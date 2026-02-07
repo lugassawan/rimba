@@ -84,3 +84,12 @@ func TestFromContextNil(t *testing.T) {
 		t.Error("FromContext on empty context should return nil")
 	}
 }
+
+func TestSaveWriteError(t *testing.T) {
+	cfg := config.DefaultConfig("test", "main")
+	// Write to a path inside a nonexistent directory to trigger os.WriteFile error.
+	err := config.Save("/nonexistent-dir/sub/config.toml", cfg)
+	if err == nil {
+		t.Fatal("expected error when writing to nonexistent directory")
+	}
+}
