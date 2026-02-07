@@ -6,7 +6,7 @@ LDFLAGS  = -s -w \
 	-X github.com/lugassawan/rimba/cmd.commit=$(COMMIT) \
 	-X github.com/lugassawan/rimba/cmd.date=$(DATE)
 
-.PHONY: build test test-short clean lint
+.PHONY: build test test-short test-e2e test-coverage clean lint
 
 build:
 	go build -ldflags '$(LDFLAGS)' -o bin/rimba .
@@ -19,6 +19,13 @@ test-short:
 
 clean:
 	rm -rf bin/
+
+test-e2e:
+	go test ./tests/e2e/ -v -count=1 -timeout 120s
+
+test-coverage:
+	go test ./... -coverprofile=coverage.out -count=1
+	go tool cover -func=coverage.out
 
 lint:
 	golangci-lint run ./...
