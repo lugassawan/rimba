@@ -13,9 +13,11 @@ const (
 	errNotARepo    = "not a git repo"
 	flagForceD     = "-D"
 	flagDryRun     = "--dry-run"
-	flagForce      = "--force"
+	branchOld      = "old-branch"
+	branchNew      = "new-branch"
 	pruneOutput      = "Pruning worktree"
 	errContainsFmt   = "error = %q, want it to contain %q"
+	errExpectedInFmt = "expected %s in args %v"
 	fatalDefaultFmt  = "DefaultBranch: %v"
 	errBranchWantFmt = "branch = %q, want %q"
 )
@@ -117,12 +119,36 @@ func TestDeleteBranchForce(t *testing.T) {
 		},
 	}
 
-	if err := DeleteBranch(r, "old-branch", true); err != nil {
+	if err := DeleteBranch(r, branchOld, true); err != nil {
 		t.Fatalf("DeleteBranch: %v", err)
 	}
 
 	if len(captured) != 3 || captured[1] != flagForceD {
 		t.Errorf("expected flag %s, got args %v", flagForceD, captured)
+	}
+}
+
+func TestRenameBranch(t *testing.T) {
+	var captured []string
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			captured = args
+			return "", nil
+		},
+	}
+
+	if err := RenameBranch(r, branchOld, branchNew); err != nil {
+		t.Fatalf("RenameBranch: %v", err)
+	}
+
+	want := []string{"branch", "-m", branchOld, branchNew}
+	if len(captured) != len(want) {
+		t.Fatalf("args = %v, want %v", captured, want)
+	}
+	for i, w := range want {
+		if captured[i] != w {
+			t.Errorf("args[%d] = %q, want %q", i, captured[i], w)
+		}
 	}
 }
 
@@ -174,7 +200,7 @@ func TestPruneDryRun(t *testing.T) {
 		t.Errorf("output = %q, want %q", out, pruneOutput)
 	}
 	if !slices.Contains(captured, flagDryRun) {
-		t.Errorf("expected %s in args %v", flagDryRun, captured)
+		t.Errorf(errExpectedInFmt, flagDryRun, captured)
 	}
 }
 
@@ -205,7 +231,48 @@ func TestRemoveWorktreeForce(t *testing.T) {
 		t.Fatalf("RemoveWorktree: %v", err)
 	}
 	if !slices.Contains(captured, flagForce) {
-		t.Errorf("expected %s in args %v", flagForce, captured)
+		t.Errorf(errExpectedInFmt, flagForce, captured)
+	}
+}
+
+func TestMoveWorktreeNoForce(t *testing.T) {
+	var captured []string
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			captured = args
+			return "", nil
+		},
+	}
+
+	if err := MoveWorktree(r, "/old/path", "/new/path", false); err != nil {
+		t.Fatalf("MoveWorktree: %v", err)
+	}
+	if slices.Contains(captured, flagForce) {
+		t.Error("--force should not be present when force=false")
+	}
+}
+
+func TestMoveWorktreeForce(t *testing.T) {
+	var captured []string
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			captured = args
+			return "", nil
+		},
+	}
+
+	if err := MoveWorktree(r, "/old/path", "/new/path", true); err != nil {
+		t.Fatalf("MoveWorktree: %v", err)
+	}
+	// git worktree move requires --force twice to move locked worktrees
+	forceCount := 0
+	for _, a := range captured {
+		if a == flagForce {
+			forceCount++
+		}
+	}
+	if forceCount != 2 {
+		t.Errorf("expected 2 %s flags, got %d in args %v", flagForce, forceCount, captured)
 	}
 }
 

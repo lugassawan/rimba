@@ -7,6 +7,7 @@ import (
 
 const (
 	cmdWorktree = "worktree"
+	flagForce   = "--force"
 
 	// Porcelain output prefixes
 	porcelainWorktree = "worktree "
@@ -32,7 +33,18 @@ func AddWorktree(r Runner, path, branch, source string) error {
 func RemoveWorktree(r Runner, path string, force bool) error {
 	args := []string{cmdWorktree, "remove", path}
 	if force {
-		args = append(args, "--force")
+		args = append(args, flagForce)
+	}
+	_, err := r.Run(args...)
+	return err
+}
+
+// MoveWorktree moves the worktree from oldPath to newPath.
+// When force is true, --force is passed twice so that even locked worktrees can be moved.
+func MoveWorktree(r Runner, oldPath, newPath string, force bool) error {
+	args := []string{cmdWorktree, "move", oldPath, newPath}
+	if force {
+		args = append(args, flagForce, flagForce)
 	}
 	_, err := r.Run(args...)
 	return err

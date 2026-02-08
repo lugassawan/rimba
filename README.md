@@ -99,6 +99,19 @@ rimba remove my-feature -f           # Force removal even if dirty
 | `--branch` | Also delete the local branch |
 | `-f`, `--force` | Force removal even if the worktree is dirty |
 
+### `rimba rename <task> <new-task>`
+
+Rename a worktree's task, branch, and directory.
+
+```sh
+rimba rename old-task new-task
+rimba rename old-task new-task -f  # Force rename even if locked
+```
+
+| Flag | Description |
+|------|-------------|
+| `-f`, `--force` | Force rename even if the worktree is locked |
+
 ### `rimba clean`
 
 Prune stale worktree references.

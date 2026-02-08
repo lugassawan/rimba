@@ -20,6 +20,12 @@ func DeleteBranch(r Runner, branch string, force bool) error {
 	return err
 }
 
+// RenameBranch renames a local branch from oldBranch to newBranch.
+func RenameBranch(r Runner, oldBranch, newBranch string) error {
+	_, err := r.Run("branch", "-m", oldBranch, newBranch)
+	return err
+}
+
 // IsDirty returns true if the working tree at the given directory has uncommitted changes.
 func IsDirty(r Runner, dir string) (bool, error) {
 	out, err := r.RunInDir(dir, "status", "--porcelain")
