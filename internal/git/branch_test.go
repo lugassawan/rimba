@@ -7,9 +7,15 @@ import (
 	"github.com/lugassawan/rimba/testutil"
 )
 
+const (
+	skipIntegration  = "skipping integration test"
+	fatalAddWorktree = "AddWorktree: %v"
+	branchToDelete   = "to-delete"
+)
+
 func TestBranchExists(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping integration test")
+		t.Skip(skipIntegration)
 	}
 
 	repo := testutil.NewTestRepo(t)
@@ -26,31 +32,31 @@ func TestBranchExists(t *testing.T) {
 
 func TestDeleteBranch(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping integration test")
+		t.Skip(skipIntegration)
 	}
 
 	repo := testutil.NewTestRepo(t)
 	r := &git.ExecRunner{Dir: repo}
 
 	// Create a branch
-	testutil.GitCmd(t, repo, "branch", "to-delete")
+	testutil.GitCmd(t, repo, "branch", branchToDelete)
 
-	if !git.BranchExists(r, "to-delete") {
+	if !git.BranchExists(r, branchToDelete) {
 		t.Fatal("branch should exist before delete")
 	}
 
-	if err := git.DeleteBranch(r, "to-delete", false); err != nil {
+	if err := git.DeleteBranch(r, branchToDelete, false); err != nil {
 		t.Fatalf("DeleteBranch: %v", err)
 	}
 
-	if git.BranchExists(r, "to-delete") {
+	if git.BranchExists(r, branchToDelete) {
 		t.Error("branch should not exist after delete")
 	}
 }
 
 func TestIsDirty(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping integration test")
+		t.Skip(skipIntegration)
 	}
 
 	repo := testutil.NewTestRepo(t)

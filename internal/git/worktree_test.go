@@ -11,7 +11,7 @@ import (
 
 func TestAddAndListWorktrees(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping integration test")
+		t.Skip(skipIntegration)
 	}
 
 	repo := testutil.NewTestRepo(t)
@@ -20,7 +20,7 @@ func TestAddAndListWorktrees(t *testing.T) {
 	wtPath := filepath.Join(filepath.Dir(repo), "wt-feat-login")
 
 	if err := git.AddWorktree(r, wtPath, "feat/login", "main"); err != nil {
-		t.Fatalf("AddWorktree: %v", err)
+		t.Fatalf(fatalAddWorktree, err)
 	}
 
 	// Verify directory exists
@@ -52,7 +52,7 @@ func TestAddAndListWorktrees(t *testing.T) {
 
 func TestRemoveWorktree(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping integration test")
+		t.Skip(skipIntegration)
 	}
 
 	repo := testutil.NewTestRepo(t)
@@ -60,7 +60,7 @@ func TestRemoveWorktree(t *testing.T) {
 
 	wtPath := filepath.Join(filepath.Dir(repo), "wt-to-remove")
 	if err := git.AddWorktree(r, wtPath, "feat/remove-me", "main"); err != nil {
-		t.Fatalf("AddWorktree: %v", err)
+		t.Fatalf(fatalAddWorktree, err)
 	}
 
 	if err := git.RemoveWorktree(r, wtPath, false); err != nil {
@@ -69,5 +69,55 @@ func TestRemoveWorktree(t *testing.T) {
 
 	if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
 		t.Error("worktree directory should be removed")
+	}
+}
+
+func TestMoveWorktree(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	oldPath := filepath.Join(filepath.Dir(repo), "wt-to-move")
+	if err := git.AddWorktree(r, oldPath, "feat/move-me", "main"); err != nil {
+		t.Fatalf(fatalAddWorktree, err)
+	}
+
+	newPath := filepath.Join(filepath.Dir(repo), "wt-moved")
+	if err := git.MoveWorktree(r, oldPath, newPath, false); err != nil {
+		t.Fatalf("MoveWorktree: %v", err)
+	}
+
+	// Old path should be gone
+	if _, err := os.Stat(oldPath); !os.IsNotExist(err) {
+		t.Error("old worktree directory should be removed")
+	}
+
+	// New path should exist
+	if _, err := os.Stat(newPath); err != nil {
+		t.Errorf("new worktree directory should exist: %v", err)
+	}
+
+	// Worktree list should reference the new path.
+	// Resolve symlinks because git returns canonical paths (e.g. /private/var on macOS).
+	resolvedNew, err := filepath.EvalSymlinks(newPath)
+	if err != nil {
+		t.Fatalf("EvalSymlinks: %v", err)
+	}
+	entries, err := git.ListWorktrees(r)
+	if err != nil {
+		t.Fatalf("ListWorktrees: %v", err)
+	}
+	found := false
+	for _, e := range entries {
+		if e.Path == resolvedNew {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected worktree at %s in list, got %v", resolvedNew, entries)
 	}
 }

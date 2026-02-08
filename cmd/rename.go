@@ -11,24 +11,24 @@ import (
 )
 
 func init() {
-	removeCmd.Flags().Bool("branch", false, "Also delete the local branch")
-	removeCmd.Flags().BoolP("force", "f", false, "Force removal even if worktree is dirty")
-	rootCmd.AddCommand(removeCmd)
+	renameCmd.Flags().BoolP("force", "f", false, "Force rename even if worktree is locked")
+	rootCmd.AddCommand(renameCmd)
 }
 
-var removeCmd = &cobra.Command{
-	Use:   "remove <task>",
-	Short: "Remove a worktree",
-	Long:  "Removes the worktree for the given task. Use --branch to also delete the local branch.",
-	Args:  cobra.ExactArgs(1),
+var renameCmd = &cobra.Command{
+	Use:   "rename <task> <new-task>",
+	Short: "Rename a worktree's task, branch, and directory",
+	Long:  "Renames the worktree for the given task, updating its branch name and directory to match the new task name.",
+	Args:  cobra.ExactArgs(2),
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		if len(args) != 0 {
-			return nil, cobra.ShellCompDirectiveNoFileComp
+		if len(args) == 0 {
+			return completeWorktreeTasks(cmd, toComplete), cobra.ShellCompDirectiveNoFileComp
 		}
-		return completeWorktreeTasks(cmd, toComplete), cobra.ShellCompDirectiveNoFileComp
+		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		task := args[0]
+		newTask := args[1]
 		cfg := config.FromContext(cmd.Context())
 		if cfg == nil {
 			return fmt.Errorf(errNoConfig)
@@ -41,7 +41,7 @@ var removeCmd = &cobra.Command{
 			return err
 		}
 
-		// Try to find the worktree by scanning existing worktrees
+		// Find the existing worktree by task name
 		entries, err := git.ListWorktrees(r)
 		if err != nil {
 			return err
@@ -57,28 +57,32 @@ var removeCmd = &cobra.Command{
 
 		wt, found := resolver.FindBranchForTask(task, worktrees, cfg.DefaultPrefix)
 		if !found {
-			// Try direct path resolution as fallback
 			branch := resolver.BranchName(cfg.DefaultPrefix, task)
 			wtDir := filepath.Join(repoRoot, cfg.WorktreeDir)
 			wtPath := resolver.WorktreePath(wtDir, branch)
 			return fmt.Errorf(errWorktreeNotFmt, task, wtPath)
 		}
 
+		// Derive new branch and path from the new task name
+		newBranch := resolver.BranchName(cfg.DefaultPrefix, newTask)
+
+		if git.BranchExists(r, newBranch) {
+			return fmt.Errorf("branch %q already exists", newBranch)
+		}
+
+		wtDir := filepath.Join(repoRoot, cfg.WorktreeDir)
+		newPath := resolver.WorktreePath(wtDir, newBranch)
+
 		force, _ := cmd.Flags().GetBool("force")
-		if err := git.RemoveWorktree(r, wt.Path, force); err != nil {
+		if err := git.MoveWorktree(r, wt.Path, newPath, force); err != nil {
 			return err
 		}
 
-		fmt.Fprintf(cmd.OutOrStdout(), "Removed worktree: %s\n", wt.Path)
-
-		deleteBranch, _ := cmd.Flags().GetBool("branch")
-		if deleteBranch {
-			if err := git.DeleteBranch(r, wt.Branch, force); err != nil {
-				return fmt.Errorf("worktree removed but failed to delete branch %q: %w", wt.Branch, err)
-			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Deleted branch: %s\n", wt.Branch)
+		if err := git.RenameBranch(r, wt.Branch, newBranch); err != nil {
+			return fmt.Errorf("worktree moved but failed to rename branch %q: %w", wt.Branch, err)
 		}
 
+		fmt.Fprintf(cmd.OutOrStdout(), "Renamed worktree: %s -> %s\n", task, newTask)
 		return nil
 	},
 }

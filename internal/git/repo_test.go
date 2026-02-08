@@ -10,7 +10,7 @@ import (
 
 func TestRepoRoot(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping integration test")
+		t.Skip(skipIntegration)
 	}
 
 	repo := testutil.NewTestRepo(t)
@@ -31,7 +31,7 @@ func TestRepoRoot(t *testing.T) {
 
 func TestRepoName(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping integration test")
+		t.Skip(skipIntegration)
 	}
 
 	repo := testutil.NewTestRepo(t)
@@ -49,7 +49,7 @@ func TestRepoName(t *testing.T) {
 
 func TestDefaultBranch(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping integration test")
+		t.Skip(skipIntegration)
 	}
 
 	repo := testutil.NewTestRepo(t)
