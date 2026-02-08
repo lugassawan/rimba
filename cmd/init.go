@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/fileutil"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/spf13/cobra"
 )
@@ -53,11 +54,20 @@ var initCmd = &cobra.Command{
 			return fmt.Errorf("failed to create worktree directory: %w", err)
 		}
 
+		added, err := fileutil.EnsureGitignore(repoRoot, configFileName)
+		if err != nil {
+			return fmt.Errorf("failed to update .gitignore: %w", err)
+		}
+
 		fmt.Fprintf(cmd.OutOrStdout(), "Initialized rimba in %s\n", repoRoot)
 		fmt.Fprintf(cmd.OutOrStdout(), "  Config:       %s\n", configPath)
 		fmt.Fprintf(cmd.OutOrStdout(), "  Worktree dir: %s\n", wtDir)
 		fmt.Fprintf(cmd.OutOrStdout(), "  Source:       %s\n", defaultBranch)
-		fmt.Fprintf(cmd.OutOrStdout(), "\nTip: add .rimba.toml to .gitignore\n")
+		if added {
+			fmt.Fprintf(cmd.OutOrStdout(), "  Gitignore:   %s added to .gitignore\n", configFileName)
+		} else {
+			fmt.Fprintf(cmd.OutOrStdout(), "  Gitignore:   %s (already in .gitignore)\n", configFileName)
+		}
 
 		return nil
 	},
