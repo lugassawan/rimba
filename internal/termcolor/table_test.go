@@ -74,8 +74,16 @@ func TestTableRenderWithANSI(t *testing.T) {
 	// "ok" columns should all start at the same visible position.
 	// The ANSI-colored "short" has more bytes but same visible width as "short".
 	// "longername" is the widest, so all STATUS columns align to its right edge + gap.
-	headerOkIdx := VisibleLen(lines[0][:strings.Index(lines[0], "STATUS")])
-	row2OkIdx := VisibleLen(lines[2][:strings.Index(lines[2], "ok")])
+	statusIdx := strings.Index(lines[0], "STATUS")
+	if statusIdx < 0 {
+		t.Fatal("STATUS not found in header")
+	}
+	okIdx := strings.Index(lines[2], "ok")
+	if okIdx < 0 {
+		t.Fatal("ok not found in row 2")
+	}
+	headerOkIdx := VisibleLen(lines[0][:statusIdx])
+	row2OkIdx := VisibleLen(lines[2][:okIdx])
 
 	if headerOkIdx != row2OkIdx {
 		t.Errorf("ANSI columns misaligned: STATUS at vis %d, row2 ok at vis %d", headerOkIdx, row2OkIdx)

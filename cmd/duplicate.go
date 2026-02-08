@@ -32,7 +32,7 @@ var duplicateCmd = &cobra.Command{
 		task := args[0]
 		cfg := config.FromContext(cmd.Context())
 		if cfg == nil {
-			return fmt.Errorf(errNoConfig)
+			return errNoConfig
 		}
 
 		r := &git.ExecRunner{}

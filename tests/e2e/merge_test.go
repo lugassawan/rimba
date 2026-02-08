@@ -21,7 +21,7 @@ func setupCleanInitializedRepo(t *testing.T) string {
 
 // mergeSetup creates a worktree with a committed file, ready for merging.
 // Returns the worktree path and the file name that was committed.
-func mergeSetup(t *testing.T, repo, task string, flags ...string) string {
+func mergeSetup(t *testing.T, repo, task string, flags ...string) string { //nolint:unparam // flags kept for test flexibility
 	t.Helper()
 	args := append([]string{"add"}, flags...)
 	args = append(args, task)

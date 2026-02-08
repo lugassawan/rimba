@@ -9,10 +9,10 @@ import (
 // EnsureGitignore ensures that entry is present as a line in the .gitignore
 // file at repoRoot. If the file does not exist it is created. Returns true
 // if the entry was added, false if it was already present.
-func EnsureGitignore(repoRoot string, entry string) (bool, error) {
+func EnsureGitignore(repoRoot string, entry string) (added bool, retErr error) {
 	path := filepath.Join(repoRoot, ".gitignore")
 
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil && !os.IsNotExist(err) {
 		return false, err
 	}
@@ -34,11 +34,15 @@ func EnsureGitignore(repoRoot string, entry string) (bool, error) {
 	buf.WriteString(entry)
 	buf.WriteByte('\n')
 
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644) //nolint:gosec // .gitignore must be world-readable for git
 	if err != nil {
 		return false, err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); retErr == nil {
+			retErr = cerr
+		}
+	}()
 
 	if _, err := f.WriteString(buf.String()); err != nil {
 		return false, err

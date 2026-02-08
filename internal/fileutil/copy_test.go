@@ -20,8 +20,8 @@ func TestCopyDotfiles(t *testing.T) {
 	dst := t.TempDir()
 
 	// Create some source files
-	os.WriteFile(filepath.Join(src, ".env"), []byte(testSecret), 0644)
-	os.WriteFile(filepath.Join(src, dotEnvrc), []byte("use nix"), 0644)
+	_ = os.WriteFile(filepath.Join(src, ".env"), []byte(testSecret), 0644)
+	_ = os.WriteFile(filepath.Join(src, dotEnvrc), []byte("use nix"), 0644)
 	// .env.local does NOT exist — should be silently skipped
 
 	files := []string{".env", ".env.local", dotEnvrc, ".tool-versions"}
@@ -54,7 +54,7 @@ func TestCopyDotfilesPreservesPermissions(t *testing.T) {
 	src := t.TempDir()
 	dst := t.TempDir()
 
-	os.WriteFile(filepath.Join(src, dotEnvrc), []byte("use nix"), 0755)
+	_ = os.WriteFile(filepath.Join(src, dotEnvrc), []byte("use nix"), 0755)
 
 	copied, err := fileutil.CopyDotfiles(src, dst, []string{dotEnvrc})
 	if err != nil {
@@ -81,8 +81,8 @@ func TestCopyDotfilesEmptyList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CopyDotfiles with empty list: %v", err)
 	}
-	if copied != nil {
-		t.Errorf("expected nil copied list, got %v", copied)
+	if len(copied) != 0 {
+		t.Errorf("expected empty copied list, got %v", copied)
 	}
 }
 
@@ -91,11 +91,11 @@ func TestCopyDotfilesDstError(t *testing.T) {
 	dst := t.TempDir()
 
 	// Create a source file that exists
-	os.WriteFile(filepath.Join(src, ".env"), []byte(testSecret), 0644)
+	_ = os.WriteFile(filepath.Join(src, ".env"), []byte(testSecret), 0644)
 
 	// Create a subdirectory at the destination path so OpenFile fails with EISDIR,
 	// which is not an os.IsNotExist error and triggers the wrapped error return.
-	os.Mkdir(filepath.Join(dst, ".env"), 0755)
+	_ = os.Mkdir(filepath.Join(dst, ".env"), 0755)
 
 	_, err := fileutil.CopyDotfiles(src, dst, []string{".env"})
 	if err == nil {

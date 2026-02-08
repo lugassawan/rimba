@@ -16,6 +16,11 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 }
 
+// Version returns the current version string.
+func Version() string {
+	return version
+}
+
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version information",
