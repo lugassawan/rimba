@@ -31,8 +31,25 @@ checksum:
 
 changelog:
   sort: asc
+  abbrev: -1
+  groups:
+    - title: "Features"
+      regexp: '^.*\[feat\].*$'
+      order: 0
+    - title: "Bug Fixes"
+      regexp: '^.*\[fix\].*$'
+      order: 1
+    - title: "Refactoring"
+      regexp: '^.*\[refactor\].*$'
+      order: 2
+    - title: "Maintenance"
+      regexp: '^.*\[chore\].*$'
+      order: 3
+    - title: "Other"
+      order: 999
   filters:
     exclude:
-      - "^docs:"
-      - "^test:"
-      - "^ci:"
+      - '^\[docs\]'
+      - '^\[test\]'
+      - '^\[ci\]'
+      - '^Initial commit$'
