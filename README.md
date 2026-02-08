@@ -7,6 +7,8 @@ Git worktree manager CLI — branch naming conventions, dotfile copying, and wor
 - **Automatic branch naming** — configurable prefix (e.g. `feat/`, `fix/`) applied to task names
 - **Dotfile copying** — auto-copies files like `.env`, `.envrc`, `.tool-versions` into new worktrees
 - **Status dashboard** — colored tabular view of all worktrees with dirty state, ahead/behind counts, current worktree indicator, and filtering
+- **Duplicate worktrees** — create a copy of an existing worktree with auto-suffixed or custom name
+- **Local merge** — merge worktree branches into main or other worktrees with auto-cleanup
 - **Stale cleanup** — prune stale worktree references with dry-run support
 - **Shell completions** — built-in completion for bash, zsh, fish, and PowerShell
 - **Cross-platform** — builds for Linux, macOS, and Windows (amd64/arm64)
@@ -124,6 +126,40 @@ rimba rename old-task new-task -f  # Force rename even if locked
 | Flag | Description |
 |------|-------------|
 | `-f`, `--force` | Force rename even if the worktree is locked |
+
+### `rimba duplicate <task>`
+
+Create a new worktree from an existing worktree, inheriting its branch prefix. Auto-generates a `-1`, `-2`, etc. suffix unless `--as` is provided.
+
+```sh
+rimba duplicate auth              # Creates feature/auth-1 from feature/auth
+rimba duplicate auth --as auth-v2 # Creates feature/auth-v2 from feature/auth
+```
+
+| Flag | Description |
+|------|-------------|
+| `--as` | Custom name for the duplicate worktree (instead of auto-suffix) |
+
+### `rimba merge <source-task>`
+
+Merge a worktree's branch into main or another worktree. When merging into main, the source worktree and branch are auto-deleted unless `--keep` is set. When merging between worktrees, the source is kept unless `--delete` is set.
+
+```sh
+rimba merge auth                           # Merge into main, delete source
+rimba merge auth --keep                    # Merge into main, keep source
+rimba merge auth --into dashboard          # Merge into worktree, keep source
+rimba merge auth --into dashboard --delete # Merge into worktree, delete source
+rimba merge auth --no-ff                   # Force merge commit
+```
+
+| Flag | Description |
+|------|-------------|
+| `--into` | Target worktree task to merge into (default: main/repo root) |
+| `--no-ff` | Force a merge commit (no fast-forward) |
+| `--keep` | Keep source worktree after merging into main |
+| `--delete` | Delete source worktree after merging into another worktree |
+
+> **Note:** `--keep` and `--delete` are mutually exclusive. Merging to main deletes the source by default; merging to another worktree keeps it by default.
 
 ### `rimba clean`
 
