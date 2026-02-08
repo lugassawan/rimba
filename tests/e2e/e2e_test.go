@@ -32,6 +32,8 @@ const (
 	taskDotfile    = "dotfile-test"
 	task1          = "task-1"
 	task2          = "task-2"
+	taskRmPartial  = "rm-partial-task"
+	taskDirtyOne   = "dirty-one"
 )
 
 var (
@@ -101,7 +103,7 @@ func rimba(t *testing.T, dir string, args ...string) result {
 
 	cmd := exec.Command(binaryPath, args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GOCOVERDIR="+coverDir)
+	cmd.Env = append(os.Environ(), "GOCOVERDIR="+coverDir, "NO_COLOR=1")
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

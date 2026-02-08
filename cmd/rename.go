@@ -81,7 +81,7 @@ var renameCmd = &cobra.Command{
 		}
 
 		if err := git.RenameBranch(r, wt.Branch, newBranch); err != nil {
-			return fmt.Errorf("worktree moved but failed to rename branch %q: %w", wt.Branch, err)
+			return fmt.Errorf("worktree moved but failed to rename branch %q: %w\nTo complete manually: git branch -m %s %s", wt.Branch, err, wt.Branch, newBranch)
 		}
 
 		fmt.Fprintf(cmd.OutOrStdout(), "Renamed worktree: %s -> %s\n", task, newTask)

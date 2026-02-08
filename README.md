@@ -6,7 +6,7 @@ Git worktree manager CLI — branch naming conventions, dotfile copying, and wor
 
 - **Automatic branch naming** — configurable prefix (e.g. `feat/`, `fix/`) applied to task names
 - **Dotfile copying** — auto-copies files like `.env`, `.envrc`, `.tool-versions` into new worktrees
-- **Status dashboard** — tabular view of all worktrees with dirty state and ahead/behind counts
+- **Status dashboard** — colored tabular view of all worktrees with dirty state, ahead/behind counts, current worktree indicator, and filtering
 - **Stale cleanup** — prune stale worktree references with dry-run support
 - **Shell completions** — built-in completion for bash, zsh, fish, and PowerShell
 - **Cross-platform** — builds for Linux, macOS, and Windows (amd64/arm64)
@@ -37,7 +37,7 @@ rimba init
 # Create a worktree for a task
 rimba add my-feature
 
-# List all worktrees with status
+# List all worktrees with status (colored output)
 rimba list
 
 # Remove a worktree when done
@@ -71,18 +71,31 @@ rimba add my-feature -s develop      # Branch from a different source
 
 ### `rimba list`
 
-List all worktrees with their task name, branch, path, and status (dirty, ahead/behind).
+List all worktrees with their task name, type, branch, path, and status. The current worktree is marked with `*`. Output is colored by default.
 
 ```sh
 rimba list
+rimba list --type bugfix        # Show only bugfix worktrees
+rimba list --dirty              # Show only dirty worktrees
+rimba list --behind             # Show only worktrees behind upstream
+rimba list --no-color           # Disable colored output
 ```
 
 Example output:
 
 ```
-TASK          BRANCH          PATH              STATUS
-my-feature    feat/my-feature feat/my-feature   [dirty] [+2/-0]
+TASK            TYPE     BRANCH              PATH              STATUS
+* auth-flow     feature  feature/auth-flow   feature-auth-flow [dirty]
+  fix-login     bugfix   bugfix/fix-login    bugfix-fix-login  ↑2 ↓1
+  ui-cleanup    chore    chore/ui-cleanup    chore-ui-cleanup  ✓
 ```
+
+| Flag | Description |
+|------|-------------|
+| `--type` | Filter by prefix type (e.g. `feature`, `bugfix`, `hotfix`, `docs`, `test`, `chore`) |
+| `--dirty` | Show only worktrees with uncommitted changes |
+| `--behind` | Show only worktrees behind their upstream branch |
+| `--no-color` | Disable colored output (also respects `NO_COLOR` env var) |
 
 ### `rimba remove <task>`
 

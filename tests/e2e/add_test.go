@@ -153,6 +153,33 @@ func TestAddFailsDuplicate(t *testing.T) {
 	assertContains(t, r.Stderr, "already exists")
 }
 
+func TestAddPartialFailCopyHint(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupRepo(t)
+
+	// Create a directory that will trigger EISDIR when copyFile tries io.Copy
+	if err := os.MkdirAll(filepath.Join(repo, ".testdir"), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	rimbaSuccess(t, repo, "init")
+
+	// Override copy_files to include the directory
+	cfg := loadConfig(t, repo)
+	cfg.CopyFiles = []string{".testdir"}
+	if err := config.Save(filepath.Join(repo, configFile), cfg); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+
+	r := rimbaFail(t, repo, "add", "copy-fail-task")
+	assertContains(t, r.Stderr, "worktree created but failed to copy files")
+	assertContains(t, r.Stderr, "To retry, manually copy files to:")
+	assertContains(t, r.Stderr, "rimba remove copy-fail-task")
+}
+
 func TestAddFailsNoArgs(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
