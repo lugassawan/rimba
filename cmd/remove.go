@@ -51,7 +51,7 @@ var removeCmd = &cobra.Command{
 
 		wt, found := resolver.FindBranchForTask(task, worktrees, resolver.AllPrefixes())
 		if !found {
-			return fmt.Errorf("worktree not found for task %q", task)
+			return fmt.Errorf(errWorktreeNotFound, task)
 		}
 
 		force, _ := cmd.Flags().GetBool("force")

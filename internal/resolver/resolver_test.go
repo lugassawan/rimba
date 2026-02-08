@@ -6,13 +6,33 @@ import (
 	"github.com/lugassawan/rimba/internal/resolver"
 )
 
+const (
+	taskMyTask   = "my-task"
+	taskLoginFix = "login-fix"
+	taskBare     = "bare-branch"
+	taskLogin    = "login"
+	taskCrash    = "crash"
+
+	msgExpectedMatch = "expected match"
+	fmtGotBranch     = "got branch %q, want %q"
+)
+
+var (
+	featurePrefix, _ = resolver.PrefixString(resolver.PrefixFeature)
+	bugfixPrefix, _  = resolver.PrefixString(resolver.PrefixBugfix)
+	hotfixPrefix, _  = resolver.PrefixString(resolver.PrefixHotfix)
+	docsPrefix, _    = resolver.PrefixString(resolver.PrefixDocs)
+	testPrefix, _    = resolver.PrefixString(resolver.PrefixTest)
+	chorePrefix, _   = resolver.PrefixString(resolver.PrefixChore)
+)
+
 func TestBranchName(t *testing.T) {
 	tests := []struct {
 		prefix, task, want string
 	}{
-		{"feature/", "my-task", "feature/my-task"},
-		{"bugfix/", "login-fix", "bugfix/login-fix"},
-		{"", "bare-branch", "bare-branch"},
+		{featurePrefix, taskMyTask, featurePrefix + taskMyTask},
+		{bugfixPrefix, taskLoginFix, bugfixPrefix + taskLoginFix},
+		{"", taskBare, taskBare},
 	}
 	for _, tt := range tests {
 		got := resolver.BranchName(tt.prefix, tt.task)
@@ -26,9 +46,9 @@ func TestDirName(t *testing.T) {
 	tests := []struct {
 		branch, want string
 	}{
-		{"feature/my-task", "feature-my-task"},
-		{"bugfix/login-fix", "bugfix-login-fix"},
-		{"bare-branch", "bare-branch"},
+		{featurePrefix + taskMyTask, "feature-my-task"},
+		{bugfixPrefix + taskLoginFix, "bugfix-login-fix"},
+		{taskBare, taskBare},
 	}
 	for _, tt := range tests {
 		got := resolver.DirName(tt.branch)
@@ -39,7 +59,7 @@ func TestDirName(t *testing.T) {
 }
 
 func TestWorktreePath(t *testing.T) {
-	got := resolver.WorktreePath("/home/user/repo-worktrees", "feature/my-task")
+	got := resolver.WorktreePath("/home/user/repo-worktrees", featurePrefix+taskMyTask)
 	want := "/home/user/repo-worktrees/feature-my-task"
 	if got != want {
 		t.Errorf("WorktreePath = %q, want %q", got, want)
@@ -54,13 +74,13 @@ func TestTaskFromBranch(t *testing.T) {
 		wantTask   string
 		wantPrefix string
 	}{
-		{"feature/my-task", "my-task", "feature/"},
-		{"bugfix/login-fix", "login-fix", "bugfix/"},
-		{"hotfix/urgent", "urgent", "hotfix/"},
-		{"docs/readme", "readme", "docs/"},
-		{"test/experiment", "experiment", "test/"},
-		{"chore/deps", "deps", "chore/"},
-		{"bare-branch", "bare-branch", ""},
+		{featurePrefix + taskMyTask, taskMyTask, featurePrefix},
+		{bugfixPrefix + taskLoginFix, taskLoginFix, bugfixPrefix},
+		{hotfixPrefix + "urgent", "urgent", hotfixPrefix},
+		{docsPrefix + "readme", "readme", docsPrefix},
+		{testPrefix + "experiment", "experiment", testPrefix},
+		{chorePrefix + "deps", "deps", chorePrefix},
+		{taskBare, taskBare, ""},
 		{"unknown/prefix", "unknown/prefix", ""},
 	}
 	for _, tt := range tests {
@@ -76,40 +96,40 @@ func TestTaskFromBranch(t *testing.T) {
 
 func TestFindBranchForTask(t *testing.T) {
 	worktrees := []resolver.WorktreeInfo{
-		{Path: "/wt/feature-login", Branch: "feature/login"},
-		{Path: "/wt/feature-signup", Branch: "feature/signup"},
-		{Path: "/wt/bugfix-crash", Branch: "bugfix/crash"},
+		{Path: "/wt/feature-login", Branch: featurePrefix + taskLogin},
+		{Path: "/wt/feature-signup", Branch: featurePrefix + "signup"},
+		{Path: "/wt/bugfix-crash", Branch: bugfixPrefix + taskCrash},
 	}
 
 	prefixes := resolver.AllPrefixes()
 
 	t.Run("match with prefix", func(t *testing.T) {
-		wt, ok := resolver.FindBranchForTask("login", worktrees, prefixes)
+		wt, ok := resolver.FindBranchForTask(taskLogin, worktrees, prefixes)
 		if !ok {
-			t.Fatal("expected match")
+			t.Fatal(msgExpectedMatch)
 		}
-		if wt.Branch != "feature/login" {
-			t.Errorf("got branch %q, want %q", wt.Branch, "feature/login")
+		if wt.Branch != featurePrefix+taskLogin {
+			t.Errorf(fmtGotBranch, wt.Branch, featurePrefix+taskLogin)
 		}
 	})
 
 	t.Run("cross-prefix match", func(t *testing.T) {
-		wt, ok := resolver.FindBranchForTask("crash", worktrees, prefixes)
+		wt, ok := resolver.FindBranchForTask(taskCrash, worktrees, prefixes)
 		if !ok {
-			t.Fatal("expected match")
+			t.Fatal(msgExpectedMatch)
 		}
-		if wt.Branch != "bugfix/crash" {
-			t.Errorf("got branch %q, want %q", wt.Branch, "bugfix/crash")
+		if wt.Branch != bugfixPrefix+taskCrash {
+			t.Errorf(fmtGotBranch, wt.Branch, bugfixPrefix+taskCrash)
 		}
 	})
 
 	t.Run("match with full branch name", func(t *testing.T) {
-		wt, ok := resolver.FindBranchForTask("bugfix/crash", worktrees, prefixes)
+		wt, ok := resolver.FindBranchForTask(bugfixPrefix+taskCrash, worktrees, prefixes)
 		if !ok {
-			t.Fatal("expected match")
+			t.Fatal(msgExpectedMatch)
 		}
-		if wt.Branch != "bugfix/crash" {
-			t.Errorf("got branch %q, want %q", wt.Branch, "bugfix/crash")
+		if wt.Branch != bugfixPrefix+taskCrash {
+			t.Errorf(fmtGotBranch, wt.Branch, bugfixPrefix+taskCrash)
 		}
 	})
 
@@ -127,8 +147,8 @@ func TestAllPrefixes(t *testing.T) {
 		t.Fatalf("expected 6 prefixes, got %d", len(prefixes))
 	}
 	// First should always be feature/ (the default)
-	if prefixes[0] != "feature/" {
-		t.Errorf("expected first prefix to be %q, got %q", "feature/", prefixes[0])
+	if prefixes[0] != featurePrefix {
+		t.Errorf("expected first prefix to be %q, got %q", featurePrefix, prefixes[0])
 	}
 	// All should end with /
 	for _, p := range prefixes {
@@ -144,12 +164,12 @@ func TestPrefixString(t *testing.T) {
 		want   string
 		wantOk bool
 	}{
-		{resolver.PrefixFeature, "feature/", true},
-		{resolver.PrefixBugfix, "bugfix/", true},
-		{resolver.PrefixHotfix, "hotfix/", true},
-		{resolver.PrefixDocs, "docs/", true},
-		{resolver.PrefixTest, "test/", true},
-		{resolver.PrefixChore, "chore/", true},
+		{resolver.PrefixFeature, featurePrefix, true},
+		{resolver.PrefixBugfix, bugfixPrefix, true},
+		{resolver.PrefixHotfix, hotfixPrefix, true},
+		{resolver.PrefixDocs, docsPrefix, true},
+		{resolver.PrefixTest, testPrefix, true},
+		{resolver.PrefixChore, chorePrefix, true},
 		{resolver.PrefixType("unknown"), "", false},
 	}
 	for _, tt := range tests {

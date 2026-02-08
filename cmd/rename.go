@@ -58,7 +58,7 @@ var renameCmd = &cobra.Command{
 		prefixes := resolver.AllPrefixes()
 		wt, found := resolver.FindBranchForTask(task, worktrees, prefixes)
 		if !found {
-			return fmt.Errorf("worktree not found for task %q", task)
+			return fmt.Errorf(errWorktreeNotFound, task)
 		}
 
 		_, matchedPrefix := resolver.TaskFromBranch(wt.Branch, prefixes)

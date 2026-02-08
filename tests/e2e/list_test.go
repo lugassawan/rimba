@@ -59,10 +59,14 @@ func TestListSortedByTask(t *testing.T) {
 		t.Skip(skipE2E)
 	}
 
+	// Sorted order expectation: a-task, m-task, z-task
+	sortedTasks := []string{"a-task", "m-task", "z-task"}
+
 	repo := setupInitializedRepo(t)
-	rimbaSuccess(t, repo, "add", "z-task")
-	rimbaSuccess(t, repo, "add", "a-task")
-	rimbaSuccess(t, repo, "add", "m-task")
+	// Add in reverse order to verify sorting
+	rimbaSuccess(t, repo, "add", sortedTasks[2])
+	rimbaSuccess(t, repo, "add", sortedTasks[0])
+	rimbaSuccess(t, repo, "add", sortedTasks[1])
 
 	r := rimbaSuccess(t, repo, "list")
 
@@ -70,18 +74,21 @@ func TestListSortedByTask(t *testing.T) {
 	lines := strings.Split(r.Stdout, "\n")
 	var taskOrder []string
 	for _, line := range lines {
-		for _, task := range []string{"a-task", "m-task", "z-task"} {
+		for _, task := range sortedTasks {
 			if strings.Contains(line, task) {
 				taskOrder = append(taskOrder, task)
 			}
 		}
 	}
 
-	if len(taskOrder) != 3 {
-		t.Fatalf("expected 3 tasks in output, got %d: %v", len(taskOrder), taskOrder)
+	if len(taskOrder) != len(sortedTasks) {
+		t.Fatalf("expected %d tasks in output, got %d: %v", len(sortedTasks), len(taskOrder), taskOrder)
 	}
-	if taskOrder[0] != "a-task" || taskOrder[1] != "m-task" || taskOrder[2] != "z-task" {
-		t.Errorf("expected tasks sorted as [a-task, m-task, z-task], got %v", taskOrder)
+	for i, task := range sortedTasks {
+		if taskOrder[i] != task {
+			t.Errorf("expected tasks sorted as %v, got %v", sortedTasks, taskOrder)
+			break
+		}
 	}
 }
 
