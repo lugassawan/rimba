@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"path/filepath"
 
 	"github.com/lugassawan/rimba/internal/config"
@@ -10,9 +11,10 @@ import (
 
 const (
 	configFileName      = ".rimba.toml"
-	errNoConfig         = "config not loaded (run 'rimba init' first)"
 	errWorktreeNotFound = "worktree not found for task %q"
 )
+
+var errNoConfig = errors.New("config not loaded (run 'rimba init' first)")
 
 var rootCmd = &cobra.Command{
 	Use:          "rimba",

@@ -26,7 +26,7 @@ func init() {
 	listCmd.Flags().BoolVar(&listDirty, "dirty", false, "show only dirty worktrees")
 	listCmd.Flags().BoolVar(&listBehind, "behind", false, "show only worktrees behind upstream")
 
-	listCmd.RegisterFlagCompletionFunc("type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	_ = listCmd.RegisterFlagCompletionFunc("type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		var types []string
 		for _, p := range resolver.AllPrefixes() {
 			t := strings.TrimSuffix(p, "/")
@@ -45,7 +45,7 @@ var listCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.FromContext(cmd.Context())
 		if cfg == nil {
-			return fmt.Errorf(errNoConfig)
+			return errNoConfig
 		}
 
 		if listType != "" && !resolver.ValidPrefixType(listType) {

@@ -31,7 +31,7 @@ var renameCmd = &cobra.Command{
 		newTask := args[1]
 		cfg := config.FromContext(cmd.Context())
 		if cfg == nil {
-			return fmt.Errorf(errNoConfig)
+			return errNoConfig
 		}
 
 		r := &git.ExecRunner{}
