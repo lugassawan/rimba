@@ -107,6 +107,58 @@ func TestAheadBehind(t *testing.T) {
 	}
 }
 
+func TestMergedBranches(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			return "  feature/done\n* main\n+ bugfix/old", nil
+		},
+	}
+
+	branches, err := MergedBranches(r, branchMain)
+	if err != nil {
+		t.Fatalf("MergedBranches: %v", err)
+	}
+
+	want := []string{"feature/done", "main", "bugfix/old"}
+	if len(branches) != len(want) {
+		t.Fatalf("got %d branches, want %d: %v", len(branches), len(want), branches)
+	}
+	for i, w := range want {
+		if branches[i] != w {
+			t.Errorf("branches[%d] = %q, want %q", i, branches[i], w)
+		}
+	}
+}
+
+func TestMergedBranchesError(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			return "", errors.New(errNotARepo)
+		},
+	}
+
+	_, err := MergedBranches(r, branchMain)
+	if err == nil {
+		t.Fatal("expected error from MergedBranches")
+	}
+}
+
+func TestMergedBranchesEmpty(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			return "", nil
+		},
+	}
+
+	branches, err := MergedBranches(r, branchMain)
+	if err != nil {
+		t.Fatalf("MergedBranches: %v", err)
+	}
+	if len(branches) != 0 {
+		t.Errorf("expected no branches, got %v", branches)
+	}
+}
+
 func TestDeleteBranchForce(t *testing.T) {
 	var captured []string
 	r := &mockRunner{

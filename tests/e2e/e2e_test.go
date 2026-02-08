@@ -52,6 +52,16 @@ const (
 	taskMergeKeep   = "merge-keep"
 	taskMergeSrc    = "merge-src"
 	taskMergeDelSrc = "merge-del-src"
+
+	// Shared test data.
+	fileFromMain    = "from-main.txt"
+	contentMainChg  = "main change"
+	commitUpdateMsg = "update main"
+
+	// Shared flags.
+	flagMergedE2E  = "--merged"
+	flagForceE2E   = "--force"
+	flagDryRunE2E  = "--dry-run"
 )
 
 var (

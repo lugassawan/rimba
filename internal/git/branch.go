@@ -55,6 +55,27 @@ func AheadBehind(r Runner, dir string) (ahead, behind int, _ error) {
 	return a, b, nil
 }
 
+// MergedBranches returns branches that have been merged into the given branch.
+// Runs `git branch --merged <branch>` and parses the output.
+func MergedBranches(r Runner, branch string) ([]string, error) {
+	out, err := r.Run("branch", "--merged", branch)
+	if err != nil {
+		return nil, err
+	}
+
+	var branches []string
+	for line := range strings.SplitSeq(out, "\n") {
+		// Lines are "  branch-name", "* current-branch", or "+ worktree-branch"
+		line = strings.TrimSpace(line)
+		line = strings.TrimPrefix(line, "* ")
+		line = strings.TrimPrefix(line, "+ ")
+		if line != "" {
+			branches = append(branches, line)
+		}
+	}
+	return branches, nil
+}
+
 func parseCount(s string, v *int) int {
 	n := 0
 	for _, c := range s {
