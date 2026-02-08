@@ -38,16 +38,27 @@ func TestAddCustomPrefix(t *testing.T) {
 
 	repo := setupInitializedRepo(t)
 
-	r := rimbaSuccess(t, repo, "add", "-p", bugfixPrefix, taskFix123)
+	r := rimbaSuccess(t, repo, "add", "--bugfix", taskFix123)
 	assertContains(t, r.Stdout, msgCreatedWorktree)
 	assertContains(t, r.Stdout, bugfixPrefix+taskFix123)
 
-	// Verify the worktree dir name uses the custom prefix
+	// Verify the worktree dir name uses the bugfix prefix
 	cfg := loadConfig(t, repo)
 	wtDir := filepath.Join(repo, cfg.WorktreeDir)
 	branch := resolver.BranchName(bugfixPrefix, taskFix123)
 	wtPath := resolver.WorktreePath(wtDir, branch)
 	assertFileExists(t, wtPath)
+}
+
+func TestAddMutuallyExclusiveFlags(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+
+	r := rimbaFail(t, repo, "add", "--bugfix", "--hotfix", "oops")
+	assertContains(t, r.Stderr, "none of the others can be")
 }
 
 func TestAddCustomSource(t *testing.T) {

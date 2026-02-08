@@ -53,6 +53,27 @@ func TestRenameRenamesWorktree(t *testing.T) {
 	}
 }
 
+func TestRenamePreservesPrefix(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", "--bugfix", "old-bug")
+
+	r := rimbaSuccess(t, repo, "rename", "old-bug", "new-bug")
+	assertContains(t, r.Stdout, "Renamed worktree")
+
+	// Verify the branch preserved the bugfix/ prefix
+	branches := testutil.GitCmd(t, repo, "branch", "--list")
+	if !strings.Contains(branches, "bugfix/new-bug") {
+		t.Errorf("expected branch bugfix/new-bug to exist, got branches:\n%s", branches)
+	}
+	if strings.Contains(branches, "feature/new-bug") {
+		t.Errorf("did not expect branch feature/new-bug")
+	}
+}
+
 func TestRenameForceFlag(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)

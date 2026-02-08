@@ -40,9 +40,6 @@ func TestInitConfigDefaults(t *testing.T) {
 		t.Fatalf("failed to load config: %v", err)
 	}
 
-	if cfg.DefaultPrefix != defaultPrefix {
-		t.Errorf("expected default_prefix %q, got %q", defaultPrefix, cfg.DefaultPrefix)
-	}
 	if cfg.DefaultSource != "main" {
 		t.Errorf("expected default_source %q, got %q", "main", cfg.DefaultSource)
 	}

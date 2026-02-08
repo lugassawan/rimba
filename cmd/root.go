@@ -10,8 +10,7 @@ import (
 
 const (
 	configFileName    = ".rimba.toml"
-	errNoConfig       = "config not loaded (run 'rimba init' first)"
-	errWorktreeNotFmt = "worktree not found for task %q (expected path: %s)"
+	errNoConfig = "config not loaded (run 'rimba init' first)"
 )
 
 var rootCmd = &cobra.Command{

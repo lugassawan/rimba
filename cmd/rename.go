@@ -55,16 +55,18 @@ var renameCmd = &cobra.Command{
 			})
 		}
 
-		wt, found := resolver.FindBranchForTask(task, worktrees, cfg.DefaultPrefix)
+		prefixes := resolver.AllPrefixes()
+		wt, found := resolver.FindBranchForTask(task, worktrees, prefixes)
 		if !found {
-			branch := resolver.BranchName(cfg.DefaultPrefix, task)
-			wtDir := filepath.Join(repoRoot, cfg.WorktreeDir)
-			wtPath := resolver.WorktreePath(wtDir, branch)
-			return fmt.Errorf(errWorktreeNotFmt, task, wtPath)
+			return fmt.Errorf("worktree not found for task %q", task)
 		}
 
-		// Derive new branch and path from the new task name
-		newBranch := resolver.BranchName(cfg.DefaultPrefix, newTask)
+		_, matchedPrefix := resolver.TaskFromBranch(wt.Branch, prefixes)
+		if matchedPrefix == "" {
+			matchedPrefix, _ = resolver.PrefixString(resolver.DefaultPrefixType)
+		}
+
+		newBranch := resolver.BranchName(matchedPrefix, newTask)
 
 		if git.BranchExists(r, newBranch) {
 			return fmt.Errorf("branch %q already exists", newBranch)
