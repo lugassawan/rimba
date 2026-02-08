@@ -18,7 +18,7 @@ Git worktree manager CLI — branch naming conventions, dotfile copying, and wor
 ### Quick install (Linux/macOS)
 
 ```sh
-curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/install.sh | bash
+curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/install.sh | bash
 ```
 
 ### Go install
