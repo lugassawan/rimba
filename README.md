@@ -15,6 +15,12 @@ Git worktree manager CLI — branch naming conventions, dotfile copying, and wor
 
 ## Installation
 
+### Quick install (Linux/macOS)
+
+```sh
+curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/install.sh | bash
+```
+
 ### Go install
 
 ```sh
@@ -173,6 +179,19 @@ rimba clean --dry-run                # Preview what would be pruned
 | Flag | Description |
 |------|-------------|
 | `--dry-run` | Show what would be pruned without pruning |
+
+### `rimba update`
+
+Check for the latest release on GitHub and update the binary in place.
+
+```sh
+rimba update             # Check and update to latest
+rimba update --force     # Also works on dev builds
+```
+
+| Flag | Description |
+|------|-------------|
+| `--force` | Update even if running a development build |
 
 ### `rimba version`
 

@@ -20,8 +20,8 @@ var rootCmd = &cobra.Command{
 	Long:         "Rimba simplifies git worktree management with auto-copying dotfiles, branch naming conventions, and worktree status dashboards.",
 	SilenceUsage: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Skip config loading for init, version, and completion commands
-		if cmd.Name() == "init" || cmd.Name() == "version" || cmd.Name() == "completion" || cmd.Name() == "clean" {
+		// Skip config loading for these commands
+		if cmd.Name() == "init" || cmd.Name() == "version" || cmd.Name() == "completion" || cmd.Name() == "clean" || cmd.Name() == "update" {
 			return nil
 		}
 
