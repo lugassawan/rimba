@@ -1,0 +1,48 @@
+package fileutil
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+// EnsureGitignore ensures that entry is present as a line in the .gitignore
+// file at repoRoot. If the file does not exist it is created. Returns true
+// if the entry was added, false if it was already present.
+func EnsureGitignore(repoRoot string, entry string) (bool, error) {
+	path := filepath.Join(repoRoot, ".gitignore")
+
+	data, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return false, err
+	}
+
+	content := string(data)
+
+	// Check whether entry already exists as a line.
+	for line := range strings.SplitSeq(content, "\n") {
+		if strings.TrimSpace(line) == entry {
+			return false, nil
+		}
+	}
+
+	// Build the line to append.
+	var buf strings.Builder
+	if len(content) > 0 && !strings.HasSuffix(content, "\n") {
+		buf.WriteByte('\n')
+	}
+	buf.WriteString(entry)
+	buf.WriteByte('\n')
+
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+
+	if _, err := f.WriteString(buf.String()); err != nil {
+		return false, err
+	}
+
+	return true, nil
+}

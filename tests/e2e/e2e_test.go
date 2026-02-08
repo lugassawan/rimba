@@ -17,6 +17,7 @@ const (
 	defaultPrefix = "feature/"
 	bugfixPrefix  = "bugfix/"
 	configFile    = ".rimba.toml"
+	gitignoreFile = ".gitignore"
 
 	// Output messages asserted in tests.
 	msgCreatedWorktree = "Created worktree"
