@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
@@ -36,11 +35,6 @@ var removeCmd = &cobra.Command{
 
 		r := &git.ExecRunner{}
 
-		repoRoot, err := git.RepoRoot(r)
-		if err != nil {
-			return err
-		}
-
 		// Try to find the worktree by scanning existing worktrees
 		entries, err := git.ListWorktrees(r)
 		if err != nil {
@@ -55,13 +49,9 @@ var removeCmd = &cobra.Command{
 			})
 		}
 
-		wt, found := resolver.FindBranchForTask(task, worktrees, cfg.DefaultPrefix)
+		wt, found := resolver.FindBranchForTask(task, worktrees, resolver.AllPrefixes())
 		if !found {
-			// Try direct path resolution as fallback
-			branch := resolver.BranchName(cfg.DefaultPrefix, task)
-			wtDir := filepath.Join(repoRoot, cfg.WorktreeDir)
-			wtPath := resolver.WorktreePath(wtDir, branch)
-			return fmt.Errorf(errWorktreeNotFmt, task, wtPath)
+			return fmt.Errorf(errWorktreeNotFound, task)
 		}
 
 		force, _ := cmd.Flags().GetBool("force")

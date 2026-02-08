@@ -13,7 +13,7 @@ import (
 )
 
 func init() {
-	addCmd.Flags().StringP("prefix", "p", "", "Branch prefix (default from config)")
+	addPrefixFlags(addCmd)
 	addCmd.Flags().StringP("source", "s", "", "Source branch to create worktree from (default from config)")
 	_ = addCmd.RegisterFlagCompletionFunc("source", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return completeBranchNames(cmd, toComplete), cobra.ShellCompDirectiveNoFileComp
@@ -40,10 +40,7 @@ var addCmd = &cobra.Command{
 			return err
 		}
 
-		prefix, _ := cmd.Flags().GetString("prefix")
-		if prefix == "" {
-			prefix = cfg.DefaultPrefix
-		}
+		prefix := resolvedPrefixString(cmd)
 
 		source, _ := cmd.Flags().GetString("source")
 		if source == "" {

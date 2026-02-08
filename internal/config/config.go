@@ -10,7 +10,6 @@ import (
 
 type Config struct {
 	WorktreeDir   string   `toml:"worktree_dir"`
-	DefaultPrefix string   `toml:"default_prefix"`
 	DefaultSource string   `toml:"default_source"`
 	CopyFiles     []string `toml:"copy_files"`
 }
@@ -20,7 +19,6 @@ type ctxKey struct{}
 func DefaultConfig(repoName, defaultBranch string) *Config {
 	return &Config{
 		WorktreeDir:   "../" + repoName + "-worktrees",
-		DefaultPrefix: "feat/",
 		DefaultSource: defaultBranch,
 		CopyFiles:     []string{".env", ".env.local", ".envrc", ".tool-versions"},
 	}

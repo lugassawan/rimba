@@ -16,9 +16,6 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.WorktreeDir != "../myrepo-worktrees" {
 		t.Errorf("WorktreeDir = %q, want %q", cfg.WorktreeDir, "../myrepo-worktrees")
 	}
-	if cfg.DefaultPrefix != "feat/" {
-		t.Errorf("DefaultPrefix = %q, want %q", cfg.DefaultPrefix, "feat/")
-	}
 	if cfg.DefaultSource != "main" {
 		t.Errorf("DefaultSource = %q, want %q", cfg.DefaultSource, "main")
 	}

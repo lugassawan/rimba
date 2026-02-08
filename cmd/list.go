@@ -42,17 +42,14 @@ var listCmd = &cobra.Command{
 			return nil
 		}
 
-		w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "TASK\tBRANCH\tPATH\tSTATUS")
-
 		wtDir := filepath.Join(repoRoot, cfg.WorktreeDir)
+		prefixes := resolver.AllPrefixes()
 
+		var rows []resolver.WorktreeDetail
 		for _, e := range entries {
 			if e.Bare {
 				continue
 			}
-
-			task := resolver.TaskFromBranch(e.Branch, cfg.DefaultPrefix)
 
 			// Determine relative path for display
 			displayPath := e.Path
@@ -76,7 +73,15 @@ var listCmd = &cobra.Command{
 				}
 			}
 
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", task, e.Branch, displayPath, status)
+			rows = append(rows, resolver.NewWorktreeDetail(e.Branch, prefixes, displayPath, status))
+		}
+
+		resolver.SortDetailsByTask(rows)
+
+		w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
+		fmt.Fprintln(w, "TASK\tTYPE\tBRANCH\tPATH\tSTATUS")
+		for _, row := range rows {
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", row.Task, row.Type, row.Branch, row.Path, row.Status)
 		}
 
 		return w.Flush()

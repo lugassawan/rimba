@@ -30,8 +30,8 @@ func TestWorkflowFullLifecycle(t *testing.T) {
 	wtPath1 := resolver.WorktreePath(wtDir, branch1)
 	assertFileExists(t, wtPath1)
 
-	// Step 3: add task-2 with custom prefix
-	r = rimbaSuccess(t, repo, "add", "-p", bugfixPrefix, task2)
+	// Step 3: add task-2 with bugfix prefix
+	r = rimbaSuccess(t, repo, "add", "--bugfix", task2)
 	assertContains(t, r.Stdout, msgCreatedWorktree)
 	branch2 := resolver.BranchName(bugfixPrefix, task2)
 	wtPath2 := resolver.WorktreePath(wtDir, branch2)

@@ -3,31 +3,26 @@ package cmd
 import (
 	"strings"
 
-	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/spf13/cobra"
 )
 
 // completeWorktreeTasks returns task names for shell completion.
-func completeWorktreeTasks(cmd *cobra.Command, toComplete string) []string {
-	cfg := config.FromContext(cmd.Context())
-	if cfg == nil {
-		return nil
-	}
-
+func completeWorktreeTasks(_ *cobra.Command, toComplete string) []string {
 	r := &git.ExecRunner{}
 	entries, err := git.ListWorktrees(r)
 	if err != nil {
 		return nil
 	}
 
+	prefixes := resolver.AllPrefixes()
 	var tasks []string
 	for _, e := range entries {
 		if e.Bare || e.Branch == "" {
 			continue
 		}
-		task := resolver.TaskFromBranch(e.Branch, cfg.DefaultPrefix)
+		task, _ := resolver.TaskFromBranch(e.Branch, prefixes)
 		if strings.HasPrefix(task, toComplete) {
 			tasks = append(tasks, task)
 		}

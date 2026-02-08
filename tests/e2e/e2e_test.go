@@ -14,7 +14,7 @@ import (
 
 const (
 	skipE2E       = "skipping e2e test"
-	defaultPrefix = "feat/"
+	defaultPrefix = "feature/"
 	bugfixPrefix  = "bugfix/"
 	configFile    = ".rimba.toml"
 

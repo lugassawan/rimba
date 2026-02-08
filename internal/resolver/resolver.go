@@ -11,7 +11,7 @@ func BranchName(prefix, task string) string {
 }
 
 // DirName converts a branch name to a directory-safe name.
-// e.g. "feat/my-task" → "feat-my-task"
+// e.g. "feature/my-task" → "feature-my-task"
 func DirName(branch string) string {
 	return strings.ReplaceAll(branch, "/", "-")
 }
@@ -21,13 +21,16 @@ func WorktreePath(worktreeDir, branch string) string {
 	return filepath.Join(worktreeDir, DirName(branch))
 }
 
-// TaskFromBranch extracts the task name from a branch name by stripping the prefix.
-// Returns the full branch name if the prefix doesn't match.
-func TaskFromBranch(branch, prefix string) string {
-	if task, ok := strings.CutPrefix(branch, prefix); ok {
-		return task
+// TaskFromBranch extracts the task name from a branch by trying each prefix in order.
+// Returns the task name and the matched prefix string.
+// If no prefix matches, returns the full branch name and an empty string.
+func TaskFromBranch(branch string, prefixes []string) (task, matchedPrefix string) {
+	for _, p := range prefixes {
+		if t, ok := strings.CutPrefix(branch, p); ok {
+			return t, p
+		}
 	}
-	return branch
+	return branch, ""
 }
 
 // WorktreeInfo holds parsed information about a worktree.
@@ -37,18 +40,17 @@ type WorktreeInfo struct {
 }
 
 // FindBranchForTask searches worktrees for one matching the given task.
-// It tries: prefix+task exact match, then bare task name match.
-func FindBranchForTask(task string, worktrees []WorktreeInfo, prefix string) (WorktreeInfo, bool) {
-	target := BranchName(prefix, task)
-
-	// Try exact match with prefix
-	for _, wt := range worktrees {
-		if wt.Branch == target {
-			return wt, true
+// It tries each prefix+task combination, then falls back to exact branch name match.
+func FindBranchForTask(task string, worktrees []WorktreeInfo, prefixes []string) (WorktreeInfo, bool) {
+	for _, p := range prefixes {
+		target := BranchName(p, task)
+		for _, wt := range worktrees {
+			if wt.Branch == target {
+				return wt, true
+			}
 		}
 	}
 
-	// Try exact match without prefix (user passed full branch name)
 	for _, wt := range worktrees {
 		if wt.Branch == task {
 			return wt, true
