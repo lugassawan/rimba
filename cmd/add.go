@@ -67,7 +67,7 @@ var addCmd = &cobra.Command{
 		// Copy dotfiles
 		copied, err := fileutil.CopyDotfiles(repoRoot, wtPath, cfg.CopyFiles)
 		if err != nil {
-			return fmt.Errorf("worktree created but failed to copy files: %w", err)
+			return fmt.Errorf("worktree created but failed to copy files: %w\nTo retry, manually copy files to: %s\nTo remove the worktree: rimba remove %s", err, wtPath, task)
 		}
 
 		fmt.Fprintf(cmd.OutOrStdout(), "Created worktree for task %q\n", task)

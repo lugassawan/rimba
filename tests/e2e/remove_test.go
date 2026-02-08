@@ -91,6 +91,31 @@ func TestRemoveForceFlag(t *testing.T) {
 	assertFileNotExists(t, wtPath)
 }
 
+func TestRemovePartialFailBranchHint(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", taskRmPartial)
+
+	// Commit in the worktree so the branch has unmerged changes,
+	// causing git branch -d to refuse deletion after worktree removal.
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch := resolver.BranchName(defaultPrefix, taskRmPartial)
+	wtPath := resolver.WorktreePath(wtDir, branch)
+
+	testutil.CreateFile(t, wtPath, "unmerged.txt", "content")
+	testutil.GitCmd(t, wtPath, "add", ".")
+	testutil.GitCmd(t, wtPath, "commit", "-m", "unmerged commit")
+
+	r := rimbaFail(t, repo, "remove", "--branch", taskRmPartial)
+	assertContains(t, r.Stderr, "worktree removed but failed to delete branch")
+	assertContains(t, r.Stderr, "git branch -d")
+	assertContains(t, r.Stderr, "-D to force")
+}
+
 func TestRemoveFailsNonexistent(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)

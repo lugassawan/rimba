@@ -32,6 +32,7 @@ const (
 	taskDotfile    = "dotfile-test"
 	task1          = "task-1"
 	task2          = "task-2"
+	taskRmPartial  = "rm-partial-task"
 )
 
 var (

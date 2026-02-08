@@ -64,7 +64,10 @@ var removeCmd = &cobra.Command{
 		deleteBranch, _ := cmd.Flags().GetBool("branch")
 		if deleteBranch {
 			if err := git.DeleteBranch(r, wt.Branch, force); err != nil {
-				return fmt.Errorf("worktree removed but failed to delete branch %q: %w", wt.Branch, err)
+				if force {
+					return fmt.Errorf("worktree removed but failed to delete branch %q: %w\nTo force delete: git branch -D %s", wt.Branch, err, wt.Branch)
+				}
+				return fmt.Errorf("worktree removed but failed to delete branch %q: %w\nTo delete manually: git branch -d %s (or -D to force)", wt.Branch, err, wt.Branch)
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Deleted branch: %s\n", wt.Branch)
 		}

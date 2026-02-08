@@ -129,6 +129,24 @@ func TestRenameFailsBranchExists(t *testing.T) {
 	assertContains(t, r.Stderr, "already exists")
 }
 
+func TestRenamePartialFailBranchHint(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", "--bugfix", "rn-partial-old")
+
+	// Create a sub-branch that blocks the rename target in the git ref namespace.
+	// "bugfix/rn-partial-new/sub" makes bugfix/rn-partial-new a directory in
+	// .git/refs/heads/, so git branch -m cannot create it as a file.
+	testutil.GitCmd(t, repo, "branch", "bugfix/rn-partial-new/sub")
+
+	r := rimbaFail(t, repo, "rename", "rn-partial-old", "rn-partial-new")
+	assertContains(t, r.Stderr, "worktree moved but failed to rename branch")
+	assertContains(t, r.Stderr, "git branch -m")
+}
+
 func TestRenameFailsNoArgs(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
