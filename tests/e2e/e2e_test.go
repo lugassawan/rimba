@@ -21,6 +21,11 @@ const (
 
 	// Output messages asserted in tests.
 	msgCreatedWorktree = "Created worktree"
+	msgRemovedWorktree = "Removed worktree"
+	msgDeletedBranch   = "Deleted branch"
+
+	// Flags reused across tests.
+	flagInto = "--into"
 
 	// Task names reused across tests.
 	taskRm         = "rm-task"
@@ -34,6 +39,18 @@ const (
 	task2          = "task-2"
 	taskRmPartial  = "rm-partial-task"
 	taskDirtyOne   = "dirty-one"
+
+	// Duplicate test constants.
+	taskDupA      = "task-a"
+	taskDupB      = "task-b"
+	taskMyCopy    = "my-copy"
+	secretContent = "SECRET=test"
+
+	// Merge test constants.
+	taskMergeMain   = "merge-main"
+	taskMergeKeep   = "merge-keep"
+	taskMergeSrc    = "merge-src"
+	taskMergeDelSrc = "merge-del-src"
 )
 
 var (

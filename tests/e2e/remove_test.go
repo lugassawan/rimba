@@ -19,7 +19,7 @@ func TestRemoveRemovesWorktree(t *testing.T) {
 	rimbaSuccess(t, repo, "add", taskRm)
 
 	r := rimbaSuccess(t, repo, "remove", taskRm)
-	assertContains(t, r.Stdout, "Removed worktree")
+	assertContains(t, r.Stdout, msgRemovedWorktree)
 
 	// Verify the worktree directory is gone
 	cfg := loadConfig(t, repo)
@@ -38,8 +38,8 @@ func TestRemoveWithBranchFlag(t *testing.T) {
 	rimbaSuccess(t, repo, "add", taskRmBranch)
 
 	r := rimbaSuccess(t, repo, "remove", "--branch", taskRmBranch)
-	assertContains(t, r.Stdout, "Removed worktree")
-	assertContains(t, r.Stdout, "Deleted branch")
+	assertContains(t, r.Stdout, msgRemovedWorktree)
+	assertContains(t, r.Stdout, msgDeletedBranch)
 
 	// Verify branch is deleted
 	out := testutil.GitCmd(t, repo, "branch", "--list")
