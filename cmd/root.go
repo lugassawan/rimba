@@ -26,6 +26,12 @@ var rootCmd = &cobra.Command{
 		if cmd.Name() == "init" || cmd.Name() == "version" || cmd.Name() == "completion" || cmd.Name() == "clean" || cmd.Name() == "update" {
 			return nil
 		}
+		// Skip all hook subcommands
+		for p := cmd; p != nil; p = p.Parent() {
+			if p.Name() == "hook" {
+				return nil
+			}
+		}
 
 		r := &git.ExecRunner{}
 		repoRoot, err := git.RepoRoot(r)

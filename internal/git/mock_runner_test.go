@@ -2,6 +2,7 @@ package git
 
 import (
 	"errors"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -16,6 +17,7 @@ const (
 	branchOld        = "old-branch"
 	branchNew        = "new-branch"
 	pruneOutput      = "Pruning worktree"
+	errNotAGitRepo   = "not a git repository"
 	errContainsFmt   = "error = %q, want it to contain %q"
 	errExpectedInFmt = "expected %s in args %v"
 	fatalDefaultFmt  = "DefaultBranch: %v"
@@ -104,6 +106,58 @@ func TestAheadBehind(t *testing.T) {
 				t.Errorf("behind = %d, want %d", behind, tt.wantBehind)
 			}
 		})
+	}
+}
+
+func TestMergedBranches(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			return "  feature/done\n* main\n+ bugfix/old", nil
+		},
+	}
+
+	branches, err := MergedBranches(r, branchMain)
+	if err != nil {
+		t.Fatalf("MergedBranches: %v", err)
+	}
+
+	want := []string{"feature/done", "main", "bugfix/old"}
+	if len(branches) != len(want) {
+		t.Fatalf("got %d branches, want %d: %v", len(branches), len(want), branches)
+	}
+	for i, w := range want {
+		if branches[i] != w {
+			t.Errorf("branches[%d] = %q, want %q", i, branches[i], w)
+		}
+	}
+}
+
+func TestMergedBranchesError(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			return "", errors.New(errNotARepo)
+		},
+	}
+
+	_, err := MergedBranches(r, branchMain)
+	if err == nil {
+		t.Fatal("expected error from MergedBranches")
+	}
+}
+
+func TestMergedBranchesEmpty(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			return "", nil
+		},
+	}
+
+	branches, err := MergedBranches(r, branchMain)
+	if err != nil {
+		t.Fatalf("MergedBranches: %v", err)
+	}
+	if len(branches) != 0 {
+		t.Errorf("expected no branches, got %v", branches)
 	}
 }
 
@@ -351,6 +405,65 @@ func TestDefaultBranchNotFound(t *testing.T) {
 	assertContains(t, err, "could not detect default branch")
 }
 
+func TestHooksDirError(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			return "", errors.New(errNotARepo)
+		},
+	}
+
+	_, err := HooksDir(r)
+	if err == nil {
+		t.Fatal("expected error from HooksDir")
+	}
+	assertContains(t, err, errNotAGitRepo)
+}
+
+func TestHooksDirRelativePath(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == "--git-common-dir" {
+				return ".git", nil
+			}
+			if len(args) >= 2 && args[1] == "--show-toplevel" {
+				return "/repo", nil
+			}
+			return "", errors.New("unexpected command")
+		},
+	}
+
+	dir, err := HooksDir(r)
+	if err != nil {
+		t.Fatalf("HooksDir: %v", err)
+	}
+
+	want := filepath.Join("/repo", ".git", "hooks")
+	if dir != want {
+		t.Errorf("HooksDir = %q, want %q", dir, want)
+	}
+}
+
+func TestHooksDirAbsolutePath(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == "--git-common-dir" {
+				return "/repo/.git", nil
+			}
+			return "", errors.New("unexpected command")
+		},
+	}
+
+	dir, err := HooksDir(r)
+	if err != nil {
+		t.Fatalf("HooksDir: %v", err)
+	}
+
+	want := filepath.Join("/repo/.git", "hooks")
+	if dir != want {
+		t.Errorf("HooksDir = %q, want %q", dir, want)
+	}
+}
+
 func TestRepoRootError(t *testing.T) {
 	r := &mockRunner{
 		run: func(_ ...string) (string, error) {
@@ -362,7 +475,7 @@ func TestRepoRootError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error from RepoRoot")
 	}
-	assertContains(t, err, "not a git repository")
+	assertContains(t, err, errNotAGitRepo)
 }
 
 func TestRepoNameError(t *testing.T) {
@@ -376,5 +489,5 @@ func TestRepoNameError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error from RepoName")
 	}
-	assertContains(t, err, "not a git repository")
+	assertContains(t, err, errNotAGitRepo)
 }

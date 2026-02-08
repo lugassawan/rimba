@@ -30,6 +30,26 @@ func RepoName(r Runner) (string, error) {
 	return filepath.Base(root), nil
 }
 
+// HooksDir returns the absolute path to the repository's hooks directory.
+// Uses git rev-parse --git-common-dir for worktree compatibility.
+func HooksDir(r Runner) (string, error) {
+	commonDir, err := r.Run(cmdRevParse, "--git-common-dir")
+	if err != nil {
+		return "", fmt.Errorf("not a git repository: %w", err)
+	}
+
+	// --git-common-dir may return a relative path; resolve against repo root
+	if !filepath.IsAbs(commonDir) {
+		root, err := RepoRoot(r)
+		if err != nil {
+			return "", err
+		}
+		commonDir = filepath.Join(root, commonDir)
+	}
+
+	return filepath.Join(commonDir, "hooks"), nil
+}
+
 // DefaultBranch detects the default branch (main or master).
 func DefaultBranch(r Runner) (string, error) {
 	// Try symbolic-ref for origin/HEAD first

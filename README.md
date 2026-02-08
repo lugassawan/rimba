@@ -9,7 +9,9 @@ Git worktree manager CLI — branch naming conventions, dotfile copying, and wor
 - **Status dashboard** — colored tabular view of all worktrees with dirty state, ahead/behind counts, current worktree indicator, and filtering
 - **Duplicate worktrees** — create a copy of an existing worktree with auto-suffixed or custom name
 - **Local merge** — merge worktree branches into main or other worktrees with auto-cleanup
-- **Stale cleanup** — prune stale worktree references with dry-run support
+- **Sync worktrees** — rebase or merge worktrees onto the latest main branch, with bulk sync support
+- **Stale cleanup** — prune stale worktree references or auto-detect and remove merged worktrees
+- **Auto-cleanup hook** — install a post-merge Git hook that cleans merged worktrees after `git pull`
 - **Shell completions** — built-in completion for bash, zsh, fish, and PowerShell
 - **Cross-platform** — builds for Linux, macOS, and Windows (amd64/arm64)
 
@@ -167,18 +169,70 @@ rimba merge auth --no-ff                   # Force merge commit
 
 > **Note:** `--keep` and `--delete` are mutually exclusive. Merging to main deletes the source by default; merging to another worktree keeps it by default.
 
-### `rimba clean`
+### `rimba sync <task>`
 
-Prune stale worktree references.
+Sync worktree(s) with the main branch by rebasing (default) or merging. Fetches the latest changes from origin first.
 
 ```sh
-rimba clean
-rimba clean --dry-run                # Preview what would be pruned
+rimba sync my-feature                # Rebase a single worktree onto main
+rimba sync my-feature --merge        # Use merge instead of rebase
+rimba sync --all                     # Sync all eligible worktrees
+rimba sync --all --include-inherited # Include duplicate worktrees
 ```
 
 | Flag | Description |
 |------|-------------|
-| `--dry-run` | Show what would be pruned without pruning |
+| `--all` | Sync all eligible worktrees (skips dirty and inherited by default) |
+| `--merge` | Use merge instead of rebase |
+| `--include-inherited` | Include inherited/duplicate worktrees when using `--all` |
+
+> **Note:** Dirty worktrees are skipped with a warning. On conflict, the rebase is automatically aborted and a recovery hint is printed.
+
+### `rimba hook install`
+
+Install a `post-merge` Git hook that automatically runs `rimba clean --merged --force` after `git pull`. The hook only fires on the default branch (e.g. `main`), so pulling on feature branches is unaffected.
+
+```sh
+rimba hook install           # Install the post-merge hook
+```
+
+### `rimba hook uninstall`
+
+Remove the rimba post-merge hook. Preserves any other content in the hook file.
+
+```sh
+rimba hook uninstall         # Remove the rimba hook
+```
+
+### `rimba hook status`
+
+Show whether the rimba post-merge hook is currently installed.
+
+```sh
+rimba hook status            # Check installation status
+```
+
+> **Note:** `rimba hook` works with or without `rimba init`. The hook coexists with existing user-defined hooks in the same `post-merge` file.
+
+### `rimba clean`
+
+Prune stale worktree references, or detect and remove worktrees whose branches have been merged into main.
+
+```sh
+rimba clean                          # Prune stale worktree references
+rimba clean --dry-run                # Preview what would be pruned
+rimba clean --merged                 # Detect and remove merged worktrees (with confirmation)
+rimba clean --merged --force         # Remove merged worktrees without confirmation
+rimba clean --merged --dry-run       # Show merged worktrees without removing
+```
+
+| Flag | Description |
+|------|-------------|
+| `--dry-run` | Show what would be pruned/removed without making changes |
+| `--merged` | Detect and remove worktrees whose branches are merged into main |
+| `--force` | Skip confirmation prompt when used with `--merged` |
+
+> **Note:** `--merged` works with or without `rimba init`. Without a config file, it falls back to auto-detecting the default branch.
 
 ### `rimba update`
 
