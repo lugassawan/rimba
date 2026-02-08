@@ -81,8 +81,8 @@ func TestCopyDotfilesEmptyList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CopyDotfiles with empty list: %v", err)
 	}
-	if copied != nil {
-		t.Errorf("expected nil copied list, got %v", copied)
+	if len(copied) != 0 {
+		t.Errorf("expected empty copied list, got %v", copied)
 	}
 }
 

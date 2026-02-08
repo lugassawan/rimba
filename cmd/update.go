@@ -65,7 +65,7 @@ var updateCmd = &cobra.Command{
 		}
 
 		// Verify the new binary works
-		out, err := exec.Command(currentBinary, "version").Output()
+		out, err := exec.Command(filepath.Clean(currentBinary), "version").Output() //nolint:gosec // path comes from os.Executable
 		if err != nil {
 			return fmt.Errorf("verifying new binary: %w", err)
 		}

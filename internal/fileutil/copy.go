@@ -10,7 +10,7 @@ import (
 // CopyDotfiles copies the listed files from src directory to dst directory.
 // Missing source files are silently skipped. Returns the list of files actually copied.
 func CopyDotfiles(src, dst string, files []string) ([]string, error) {
-	var copied []string
+	copied := make([]string, 0, len(files))
 	for _, name := range files {
 		srcPath := filepath.Join(src, name)
 		dstPath := filepath.Join(dst, name)
@@ -26,23 +26,27 @@ func CopyDotfiles(src, dst string, files []string) ([]string, error) {
 	return copied, nil
 }
 
-func copyFile(src, dst string) error {
-	in, err := os.Open(src)
+func copyFile(src, dst string) (retErr error) {
+	in, err := os.Open(filepath.Clean(src))
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 
 	info, err := in.Stat()
 	if err != nil {
 		return err
 	}
 
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode())
+	out, err := os.OpenFile(filepath.Clean(dst), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode())
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer func() {
+		if cerr := out.Close(); retErr == nil {
+			retErr = cerr
+		}
+	}()
 
 	_, err = io.Copy(out, in)
 	return err

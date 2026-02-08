@@ -2,6 +2,7 @@ package e2e_test
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -72,17 +73,16 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "failed to create temp dir: %v\n", err)
 		os.Exit(1)
 	}
-	defer os.RemoveAll(binDir)
 
 	binaryPath = filepath.Join(binDir, "rimba")
 
 	// Create coverage directory
 	coverDir, err = os.MkdirTemp("", "rimba-e2e-cover-*")
 	if err != nil {
+		os.RemoveAll(binDir)
 		fmt.Fprintf(os.Stderr, "failed to create cover dir: %v\n", err)
 		os.Exit(1)
 	}
-	defer os.RemoveAll(coverDir)
 
 	// Build the binary with coverage instrumentation
 	build := exec.Command("go", "build", "-cover", "-o", binaryPath, ".")
@@ -104,6 +104,8 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stdout, "E2E coverage written to %s\n", coverOut)
 	}
 
+	os.RemoveAll(binDir)
+	os.RemoveAll(coverDir)
 	os.Exit(code)
 }
 
@@ -134,7 +136,8 @@ func rimba(t *testing.T, dir string, args ...string) result {
 	}
 
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
 			r.ExitCode = exitErr.ExitCode()
 		} else {
 			t.Fatalf("failed to run rimba: %v", err)

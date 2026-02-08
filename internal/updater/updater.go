@@ -144,7 +144,7 @@ func (u *Updater) Download(url string) (string, error) {
 
 	dst, err := extractBinary(resp.Body, tmpDir)
 	if err != nil {
-		os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
 		return "", err
 	}
 
@@ -157,7 +157,7 @@ func extractBinary(r io.Reader, dstDir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("decompressing archive: %w", err)
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 
 	tr := tar.NewReader(gz)
 	for {
@@ -178,12 +178,16 @@ func extractBinary(r io.Reader, dstDir string) (string, error) {
 }
 
 // writeBinary writes the tar entry contents to dst with executable permissions.
-func writeBinary(dst string, r io.Reader) (string, error) {
-	f, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY, 0755)
+func writeBinary(dst string, r io.Reader) (_ string, retErr error) {
+	f, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY, 0755) //nolint:gosec // executable binary requires 0755
 	if err != nil {
 		return "", fmt.Errorf("creating binary file: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); retErr == nil {
+			retErr = cerr
+		}
+	}()
 
 	if _, err := io.Copy(f, r); err != nil {
 		return "", fmt.Errorf("extracting binary: %w", err)
@@ -218,21 +222,25 @@ func Replace(currentBinary, newBinary string) error {
 
 // CleanupTempDir removes the parent directory of the given binary path.
 func CleanupTempDir(binaryPath string) {
-	os.RemoveAll(filepath.Dir(binaryPath))
+	_ = os.RemoveAll(filepath.Dir(binaryPath))
 }
 
-func copyFile(src, dst string, perm os.FileMode) error {
-	in, err := os.Open(src)
+func copyFile(src, dst string, perm os.FileMode) (retErr error) {
+	in, err := os.Open(filepath.Clean(src))
 	if err != nil {
 		return fmt.Errorf("opening new binary: %w", err)
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm)
+	out, err := os.OpenFile(filepath.Clean(dst), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm)
 	if err != nil {
 		return fmt.Errorf("opening destination: %w", err)
 	}
-	defer out.Close()
+	defer func() {
+		if cerr := out.Close(); retErr == nil {
+			retErr = cerr
+		}
+	}()
 
 	if _, err := io.Copy(out, in); err != nil {
 		return fmt.Errorf("copying binary: %w", err)

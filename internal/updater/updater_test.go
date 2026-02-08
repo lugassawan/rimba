@@ -11,9 +11,9 @@ import (
 )
 
 const (
-	testVersion    = "v1.0.0"
-	testOS         = "linux"
-	testArch       = "amd64"
+	testVersion     = "v1.0.0"
+	testOS          = "linux"
+	testArch        = "amd64"
 	contentTypeJSON = "application/json"
 )
 
@@ -228,9 +228,15 @@ func buildTestArchive(t *testing.T, name, content string) []byte {
 		t.Fatal(err)
 	}
 
-	tw.Close()
-	gw.Close()
-	f.Close()
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
 
 	data, err := os.ReadFile(archivePath)
 	if err != nil {

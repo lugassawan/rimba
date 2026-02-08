@@ -37,11 +37,11 @@ func IsDirty(r Runner, dir string) (bool, error) {
 
 // AheadBehind returns the ahead/behind counts of the current branch vs its upstream.
 // Returns (0, 0, nil) if there's no upstream configured.
-func AheadBehind(r Runner, dir string) (ahead, behind int, err error) {
+func AheadBehind(r Runner, dir string) (ahead, behind int, _ error) {
 	out, err := r.RunInDir(dir, "rev-list", "--left-right", "--count", "@{upstream}...HEAD")
 	if err != nil {
 		// No upstream or other error — treat as 0/0
-		return 0, 0, nil
+		return 0, 0, nil //nolint:nilerr // intentional: missing upstream is not an error
 	}
 
 	parts := strings.Fields(out)
@@ -50,12 +50,12 @@ func AheadBehind(r Runner, dir string) (ahead, behind int, err error) {
 	}
 
 	var a, b int
-	_, _ = parseCount(parts[0], &b)
-	_, _ = parseCount(parts[1], &a)
+	parseCount(parts[0], &b)
+	parseCount(parts[1], &a)
 	return a, b, nil
 }
 
-func parseCount(s string, v *int) (int, error) {
+func parseCount(s string, v *int) int {
 	n := 0
 	for _, c := range s {
 		if c < '0' || c > '9' {
@@ -64,5 +64,5 @@ func parseCount(s string, v *int) (int, error) {
 		n = n*10 + int(c-'0')
 	}
 	*v = n
-	return n, nil
+	return n
 }

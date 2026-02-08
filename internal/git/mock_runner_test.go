@@ -8,13 +8,13 @@ import (
 )
 
 const (
-	fakeDir        = "/fake"
-	fakePath       = "/some/path"
-	errNotARepo    = "not a git repo"
-	flagForceD     = "-D"
-	flagDryRun     = "--dry-run"
-	branchOld      = "old-branch"
-	branchNew      = "new-branch"
+	fakeDir          = "/fake"
+	fakePath         = "/some/path"
+	errNotARepo      = "not a git repo"
+	flagForceD       = "-D"
+	flagDryRun       = "--dry-run"
+	branchOld        = "old-branch"
+	branchNew        = "new-branch"
 	pruneOutput      = "Pruning worktree"
 	errContainsFmt   = "error = %q, want it to contain %q"
 	errExpectedInFmt = "expected %s in args %v"
@@ -60,10 +60,7 @@ func TestParseCount(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var v int
-			got, err := parseCount(tt.input, &v)
-			if err != nil {
-				t.Fatalf("parseCount(%q) returned error: %v", tt.input, err)
-			}
+			got := parseCount(tt.input, &v)
 			if got != tt.want {
 				t.Errorf("parseCount(%q) = %d, want %d", tt.input, got, tt.want)
 			}

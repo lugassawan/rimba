@@ -50,7 +50,7 @@ var initCmd = &cobra.Command{
 
 		// Create the worktree directory
 		wtDir := filepath.Join(repoRoot, cfg.WorktreeDir)
-		if err := os.MkdirAll(wtDir, 0755); err != nil {
+		if err := os.MkdirAll(wtDir, 0750); err != nil {
 			return fmt.Errorf("failed to create worktree directory: %w", err)
 		}
 

@@ -1,0 +1,50 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - copyloopvar
+    - dupl
+    - errname
+    - errorlint
+    - fatcontext
+    - goconst
+    - gocritic
+    - gocyclo
+    - gosec
+    - nilerr
+    - prealloc
+    - unconvert
+    - unparam
+    - whitespace
+  settings:
+    gocyclo:
+      min-complexity: 15
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+    dupl:
+      threshold: 150
+    errcheck:
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - os.RemoveAll
+        - (io.ReadCloser).Close
+    revive:
+      rules:
+        - name: unused-parameter
+          disabled: true
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+  exclusions:
+    presets:
+      - std-error-handling
+      - common-false-positives
+    rules:
+      - path: (_test\.go|testutil/)
+        linters: [gosec]
