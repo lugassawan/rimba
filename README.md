@@ -11,6 +11,7 @@ Git worktree manager CLI — branch naming conventions, dotfile copying, and wor
 - **Local merge** — merge worktree branches into main or other worktrees with auto-cleanup
 - **Sync worktrees** — rebase or merge worktrees onto the latest main branch, with bulk sync support
 - **Stale cleanup** — prune stale worktree references or auto-detect and remove merged worktrees
+- **Auto-cleanup hook** — install a post-merge Git hook that cleans merged worktrees after `git pull`
 - **Shell completions** — built-in completion for bash, zsh, fish, and PowerShell
 - **Cross-platform** — builds for Linux, macOS, and Windows (amd64/arm64)
 
@@ -186,6 +187,32 @@ rimba sync --all --include-inherited # Include duplicate worktrees
 | `--include-inherited` | Include inherited/duplicate worktrees when using `--all` |
 
 > **Note:** Dirty worktrees are skipped with a warning. On conflict, the rebase is automatically aborted and a recovery hint is printed.
+
+### `rimba hook install`
+
+Install a `post-merge` Git hook that automatically runs `rimba clean --merged --force` after `git pull`. The hook only fires on the default branch (e.g. `main`), so pulling on feature branches is unaffected.
+
+```sh
+rimba hook install           # Install the post-merge hook
+```
+
+### `rimba hook uninstall`
+
+Remove the rimba post-merge hook. Preserves any other content in the hook file.
+
+```sh
+rimba hook uninstall         # Remove the rimba hook
+```
+
+### `rimba hook status`
+
+Show whether the rimba post-merge hook is currently installed.
+
+```sh
+rimba hook status            # Check installation status
+```
+
+> **Note:** `rimba hook` works with or without `rimba init`. The hook coexists with existing user-defined hooks in the same `post-merge` file.
 
 ### `rimba clean`
 

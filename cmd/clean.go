@@ -3,10 +3,8 @@ package cmd
 import (
 	"bufio"
 	"fmt"
-	"path/filepath"
 	"strings"
 
-	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/spf13/cobra"
@@ -170,18 +168,3 @@ func removeMergedWorktrees(cmd *cobra.Command, r git.Runner, candidates []merged
 	return removed
 }
 
-// resolveMainBranch tries to get the main branch from config, falling back to DefaultBranch.
-func resolveMainBranch(r git.Runner) (string, error) {
-	repoRoot, err := git.RepoRoot(r)
-	if err != nil {
-		return "", err
-	}
-
-	cfg, err := config.Load(filepath.Join(repoRoot, configFileName))
-	if err == nil && cfg.DefaultSource != "" {
-		return cfg.DefaultSource, nil
-	}
-
-	// No config — use git detection
-	return git.DefaultBranch(r)
-}

@@ -47,6 +47,27 @@ func TestRepoName(t *testing.T) {
 	}
 }
 
+func TestHooksDir(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	dir, err := git.HooksDir(r)
+	if err != nil {
+		t.Fatalf("HooksDir: %v", err)
+	}
+
+	// Resolve symlinks for macOS /private/var vs /var
+	wantDir, _ := filepath.EvalSymlinks(filepath.Join(repo, ".git", "hooks"))
+	gotDir, _ := filepath.EvalSymlinks(dir)
+	if gotDir != wantDir {
+		t.Errorf("HooksDir = %q, want %q", gotDir, wantDir)
+	}
+}
+
 func TestDefaultBranch(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipIntegration)
