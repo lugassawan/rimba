@@ -40,6 +40,10 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+func init() {
+	rootCmd.PersistentFlags().Bool("no-color", false, "disable colored output")
+}
+
 func Execute() error {
 	return rootCmd.Execute()
 }
