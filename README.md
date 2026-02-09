@@ -12,6 +12,8 @@ Git worktree manager CLI — branch naming conventions, dotfile copying, and wor
 - **Sync worktrees** — rebase or merge worktrees onto the latest main branch, with bulk sync support
 - **Stale cleanup** — prune stale worktree references or auto-detect and remove merged worktrees
 - **Auto-cleanup hook** — install a post-merge Git hook that cleans merged worktrees after `git pull`
+- **Shared dependencies** — auto-detect lockfiles (npm/yarn/pnpm/Go) and clone dependency directories between worktrees using copy-on-write
+- **Post-create hooks** — run shell commands in new worktrees after creation (e.g. `./gradlew build`)
 - **Shell completions** — built-in completion for bash, zsh, fish, and PowerShell
 - **Cross-platform** — builds for Linux, macOS, and Windows (amd64/arm64)
 
@@ -78,6 +80,8 @@ rimba add my-feature -s develop      # Branch from a different source
 |------|-------------|
 | `-p`, `--prefix` | Branch prefix (default from config) |
 | `-s`, `--source` | Source branch to create worktree from (default from config) |
+| `--skip-deps` | Skip dependency detection and installation |
+| `--skip-hooks` | Skip post-create hooks |
 
 ### `rimba list`
 
@@ -147,6 +151,8 @@ rimba duplicate auth --as auth-v2 # Creates feature/auth-v2 from feature/auth
 | Flag | Description |
 |------|-------------|
 | `--as` | Custom name for the duplicate worktree (instead of auto-suffix) |
+| `--skip-deps` | Skip dependency detection and installation |
+| `--skip-hooks` | Skip post-create hooks |
 
 ### `rimba merge <source-task>`
 
@@ -214,6 +220,33 @@ rimba hook status            # Check installation status
 
 > **Note:** `rimba hook` works with or without `rimba init`. The hook coexists with existing user-defined hooks in the same `post-merge` file.
 
+### `rimba deps status`
+
+Show detected dependency modules and lockfile hashes for all worktrees.
+
+```sh
+rimba deps status
+```
+
+Example output:
+
+```
+refs/heads/main (/path/to/repo)
+  node_modules [a1b2c3d4e5f6]
+  vendor [7g8h9i0j1k2l]
+refs/heads/feature/auth (/path/to/worktrees/feature-auth)
+  node_modules [a1b2c3d4e5f6]
+  vendor [7g8h9i0j1k2l]
+```
+
+### `rimba deps install <task>`
+
+Detect and install dependencies for a specific worktree. Clones from an existing worktree with a matching lockfile hash, or falls back to the configured install command.
+
+```sh
+rimba deps install my-feature
+```
+
 ### `rimba clean`
 
 Prune stale worktree references, or detect and remove worktrees whose branches have been merged into main.
@@ -265,6 +298,25 @@ worktree_dir = '../myrepo-worktrees'
 default_prefix = 'feat/'
 default_source = 'main'
 copy_files = ['.env', '.env.local', '.envrc', '.tool-versions']
+
+# Post-create hooks (run in new worktree directory)
+post_create = ['./gradlew build']
+
+# Dependency management (optional — auto-detect is on by default)
+[deps]
+auto_detect = true
+
+# Manual module overrides (supplements or overrides auto-detected modules)
+[[deps.modules]]
+dir = 'node_modules'
+lockfile = 'package-lock.json'
+install = 'npm ci'
+
+[[deps.modules]]
+dir = 'api/vendor'
+lockfile = 'api/go.sum'
+install = 'go mod vendor'
+work_dir = 'api'
 ```
 
 | Field | Description | Default |
@@ -273,8 +325,23 @@ copy_files = ['.env', '.env.local', '.envrc', '.tool-versions']
 | `default_prefix` | Branch name prefix | `feat/` |
 | `default_source` | Branch to create worktrees from | Default branch (e.g. `main`) |
 | `copy_files` | Files to copy from repo root into new worktrees | `.env`, `.env.local`, `.envrc`, `.tool-versions` |
+| `post_create` | Shell commands to run in new worktrees after creation | (none) |
+| `deps.auto_detect` | Auto-detect dependency modules from lockfiles | `true` |
+| `deps.modules[].dir` | Dependency directory to clone (e.g. `node_modules`) | — |
+| `deps.modules[].lockfile` | Lockfile used to match worktrees (e.g. `pnpm-lock.yaml`) | — |
+| `deps.modules[].install` | Install command to run if no matching worktree is found | — |
+| `deps.modules[].work_dir` | Subdirectory to run the install command in | (repo root) |
 
-> **Tip:** Add `.rimba.toml` to your `.gitignore`.
+**Auto-detected ecosystems** (when `auto_detect` is enabled):
+
+| Lockfile | Dep directory | Install command | Behavior |
+|----------|---------------|-----------------|----------|
+| `pnpm-lock.yaml` | `node_modules` | `pnpm install --frozen-lockfile` | Recursive clone + install fallback |
+| `yarn.lock` | `node_modules` | `yarn install` | Recursive clone + `.yarn/cache` |
+| `package-lock.json` | `node_modules` | `npm ci` | Recursive clone + install fallback |
+| `go.sum` | `vendor` | `go mod vendor` | Clone only (skip if no match) |
+
+> **Note:** Dependencies are shared using copy-on-write clones (`cp -c` on macOS, `cp --reflink=auto` on Linux) for near-instant copies on supported filesystems (APFS, Btrfs). Falls back to regular copy on other systems.
 
 ## License
 
