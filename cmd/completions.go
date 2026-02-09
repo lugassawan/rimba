@@ -10,7 +10,7 @@ import (
 
 // completeWorktreeTasks returns task names for shell completion.
 func completeWorktreeTasks(_ *cobra.Command, toComplete string) []string {
-	r := &git.ExecRunner{}
+	r := newRunner()
 	entries, err := git.ListWorktrees(r)
 	if err != nil {
 		return nil
@@ -32,7 +32,7 @@ func completeWorktreeTasks(_ *cobra.Command, toComplete string) []string {
 
 // completeBranchNames returns branch names for shell completion.
 func completeBranchNames(_ *cobra.Command, toComplete string) []string {
-	r := &git.ExecRunner{}
+	r := newRunner()
 	out, err := r.Run("branch", "--format=%(refname:short)")
 	if err != nil {
 		return nil

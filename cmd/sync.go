@@ -36,11 +36,8 @@ var syncCmd = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.FromContext(cmd.Context())
-		if cfg == nil {
-			return errNoConfig
-		}
 
-		r := &git.ExecRunner{}
+		r := newRunner()
 		all, _ := cmd.Flags().GetBool("all")
 		useMerge, _ := cmd.Flags().GetBool("merge")
 		includeInherited, _ := cmd.Flags().GetBool("include-inherited")
@@ -54,18 +51,9 @@ var syncCmd = &cobra.Command{
 			fmt.Fprintf(cmd.OutOrStdout(), "Warning: fetch failed (no remote?): continuing with local state\n")
 		}
 
-		// List worktrees
-		entries, err := git.ListWorktrees(r)
+		worktrees, err := listWorktreeInfos(r)
 		if err != nil {
 			return err
-		}
-
-		var worktrees []resolver.WorktreeInfo
-		for _, e := range entries {
-			worktrees = append(worktrees, resolver.WorktreeInfo{
-				Path:   e.Path,
-				Branch: e.Branch,
-			})
 		}
 
 		prefixes := resolver.AllPrefixes()

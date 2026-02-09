@@ -3,9 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
-	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/spf13/cobra"
 )
 
@@ -28,30 +26,11 @@ var removeCmd = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		task := args[0]
-		cfg := config.FromContext(cmd.Context())
-		if cfg == nil {
-			return errNoConfig
-		}
+		r := newRunner()
 
-		r := &git.ExecRunner{}
-
-		// Try to find the worktree by scanning existing worktrees
-		entries, err := git.ListWorktrees(r)
+		wt, err := findWorktree(r, task)
 		if err != nil {
 			return err
-		}
-
-		var worktrees []resolver.WorktreeInfo
-		for _, e := range entries {
-			worktrees = append(worktrees, resolver.WorktreeInfo{
-				Path:   e.Path,
-				Branch: e.Branch,
-			})
-		}
-
-		wt, found := resolver.FindBranchForTask(task, worktrees, resolver.AllPrefixes())
-		if !found {
-			return fmt.Errorf(errWorktreeNotFound, task)
 		}
 
 		force, _ := cmd.Flags().GetBool("force")

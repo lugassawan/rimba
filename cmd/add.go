@@ -31,11 +31,8 @@ var addCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		task := args[0]
 		cfg := config.FromContext(cmd.Context())
-		if cfg == nil {
-			return errNoConfig
-		}
 
-		r := &git.ExecRunner{}
+		r := newRunner()
 
 		repoRoot, err := git.RepoRoot(r)
 		if err != nil {

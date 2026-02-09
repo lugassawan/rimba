@@ -33,36 +33,20 @@ var duplicateCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		task := args[0]
 		cfg := config.FromContext(cmd.Context())
-		if cfg == nil {
-			return errNoConfig
-		}
 
-		r := &git.ExecRunner{}
+		r := newRunner()
 
 		repoRoot, err := git.RepoRoot(r)
 		if err != nil {
 			return err
 		}
 
-		// Find the source worktree
-		entries, err := git.ListWorktrees(r)
+		wt, err := findWorktree(r, task)
 		if err != nil {
 			return err
 		}
 
-		var worktrees []resolver.WorktreeInfo
-		for _, e := range entries {
-			worktrees = append(worktrees, resolver.WorktreeInfo{
-				Path:   e.Path,
-				Branch: e.Branch,
-			})
-		}
-
 		prefixes := resolver.AllPrefixes()
-		wt, found := resolver.FindBranchForTask(task, worktrees, prefixes)
-		if !found {
-			return fmt.Errorf(errWorktreeNotFound, task)
-		}
 
 		if wt.Branch == cfg.DefaultSource {
 			return fmt.Errorf("cannot duplicate the default branch %q; use 'rimba add' instead", cfg.DefaultSource)

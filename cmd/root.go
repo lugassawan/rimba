@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"path/filepath"
 
 	"github.com/lugassawan/rimba/internal/config"
@@ -9,37 +8,33 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const (
-	configFileName      = ".rimba.toml"
-	errWorktreeNotFound = "worktree not found for task %q"
-)
-
-var errNoConfig = errors.New("config not loaded (run 'rimba init' first)")
+const errWorktreeNotFound = "worktree not found for task %q"
 
 var rootCmd = &cobra.Command{
 	Use:          "rimba",
-	Short:        "Git worktree manager",
-	Long:         "Rimba simplifies git worktree management with auto-copying dotfiles, branch naming conventions, and worktree status dashboards.",
+	Short:        "Git worktree lifecycle manager",
+	Long:         "Rimba manages the full git worktree lifecycle: create, list, rename, duplicate, merge, sync, and clean worktrees with branch naming conventions, dotfile copying, shared dependency management, post-create hooks, and status dashboards.",
 	SilenceUsage: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Skip config loading for these commands
-		if cmd.Name() == "init" || cmd.Name() == "version" || cmd.Name() == "completion" || cmd.Name() == "clean" || cmd.Name() == "update" {
+		// Skip config for Cobra internals (completion, __complete)
+		if cmd.Name() == "completion" || cmd.Name() == "__complete" {
 			return nil
 		}
-		// Skip all hook subcommands
-		for p := cmd; p != nil; p = p.Parent() {
-			if p.Name() == "hook" {
+
+		// Skip config if any command in the chain is annotated
+		for c := cmd; c != nil; c = c.Parent() {
+			if c.Annotations != nil && c.Annotations["skipConfig"] == "true" {
 				return nil
 			}
 		}
 
-		r := &git.ExecRunner{}
+		r := newRunner()
 		repoRoot, err := git.RepoRoot(r)
 		if err != nil {
 			return err
 		}
 
-		cfg, err := config.Load(filepath.Join(repoRoot, configFileName))
+		cfg, err := config.Load(filepath.Join(repoRoot, config.FileName))
 		if err != nil {
 			return err
 		}

@@ -2,11 +2,15 @@ package config
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
 	toml "github.com/pelletier/go-toml/v2"
 )
+
+// FileName is the config file name used by rimba.
+const FileName = ".rimba.toml"
 
 type Config struct {
 	WorktreeDir   string   `toml:"worktree_dir"`
@@ -40,6 +44,27 @@ func (c *Config) IsAutoDetectDeps() bool {
 	return *c.Deps.AutoDetect
 }
 
+// Validation error messages for required config fields.
+const (
+	ErrMsgEmptyWorktreeDir   = "worktree_dir must not be empty"
+	ErrMsgEmptyDefaultSource = "default_source must not be empty"
+)
+
+// Validate checks that required config fields are present.
+func (c *Config) Validate() error {
+	var errs []error
+	if c.WorktreeDir == "" {
+		errs = append(errs, errors.New(ErrMsgEmptyWorktreeDir))
+	}
+	if c.DefaultSource == "" {
+		errs = append(errs, errors.New(ErrMsgEmptyDefaultSource))
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("invalid config: %w", errors.Join(errs...))
+	}
+	return nil
+}
+
 type ctxKey struct{}
 
 func DefaultConfig(repoName, defaultBranch string) *Config {
@@ -59,6 +84,9 @@ func Load(path string) (*Config, error) {
 	var cfg Config
 	if err := toml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
+	}
+	if err := cfg.Validate(); err != nil {
+		return nil, err
 	}
 	return &cfg, nil
 }

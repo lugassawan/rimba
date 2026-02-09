@@ -28,12 +28,9 @@ var depsStatusCmd = &cobra.Command{
 	Short: "Show detected modules and lockfile hashes for all worktrees",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.FromContext(cmd.Context())
-		if cfg == nil {
-			return errNoConfig
-		}
 
-		r := &git.ExecRunner{}
-		entries, err := git.ListWorktrees(r)
+		r := newRunner()
+		worktrees, err := listWorktreeInfos(r)
 		if err != nil {
 			return err
 		}
@@ -45,27 +42,26 @@ var depsStatusCmd = &cobra.Command{
 			configModules = cfg.Deps.Modules
 		}
 
-		// Collect existing worktree paths
-		var existingPaths []string
-		for _, e := range entries {
-			existingPaths = append(existingPaths, e.Path)
+		existingPaths := make([]string, len(worktrees))
+		for i, w := range worktrees {
+			existingPaths[i] = w.Path
 		}
 
-		for _, e := range entries {
-			modules, err := deps.ResolveModules(e.Path, cfg.IsAutoDetectDeps(), configModules, existingPaths)
+		for _, wt := range worktrees {
+			modules, err := deps.ResolveModules(wt.Path, cfg.IsAutoDetectDeps(), configModules, existingPaths)
 			if err != nil {
-				fmt.Fprintf(out, "%s (%s)\n  error: %v\n", e.Branch, e.Path, err)
+				fmt.Fprintf(out, "%s (%s)\n  error: %v\n", wt.Branch, wt.Path, err)
 				continue
 			}
 
-			fmt.Fprintf(out, "%s (%s)\n", e.Branch, e.Path)
+			fmt.Fprintf(out, "%s (%s)\n", wt.Branch, wt.Path)
 
 			if len(modules) == 0 {
 				fmt.Fprintf(out, "  (no modules detected)\n")
 				continue
 			}
 
-			hashed, err := deps.HashModules(e.Path, modules)
+			hashed, err := deps.HashModules(wt.Path, modules)
 			if err != nil {
 				fmt.Fprintf(out, "  error hashing: %v\n", err)
 				continue
@@ -100,31 +96,22 @@ var depsInstallCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		task := args[0]
 		cfg := config.FromContext(cmd.Context())
-		if cfg == nil {
-			return errNoConfig
-		}
 
-		r := &git.ExecRunner{}
+		r := newRunner()
 
 		repoRoot, err := git.RepoRoot(r)
 		if err != nil {
 			return err
 		}
 
-		// Find the worktree
-		entries, err := git.ListWorktrees(r)
+		worktrees, err := listWorktreeInfos(r)
 		if err != nil {
 			return err
 		}
 
-		var worktrees []resolver.WorktreeInfo
-		var existingPaths []string
-		for _, e := range entries {
-			worktrees = append(worktrees, resolver.WorktreeInfo{
-				Path:   e.Path,
-				Branch: e.Branch,
-			})
-			existingPaths = append(existingPaths, e.Path)
+		existingPaths := make([]string, len(worktrees))
+		for i, w := range worktrees {
+			existingPaths[i] = w.Path
 		}
 
 		prefixes := resolver.AllPrefixes()

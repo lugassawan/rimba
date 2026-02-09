@@ -17,9 +17,10 @@ func init() {
 }
 
 var updateCmd = &cobra.Command{
-	Use:   "update",
-	Short: "Update rimba to the latest version",
-	Long:  "Check for the latest release on GitHub and update the binary in place.",
+	Use:         "update",
+	Short:       "Update rimba to the latest version",
+	Long:        "Check for the latest release on GitHub and update the binary in place.",
+	Annotations: map[string]string{"skipConfig": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		force, _ := cmd.Flags().GetBool("force")
 

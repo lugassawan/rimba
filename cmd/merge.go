@@ -37,29 +37,17 @@ var mergeCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sourceTask := args[0]
 		cfg := config.FromContext(cmd.Context())
-		if cfg == nil {
-			return errNoConfig
-		}
 
-		r := &git.ExecRunner{}
+		r := newRunner()
 
 		repoRoot, err := git.RepoRoot(r)
 		if err != nil {
 			return err
 		}
 
-		// List worktrees
-		entries, err := git.ListWorktrees(r)
+		worktrees, err := listWorktreeInfos(r)
 		if err != nil {
 			return err
-		}
-
-		var worktrees []resolver.WorktreeInfo
-		for _, e := range entries {
-			worktrees = append(worktrees, resolver.WorktreeInfo{
-				Path:   e.Path,
-				Branch: e.Branch,
-			})
 		}
 
 		prefixes := resolver.AllPrefixes()

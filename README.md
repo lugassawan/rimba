@@ -1,6 +1,6 @@
 # rimba
 
-Git worktree manager CLI — branch naming conventions, dotfile copying, and worktree status dashboards.
+Git worktree lifecycle manager CLI — create, list, rename, duplicate, merge, sync, and clean worktrees with branch naming conventions, dotfile copying, shared dependencies, hooks, and status dashboards.
 
 ## Features
 
@@ -72,13 +72,17 @@ Create a new worktree with a branch named `<prefix><task>` and copy dotfiles fro
 
 ```sh
 rimba add my-feature
-rimba add my-feature -p fix/         # Override branch prefix
+rimba add my-feature --bugfix        # Use bugfix/ prefix instead of feature/
 rimba add my-feature -s develop      # Branch from a different source
 ```
 
 | Flag | Description |
 |------|-------------|
-| `-p`, `--prefix` | Branch prefix (default from config) |
+| `--bugfix` | Use `bugfix/` branch prefix |
+| `--hotfix` | Use `hotfix/` branch prefix |
+| `--docs` | Use `docs/` branch prefix |
+| `--test` | Use `test/` branch prefix |
+| `--chore` | Use `chore/` branch prefix |
 | `-s`, `--source` | Source branch to create worktree from (default from config) |
 | `--skip-deps` | Skip dependency detection and installation |
 | `--skip-hooks` | Skip post-create hooks |
@@ -295,7 +299,6 @@ rimba version
 
 ```toml
 worktree_dir = '../myrepo-worktrees'
-default_prefix = 'feat/'
 default_source = 'main'
 copy_files = ['.env', '.env.local', '.envrc', '.tool-versions']
 
@@ -322,7 +325,6 @@ work_dir = 'api'
 | Field | Description | Default |
 |-------|-------------|---------|
 | `worktree_dir` | Directory for worktrees (relative to repo root) | `../<repo-name>-worktrees` |
-| `default_prefix` | Branch name prefix | `feat/` |
 | `default_source` | Branch to create worktrees from | Default branch (e.g. `main`) |
 | `copy_files` | Files to copy from repo root into new worktrees | `.env`, `.env.local`, `.envrc`, `.tool-versions` |
 | `post_create` | Shell commands to run in new worktrees after creation | (none) |

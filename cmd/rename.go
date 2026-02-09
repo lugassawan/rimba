@@ -30,36 +30,20 @@ var renameCmd = &cobra.Command{
 		task := args[0]
 		newTask := args[1]
 		cfg := config.FromContext(cmd.Context())
-		if cfg == nil {
-			return errNoConfig
-		}
 
-		r := &git.ExecRunner{}
+		r := newRunner()
 
 		repoRoot, err := git.RepoRoot(r)
 		if err != nil {
 			return err
 		}
 
-		// Find the existing worktree by task name
-		entries, err := git.ListWorktrees(r)
+		wt, err := findWorktree(r, task)
 		if err != nil {
 			return err
 		}
 
-		var worktrees []resolver.WorktreeInfo
-		for _, e := range entries {
-			worktrees = append(worktrees, resolver.WorktreeInfo{
-				Path:   e.Path,
-				Branch: e.Branch,
-			})
-		}
-
 		prefixes := resolver.AllPrefixes()
-		wt, found := resolver.FindBranchForTask(task, worktrees, prefixes)
-		if !found {
-			return fmt.Errorf(errWorktreeNotFound, task)
-		}
 
 		_, matchedPrefix := resolver.TaskFromBranch(wt.Branch, prefixes)
 		if matchedPrefix == "" {

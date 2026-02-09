@@ -17,16 +17,17 @@ func init() {
 }
 
 var hookCmd = &cobra.Command{
-	Use:   "hook",
-	Short: "Manage Git hooks for automatic worktree cleanup",
-	Long:  "Install or remove a post-merge Git hook that automatically cleans merged worktrees after git pull.",
+	Use:         "hook",
+	Short:       "Manage Git hooks for automatic worktree cleanup",
+	Long:        "Install or remove a post-merge Git hook that automatically cleans merged worktrees after git pull.",
+	Annotations: map[string]string{"skipConfig": "true"},
 }
 
 var hookInstallCmd = &cobra.Command{
 	Use:   "install",
 	Short: "Install the post-merge hook for automatic cleanup",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		r := &git.ExecRunner{}
+		r := newRunner()
 
 		branch, err := resolveMainBranch(r)
 		if err != nil {
@@ -57,7 +58,7 @@ var hookUninstallCmd = &cobra.Command{
 	Use:   "uninstall",
 	Short: "Remove the post-merge hook",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		r := &git.ExecRunner{}
+		r := newRunner()
 
 		hooksDir, err := git.HooksDir(r)
 		if err != nil {
@@ -81,7 +82,7 @@ var hookStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show post-merge hook status",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		r := &git.ExecRunner{}
+		r := newRunner()
 
 		hooksDir, err := git.HooksDir(r)
 		if err != nil {

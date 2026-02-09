@@ -1,11 +1,18 @@
 package cmd
 
 import (
+	"fmt"
 	"path/filepath"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/resolver"
 )
+
+// newRunner creates a git.Runner for command execution.
+func newRunner() git.Runner {
+	return &git.ExecRunner{}
+}
 
 // resolveMainBranch tries to get the main branch from config, falling back to DefaultBranch.
 func resolveMainBranch(r git.Runner) (string, error) {
@@ -14,11 +21,42 @@ func resolveMainBranch(r git.Runner) (string, error) {
 		return "", err
 	}
 
-	cfg, err := config.Load(filepath.Join(repoRoot, configFileName))
+	cfg, err := config.Load(filepath.Join(repoRoot, config.FileName))
 	if err == nil && cfg.DefaultSource != "" {
 		return cfg.DefaultSource, nil
 	}
 
 	// No config — use git detection
 	return git.DefaultBranch(r)
+}
+
+// listWorktreeInfos converts git worktree entries to resolver-compatible WorktreeInfo slice.
+func listWorktreeInfos(r git.Runner) ([]resolver.WorktreeInfo, error) {
+	entries, err := git.ListWorktrees(r)
+	if err != nil {
+		return nil, err
+	}
+
+	worktrees := make([]resolver.WorktreeInfo, len(entries))
+	for i, e := range entries {
+		worktrees[i] = resolver.WorktreeInfo{
+			Path:   e.Path,
+			Branch: e.Branch,
+		}
+	}
+	return worktrees, nil
+}
+
+// findWorktree looks up a worktree by task name.
+func findWorktree(r git.Runner, task string) (resolver.WorktreeInfo, error) {
+	worktrees, err := listWorktreeInfos(r)
+	if err != nil {
+		return resolver.WorktreeInfo{}, err
+	}
+
+	wt, found := resolver.FindBranchForTask(task, worktrees, resolver.AllPrefixes())
+	if !found {
+		return resolver.WorktreeInfo{}, fmt.Errorf(errWorktreeNotFound, task)
+	}
+	return wt, nil
 }
