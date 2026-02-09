@@ -54,18 +54,9 @@ var syncCmd = &cobra.Command{
 			fmt.Fprintf(cmd.OutOrStdout(), "Warning: fetch failed (no remote?): continuing with local state\n")
 		}
 
-		// List worktrees
-		entries, err := git.ListWorktrees(r)
+		worktrees, err := listWorktreeInfos(r)
 		if err != nil {
 			return err
-		}
-
-		var worktrees []resolver.WorktreeInfo
-		for _, e := range entries {
-			worktrees = append(worktrees, resolver.WorktreeInfo{
-				Path:   e.Path,
-				Branch: e.Branch,
-			})
 		}
 
 		prefixes := resolver.AllPrefixes()
