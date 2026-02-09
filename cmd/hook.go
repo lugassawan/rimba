@@ -17,9 +17,10 @@ func init() {
 }
 
 var hookCmd = &cobra.Command{
-	Use:   "hook",
-	Short: "Manage Git hooks for automatic worktree cleanup",
-	Long:  "Install or remove a post-merge Git hook that automatically cleans merged worktrees after git pull.",
+	Use:         "hook",
+	Short:       "Manage Git hooks for automatic worktree cleanup",
+	Long:        "Install or remove a post-merge Git hook that automatically cleans merged worktrees after git pull.",
+	Annotations: map[string]string{"skipConfig": "true"},
 }
 
 var hookInstallCmd = &cobra.Command{

@@ -36,9 +36,6 @@ var syncCmd = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.FromContext(cmd.Context())
-		if cfg == nil {
-			return errNoConfig
-		}
 
 		r := &git.ExecRunner{}
 		all, _ := cmd.Flags().GetBool("all")

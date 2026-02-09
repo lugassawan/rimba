@@ -37,9 +37,6 @@ var mergeCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sourceTask := args[0]
 		cfg := config.FromContext(cmd.Context())
-		if cfg == nil {
-			return errNoConfig
-		}
 
 		r := &git.ExecRunner{}
 

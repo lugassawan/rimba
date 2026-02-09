@@ -44,9 +44,6 @@ var listCmd = &cobra.Command{
 	Long:  "Lists all git worktrees with their branch, path, and status (dirty, ahead/behind).",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.FromContext(cmd.Context())
-		if cfg == nil {
-			return errNoConfig
-		}
 
 		if listType != "" && !resolver.ValidPrefixType(listType) {
 			valid := make([]string, 0, len(resolver.AllPrefixes()))

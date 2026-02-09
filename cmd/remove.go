@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/spf13/cobra"
 )
@@ -27,11 +26,6 @@ var removeCmd = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		task := args[0]
-		cfg := config.FromContext(cmd.Context())
-		if cfg == nil {
-			return errNoConfig
-		}
-
 		r := &git.ExecRunner{}
 
 		wt, err := findWorktree(r, task)

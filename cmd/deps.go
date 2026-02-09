@@ -28,9 +28,6 @@ var depsStatusCmd = &cobra.Command{
 	Short: "Show detected modules and lockfile hashes for all worktrees",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.FromContext(cmd.Context())
-		if cfg == nil {
-			return errNoConfig
-		}
 
 		r := &git.ExecRunner{}
 		worktrees, err := listWorktreeInfos(r)
@@ -99,9 +96,6 @@ var depsInstallCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		task := args[0]
 		cfg := config.FromContext(cmd.Context())
-		if cfg == nil {
-			return errNoConfig
-		}
 
 		r := &git.ExecRunner{}
 

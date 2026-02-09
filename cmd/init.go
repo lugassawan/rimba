@@ -16,9 +16,10 @@ func init() {
 }
 
 var initCmd = &cobra.Command{
-	Use:   "init",
-	Short: "Initialize rimba in the current repository",
-	Long:  "Detects the repository root, creates a .rimba.toml config file, and sets up the worktree directory.",
+	Use:         "init",
+	Short:       "Initialize rimba in the current repository",
+	Long:        "Detects the repository root, creates a .rimba.toml config file, and sets up the worktree directory.",
+	Annotations: map[string]string{"skipConfig": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		r := &git.ExecRunner{}
 
