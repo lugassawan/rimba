@@ -9,6 +9,11 @@ import (
 	"github.com/lugassawan/rimba/internal/resolver"
 )
 
+// newRunner creates a git.Runner for command execution.
+func newRunner() git.Runner {
+	return &git.ExecRunner{}
+}
+
 // resolveMainBranch tries to get the main branch from config, falling back to DefaultBranch.
 func resolveMainBranch(r git.Runner) (string, error) {
 	repoRoot, err := git.RepoRoot(r)

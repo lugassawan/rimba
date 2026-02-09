@@ -35,7 +35,7 @@ var cleanCmd = &cobra.Command{
 	Long:        "Runs git worktree prune to clean up stale references. Use --merged to detect and remove worktrees whose branches have been merged into main.",
 	Annotations: map[string]string{"skipConfig": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		r := &git.ExecRunner{}
+		r := newRunner()
 		merged, _ := cmd.Flags().GetBool(flagMerged)
 
 		if merged {

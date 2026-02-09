@@ -26,7 +26,7 @@ var removeCmd = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		task := args[0]
-		r := &git.ExecRunner{}
+		r := newRunner()
 
 		wt, err := findWorktree(r, task)
 		if err != nil {

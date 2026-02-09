@@ -31,7 +31,7 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
-		r := &git.ExecRunner{}
+		r := newRunner()
 		repoRoot, err := git.RepoRoot(r)
 		if err != nil {
 			return err

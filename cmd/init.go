@@ -21,7 +21,7 @@ var initCmd = &cobra.Command{
 	Long:        "Detects the repository root, creates a .rimba.toml config file, and sets up the worktree directory.",
 	Annotations: map[string]string{"skipConfig": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		r := &git.ExecRunner{}
+		r := newRunner()
 
 		repoRoot, err := git.RepoRoot(r)
 		if err != nil {

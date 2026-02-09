@@ -53,7 +53,7 @@ var listCmd = &cobra.Command{
 			return fmt.Errorf("invalid type %q; valid types: %s", listType, strings.Join(valid, ", "))
 		}
 
-		r := &git.ExecRunner{}
+		r := newRunner()
 
 		repoRoot, err := git.RepoRoot(r)
 		if err != nil {

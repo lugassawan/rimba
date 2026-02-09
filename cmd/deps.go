@@ -29,7 +29,7 @@ var depsStatusCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.FromContext(cmd.Context())
 
-		r := &git.ExecRunner{}
+		r := newRunner()
 		worktrees, err := listWorktreeInfos(r)
 		if err != nil {
 			return err
@@ -97,7 +97,7 @@ var depsInstallCmd = &cobra.Command{
 		task := args[0]
 		cfg := config.FromContext(cmd.Context())
 
-		r := &git.ExecRunner{}
+		r := newRunner()
 
 		repoRoot, err := git.RepoRoot(r)
 		if err != nil {

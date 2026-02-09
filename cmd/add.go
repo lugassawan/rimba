@@ -32,7 +32,7 @@ var addCmd = &cobra.Command{
 		task := args[0]
 		cfg := config.FromContext(cmd.Context())
 
-		r := &git.ExecRunner{}
+		r := newRunner()
 
 		repoRoot, err := git.RepoRoot(r)
 		if err != nil {

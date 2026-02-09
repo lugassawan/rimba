@@ -27,7 +27,7 @@ var hookInstallCmd = &cobra.Command{
 	Use:   "install",
 	Short: "Install the post-merge hook for automatic cleanup",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		r := &git.ExecRunner{}
+		r := newRunner()
 
 		branch, err := resolveMainBranch(r)
 		if err != nil {
@@ -58,7 +58,7 @@ var hookUninstallCmd = &cobra.Command{
 	Use:   "uninstall",
 	Short: "Remove the post-merge hook",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		r := &git.ExecRunner{}
+		r := newRunner()
 
 		hooksDir, err := git.HooksDir(r)
 		if err != nil {
@@ -82,7 +82,7 @@ var hookStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show post-merge hook status",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		r := &git.ExecRunner{}
+		r := newRunner()
 
 		hooksDir, err := git.HooksDir(r)
 		if err != nil {

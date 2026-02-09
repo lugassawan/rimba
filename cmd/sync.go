@@ -37,7 +37,7 @@ var syncCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.FromContext(cmd.Context())
 
-		r := &git.ExecRunner{}
+		r := newRunner()
 		all, _ := cmd.Flags().GetBool("all")
 		useMerge, _ := cmd.Flags().GetBool("merge")
 		includeInherited, _ := cmd.Flags().GetBool("include-inherited")

@@ -31,7 +31,7 @@ var renameCmd = &cobra.Command{
 		newTask := args[1]
 		cfg := config.FromContext(cmd.Context())
 
-		r := &git.ExecRunner{}
+		r := newRunner()
 
 		repoRoot, err := git.RepoRoot(r)
 		if err != nil {
