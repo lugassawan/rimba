@@ -13,7 +13,6 @@ const errWorktreeNotFound = "worktree not found for task %q"
 var rootCmd = &cobra.Command{
 	Use:          "rimba",
 	Short:        "Git worktree lifecycle manager",
-	Long:         "Rimba manages the full git worktree lifecycle: create, list, rename, duplicate, merge, sync, and clean worktrees with branch naming conventions, dotfile copying, shared dependency management, post-create hooks, and status dashboards.",
 	SilenceUsage: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Skip config for Cobra internals (completion, __complete)
@@ -45,6 +44,14 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.PersistentFlags().Bool("no-color", false, "disable colored output")
+
+	originalHelp := rootCmd.HelpFunc()
+	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		if cmd == rootCmd {
+			printBanner(cmd)
+		}
+		originalHelp(cmd, args)
+	})
 }
 
 func Execute() error {
