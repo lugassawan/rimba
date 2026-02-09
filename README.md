@@ -42,6 +42,7 @@
 🖥️ **Developer Experience**
 
 - **Status dashboard** — colored tabular view with dirty state, ahead/behind counts, and filtering
+- **Worktree navigation** — open worktrees or run commands inside them via `open`
 - **Shell completions** — bash, zsh, fish, and PowerShell
 - **Cross-platform** — Linux, macOS, and Windows (amd64/arm64)
 
@@ -142,6 +143,17 @@ TASK            TYPE     BRANCH              PATH              STATUS
 | `--dirty` | Show only worktrees with uncommitted changes |
 | `--behind` | Show only worktrees behind their upstream branch |
 | `--no-color` | Disable colored output (also respects `NO_COLOR` env var) |
+
+### `rimba open <task> [command args...]`
+
+Open a worktree or run a command inside it. When called with just a task name, prints the worktree path. When given additional arguments, executes that command inside the worktree directory.
+
+```sh
+rimba open my-task              # Print worktree path
+cd $(rimba open my-task)        # Navigate to worktree
+rimba open my-task code .       # Open in VS Code
+rimba open my-task claude       # Launch claude in worktree
+```
 
 ### `rimba remove <task>`
 
@@ -311,6 +323,8 @@ rimba update --force     # Also works on dev builds
 | Flag | Description |
 |------|-------------|
 | `--force` | Update even if running a development build |
+
+> **Note:** If the binary cannot be replaced due to file permissions, rimba automatically retries with `sudo`.
 
 ### `rimba version`
 
