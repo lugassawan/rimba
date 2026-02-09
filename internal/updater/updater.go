@@ -4,10 +4,12 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -223,6 +225,45 @@ func Replace(currentBinary, newBinary string) error {
 // CleanupTempDir removes the parent directory of the given binary path.
 func CleanupTempDir(binaryPath string) {
 	_ = os.RemoveAll(filepath.Dir(binaryPath))
+}
+
+// IsPermissionError returns true if the error chain contains os.ErrPermission.
+func IsPermissionError(err error) bool {
+	return errors.Is(err, os.ErrPermission)
+}
+
+// ReplaceElevated replaces the current binary using sudo cp and sudo chmod.
+// Stdin, stdout, and stderr are connected to the terminal so sudo can prompt
+// for a password.
+func ReplaceElevated(currentBinary, newBinary string) error {
+	resolved, err := filepath.EvalSymlinks(currentBinary)
+	if err != nil {
+		return fmt.Errorf("resolving symlinks: %w", err)
+	}
+
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return fmt.Errorf("stat current binary: %w", err)
+	}
+
+	cpCmd := exec.Command("sudo", "cp", newBinary, resolved) //nolint:gosec // paths from os.Executable
+	cpCmd.Stdin = os.Stdin
+	cpCmd.Stdout = os.Stdout
+	cpCmd.Stderr = os.Stderr
+	if err := cpCmd.Run(); err != nil {
+		return fmt.Errorf("sudo cp: %w", err)
+	}
+
+	perm := fmt.Sprintf("%o", info.Mode().Perm())
+	chmodCmd := exec.Command("sudo", "chmod", perm, resolved) //nolint:gosec // perm from os.Stat
+	chmodCmd.Stdin = os.Stdin
+	chmodCmd.Stdout = os.Stdout
+	chmodCmd.Stderr = os.Stderr
+	if err := chmodCmd.Run(); err != nil {
+		return fmt.Errorf("sudo chmod: %w", err)
+	}
+
+	return nil
 }
 
 func copyFile(src, dst string, perm os.FileMode) (retErr error) {

@@ -62,7 +62,13 @@ var updateCmd = &cobra.Command{
 		}
 
 		if err := updater.Replace(currentBinary, newBinary); err != nil {
-			return fmt.Errorf("replacing binary: %w", err)
+			if !updater.IsPermissionError(err) {
+				return fmt.Errorf("replacing binary: %w", err)
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "Elevated permissions required. Retrying with sudo...")
+			if err := updater.ReplaceElevated(currentBinary, newBinary); err != nil {
+				return fmt.Errorf("replacing binary with sudo: %w", err)
+			}
 		}
 
 		// Verify the new binary works
