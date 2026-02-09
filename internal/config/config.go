@@ -12,6 +12,32 @@ type Config struct {
 	WorktreeDir   string   `toml:"worktree_dir"`
 	DefaultSource string   `toml:"default_source"`
 	CopyFiles     []string `toml:"copy_files"`
+	PostCreate    []string `toml:"post_create,omitempty"`
+
+	Deps *DepsConfig `toml:"deps,omitempty"`
+}
+
+// DepsConfig holds optional dependency management settings.
+type DepsConfig struct {
+	AutoDetect *bool          `toml:"auto_detect,omitempty"`
+	Modules    []ModuleConfig `toml:"modules,omitempty"`
+}
+
+// ModuleConfig defines a manually configured dependency module.
+type ModuleConfig struct {
+	Dir      string `toml:"dir"`
+	Lockfile string `toml:"lockfile"`
+	Install  string `toml:"install"`
+	WorkDir  string `toml:"work_dir,omitempty"`
+}
+
+// IsAutoDetectDeps returns whether automatic dependency detection is enabled.
+// Defaults to true when Deps or AutoDetect is not configured.
+func (c *Config) IsAutoDetectDeps() bool {
+	if c.Deps == nil || c.Deps.AutoDetect == nil {
+		return true
+	}
+	return *c.Deps.AutoDetect
 }
 
 type ctxKey struct{}

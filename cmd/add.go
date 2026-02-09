@@ -15,6 +15,8 @@ import (
 func init() {
 	addPrefixFlags(addCmd)
 	addCmd.Flags().StringP("source", "s", "", "Source branch to create worktree from (default from config)")
+	addCmd.Flags().Bool("skip-deps", false, "Skip dependency detection and installation")
+	addCmd.Flags().Bool("skip-hooks", false, "Skip post-create hooks")
 	_ = addCmd.RegisterFlagCompletionFunc("source", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return completeBranchNames(cmd, toComplete), cobra.ShellCompDirectiveNoFileComp
 	})
@@ -70,11 +72,24 @@ var addCmd = &cobra.Command{
 			return fmt.Errorf("worktree created but failed to copy files: %w\nTo retry, manually copy files to: %s\nTo remove the worktree: rimba remove %s", err, wtPath, task)
 		}
 
-		fmt.Fprintf(cmd.OutOrStdout(), "Created worktree for task %q\n", task)
-		fmt.Fprintf(cmd.OutOrStdout(), "  Branch: %s\n", branch)
-		fmt.Fprintf(cmd.OutOrStdout(), "  Path:   %s\n", wtPath)
+		out := cmd.OutOrStdout()
+		fmt.Fprintf(out, "Created worktree for task %q\n", task)
+		fmt.Fprintf(out, "  Branch: %s\n", branch)
+		fmt.Fprintf(out, "  Path:   %s\n", wtPath)
 		if len(copied) > 0 {
-			fmt.Fprintf(cmd.OutOrStdout(), "  Copied: %v\n", copied)
+			fmt.Fprintf(out, "  Copied: %v\n", copied)
+		}
+
+		// Dependencies
+		skipDeps, _ := cmd.Flags().GetBool("skip-deps")
+		if !skipDeps {
+			printDepsResults(out, r, cfg, wtPath)
+		}
+
+		// Post-create hooks
+		skipHooks, _ := cmd.Flags().GetBool("skip-hooks")
+		if !skipHooks && len(cfg.PostCreate) > 0 {
+			printHookResults(out, wtPath, cfg.PostCreate)
 		}
 
 		return nil
