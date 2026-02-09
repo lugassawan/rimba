@@ -38,7 +38,7 @@ var initCmd = &cobra.Command{
 			return err
 		}
 
-		configPath := filepath.Join(repoRoot, configFileName)
+		configPath := filepath.Join(repoRoot, config.FileName)
 		if _, err := os.Stat(configPath); err == nil {
 			return fmt.Errorf(".rimba.toml already exists (use a text editor to modify it)")
 		}
@@ -55,7 +55,7 @@ var initCmd = &cobra.Command{
 			return fmt.Errorf("failed to create worktree directory: %w", err)
 		}
 
-		added, err := fileutil.EnsureGitignore(repoRoot, configFileName)
+		added, err := fileutil.EnsureGitignore(repoRoot, config.FileName)
 		if err != nil {
 			return fmt.Errorf("failed to update .gitignore: %w", err)
 		}
@@ -65,9 +65,9 @@ var initCmd = &cobra.Command{
 		fmt.Fprintf(cmd.OutOrStdout(), "  Worktree dir: %s\n", wtDir)
 		fmt.Fprintf(cmd.OutOrStdout(), "  Source:       %s\n", defaultBranch)
 		if added {
-			fmt.Fprintf(cmd.OutOrStdout(), "  Gitignore:   %s added to .gitignore\n", configFileName)
+			fmt.Fprintf(cmd.OutOrStdout(), "  Gitignore:   %s added to .gitignore\n", config.FileName)
 		} else {
-			fmt.Fprintf(cmd.OutOrStdout(), "  Gitignore:   %s (already in .gitignore)\n", configFileName)
+			fmt.Fprintf(cmd.OutOrStdout(), "  Gitignore:   %s (already in .gitignore)\n", config.FileName)
 		}
 
 		return nil

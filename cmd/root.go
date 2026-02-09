@@ -8,15 +8,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const (
-	configFileName      = ".rimba.toml"
-	errWorktreeNotFound = "worktree not found for task %q"
-)
+const errWorktreeNotFound = "worktree not found for task %q"
 
 var rootCmd = &cobra.Command{
 	Use:          "rimba",
-	Short:        "Git worktree manager",
-	Long:         "Rimba simplifies git worktree management with auto-copying dotfiles, branch naming conventions, and worktree status dashboards.",
+	Short:        "Git worktree lifecycle manager",
+	Long:         "Rimba manages the full git worktree lifecycle: create, list, rename, duplicate, merge, sync, and clean worktrees with branch naming conventions, dotfile copying, shared dependency management, post-create hooks, and status dashboards.",
 	SilenceUsage: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Skip config for Cobra internals (completion, __complete)
@@ -37,7 +34,7 @@ var rootCmd = &cobra.Command{
 			return err
 		}
 
-		cfg, err := config.Load(filepath.Join(repoRoot, configFileName))
+		cfg, err := config.Load(filepath.Join(repoRoot, config.FileName))
 		if err != nil {
 			return err
 		}

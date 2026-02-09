@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/config"
@@ -27,7 +28,7 @@ func TestDefaultConfig(t *testing.T) {
 
 func TestSaveAndLoad(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, ".rimba.toml")
+	path := filepath.Join(dir, config.FileName)
 
 	original := config.DefaultConfig("test-repo", "main")
 	if err := config.Save(path, original); err != nil {
@@ -45,7 +46,7 @@ func TestSaveAndLoad(t *testing.T) {
 }
 
 func TestLoadMissing(t *testing.T) {
-	_, err := config.Load("/nonexistent/.rimba.toml")
+	_, err := config.Load(filepath.Join("/nonexistent", config.FileName))
 	if err == nil {
 		t.Fatal("expected error for missing config")
 	}
@@ -53,7 +54,7 @@ func TestLoadMissing(t *testing.T) {
 
 func TestLoadInvalid(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, ".rimba.toml")
+	path := filepath.Join(dir, config.FileName)
 
 	if err := os.WriteFile(path, []byte("invalid = [[["), 0644); err != nil {
 		t.Fatal(err)
@@ -79,6 +80,70 @@ func TestFromContextNil(t *testing.T) {
 	got := config.FromContext(context.Background())
 	if got != nil {
 		t.Error("FromContext on empty context should return nil")
+	}
+}
+
+func TestValidate(t *testing.T) {
+	tests := []struct {
+		name    string
+		cfg     config.Config
+		wantErr string
+	}{
+		{
+			name: "valid config",
+			cfg:  config.Config{WorktreeDir: "../worktrees", DefaultSource: "main"},
+		},
+		{
+			name:    "empty worktree_dir",
+			cfg:     config.Config{DefaultSource: "main"},
+			wantErr: config.ErrMsgEmptyWorktreeDir,
+		},
+		{
+			name:    "empty default_source",
+			cfg:     config.Config{WorktreeDir: "../worktrees"},
+			wantErr: config.ErrMsgEmptyDefaultSource,
+		},
+		{
+			name:    "both empty",
+			cfg:     config.Config{},
+			wantErr: config.ErrMsgEmptyWorktreeDir,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.cfg.Validate()
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("error %q does not contain %q", err.Error(), tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestLoadInvalidValues(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, config.FileName)
+
+	// Valid TOML but missing required fields
+	if err := os.WriteFile(path, []byte("copy_files = ['.env']\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := config.Load(path)
+	if err == nil {
+		t.Fatal("expected error for missing required fields")
+	}
+	if !strings.Contains(err.Error(), config.ErrMsgEmptyWorktreeDir) {
+		t.Errorf("error %q does not mention worktree_dir", err.Error())
 	}
 }
 

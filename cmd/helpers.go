@@ -21,7 +21,7 @@ func resolveMainBranch(r git.Runner) (string, error) {
 		return "", err
 	}
 
-	cfg, err := config.Load(filepath.Join(repoRoot, configFileName))
+	cfg, err := config.Load(filepath.Join(repoRoot, config.FileName))
 	if err == nil && cfg.DefaultSource != "" {
 		return cfg.DefaultSource, nil
 	}
