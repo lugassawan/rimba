@@ -1,21 +1,49 @@
-# rimba
+<div align="center">
+  <img src=".github/rimba-128.png" alt="rimba" width="128" height="128" />
+  <h1>rimba</h1>
+  <p>Git worktree lifecycle manager</p>
+</div>
 
-Git worktree lifecycle manager CLI — create, list, rename, duplicate, merge, sync, and clean worktrees with branch naming conventions, dotfile copying, shared dependencies, hooks, and status dashboards.
+<p align="center">
+  <a href="https://github.com/lugassawan/rimba/releases/latest"><img src="https://img.shields.io/github/v/release/lugassawan/rimba" alt="Release" /></a>
+  <a href="https://github.com/lugassawan/rimba/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/lugassawan/rimba/ci.yml?branch=main&label=CI" alt="CI" /></a>
+  <a href="go.mod"><img src="https://img.shields.io/badge/go-%3E%3D1.25-00ADD8?logo=go" alt="Go" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License" /></a>
+</p>
+
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Commands](#commands)
+- [Configuration](#configuration)
+- [License](#license)
 
 ## Features
 
+🌿 **Core Workflow**
+
 - **Automatic branch naming** — configurable prefix (e.g. `feat/`, `fix/`) applied to task names
-- **Dotfile copying** — auto-copies files like `.env`, `.envrc`, `.tool-versions` into new worktrees
-- **Status dashboard** — colored tabular view of all worktrees with dirty state, ahead/behind counts, current worktree indicator, and filtering
-- **Duplicate worktrees** — create a copy of an existing worktree with auto-suffixed or custom name
+- **Dotfile copying** — auto-copies `.env`, `.envrc`, `.tool-versions` into new worktrees
+- **Duplicate worktrees** — copy an existing worktree with auto-suffixed or custom name
 - **Local merge** — merge worktree branches into main or other worktrees with auto-cleanup
-- **Sync worktrees** — rebase or merge worktrees onto the latest main branch, with bulk sync support
-- **Stale cleanup** — prune stale worktree references or auto-detect and remove merged worktrees
-- **Auto-cleanup hook** — install a post-merge Git hook that cleans merged worktrees after `git pull`
-- **Shared dependencies** — auto-detect lockfiles (npm/yarn/pnpm/Go) and clone dependency directories between worktrees using copy-on-write
-- **Post-create hooks** — run shell commands in new worktrees after creation (e.g. `./gradlew build`)
-- **Shell completions** — built-in completion for bash, zsh, fish, and PowerShell
-- **Cross-platform** — builds for Linux, macOS, and Windows (amd64/arm64)
+- **Sync worktrees** — rebase or merge onto the latest main branch, with bulk sync support
+
+🔧 **Automation**
+
+- **Shared dependencies** — auto-detect lockfiles and clone dependency directories using copy-on-write
+- **Post-create hooks** — run shell commands after worktree creation (e.g. `./gradlew build`)
+- **Auto-cleanup hook** — post-merge Git hook that cleans merged worktrees after `git pull`
+- **Stale cleanup** — prune stale references or auto-detect and remove merged worktrees
+
+🖥️ **Developer Experience**
+
+- **Status dashboard** — colored tabular view with dirty state, ahead/behind counts, and filtering
+- **Shell completions** — bash, zsh, fish, and PowerShell
+- **Cross-platform** — Linux, macOS, and Windows (amd64/arm64)
 
 ## Installation
 
