@@ -3,6 +3,7 @@ package updater
 import (
 	"archive/tar"
 	"compress/gzip"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -198,6 +199,34 @@ func TestReplaceSameFilesystem(t *testing.T) {
 	}
 	if string(content) != "new" {
 		t.Errorf("content = %q, want %q", content, "new")
+	}
+}
+
+func TestIsPermissionError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"wrapped permission error", fmt.Errorf("opening destination: %w", os.ErrPermission), true},
+		{"direct permission error", os.ErrPermission, true},
+		{"other error", fmt.Errorf("something else"), false},
+		{"nil error", nil, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsPermissionError(tt.err); got != tt.want {
+				t.Errorf("IsPermissionError() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestReplaceElevatedFailsGracefully(t *testing.T) {
+	err := ReplaceElevated("/nonexistent/path/binary", "/also/nonexistent")
+	if err == nil {
+		t.Fatal("expected error for nonexistent paths")
 	}
 }
 

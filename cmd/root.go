@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"path/filepath"
+	"time"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/updater"
 	"github.com/spf13/cobra"
 )
 
@@ -13,7 +15,8 @@ const errWorktreeNotFound = "worktree not found for task %q"
 var rootCmd = &cobra.Command{
 	Use:          "rimba",
 	Short:        "Git worktree lifecycle manager",
-	SilenceUsage: true,
+	SilenceUsage:  true,
+	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Skip config for Cobra internals (completion, __complete)
 		if cmd.Name() == "completion" || cmd.Name() == "__complete" {
@@ -47,10 +50,17 @@ func init() {
 
 	originalHelp := rootCmd.HelpFunc()
 	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		var hint <-chan *updater.CheckResult
 		if cmd == rootCmd {
+			hint = checkUpdateHint(version, 2*time.Second)
 			printBanner(cmd)
 		}
 		originalHelp(cmd, args)
+		if hint != nil {
+			if result := collectHint(hint); result != nil {
+				printUpdateHint(cmd, result)
+			}
+		}
 	})
 }
 
