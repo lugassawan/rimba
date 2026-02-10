@@ -8,12 +8,19 @@ import (
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
+	"github.com/lugassawan/rimba/internal/termcolor"
 	"github.com/spf13/cobra"
 )
 
 // newRunner creates a git.Runner for command execution.
 func newRunner() git.Runner {
 	return &git.ExecRunner{}
+}
+
+// hintPainter returns a termcolor.Painter derived from the cobra command flags.
+func hintPainter(cmd *cobra.Command) *termcolor.Painter {
+	noColor, _ := cmd.Flags().GetBool(flagNoColor)
+	return termcolor.NewPainter(noColor)
 }
 
 // spinnerOpts returns spinner options derived from the cobra command flags.

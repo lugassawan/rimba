@@ -8,10 +8,21 @@ import (
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/lugassawan/rimba/internal/termcolor"
 	"github.com/spf13/cobra"
+)
+
+const (
+	flagType   = "type"
+	flagDirty  = "dirty"
+	flagBehind = "behind"
+
+	hintType   = "Filter by prefix type (feature, bugfix, hotfix, etc.)"
+	hintDirty  = "Show only worktrees with uncommitted changes"
+	hintBehind = "Show only worktrees behind upstream"
 )
 
 var (
@@ -23,11 +34,11 @@ var (
 func init() {
 	rootCmd.AddCommand(listCmd)
 
-	listCmd.Flags().StringVar(&listType, "type", "", "filter by prefix type (e.g. feature, bugfix)")
-	listCmd.Flags().BoolVar(&listDirty, "dirty", false, "show only dirty worktrees")
-	listCmd.Flags().BoolVar(&listBehind, "behind", false, "show only worktrees behind upstream")
+	listCmd.Flags().StringVar(&listType, flagType, "", "filter by prefix type (e.g. feature, bugfix)")
+	listCmd.Flags().BoolVar(&listDirty, flagDirty, false, "show only dirty worktrees")
+	listCmd.Flags().BoolVar(&listBehind, flagBehind, false, "show only worktrees behind upstream")
 
-	_ = listCmd.RegisterFlagCompletionFunc("type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	_ = listCmd.RegisterFlagCompletionFunc(flagType, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		var types []string
 		for _, p := range resolver.AllPrefixes() {
 			t := strings.TrimSuffix(p, "/")
@@ -78,6 +89,12 @@ var listCmd = &cobra.Command{
 		cwd, _ := os.Getwd()
 		cwdResolved, _ := filepath.EvalSymlinks(cwd)
 		cwdResolved = filepath.Clean(cwdResolved)
+
+		hint.New(cmd, hintPainter(cmd)).
+			Add(flagType, hintType).
+			Add(flagDirty, hintDirty).
+			Add(flagBehind, hintBehind).
+			Show()
 
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()

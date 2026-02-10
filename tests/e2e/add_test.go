@@ -282,6 +282,48 @@ func TestAddSkipsMissingDirectory(t *testing.T) {
 	rimbaSuccess(t, repo, "add", "skip-missing-dir")
 }
 
+func TestAddShowsHints(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+
+	r := rimbaSuccess(t, repo, "add", "hint-task")
+	assertContains(t, r.Stderr, "Options:")
+	assertContains(t, r.Stderr, flagSkipDepsE2E)
+	assertContains(t, r.Stderr, flagSkipHooksE2E)
+	assertContains(t, r.Stderr, "--source")
+}
+
+func TestAddHintsFilterUsedFlags(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+
+	r := rimbaSuccess(t, repo, "add", flagSkipDepsE2E, flagSkipHooksE2E, "hint-filter-task")
+	assertNotContains(t, r.Stderr, flagSkipDepsE2E)
+	assertNotContains(t, r.Stderr, flagSkipHooksE2E)
+	// source flag was not used, so it should still appear
+	assertContains(t, r.Stderr, "--source")
+}
+
+func TestAddHintsSuppressedByRIMBAQUIET(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+
+	r := rimbaWithEnv(t, repo, []string{"RIMBA_QUIET=1"}, "add", "hint-quiet-task")
+	if r.ExitCode != 0 {
+		t.Fatalf("expected exit 0, got %d\nstdout: %s\nstderr: %s", r.ExitCode, r.Stdout, r.Stderr)
+	}
+	assertNotContains(t, r.Stderr, "Options:")
+}
+
 // loadConfig is a test helper that loads the rimba config from a repo.
 func loadConfig(t *testing.T, repo string) *config.Config {
 	t.Helper()

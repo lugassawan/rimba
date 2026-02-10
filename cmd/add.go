@@ -9,17 +9,24 @@ import (
 	"github.com/lugassawan/rimba/internal/deps"
 	"github.com/lugassawan/rimba/internal/fileutil"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
 )
 
+const (
+	flagSource = "source"
+
+	hintSource = "Branch from a specific source instead of the default branch"
+)
+
 func init() {
 	addPrefixFlags(addCmd)
-	addCmd.Flags().StringP("source", "s", "", "Source branch to create worktree from (default from config)")
+	addCmd.Flags().StringP(flagSource, "s", "", "Source branch to create worktree from (default from config)")
 	addCmd.Flags().Bool(flagSkipDeps, false, "Skip dependency detection and installation")
 	addCmd.Flags().Bool(flagSkipHooks, false, "Skip post-create hooks")
-	_ = addCmd.RegisterFlagCompletionFunc("source", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	_ = addCmd.RegisterFlagCompletionFunc(flagSource, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return completeBranchNames(cmd, toComplete), cobra.ShellCompDirectiveNoFileComp
 	})
 	rootCmd.AddCommand(addCmd)
@@ -43,7 +50,7 @@ var addCmd = &cobra.Command{
 
 		prefix := resolvedPrefixString(cmd)
 
-		source, _ := cmd.Flags().GetString("source")
+		source, _ := cmd.Flags().GetString(flagSource)
 		if source == "" {
 			source = cfg.DefaultSource
 		}
@@ -59,6 +66,12 @@ var addCmd = &cobra.Command{
 		if _, err := os.Stat(wtPath); err == nil {
 			return fmt.Errorf("worktree path already exists: %s", wtPath)
 		}
+
+		hint.New(cmd, hintPainter(cmd)).
+			Add(flagSkipDeps, hintSkipDeps).
+			Add(flagSkipHooks, hintSkipHooks).
+			Add(flagSource, hintSource).
+			Show()
 
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()

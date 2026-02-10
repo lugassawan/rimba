@@ -167,7 +167,7 @@ func TestAddWithDepsSkipFlag(t *testing.T) {
 	addNodeModules(t, wt1Path, map[string]string{testPkgJSON: "{}"})
 
 	// Create second worktree with --skip-deps
-	r := rimbaSuccess(t, repo, "add", "--skip-deps", "skip-2")
+	r := rimbaSuccess(t, repo, "add", flagSkipDepsE2E, "skip-2")
 
 	branch2 := resolver.BranchName(defaultPrefix, "skip-2")
 	wt2Path := resolver.WorktreePath(wtDir, branch2)
@@ -221,7 +221,7 @@ func TestDepsInstall(t *testing.T) {
 	addNodeModules(t, wt1Path, map[string]string{testPkgJSON: "{}"})
 
 	// Create second worktree with --skip-deps (no deps initially)
-	rimbaSuccess(t, repo, "add", "--skip-deps", taskInstallDst)
+	rimbaSuccess(t, repo, "add", flagSkipDepsE2E, taskInstallDst)
 
 	r := rimbaSuccess(t, repo, "deps", "install", taskInstallDst)
 
@@ -269,7 +269,7 @@ func TestPostCreateHooksSkipFlag(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r := rimbaSuccess(t, repo, "add", "--skip-hooks", "skip-hook-task")
+	r := rimbaSuccess(t, repo, "add", flagSkipHooksE2E, "skip-hook-task")
 
 	wtDir := filepath.Join(repo, cfg.WorktreeDir)
 	branch := resolver.BranchName(defaultPrefix, "skip-hook-task")

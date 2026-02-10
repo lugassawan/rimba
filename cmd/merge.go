@@ -5,19 +5,31 @@ import (
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
 )
 
-func init() {
-	mergeCmd.Flags().String("into", "", "Target worktree task to merge into (default: main/repo root)")
-	mergeCmd.Flags().Bool("no-ff", false, "Force a merge commit (no fast-forward)")
-	mergeCmd.Flags().Bool("keep", false, "Keep source worktree after merging into main")
-	mergeCmd.Flags().Bool("delete", false, "Delete source worktree after merging into another worktree")
-	mergeCmd.MarkFlagsMutuallyExclusive("keep", "delete")
+const (
+	flagInto   = "into"
+	flagNoFF   = "no-ff"
+	flagKeep   = "keep"
+	flagDelete = "delete"
 
-	_ = mergeCmd.RegisterFlagCompletionFunc("into", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	hintNoFF = "Force a merge commit (preserves branch history in git log)"
+	hintKeep = "Keep source worktree after merge (continue working on it)"
+	hintInto = "Merge into another worktree instead of the main branch"
+)
+
+func init() {
+	mergeCmd.Flags().String(flagInto, "", "Target worktree task to merge into (default: main/repo root)")
+	mergeCmd.Flags().Bool(flagNoFF, false, "Force a merge commit (no fast-forward)")
+	mergeCmd.Flags().Bool(flagKeep, false, "Keep source worktree after merging into main")
+	mergeCmd.Flags().Bool(flagDelete, false, "Delete source worktree after merging into another worktree")
+	mergeCmd.MarkFlagsMutuallyExclusive(flagKeep, flagDelete)
+
+	_ = mergeCmd.RegisterFlagCompletionFunc(flagInto, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return completeWorktreeTasks(cmd, toComplete), cobra.ShellCompDirectiveNoFileComp
 	})
 
@@ -60,7 +72,7 @@ var mergeCmd = &cobra.Command{
 		}
 
 		// Resolve target
-		intoTask, _ := cmd.Flags().GetString("into")
+		intoTask, _ := cmd.Flags().GetString(flagInto)
 		var targetDir, targetLabel string
 		mergingToMain := intoTask == ""
 
@@ -97,11 +109,17 @@ var mergeCmd = &cobra.Command{
 			return fmt.Errorf("target worktree %q has uncommitted changes\nCommit or stash changes before merging: cd %s", intoTask, targetDir)
 		}
 
+		hint.New(cmd, hintPainter(cmd)).
+			Add(flagNoFF, hintNoFF).
+			Add(flagKeep, hintKeep).
+			Add(flagInto, hintInto).
+			Show()
+
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
 
 		// Execute merge
-		noFF, _ := cmd.Flags().GetBool("no-ff")
+		noFF, _ := cmd.Flags().GetBool(flagNoFF)
 		s.Start("Merging...")
 		if err := git.Merge(r, targetDir, source.Branch, noFF); err != nil {
 			return fmt.Errorf("merge failed: %w\nTo resolve conflicts: cd %s", err, targetDir)
@@ -111,8 +129,8 @@ var mergeCmd = &cobra.Command{
 		fmt.Fprintf(cmd.OutOrStdout(), "Merged %s into %s\n", source.Branch, targetLabel)
 
 		// Auto-cleanup
-		keep, _ := cmd.Flags().GetBool("keep")
-		del, _ := cmd.Flags().GetBool("delete")
+		keep, _ := cmd.Flags().GetBool(flagKeep)
+		del, _ := cmd.Flags().GetBool(flagDelete)
 
 		shouldDelete := false
 		if mergingToMain {

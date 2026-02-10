@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
@@ -15,6 +16,11 @@ const (
 	flagDryRun = "dry-run"
 	flagMerged = "merged"
 	flagForce  = "force"
+
+	hintMerged        = "Remove worktrees whose branches are already merged into main"
+	hintDryRunPrune   = "Preview what would be pruned without making changes"
+	hintDryRunMerged  = "Preview what would be removed without making changes"
+	hintForce         = "Skip confirmation prompt"
 )
 
 type mergedCandidate struct {
@@ -49,6 +55,11 @@ var cleanCmd = &cobra.Command{
 func cleanPrune(cmd *cobra.Command, r git.Runner) error {
 	dryRun, _ := cmd.Flags().GetBool(flagDryRun)
 
+	hint.New(cmd, hintPainter(cmd)).
+		Add(flagMerged, hintMerged).
+		Add(flagDryRun, hintDryRunPrune).
+		Show()
+
 	s := spinner.New(spinnerOpts(cmd))
 	defer s.Stop()
 
@@ -79,6 +90,11 @@ func cleanMerged(cmd *cobra.Command, r git.Runner) error {
 	if err != nil {
 		return err
 	}
+
+	hint.New(cmd, hintPainter(cmd)).
+		Add(flagDryRun, hintDryRunMerged).
+		Add(flagForce, hintForce).
+		Show()
 
 	s := spinner.New(spinnerOpts(cmd))
 	defer s.Stop()
