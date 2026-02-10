@@ -27,7 +27,7 @@
 🌿 **Core Workflow**
 
 - **Automatic branch naming** — configurable prefix (e.g. `feat/`, `fix/`) applied to task names
-- **Dotfile copying** — auto-copies `.env`, `.envrc`, `.tool-versions` into new worktrees
+- **File & directory copying** — auto-copies `.env`, `.envrc`, `.tool-versions`, `.vscode/` and other files or directories into new worktrees
 - **Duplicate worktrees** — copy an existing worktree with auto-suffixed or custom name
 - **Local merge** — merge worktree branches into main or other worktrees with auto-cleanup
 - **Sync worktrees** — rebase or merge onto the latest main branch, with bulk sync support
@@ -342,7 +342,7 @@ rimba version
 ```toml
 worktree_dir = '../myrepo-worktrees'
 default_source = 'main'
-copy_files = ['.env', '.env.local', '.envrc', '.tool-versions']
+copy_files = ['.env', '.env.local', '.envrc', '.tool-versions', '.vscode']
 
 # Post-create hooks (run in new worktree directory)
 post_create = ['./gradlew build']
@@ -368,7 +368,7 @@ work_dir = 'api'
 |-------|-------------|---------|
 | `worktree_dir` | Directory for worktrees (relative to repo root) | `../<repo-name>-worktrees` |
 | `default_source` | Branch to create worktrees from | Default branch (e.g. `main`) |
-| `copy_files` | Files to copy from repo root into new worktrees | `.env`, `.env.local`, `.envrc`, `.tool-versions` |
+| `copy_files` | Files or directories to copy from repo root into new worktrees | `.env`, `.env.local`, `.envrc`, `.tool-versions` |
 | `post_create` | Shell commands to run in new worktrees after creation | (none) |
 | `deps.auto_detect` | Auto-detect dependency modules from lockfiles | `true` |
 | `deps.modules[].dir` | Dependency directory to clone (e.g. `node_modules`) | — |

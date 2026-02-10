@@ -7,23 +7,67 @@ import (
 	"path/filepath"
 )
 
-// CopyDotfiles copies the listed files from src directory to dst directory.
-// Missing source files are silently skipped. Returns the list of files actually copied.
-func CopyDotfiles(src, dst string, files []string) ([]string, error) {
-	copied := make([]string, 0, len(files))
-	for _, name := range files {
+const copyErrFmt = "copy %s: %w"
+
+// CopyEntries copies the listed files or directories from src directory to dst directory.
+// Missing source entries are silently skipped. Returns the list of entries actually copied.
+func CopyEntries(src, dst string, entries []string) ([]string, error) {
+	copied := make([]string, 0, len(entries))
+	for _, name := range entries {
 		srcPath := filepath.Join(src, name)
 		dstPath := filepath.Join(dst, name)
 
-		if err := copyFile(srcPath, dstPath); err != nil {
+		info, err := os.Stat(srcPath)
+		if err != nil {
 			if os.IsNotExist(err) {
 				continue
 			}
-			return copied, fmt.Errorf("copy %s: %w", name, err)
+			return copied, fmt.Errorf(copyErrFmt, name, err)
+		}
+
+		if info.IsDir() {
+			if err := copyDir(srcPath, dstPath); err != nil {
+				return copied, fmt.Errorf(copyErrFmt, name, err)
+			}
+		} else {
+			if err := copyFile(srcPath, dstPath); err != nil {
+				return copied, fmt.Errorf(copyErrFmt, name, err)
+			}
 		}
 		copied = append(copied, name)
 	}
 	return copied, nil
+}
+
+func copyDir(src, dst string) error {
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dst, srcInfo.Mode().Perm()); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+		if entry.Type()&os.ModeSymlink != 0 {
+			continue // skip symlinks
+		}
+		if entry.IsDir() {
+			if err := copyDir(srcPath, dstPath); err != nil {
+				return err
+			}
+		} else {
+			if err := copyFile(srcPath, dstPath); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func copyFile(src, dst string) (retErr error) {

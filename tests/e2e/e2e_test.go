@@ -58,6 +58,14 @@ const (
 	contentMainChg  = "main change"
 	commitUpdateMsg = "update main"
 
+	// Shared directory/file names.
+	dotVscode    = ".vscode"
+	dotConfig    = ".config"
+	settingsJSON = "settings.json"
+
+	// Shared error format strings.
+	msgSaveConfig = "save config: %v"
+
 	// Shared flags.
 	flagMergedE2E  = "--merged"
 	flagForceE2E   = "--force"
