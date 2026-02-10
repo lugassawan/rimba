@@ -8,7 +8,7 @@ import (
 )
 
 func printBanner(cmd *cobra.Command) {
-	noColor, _ := cmd.Flags().GetBool("no-color")
+	noColor, _ := cmd.Flags().GetBool(flagNoColor)
 	p := termcolor.NewPainter(noColor)
 
 	lines := []string{

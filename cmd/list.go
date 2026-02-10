@@ -9,6 +9,7 @@ import (
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/resolver"
+	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/lugassawan/rimba/internal/termcolor"
 	"github.com/spf13/cobra"
 )
@@ -78,11 +79,17 @@ var listCmd = &cobra.Command{
 		cwdResolved, _ := filepath.EvalSymlinks(cwd)
 		cwdResolved = filepath.Clean(cwdResolved)
 
+		s := spinner.New(spinnerOpts(cmd))
+		defer s.Stop()
+		s.Start("Loading worktrees...")
+
 		var rows []resolver.WorktreeDetail
-		for _, e := range entries {
+		for i, e := range entries {
 			if e.Bare {
 				continue
 			}
+
+			s.Update(fmt.Sprintf("Loading worktrees... (%d/%d)", i+1, len(entries)))
 
 			// Determine relative path for display
 			displayPath := e.Path
@@ -122,6 +129,8 @@ var listCmd = &cobra.Command{
 		}
 		rows = filtered
 
+		s.Stop()
+
 		if len(rows) == 0 {
 			fmt.Fprintln(cmd.OutOrStdout(), "No worktrees match the given filters.")
 			return nil
@@ -130,7 +139,7 @@ var listCmd = &cobra.Command{
 		resolver.SortDetailsByTask(rows)
 
 		// Setup color painter
-		noColor, _ := cmd.Flags().GetBool("no-color")
+		noColor, _ := cmd.Flags().GetBool(flagNoColor)
 		p := termcolor.NewPainter(noColor)
 
 		tbl := termcolor.NewTable(2)

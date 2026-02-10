@@ -63,7 +63,7 @@ func collectHint(ch <-chan *updater.CheckResult) *updater.CheckResult {
 
 // printUpdateHint prints a yellow-colored update notification.
 func printUpdateHint(cmd *cobra.Command, result *updater.CheckResult) {
-	noColor, _ := cmd.Flags().GetBool("no-color")
+	noColor, _ := cmd.Flags().GetBool(flagNoColor)
 	p := termcolor.NewPainter(noColor)
 
 	msg := fmt.Sprintf(

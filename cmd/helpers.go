@@ -7,11 +7,19 @@ import (
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/resolver"
+	"github.com/lugassawan/rimba/internal/spinner"
+	"github.com/spf13/cobra"
 )
 
 // newRunner creates a git.Runner for command execution.
 func newRunner() git.Runner {
 	return &git.ExecRunner{}
+}
+
+// spinnerOpts returns spinner options derived from the cobra command flags.
+func spinnerOpts(cmd *cobra.Command) spinner.Options {
+	noColor, _ := cmd.Flags().GetBool(flagNoColor)
+	return spinner.Options{Writer: cmd.ErrOrStderr(), NoColor: noColor}
 }
 
 // resolveMainBranch tries to get the main branch from config, falling back to DefaultBranch.

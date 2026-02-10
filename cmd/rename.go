@@ -7,6 +7,7 @@ import (
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/resolver"
+	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
 )
 
@@ -59,7 +60,11 @@ var renameCmd = &cobra.Command{
 		wtDir := filepath.Join(repoRoot, cfg.WorktreeDir)
 		newPath := resolver.WorktreePath(wtDir, newBranch)
 
+		s := spinner.New(spinnerOpts(cmd))
+		defer s.Stop()
+
 		force, _ := cmd.Flags().GetBool("force")
+		s.Start("Renaming worktree...")
 		if err := git.MoveWorktree(r, wt.Path, newPath, force); err != nil {
 			return err
 		}
@@ -68,6 +73,7 @@ var renameCmd = &cobra.Command{
 			return fmt.Errorf("worktree moved but failed to rename branch %q: %w\nTo complete manually: git branch -m %s %s", wt.Branch, err, wt.Branch, newBranch)
 		}
 
+		s.Stop()
 		fmt.Fprintf(cmd.OutOrStdout(), "Renamed worktree: %s -> %s\n", task, newTask)
 		return nil
 	},
