@@ -9,13 +9,20 @@ import (
 	"github.com/lugassawan/rimba/internal/deps"
 	"github.com/lugassawan/rimba/internal/fileutil"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
 )
 
+const (
+	flagAs = "as"
+
+	hintAs = "Use a custom name instead of auto-suffix (-1, -2, etc.)"
+)
+
 func init() {
-	duplicateCmd.Flags().String("as", "", "Custom name for the duplicate worktree")
+	duplicateCmd.Flags().String(flagAs, "", "Custom name for the duplicate worktree")
 	duplicateCmd.Flags().Bool(flagSkipDeps, false, "Skip dependency detection and installation")
 	duplicateCmd.Flags().Bool(flagSkipHooks, false, "Skip post-create hooks")
 	rootCmd.AddCommand(duplicateCmd)
@@ -61,7 +68,7 @@ var duplicateCmd = &cobra.Command{
 		}
 
 		// Determine new task name
-		asFlag, _ := cmd.Flags().GetString("as")
+		asFlag, _ := cmd.Flags().GetString(flagAs)
 		var newTask string
 		if asFlag != "" {
 			newTask = asFlag
@@ -88,6 +95,12 @@ var duplicateCmd = &cobra.Command{
 		if _, err := os.Stat(wtPath); err == nil {
 			return fmt.Errorf("worktree path already exists: %s", wtPath)
 		}
+
+		hint.New(cmd, hintPainter(cmd)).
+			Add(flagSkipDeps, hintSkipDeps).
+			Add(flagSkipHooks, hintSkipHooks).
+			Add(flagAs, hintAs).
+			Show()
 
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()

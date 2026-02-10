@@ -26,7 +26,9 @@ const (
 	msgDeletedBranch   = "Deleted branch"
 
 	// Flags reused across tests.
-	flagInto = "--into"
+	flagInto         = "--into"
+	flagSkipDepsE2E  = "--skip-deps"
+	flagSkipHooksE2E = "--skip-hooks"
 
 	// Task names reused across tests.
 	taskRm         = "rm-task"
@@ -137,10 +139,17 @@ type result struct {
 // rimba runs the compiled binary with the given arguments in the specified directory.
 func rimba(t *testing.T, dir string, args ...string) result {
 	t.Helper()
+	return rimbaWithEnv(t, dir, nil, args...)
+}
+
+// rimbaWithEnv runs the compiled binary with extra environment variables.
+func rimbaWithEnv(t *testing.T, dir string, extraEnv []string, args ...string) result {
+	t.Helper()
 
 	cmd := exec.Command(binaryPath, args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GOCOVERDIR="+coverDir, "NO_COLOR=1")
+	cmd.Env = append(cmd.Env, extraEnv...)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

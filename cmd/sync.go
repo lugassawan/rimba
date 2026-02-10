@@ -5,9 +5,20 @@ import (
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
+)
+
+const (
+	flagAll              = "all"
+	flagSyncMerge        = "merge"
+	flagIncludeInherited = "include-inherited"
+
+	hintAll              = "Sync all eligible worktrees at once"
+	hintSyncMerge        = "Use merge instead of rebase (preserves history, creates merge commits)"
+	hintIncludeInherited = "Include inherited/duplicate worktrees when using --all"
 )
 
 // syncContext bundles shared state for sync operations.
@@ -25,9 +36,9 @@ type syncResult struct {
 }
 
 func init() {
-	syncCmd.Flags().Bool("all", false, "Sync all eligible worktrees")
-	syncCmd.Flags().Bool("merge", false, "Use merge instead of rebase")
-	syncCmd.Flags().Bool("include-inherited", false, "Include inherited/duplicate worktrees when using --all")
+	syncCmd.Flags().Bool(flagAll, false, "Sync all eligible worktrees")
+	syncCmd.Flags().Bool(flagSyncMerge, false, "Use merge instead of rebase")
+	syncCmd.Flags().Bool(flagIncludeInherited, false, "Include inherited/duplicate worktrees when using --all")
 
 	rootCmd.AddCommand(syncCmd)
 }
@@ -47,13 +58,19 @@ var syncCmd = &cobra.Command{
 		cfg := config.FromContext(cmd.Context())
 
 		r := newRunner()
-		all, _ := cmd.Flags().GetBool("all")
-		useMerge, _ := cmd.Flags().GetBool("merge")
-		includeInherited, _ := cmd.Flags().GetBool("include-inherited")
+		all, _ := cmd.Flags().GetBool(flagAll)
+		useMerge, _ := cmd.Flags().GetBool(flagSyncMerge)
+		includeInherited, _ := cmd.Flags().GetBool(flagIncludeInherited)
 
 		if !all && len(args) == 0 {
 			return fmt.Errorf("provide a task name or use --all to sync all worktrees")
 		}
+
+		hint.New(cmd, hintPainter(cmd)).
+			Add(flagAll, hintAll).
+			Add(flagSyncMerge, hintSyncMerge).
+			Add(flagIncludeInherited, hintIncludeInherited).
+			Show()
 
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
