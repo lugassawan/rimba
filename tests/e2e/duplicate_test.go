@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/testutil"
 )
@@ -132,6 +133,49 @@ func TestDuplicateCopiesDotfiles(t *testing.T) {
 	}
 	if string(data) != secretContent {
 		t.Errorf("expected .env content %q, got %q", secretContent, string(data))
+	}
+}
+
+func TestDuplicateCopiesDirectory(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupRepo(t)
+
+	// Create .vscode/settings.json before init
+	vscodeDir := filepath.Join(repo, dotVscode)
+	if err := os.Mkdir(vscodeDir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	testutil.CreateFile(t, vscodeDir, settingsJSON, `{"editor.fontSize":14}`)
+
+	rimbaSuccess(t, repo, "init")
+
+	// Override copy_files to include the directory
+	cfg := loadConfig(t, repo)
+	cfg.CopyFiles = []string{dotVscode}
+	if err := config.Save(filepath.Join(repo, configFile), cfg); err != nil {
+		t.Fatalf(msgSaveConfig, err)
+	}
+
+	rimbaSuccess(t, repo, "add", "dir-src")
+
+	r := rimbaSuccess(t, repo, "duplicate", "dir-src")
+	assertContains(t, r.Stdout, dotVscode)
+
+	// Verify .vscode was copied to the duplicate worktree
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	dupBranch := resolver.BranchName(defaultPrefix, "dir-src-1")
+	dupPath := resolver.WorktreePath(wtDir, dupBranch)
+	assertFileExists(t, filepath.Join(dupPath, dotVscode, settingsJSON))
+
+	data, err := os.ReadFile(filepath.Join(dupPath, dotVscode, settingsJSON))
+	if err != nil {
+		t.Fatalf("failed to read copied settings.json: %v", err)
+	}
+	if string(data) != `{"editor.fontSize":14}` {
+		t.Errorf("expected settings.json content, got %q", data)
 	}
 }
 

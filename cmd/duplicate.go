@@ -98,9 +98,9 @@ var duplicateCmd = &cobra.Command{
 			return err
 		}
 
-		// Copy dotfiles
-		s.Update("Copying dotfiles...")
-		copied, err := fileutil.CopyDotfiles(repoRoot, wtPath, cfg.CopyFiles)
+		// Copy files
+		s.Update("Copying files...")
+		copied, err := fileutil.CopyEntries(repoRoot, wtPath, cfg.CopyFiles)
 		if err != nil {
 			return fmt.Errorf("worktree created but failed to copy files: %w\nTo retry, manually copy files to: %s\nTo remove the worktree: rimba remove %s", err, wtPath, newTask)
 		}

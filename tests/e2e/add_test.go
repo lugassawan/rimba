@@ -160,18 +160,21 @@ func TestAddPartialFailCopyHint(t *testing.T) {
 
 	repo := setupRepo(t)
 
-	// Create a directory that will trigger EISDIR when copyFile tries io.Copy
-	if err := os.MkdirAll(filepath.Join(repo, ".testdir"), 0755); err != nil {
-		t.Fatalf("mkdir: %v", err)
+	// Create a file with no read permissions so copyFile fails on os.Open
+	envPath := filepath.Join(repo, ".env")
+	if err := os.WriteFile(envPath, []byte("SECRET=fail"), 0000); err != nil {
+		t.Fatalf("write: %v", err)
 	}
+	// Restore permissions on cleanup so t.TempDir() can remove the file
+	t.Cleanup(func() { _ = os.Chmod(envPath, 0644) })
 
 	rimbaSuccess(t, repo, "init")
 
-	// Override copy_files to include the directory
+	// Override copy_files to include the unreadable file
 	cfg := loadConfig(t, repo)
-	cfg.CopyFiles = []string{".testdir"}
+	cfg.CopyFiles = []string{".env"}
 	if err := config.Save(filepath.Join(repo, configFile), cfg); err != nil {
-		t.Fatalf("save config: %v", err)
+		t.Fatalf(msgSaveConfig, err)
 	}
 
 	r := rimbaFail(t, repo, "add", "copy-fail-task")
@@ -187,6 +190,96 @@ func TestAddFailsNoArgs(t *testing.T) {
 
 	repo := setupInitializedRepo(t)
 	rimbaFail(t, repo, "add")
+}
+
+func TestAddCopiesDirectory(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupRepo(t)
+
+	// Create .vscode/settings.json before init
+	vscodeDir := filepath.Join(repo, dotVscode)
+	if err := os.Mkdir(vscodeDir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	testutil.CreateFile(t, vscodeDir, settingsJSON, `{"go.formatTool":"goimports"}`)
+
+	rimbaSuccess(t, repo, "init")
+
+	// Override copy_files to include the directory
+	cfg := loadConfig(t, repo)
+	cfg.CopyFiles = []string{dotVscode}
+	if err := config.Save(filepath.Join(repo, configFile), cfg); err != nil {
+		t.Fatalf(msgSaveConfig, err)
+	}
+
+	r := rimbaSuccess(t, repo, "add", "with-dir")
+	assertContains(t, r.Stdout, dotVscode)
+
+	// Verify directory was copied to worktree
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch := resolver.BranchName(defaultPrefix, "with-dir")
+	wtPath := resolver.WorktreePath(wtDir, branch)
+	assertFileExists(t, filepath.Join(wtPath, dotVscode, settingsJSON))
+
+	data, err := os.ReadFile(filepath.Join(wtPath, dotVscode, settingsJSON))
+	if err != nil {
+		t.Fatalf("failed to read copied settings.json: %v", err)
+	}
+	if string(data) != `{"go.formatTool":"goimports"}` {
+		t.Errorf("expected settings.json content, got %q", data)
+	}
+}
+
+func TestAddCopiesNestedDirectory(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupRepo(t)
+
+	// Create .config/sub/settings.toml before init
+	subDir := filepath.Join(repo, dotConfig, "sub")
+	if err := os.MkdirAll(subDir, 0755); err != nil {
+		t.Fatalf("mkdirall: %v", err)
+	}
+	testutil.CreateFile(t, subDir, "settings.toml", "key = \"value\"")
+
+	rimbaSuccess(t, repo, "init")
+
+	cfg := loadConfig(t, repo)
+	cfg.CopyFiles = []string{dotConfig}
+	if err := config.Save(filepath.Join(repo, configFile), cfg); err != nil {
+		t.Fatalf(msgSaveConfig, err)
+	}
+
+	rimbaSuccess(t, repo, "add", "with-nested")
+
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch := resolver.BranchName(defaultPrefix, "with-nested")
+	wtPath := resolver.WorktreePath(wtDir, branch)
+	assertFileExists(t, filepath.Join(wtPath, dotConfig, "sub", "settings.toml"))
+}
+
+func TestAddSkipsMissingDirectory(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupRepo(t)
+	rimbaSuccess(t, repo, "init")
+
+	// Override copy_files to include a non-existent directory
+	cfg := loadConfig(t, repo)
+	cfg.CopyFiles = []string{".nonexistent-dir"}
+	if err := config.Save(filepath.Join(repo, configFile), cfg); err != nil {
+		t.Fatalf(msgSaveConfig, err)
+	}
+
+	// Should succeed — missing entries are silently skipped
+	rimbaSuccess(t, repo, "add", "skip-missing-dir")
 }
 
 // loadConfig is a test helper that loads the rimba config from a repo.
