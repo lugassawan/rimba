@@ -83,8 +83,8 @@ rimba add my-feature
 # List all worktrees with status (colored output)
 rimba list
 
-# Remove a worktree when done
-rimba remove my-feature --branch
+# Remove a worktree and its branch when done
+rimba remove my-feature
 ```
 
 ## Commands
@@ -159,17 +159,17 @@ rimba open my-task claude       # Launch claude in worktree
 
 ### `rimba remove <task>`
 
-Remove the worktree for the given task. Optionally delete the local branch.
+Remove the worktree for the given task and delete the local branch.
 
 ```sh
 rimba remove my-feature
-rimba remove my-feature --branch     # Also delete the local branch
+rimba remove my-feature -k           # Keep the branch after removal
 rimba remove my-feature -f           # Force removal even if dirty
 ```
 
 | Flag | Description |
 |------|-------------|
-| `--branch` | Also delete the local branch |
+| `-k`, `--keep-branch` | Keep the local branch after removing the worktree |
 | `-f`, `--force` | Force removal even if the worktree is dirty |
 
 ### `rimba rename <task> <new-task>`

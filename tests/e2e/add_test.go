@@ -28,7 +28,7 @@ func TestAddCreatesWorktree(t *testing.T) {
 	assertFileExists(t, wtPath)
 
 	// Verify branch exists
-	testutil.GitCmd(t, repo, "branch", "--list", branch)
+	testutil.GitCmd(t, repo, "branch", flagBranchList, branch)
 }
 
 func TestAddCustomPrefix(t *testing.T) {

@@ -20,6 +20,7 @@ func TestRemoveRemovesWorktree(t *testing.T) {
 
 	r := rimbaSuccess(t, repo, "remove", taskRm)
 	assertContains(t, r.Stdout, msgRemovedWorktree)
+	assertContains(t, r.Stdout, msgDeletedBranch)
 
 	// Verify the worktree directory is gone
 	cfg := loadConfig(t, repo)
@@ -27,28 +28,15 @@ func TestRemoveRemovesWorktree(t *testing.T) {
 	branch := resolver.BranchName(defaultPrefix, taskRm)
 	wtPath := resolver.WorktreePath(wtDir, branch)
 	assertFileNotExists(t, wtPath)
-}
-
-func TestRemoveWithBranchFlag(t *testing.T) {
-	if testing.Short() {
-		t.Skip(skipE2E)
-	}
-
-	repo := setupInitializedRepo(t)
-	rimbaSuccess(t, repo, "add", taskRmBranch)
-
-	r := rimbaSuccess(t, repo, "remove", "--branch", taskRmBranch)
-	assertContains(t, r.Stdout, msgRemovedWorktree)
-	assertContains(t, r.Stdout, msgDeletedBranch)
 
 	// Verify branch is deleted
-	out := testutil.GitCmd(t, repo, "branch", "--list")
-	if strings.Contains(out, defaultPrefix+taskRmBranch) {
-		t.Errorf("expected branch %s%s to be deleted, but it still exists", defaultPrefix, taskRmBranch)
+	out := testutil.GitCmd(t, repo, "branch", flagBranchList)
+	if strings.Contains(out, defaultPrefix+taskRm) {
+		t.Errorf("expected branch %s%s to be deleted, but it still exists", defaultPrefix, taskRm)
 	}
 }
 
-func TestRemovePreservesBranch(t *testing.T) {
+func TestRemoveKeepBranchFlag(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
 	}
@@ -56,10 +44,10 @@ func TestRemovePreservesBranch(t *testing.T) {
 	repo := setupInitializedRepo(t)
 	rimbaSuccess(t, repo, "add", taskKeepBranch)
 
-	rimbaSuccess(t, repo, "remove", taskKeepBranch)
+	rimbaSuccess(t, repo, "remove", "--keep-branch", taskKeepBranch)
 
 	// Verify branch still exists
-	out := testutil.GitCmd(t, repo, "branch", "--list")
+	out := testutil.GitCmd(t, repo, "branch", flagBranchList)
 	if !strings.Contains(out, defaultPrefix+taskKeepBranch) {
 		t.Errorf("expected branch %s%s to still exist", defaultPrefix, taskKeepBranch)
 	}
@@ -87,11 +75,12 @@ func TestRemoveForceFlag(t *testing.T) {
 		t.Fatalf("git add: %s: %v", out, err)
 	}
 
-	rimbaSuccess(t, repo, "remove", "-f", taskForce)
+	r := rimbaSuccess(t, repo, "remove", "-f", taskForce)
 	assertFileNotExists(t, wtPath)
+	assertContains(t, r.Stdout, msgDeletedBranch)
 }
 
-func TestRemovePartialFailBranchHint(t *testing.T) {
+func TestRemoveDeletesUnmergedBranch(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
 	}
@@ -99,8 +88,7 @@ func TestRemovePartialFailBranchHint(t *testing.T) {
 	repo := setupInitializedRepo(t)
 	rimbaSuccess(t, repo, "add", taskRmPartial)
 
-	// Commit in the worktree so the branch has unmerged changes,
-	// causing git branch -d to refuse deletion after worktree removal.
+	// Commit in the worktree so the branch has unmerged changes
 	cfg := loadConfig(t, repo)
 	wtDir := filepath.Join(repo, cfg.WorktreeDir)
 	branch := resolver.BranchName(defaultPrefix, taskRmPartial)
@@ -110,10 +98,15 @@ func TestRemovePartialFailBranchHint(t *testing.T) {
 	testutil.GitCmd(t, wtPath, "add", ".")
 	testutil.GitCmd(t, wtPath, "commit", "-m", "unmerged commit")
 
-	r := rimbaFail(t, repo, "remove", "--branch", taskRmPartial)
-	assertContains(t, r.Stderr, "worktree removed but failed to delete branch")
-	assertContains(t, r.Stderr, "git branch -d")
-	assertContains(t, r.Stderr, "-D to force")
+	r := rimbaSuccess(t, repo, "remove", taskRmPartial)
+	assertContains(t, r.Stdout, msgRemovedWorktree)
+	assertContains(t, r.Stdout, msgDeletedBranch)
+
+	// Verify branch is gone (force delete handles unmerged)
+	out := testutil.GitCmd(t, repo, "branch", flagBranchList)
+	if strings.Contains(out, defaultPrefix+taskRmPartial) {
+		t.Errorf("expected branch %s%s to be deleted, but it still exists", defaultPrefix, taskRmPartial)
+	}
 }
 
 func TestRemoveFailsNonexistent(t *testing.T) {

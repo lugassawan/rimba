@@ -15,12 +15,11 @@ import (
 const (
 	flagDryRun = "dry-run"
 	flagMerged = "merged"
-	flagForce  = "force"
 
-	hintMerged        = "Remove worktrees whose branches are already merged into main"
-	hintDryRunPrune   = "Preview what would be pruned without making changes"
-	hintDryRunMerged  = "Preview what would be removed without making changes"
-	hintForce         = "Skip confirmation prompt"
+	hintMerged       = "Remove worktrees whose branches are already merged into main"
+	hintDryRunPrune  = "Preview what would be pruned without making changes"
+	hintDryRunMerged = "Preview what would be removed without making changes"
+	hintForce        = "Skip confirmation prompt"
 )
 
 type mergedCandidate struct {

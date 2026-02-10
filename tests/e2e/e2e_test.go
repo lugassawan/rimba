@@ -26,13 +26,13 @@ const (
 	msgDeletedBranch   = "Deleted branch"
 
 	// Flags reused across tests.
+	flagBranchList   = "--list"
 	flagInto         = "--into"
 	flagSkipDepsE2E  = "--skip-deps"
 	flagSkipHooksE2E = "--skip-hooks"
 
 	// Task names reused across tests.
 	taskRm         = "rm-task"
-	taskRmBranch   = "rm-branch"
 	taskKeepBranch = "keep-branch"
 	taskFix123     = "fix-123"
 	taskForce      = "force-task"

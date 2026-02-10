@@ -130,7 +130,7 @@ func TestCleanMergedForce(t *testing.T) {
 	assertFileNotExists(t, wtPath)
 
 	// Branch should be gone
-	out := testutil.GitCmd(t, repo, "branch", "--list")
+	out := testutil.GitCmd(t, repo, "branch", flagBranchList)
 	if strings.Contains(out, defaultPrefix+"clean-force") {
 		t.Error("expected branch to be deleted")
 	}

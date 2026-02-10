@@ -41,7 +41,7 @@ func TestRenameRenamesWorktree(t *testing.T) {
 
 	// Old directory and branch should be gone
 	assertFileNotExists(t, oldPath)
-	branches := testutil.GitCmd(t, repo, "branch", "--list")
+	branches := testutil.GitCmd(t, repo, "branch", flagBranchList)
 	if strings.Contains(branches, oldBranch) {
 		t.Errorf("expected old branch %q to be gone", oldBranch)
 	}
@@ -65,7 +65,7 @@ func TestRenamePreservesPrefix(t *testing.T) {
 	assertContains(t, r.Stdout, "Renamed worktree")
 
 	// Verify the branch preserved the bugfix/ prefix
-	branches := testutil.GitCmd(t, repo, "branch", "--list")
+	branches := testutil.GitCmd(t, repo, "branch", flagBranchList)
 	if !strings.Contains(branches, "bugfix/new-bug") {
 		t.Errorf("expected branch bugfix/new-bug to exist, got branches:\n%s", branches)
 	}

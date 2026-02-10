@@ -42,8 +42,8 @@ func TestWorkflowFullLifecycle(t *testing.T) {
 	assertContains(t, r.Stdout, task1)
 	assertContains(t, r.Stdout, task2)
 
-	// Step 5: remove task-1 with --branch
-	r = rimbaSuccess(t, repo, "remove", "--branch", task1)
+	// Step 5: remove task-1 (branch auto-deleted by default)
+	r = rimbaSuccess(t, repo, "remove", task1)
 	assertContains(t, r.Stdout, "Removed worktree")
 	assertContains(t, r.Stdout, "Deleted branch")
 	assertFileNotExists(t, wtPath1)
@@ -53,8 +53,8 @@ func TestWorkflowFullLifecycle(t *testing.T) {
 	assertNotContains(t, r.Stdout, defaultPrefix+task1)
 	assertContains(t, r.Stdout, task2)
 
-	// Step 7: remove task-2 with --branch (using full branch name)
-	r = rimbaSuccess(t, repo, "remove", "--branch", bugfixPrefix+task2)
+	// Step 7: remove task-2 (using full branch name, branch auto-deleted)
+	r = rimbaSuccess(t, repo, "remove", bugfixPrefix+task2)
 	assertContains(t, r.Stdout, "Removed worktree")
 	assertContains(t, r.Stdout, "Deleted branch")
 	assertFileNotExists(t, wtPath2)

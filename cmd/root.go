@@ -12,6 +12,7 @@ import (
 
 const (
 	errWorktreeNotFound = "worktree not found for task %q"
+	flagForce           = "force"
 	flagNoColor         = "no-color"
 	flagSkipDeps        = "skip-deps"
 	flagSkipHooks       = "skip-hooks"
