@@ -71,7 +71,7 @@ func TestMergeIntoMain(t *testing.T) {
 	assertFileNotExists(t, wtPath)
 
 	// Verify branch is deleted
-	out := testutil.GitCmd(t, repo, "branch", "--list")
+	out := testutil.GitCmd(t, repo, "branch", flagBranchList)
 	if strings.Contains(out, defaultPrefix+taskMergeMain) {
 		t.Error("expected branch to be deleted")
 	}
@@ -93,7 +93,7 @@ func TestMergeIntoMainKeep(t *testing.T) {
 	assertFileExists(t, wtPath)
 
 	// Verify branch still exists
-	out := testutil.GitCmd(t, repo, "branch", "--list")
+	out := testutil.GitCmd(t, repo, "branch", flagBranchList)
 	if !strings.Contains(out, defaultPrefix+taskMergeKeep) {
 		t.Error("expected branch to still exist")
 	}
