@@ -59,6 +59,11 @@ var addCmd = &cobra.Command{
 		wtDir := filepath.Join(repoRoot, cfg.WorktreeDir)
 		wtPath := resolver.WorktreePath(wtDir, branch)
 
+		wtEntries, err := git.ListWorktrees(r)
+		if err != nil {
+			return err
+		}
+
 		// Validate
 		if git.BranchExists(r, branch) {
 			return fmt.Errorf("branch %q already exists", branch)
@@ -94,7 +99,7 @@ var addCmd = &cobra.Command{
 		var depsResults []deps.InstallResult
 		if !skipDeps {
 			s.Update("Installing dependencies...")
-			depsResults = installDeps(r, cfg, wtPath)
+			depsResults = installDeps(r, cfg, wtPath, wtEntries)
 		}
 
 		// Post-create hooks

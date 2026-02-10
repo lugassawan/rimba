@@ -88,6 +88,11 @@ var duplicateCmd = &cobra.Command{
 		wtDir := filepath.Join(repoRoot, cfg.WorktreeDir)
 		wtPath := resolver.WorktreePath(wtDir, newBranch)
 
+		wtEntries, err := git.ListWorktrees(r)
+		if err != nil {
+			return err
+		}
+
 		// Validate
 		if git.BranchExists(r, newBranch) {
 			return fmt.Errorf("branch %q already exists", newBranch)
@@ -123,7 +128,7 @@ var duplicateCmd = &cobra.Command{
 		var depsResults []deps.InstallResult
 		if !skipDeps {
 			s.Update("Installing dependencies...")
-			depsResults = installDepsPreferSource(r, cfg, wtPath, wt.Path)
+			depsResults = installDepsPreferSource(r, cfg, wtPath, wt.Path, wtEntries)
 		}
 
 		// Post-create hooks

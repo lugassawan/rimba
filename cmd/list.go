@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
@@ -24,6 +25,13 @@ const (
 	hintDirty  = "Show only worktrees with uncommitted changes"
 	hintBehind = "Show only worktrees behind upstream"
 )
+
+// candidate holds a pre-filtered worktree entry before status collection.
+type candidate struct {
+	entry       git.WorktreeEntry
+	displayPath string
+	isCurrent   bool
+}
 
 var (
 	listType   string
@@ -100,42 +108,59 @@ var listCmd = &cobra.Command{
 		defer s.Stop()
 		s.Start("Loading worktrees...")
 
-		var rows []resolver.WorktreeDetail
-		for i, e := range entries {
+		var candidates []candidate
+		for _, e := range entries {
 			if e.Bare {
 				continue
 			}
 
-			s.Update(fmt.Sprintf("Loading worktrees... (%d/%d)", i+1, len(entries)))
+			if listType != "" {
+				_, matchedPrefix := resolver.TaskFromBranch(e.Branch, prefixes)
+				entryType := strings.TrimSuffix(matchedPrefix, "/")
+				if entryType != listType {
+					continue
+				}
+			}
 
-			// Determine relative path for display
 			displayPath := e.Path
 			if rel, err := filepath.Rel(wtDir, e.Path); err == nil && len(rel) < len(displayPath) {
 				displayPath = rel
 			}
 
-			// Build structured status
-			var status resolver.WorktreeStatus
-			if dirty, err := git.IsDirty(r, e.Path); err == nil && dirty {
-				status.Dirty = true
-			}
-			ahead, behind, _ := git.AheadBehind(r, e.Path)
-			status.Ahead = ahead
-			status.Behind = behind
-
-			// Detect if this is the current worktree
 			entryResolved, _ := filepath.EvalSymlinks(e.Path)
 			entryResolved = filepath.Clean(entryResolved)
 			isCurrent := cwdResolved == entryResolved
 
-			rows = append(rows, resolver.NewWorktreeDetail(e.Branch, prefixes, displayPath, status, isCurrent))
+			candidates = append(candidates, candidate{entry: e, displayPath: displayPath, isCurrent: isCurrent})
 		}
+
+		rows := make([]resolver.WorktreeDetail, len(candidates))
+		var wg sync.WaitGroup
+		sem := make(chan struct{}, 8)
+
+		for i, c := range candidates {
+			s.Update(fmt.Sprintf("Loading worktrees... (%d/%d)", i+1, len(candidates)))
+			wg.Add(1)
+			go func(idx int, c candidate) {
+				defer wg.Done()
+				sem <- struct{}{}
+				defer func() { <-sem }()
+
+				var status resolver.WorktreeStatus
+				if dirty, err := git.IsDirty(r, c.entry.Path); err == nil && dirty {
+					status.Dirty = true
+				}
+				ahead, behind, _ := git.AheadBehind(r, c.entry.Path)
+				status.Ahead = ahead
+				status.Behind = behind
+
+				rows[idx] = resolver.NewWorktreeDetail(c.entry.Branch, prefixes, c.displayPath, status, c.isCurrent)
+			}(i, c)
+		}
+		wg.Wait()
 
 		filtered := rows[:0]
 		for _, row := range rows {
-			if listType != "" && row.Type != listType {
-				continue
-			}
 			if listDirty && !row.Status.Dirty {
 				continue
 			}

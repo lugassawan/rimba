@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
@@ -130,10 +131,27 @@ func syncAll(sc syncContext, worktrees []resolver.WorktreeInfo, prefixes []strin
 	eligible := filterEligible(worktrees, prefixes, sc.cfg.DefaultSource, allTasks, includeInherited)
 
 	var res syncResult
-	for i, wt := range eligible {
-		sc.s.Update(fmt.Sprintf("[%d/%d] Syncing %s...", i+1, len(eligible), wt.Branch))
-		syncWorktree(sc.cmd, sc.r, sc.cfg.DefaultSource, wt, useMerge, &res)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 4) // bounded: git worktrees share object store
+
+	var completed int
+	for _, wt := range eligible {
+		wg.Add(1)
+		go func(wt resolver.WorktreeInfo) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			syncWorktree(sc.cmd, sc.r, sc.cfg.DefaultSource, wt, useMerge, &res, &mu)
+
+			mu.Lock()
+			completed++
+			sc.s.Update(fmt.Sprintf("[%d/%d] Syncing worktrees...", completed, len(eligible)))
+			mu.Unlock()
+		}(wt)
 	}
+	wg.Wait()
 
 	sc.s.Stop()
 	printSyncSummary(sc.cmd, sc.cfg.DefaultSource, useMerge, &res)
@@ -164,29 +182,37 @@ func filterEligible(worktrees []resolver.WorktreeInfo, prefixes []string, mainBr
 	return eligible
 }
 
-func syncWorktree(cmd *cobra.Command, r git.Runner, mainBranch string, wt resolver.WorktreeInfo, useMerge bool, res *syncResult) {
+func syncWorktree(cmd *cobra.Command, r git.Runner, mainBranch string, wt resolver.WorktreeInfo, useMerge bool, res *syncResult, mu *sync.Mutex) {
 	dirty, err := git.IsDirty(r, wt.Path)
 	if err != nil {
+		mu.Lock()
 		fmt.Fprintf(cmd.OutOrStdout(), "Warning: could not check status of %s: %v\n", wt.Branch, err)
 		res.skippedDirty++
+		mu.Unlock()
 		return
 	}
 	if dirty {
+		mu.Lock()
 		fmt.Fprintf(cmd.OutOrStdout(), "Skipping %s (dirty)\n", wt.Branch)
 		res.skippedDirty++
+		mu.Unlock()
 		return
 	}
 
 	if err := doSync(r, wt.Path, mainBranch, useMerge); err != nil {
+		mu.Lock()
 		res.failed++
 		verb := "rebase"
 		if useMerge {
 			verb = "merge"
 		}
 		res.failures = append(res.failures, fmt.Sprintf("  %s: To resolve: cd %s && git %s %s", wt.Branch, wt.Path, verb, mainBranch))
+		mu.Unlock()
 		return
 	}
+	mu.Lock()
 	res.synced++
+	mu.Unlock()
 }
 
 func printSyncSummary(cmd *cobra.Command, mainBranch string, useMerge bool, res *syncResult) {

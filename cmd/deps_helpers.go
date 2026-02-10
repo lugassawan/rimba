@@ -11,22 +11,14 @@ import (
 )
 
 // installDeps detects modules and installs dependencies, returning the results.
-func installDeps(r git.Runner, cfg *config.Config, wtPath string) []deps.InstallResult {
+// existingEntries should contain the current worktree list to avoid a redundant git call.
+func installDeps(r git.Runner, cfg *config.Config, wtPath string, existingEntries []git.WorktreeEntry) []deps.InstallResult {
 	var configModules []config.ModuleConfig
 	if cfg.Deps != nil {
 		configModules = cfg.Deps.Modules
 	}
 
-	entries, err := git.ListWorktrees(r)
-	if err != nil {
-		return nil
-	}
-	var existingPaths []string
-	for _, e := range entries {
-		if e.Path != wtPath {
-			existingPaths = append(existingPaths, e.Path)
-		}
-	}
+	existingPaths := worktreePathsExcluding(existingEntries, wtPath)
 
 	modules, err := deps.ResolveModules(wtPath, cfg.IsAutoDetectDeps(), configModules, existingPaths)
 	if err != nil || len(modules) == 0 {
@@ -38,22 +30,14 @@ func installDeps(r git.Runner, cfg *config.Config, wtPath string) []deps.Install
 }
 
 // installDepsPreferSource is like installDeps but prefers cloning from sourceWT.
-func installDepsPreferSource(r git.Runner, cfg *config.Config, wtPath, sourceWT string) []deps.InstallResult {
+// existingEntries should contain the current worktree list to avoid a redundant git call.
+func installDepsPreferSource(r git.Runner, cfg *config.Config, wtPath, sourceWT string, existingEntries []git.WorktreeEntry) []deps.InstallResult {
 	var configModules []config.ModuleConfig
 	if cfg.Deps != nil {
 		configModules = cfg.Deps.Modules
 	}
 
-	entries, err := git.ListWorktrees(r)
-	if err != nil {
-		return nil
-	}
-	var existingPaths []string
-	for _, e := range entries {
-		if e.Path != wtPath {
-			existingPaths = append(existingPaths, e.Path)
-		}
-	}
+	existingPaths := worktreePathsExcluding(existingEntries, wtPath)
 
 	modules, err := deps.ResolveModules(wtPath, cfg.IsAutoDetectDeps(), configModules, existingPaths)
 	if err != nil || len(modules) == 0 {
@@ -62,6 +46,17 @@ func installDepsPreferSource(r git.Runner, cfg *config.Config, wtPath, sourceWT 
 
 	mgr := &deps.Manager{Runner: r}
 	return mgr.InstallPreferSource(wtPath, sourceWT, modules)
+}
+
+// worktreePathsExcluding returns paths from entries, excluding the given path.
+func worktreePathsExcluding(entries []git.WorktreeEntry, exclude string) []string {
+	var paths []string
+	for _, e := range entries {
+		if e.Path != exclude {
+			paths = append(paths, e.Path)
+		}
+	}
+	return paths
 }
 
 func printInstallResults(out io.Writer, results []deps.InstallResult) {
