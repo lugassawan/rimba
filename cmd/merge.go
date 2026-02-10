@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
@@ -21,6 +22,12 @@ const (
 	hintKeep = "Keep source worktree after merge (continue working on it)"
 	hintInto = "Merge into another worktree instead of the main branch"
 )
+
+// dirtyResult holds the outcome of an IsDirty check.
+type dirtyResult struct {
+	dirty bool
+	err   error
+}
 
 func init() {
 	mergeCmd.Flags().String(flagInto, "", "Target worktree task to merge into (default: main/repo root)")
@@ -88,21 +95,29 @@ var mergeCmd = &cobra.Command{
 			targetLabel = target.Branch
 		}
 
-		// Pre-flight: check source is clean
-		dirty, err := git.IsDirty(r, source.Path)
-		if err != nil {
-			return err
+		var srcResult, tgtResult dirtyResult
+		var dwg sync.WaitGroup
+		dwg.Add(2)
+		go func() {
+			defer dwg.Done()
+			srcResult.dirty, srcResult.err = git.IsDirty(r, source.Path)
+		}()
+		go func() {
+			defer dwg.Done()
+			tgtResult.dirty, tgtResult.err = git.IsDirty(r, targetDir)
+		}()
+		dwg.Wait()
+
+		if srcResult.err != nil {
+			return srcResult.err
 		}
-		if dirty {
+		if srcResult.dirty {
 			return fmt.Errorf("source worktree %q has uncommitted changes\nCommit or stash changes before merging: cd %s", sourceTask, source.Path)
 		}
-
-		// Pre-flight: check target is clean
-		dirty, err = git.IsDirty(r, targetDir)
-		if err != nil {
-			return err
+		if tgtResult.err != nil {
+			return tgtResult.err
 		}
-		if dirty {
+		if tgtResult.dirty {
 			if mergingToMain {
 				return fmt.Errorf("target %q has uncommitted changes\nCommit or stash changes before merging: cd %s", targetLabel, targetDir)
 			}

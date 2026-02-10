@@ -6,7 +6,7 @@ LDFLAGS  = -s -w \
 	-X github.com/lugassawan/rimba/cmd.commit=$(COMMIT) \
 	-X github.com/lugassawan/rimba/cmd.date=$(DATE)
 
-.PHONY: build test test-short test-e2e test-coverage clean lint
+.PHONY: build test test-short test-e2e test-coverage clean lint bench
 
 build:
 	go build -ldflags '$(LDFLAGS)' -o bin/rimba .
@@ -29,3 +29,6 @@ test-coverage:
 
 lint:
 	golangci-lint run ./...
+
+bench:
+	go test -bench=. -benchmem -run=^$$ ./...
