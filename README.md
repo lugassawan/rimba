@@ -20,6 +20,7 @@
 - [Quick Start](#quick-start)
 - [Commands](#commands)
 - [Configuration](#configuration)
+- [Environment Variables](#environment-variables)
 - [License](#license)
 
 ## Features
@@ -42,6 +43,7 @@
 🖥️ **Developer Experience**
 
 - **Status dashboard** — colored tabular view with dirty state, ahead/behind counts, and filtering
+- **Pre-execution hints** — shows available flags before long-running commands, auto-filtered and suppressible
 - **Worktree navigation** — open worktrees or run commands inside them via `open`
 - **Shell completions** — bash, zsh, fish, and PowerShell
 - **Cross-platform** — Linux, macOS, and Windows (amd64/arm64)
@@ -386,6 +388,13 @@ work_dir = 'api'
 | `go.sum` | `vendor` | `go mod vendor` | Clone only (skip if no match) |
 
 > **Note:** Dependencies are shared using copy-on-write clones (`cp -c` on macOS, `cp --reflink=auto` on Linux) for near-instant copies on supported filesystems (APFS, Btrfs). Falls back to regular copy on other systems.
+
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `RIMBA_QUIET` | Suppress pre-execution hints (set to any value, e.g. `RIMBA_QUIET=1`) |
+| `NO_COLOR` | Disable colored output globally (per [no-color.org](https://no-color.org)) |
 
 ## License
 
