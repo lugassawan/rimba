@@ -6,17 +6,19 @@ import (
 	"path/filepath"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/deps"
 	"github.com/lugassawan/rimba/internal/fileutil"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/resolver"
+	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
 )
 
 func init() {
 	addPrefixFlags(addCmd)
 	addCmd.Flags().StringP("source", "s", "", "Source branch to create worktree from (default from config)")
-	addCmd.Flags().Bool("skip-deps", false, "Skip dependency detection and installation")
-	addCmd.Flags().Bool("skip-hooks", false, "Skip post-create hooks")
+	addCmd.Flags().Bool(flagSkipDeps, false, "Skip dependency detection and installation")
+	addCmd.Flags().Bool(flagSkipHooks, false, "Skip post-create hooks")
 	_ = addCmd.RegisterFlagCompletionFunc("source", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return completeBranchNames(cmd, toComplete), cobra.ShellCompDirectiveNoFileComp
 	})
@@ -58,16 +60,39 @@ var addCmd = &cobra.Command{
 			return fmt.Errorf("worktree path already exists: %s", wtPath)
 		}
 
+		s := spinner.New(spinnerOpts(cmd))
+		defer s.Stop()
+
 		// Create worktree
+		s.Start("Creating worktree...")
 		if err := git.AddWorktree(r, wtPath, branch, source); err != nil {
 			return err
 		}
 
 		// Copy dotfiles
+		s.Update("Copying dotfiles...")
 		copied, err := fileutil.CopyDotfiles(repoRoot, wtPath, cfg.CopyFiles)
 		if err != nil {
 			return fmt.Errorf("worktree created but failed to copy files: %w\nTo retry, manually copy files to: %s\nTo remove the worktree: rimba remove %s", err, wtPath, task)
 		}
+
+		// Dependencies
+		skipDeps, _ := cmd.Flags().GetBool(flagSkipDeps)
+		var depsResults []deps.InstallResult
+		if !skipDeps {
+			s.Update("Installing dependencies...")
+			depsResults = installDeps(r, cfg, wtPath)
+		}
+
+		// Post-create hooks
+		skipHooks, _ := cmd.Flags().GetBool(flagSkipHooks)
+		var hookResults []deps.HookResult
+		if !skipHooks && len(cfg.PostCreate) > 0 {
+			s.Update("Running hooks...")
+			hookResults = runHooks(wtPath, cfg.PostCreate)
+		}
+
+		s.Stop()
 
 		out := cmd.OutOrStdout()
 		fmt.Fprintf(out, "Created worktree for task %q\n", task)
@@ -77,17 +102,8 @@ var addCmd = &cobra.Command{
 			fmt.Fprintf(out, "  Copied: %v\n", copied)
 		}
 
-		// Dependencies
-		skipDeps, _ := cmd.Flags().GetBool("skip-deps")
-		if !skipDeps {
-			printDepsResults(out, r, cfg, wtPath)
-		}
-
-		// Post-create hooks
-		skipHooks, _ := cmd.Flags().GetBool("skip-hooks")
-		if !skipHooks && len(cfg.PostCreate) > 0 {
-			printHookResults(out, wtPath, cfg.PostCreate)
-		}
+		printInstallResults(out, depsResults)
+		printHookResultsList(out, hookResults)
 
 		return nil
 	},

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/lugassawan/rimba/internal/updater"
 	"github.com/spf13/cobra"
 )
@@ -32,20 +33,25 @@ var updateCmd = &cobra.Command{
 
 		u := updater.New(version)
 
-		fmt.Fprintln(cmd.OutOrStdout(), "Checking for updates...")
+		s := spinner.New(spinnerOpts(cmd))
+		defer s.Stop()
+
+		s.Start("Checking for updates...")
 		result, err := u.Check()
 		if err != nil {
 			return fmt.Errorf("checking for updates: %w", err)
 		}
 
 		if result.UpToDate {
+			s.Stop()
 			fmt.Fprintf(cmd.OutOrStdout(), "Already up to date (%s).\n", result.CurrentVersion)
 			return nil
 		}
 
+		s.Stop()
 		fmt.Fprintf(cmd.OutOrStdout(), "New version available: %s → %s\n", result.CurrentVersion, result.LatestVersion)
-		fmt.Fprintln(cmd.OutOrStdout(), "Downloading...")
 
+		s.Start("Downloading...")
 		newBinary, err := u.Download(result.DownloadURL)
 		if err != nil {
 			return fmt.Errorf("downloading update: %w", err)
@@ -61,15 +67,20 @@ var updateCmd = &cobra.Command{
 			return fmt.Errorf("resolving binary path: %w", err)
 		}
 
+		s.Update("Installing...")
 		if err := updater.Replace(currentBinary, newBinary); err != nil {
 			if !updater.IsPermissionError(err) {
 				return fmt.Errorf("replacing binary: %w", err)
 			}
+			s.Stop()
 			fmt.Fprintln(cmd.OutOrStdout(), "Elevated permissions required. Retrying with sudo...")
+			s.Start("Installing with sudo...")
 			if err := updater.ReplaceElevated(currentBinary, newBinary); err != nil {
 				return fmt.Errorf("replacing binary with sudo: %w", err)
 			}
 		}
+
+		s.Stop()
 
 		// Verify the new binary works
 		out, err := exec.Command(filepath.Clean(currentBinary), "version").Output() //nolint:gosec // path comes from os.Executable

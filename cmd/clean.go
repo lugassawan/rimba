@@ -7,6 +7,7 @@ import (
 
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/resolver"
+	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
 )
 
@@ -48,10 +49,15 @@ var cleanCmd = &cobra.Command{
 func cleanPrune(cmd *cobra.Command, r git.Runner) error {
 	dryRun, _ := cmd.Flags().GetBool(flagDryRun)
 
+	s := spinner.New(spinnerOpts(cmd))
+	defer s.Stop()
+
+	s.Start("Pruning stale references...")
 	out, err := git.Prune(r, dryRun)
 	if err != nil {
 		return err
 	}
+	s.Stop()
 
 	switch {
 	case out != "":
@@ -74,15 +80,23 @@ func cleanMerged(cmd *cobra.Command, r git.Runner) error {
 		return err
 	}
 
+	s := spinner.New(spinnerOpts(cmd))
+	defer s.Stop()
+
 	// Fetch latest (non-fatal)
+	s.Start("Fetching from origin...")
 	if err := git.Fetch(r, "origin"); err != nil {
+		s.Stop()
 		fmt.Fprintf(cmd.OutOrStdout(), "Warning: fetch failed (no remote?): continuing with local state\n")
 	}
 
+	s.Update("Analyzing branches...")
 	candidates, err := findMergedCandidates(r, mainBranch)
 	if err != nil {
 		return err
 	}
+
+	s.Stop()
 
 	if len(candidates) == 0 {
 		fmt.Fprintln(cmd.OutOrStdout(), "No merged worktrees found.")
@@ -168,4 +182,3 @@ func removeMergedWorktrees(cmd *cobra.Command, r git.Runner, candidates []merged
 	}
 	return removed
 }
-

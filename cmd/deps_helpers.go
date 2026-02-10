@@ -10,17 +10,16 @@ import (
 	"github.com/lugassawan/rimba/internal/git"
 )
 
-// printDepsResults detects modules, installs deps, and prints the results.
-func printDepsResults(out io.Writer, r git.Runner, cfg *config.Config, wtPath string) {
+// installDeps detects modules and installs dependencies, returning the results.
+func installDeps(r git.Runner, cfg *config.Config, wtPath string) []deps.InstallResult {
 	var configModules []config.ModuleConfig
 	if cfg.Deps != nil {
 		configModules = cfg.Deps.Modules
 	}
 
-	// Get existing worktree paths for FilterCloneOnly
 	entries, err := git.ListWorktrees(r)
 	if err != nil {
-		return
+		return nil
 	}
 	var existingPaths []string
 	for _, e := range entries {
@@ -31,16 +30,15 @@ func printDepsResults(out io.Writer, r git.Runner, cfg *config.Config, wtPath st
 
 	modules, err := deps.ResolveModules(wtPath, cfg.IsAutoDetectDeps(), configModules, existingPaths)
 	if err != nil || len(modules) == 0 {
-		return
+		return nil
 	}
 
 	mgr := &deps.Manager{Runner: r}
-	results := mgr.Install(wtPath, modules)
-	printInstallResults(out, results)
+	return mgr.Install(wtPath, modules)
 }
 
-// printDepsResultsPreferSource is like printDepsResults but prefers cloning from sourceWT.
-func printDepsResultsPreferSource(out io.Writer, r git.Runner, cfg *config.Config, wtPath, sourceWT string) {
+// installDepsPreferSource is like installDeps but prefers cloning from sourceWT.
+func installDepsPreferSource(r git.Runner, cfg *config.Config, wtPath, sourceWT string) []deps.InstallResult {
 	var configModules []config.ModuleConfig
 	if cfg.Deps != nil {
 		configModules = cfg.Deps.Modules
@@ -48,7 +46,7 @@ func printDepsResultsPreferSource(out io.Writer, r git.Runner, cfg *config.Confi
 
 	entries, err := git.ListWorktrees(r)
 	if err != nil {
-		return
+		return nil
 	}
 	var existingPaths []string
 	for _, e := range entries {
@@ -59,12 +57,11 @@ func printDepsResultsPreferSource(out io.Writer, r git.Runner, cfg *config.Confi
 
 	modules, err := deps.ResolveModules(wtPath, cfg.IsAutoDetectDeps(), configModules, existingPaths)
 	if err != nil || len(modules) == 0 {
-		return
+		return nil
 	}
 
 	mgr := &deps.Manager{Runner: r}
-	results := mgr.InstallPreferSource(wtPath, sourceWT, modules)
-	printInstallResults(out, results)
+	return mgr.InstallPreferSource(wtPath, sourceWT, modules)
 }
 
 func printInstallResults(out io.Writer, results []deps.InstallResult) {
@@ -85,9 +82,16 @@ func printInstallResults(out io.Writer, results []deps.InstallResult) {
 	}
 }
 
-// printHookResults runs post-create hooks and prints their results.
-func printHookResults(out io.Writer, wtPath string, hooks []string) {
-	results := deps.RunPostCreateHooks(wtPath, hooks)
+// runHooks executes post-create hooks and returns the results.
+func runHooks(wtPath string, hooks []string) []deps.HookResult {
+	return deps.RunPostCreateHooks(wtPath, hooks)
+}
+
+// printHookResultsList prints pre-computed hook results.
+func printHookResultsList(out io.Writer, results []deps.HookResult) {
+	if len(results) == 0 {
+		return
+	}
 	fmt.Fprintf(out, "  Hooks:\n")
 	for _, r := range results {
 		if r.Error != nil {

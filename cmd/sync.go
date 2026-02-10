@@ -6,8 +6,17 @@ import (
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/resolver"
+	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
 )
+
+// syncContext bundles shared state for sync operations.
+type syncContext struct {
+	cmd *cobra.Command
+	r   git.Runner
+	cfg *config.Config
+	s   *spinner.Spinner
+}
 
 // syncResult tracks the outcome of syncing multiple worktrees.
 type syncResult struct {
@@ -46,8 +55,13 @@ var syncCmd = &cobra.Command{
 			return fmt.Errorf("provide a task name or use --all to sync all worktrees")
 		}
 
+		s := spinner.New(spinnerOpts(cmd))
+		defer s.Stop()
+
 		// Fetch latest from origin (non-fatal if no remote configured)
+		s.Start("Fetching from origin...")
 		if err := git.Fetch(r, "origin"); err != nil {
+			s.Stop()
 			fmt.Fprintf(cmd.OutOrStdout(), "Warning: fetch failed (no remote?): continuing with local state\n")
 		}
 
@@ -57,21 +71,22 @@ var syncCmd = &cobra.Command{
 		}
 
 		prefixes := resolver.AllPrefixes()
+		sc := syncContext{cmd: cmd, r: r, cfg: cfg, s: s}
 
 		if all {
-			return syncAll(cmd, r, cfg, worktrees, prefixes, useMerge, includeInherited)
+			return syncAll(sc, worktrees, prefixes, useMerge, includeInherited)
 		}
-		return syncOne(cmd, r, cfg, args[0], worktrees, prefixes, useMerge)
+		return syncOne(sc, args[0], worktrees, prefixes, useMerge)
 	},
 }
 
-func syncOne(cmd *cobra.Command, r git.Runner, cfg *config.Config, task string, worktrees []resolver.WorktreeInfo, prefixes []string, useMerge bool) error {
+func syncOne(sc syncContext, task string, worktrees []resolver.WorktreeInfo, prefixes []string, useMerge bool) error {
 	wt, found := resolver.FindBranchForTask(task, worktrees, prefixes)
 	if !found {
 		return fmt.Errorf(errWorktreeNotFound, task)
 	}
 
-	dirty, err := git.IsDirty(r, wt.Path)
+	dirty, err := git.IsDirty(sc.r, wt.Path)
 	if err != nil {
 		return err
 	}
@@ -79,24 +94,32 @@ func syncOne(cmd *cobra.Command, r git.Runner, cfg *config.Config, task string, 
 		return fmt.Errorf("worktree %q has uncommitted changes\nCommit or stash changes before syncing: cd %s", task, wt.Path)
 	}
 
-	if err := doSync(r, wt.Path, cfg.DefaultSource, useMerge); err != nil {
+	verb := "Rebasing"
+	if useMerge {
+		verb = "Merging"
+	}
+	sc.s.Update(fmt.Sprintf("%s onto %s...", verb, sc.cfg.DefaultSource))
+	if err := doSync(sc.r, wt.Path, sc.cfg.DefaultSource, useMerge); err != nil {
 		return err
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "%s %s onto %s\n", syncMethodLabel(useMerge), wt.Branch, cfg.DefaultSource)
+	sc.s.Stop()
+	fmt.Fprintf(sc.cmd.OutOrStdout(), "%s %s onto %s\n", syncMethodLabel(useMerge), wt.Branch, sc.cfg.DefaultSource)
 	return nil
 }
 
-func syncAll(cmd *cobra.Command, r git.Runner, cfg *config.Config, worktrees []resolver.WorktreeInfo, prefixes []string, useMerge, includeInherited bool) error {
+func syncAll(sc syncContext, worktrees []resolver.WorktreeInfo, prefixes []string, useMerge, includeInherited bool) error { //nolint:unparam // error return matches RunE contract
 	allTasks := collectTasks(worktrees, prefixes)
-	eligible := filterEligible(worktrees, prefixes, cfg.DefaultSource, allTasks, includeInherited)
+	eligible := filterEligible(worktrees, prefixes, sc.cfg.DefaultSource, allTasks, includeInherited)
 
 	var res syncResult
-	for _, wt := range eligible {
-		syncWorktree(cmd, r, cfg.DefaultSource, wt, useMerge, &res)
+	for i, wt := range eligible {
+		sc.s.Update(fmt.Sprintf("[%d/%d] Syncing %s...", i+1, len(eligible), wt.Branch))
+		syncWorktree(sc.cmd, sc.r, sc.cfg.DefaultSource, wt, useMerge, &res)
 	}
 
-	printSyncSummary(cmd, cfg.DefaultSource, useMerge, &res)
+	sc.s.Stop()
+	printSyncSummary(sc.cmd, sc.cfg.DefaultSource, useMerge, &res)
 	return nil
 }
 

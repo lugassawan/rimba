@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
 )
 
@@ -33,21 +34,29 @@ var removeCmd = &cobra.Command{
 			return err
 		}
 
+		s := spinner.New(spinnerOpts(cmd))
+		defer s.Stop()
+
 		force, _ := cmd.Flags().GetBool("force")
+		s.Start("Removing worktree...")
 		if err := git.RemoveWorktree(r, wt.Path, force); err != nil {
 			return err
 		}
 
+		s.Stop()
 		fmt.Fprintf(cmd.OutOrStdout(), "Removed worktree: %s\n", wt.Path)
 
 		deleteBranch, _ := cmd.Flags().GetBool("branch")
 		if deleteBranch {
+			s.Start("Deleting branch...")
 			if err := git.DeleteBranch(r, wt.Branch, force); err != nil {
+				s.Stop()
 				if force {
 					return fmt.Errorf("worktree removed but failed to delete branch %q: %w\nTo force delete: git branch -D %s", wt.Branch, err, wt.Branch)
 				}
 				return fmt.Errorf("worktree removed but failed to delete branch %q: %w\nTo delete manually: git branch -d %s (or -D to force)", wt.Branch, err, wt.Branch)
 			}
+			s.Stop()
 			fmt.Fprintf(cmd.OutOrStdout(), "Deleted branch: %s\n", wt.Branch)
 		}
 

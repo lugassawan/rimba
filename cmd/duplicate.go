@@ -6,16 +6,18 @@ import (
 	"path/filepath"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/deps"
 	"github.com/lugassawan/rimba/internal/fileutil"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/resolver"
+	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
 )
 
 func init() {
 	duplicateCmd.Flags().String("as", "", "Custom name for the duplicate worktree")
-	duplicateCmd.Flags().Bool("skip-deps", false, "Skip dependency detection and installation")
-	duplicateCmd.Flags().Bool("skip-hooks", false, "Skip post-create hooks")
+	duplicateCmd.Flags().Bool(flagSkipDeps, false, "Skip dependency detection and installation")
+	duplicateCmd.Flags().Bool(flagSkipHooks, false, "Skip post-create hooks")
 	rootCmd.AddCommand(duplicateCmd)
 }
 
@@ -87,16 +89,39 @@ var duplicateCmd = &cobra.Command{
 			return fmt.Errorf("worktree path already exists: %s", wtPath)
 		}
 
+		s := spinner.New(spinnerOpts(cmd))
+		defer s.Stop()
+
 		// Create worktree from source branch
+		s.Start("Creating worktree...")
 		if err := git.AddWorktree(r, wtPath, newBranch, wt.Branch); err != nil {
 			return err
 		}
 
 		// Copy dotfiles
+		s.Update("Copying dotfiles...")
 		copied, err := fileutil.CopyDotfiles(repoRoot, wtPath, cfg.CopyFiles)
 		if err != nil {
 			return fmt.Errorf("worktree created but failed to copy files: %w\nTo retry, manually copy files to: %s\nTo remove the worktree: rimba remove %s", err, wtPath, newTask)
 		}
+
+		// Dependencies — prefer cloning from source worktree
+		skipDeps, _ := cmd.Flags().GetBool(flagSkipDeps)
+		var depsResults []deps.InstallResult
+		if !skipDeps {
+			s.Update("Installing dependencies...")
+			depsResults = installDepsPreferSource(r, cfg, wtPath, wt.Path)
+		}
+
+		// Post-create hooks
+		skipHooks, _ := cmd.Flags().GetBool(flagSkipHooks)
+		var hookResults []deps.HookResult
+		if !skipHooks && len(cfg.PostCreate) > 0 {
+			s.Update("Running hooks...")
+			hookResults = runHooks(wtPath, cfg.PostCreate)
+		}
+
+		s.Stop()
 
 		out := cmd.OutOrStdout()
 		fmt.Fprintf(out, "Duplicated worktree %q as %q\n", task, newTask)
@@ -106,17 +131,8 @@ var duplicateCmd = &cobra.Command{
 			fmt.Fprintf(out, "  Copied: %v\n", copied)
 		}
 
-		// Dependencies — prefer cloning from source worktree
-		skipDeps, _ := cmd.Flags().GetBool("skip-deps")
-		if !skipDeps {
-			printDepsResultsPreferSource(out, r, cfg, wtPath, wt.Path)
-		}
-
-		// Post-create hooks
-		skipHooks, _ := cmd.Flags().GetBool("skip-hooks")
-		if !skipHooks && len(cfg.PostCreate) > 0 {
-			printHookResults(out, wtPath, cfg.PostCreate)
-		}
+		printInstallResults(out, depsResults)
+		printHookResultsList(out, hookResults)
 
 		return nil
 	},

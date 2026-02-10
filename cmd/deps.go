@@ -8,6 +8,7 @@ import (
 	"github.com/lugassawan/rimba/internal/deps"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/resolver"
+	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
 )
 
@@ -146,8 +147,13 @@ var depsInstallCmd = &cobra.Command{
 			return nil
 		}
 
+		s := spinner.New(spinnerOpts(cmd))
+		defer s.Stop()
+
+		s.Start("Installing dependencies...")
 		mgr := &deps.Manager{Runner: r}
 		results := mgr.Install(wt.Path, modules)
+		s.Stop()
 
 		out := cmd.OutOrStdout()
 		fmt.Fprintf(out, "Dependencies for %q:\n", task)

@@ -10,7 +10,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const errWorktreeNotFound = "worktree not found for task %q"
+const (
+	errWorktreeNotFound = "worktree not found for task %q"
+	flagNoColor         = "no-color"
+	flagSkipDeps        = "skip-deps"
+	flagSkipHooks       = "skip-hooks"
+)
 
 var rootCmd = &cobra.Command{
 	Use:          "rimba",
@@ -46,7 +51,7 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.PersistentFlags().Bool("no-color", false, "disable colored output")
+	rootCmd.PersistentFlags().Bool(flagNoColor, false, "disable colored output")
 
 	originalHelp := rootCmd.HelpFunc()
 	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {

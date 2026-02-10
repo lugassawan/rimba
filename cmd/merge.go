@@ -6,6 +6,7 @@ import (
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/resolver"
+	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
 )
 
@@ -96,12 +97,17 @@ var mergeCmd = &cobra.Command{
 			return fmt.Errorf("target worktree %q has uncommitted changes\nCommit or stash changes before merging: cd %s", intoTask, targetDir)
 		}
 
+		s := spinner.New(spinnerOpts(cmd))
+		defer s.Stop()
+
 		// Execute merge
 		noFF, _ := cmd.Flags().GetBool("no-ff")
+		s.Start("Merging...")
 		if err := git.Merge(r, targetDir, source.Branch, noFF); err != nil {
 			return fmt.Errorf("merge failed: %w\nTo resolve conflicts: cd %s", err, targetDir)
 		}
 
+		s.Stop()
 		fmt.Fprintf(cmd.OutOrStdout(), "Merged %s into %s\n", source.Branch, targetLabel)
 
 		// Auto-cleanup
@@ -116,16 +122,22 @@ var mergeCmd = &cobra.Command{
 		}
 
 		if shouldDelete {
+			s.Start("Removing worktree...")
 			if err := git.RemoveWorktree(r, source.Path, false); err != nil {
+				s.Stop()
 				fmt.Fprintf(cmd.OutOrStdout(), "Merged successfully but failed to remove worktree: %v\nTo remove manually: rimba remove %s\n", err, sourceTask)
 				return nil
 			}
+			s.Stop()
 			fmt.Fprintf(cmd.OutOrStdout(), "Removed worktree: %s\n", source.Path)
 
+			s.Start("Deleting branch...")
 			if err := git.DeleteBranch(r, source.Branch, true); err != nil {
+				s.Stop()
 				fmt.Fprintf(cmd.OutOrStdout(), "Worktree removed but failed to delete branch: %v\nTo delete manually: git branch -D %s\n", err, source.Branch)
 				return nil
 			}
+			s.Stop()
 			fmt.Fprintf(cmd.OutOrStdout(), "Deleted branch: %s\n", source.Branch)
 		}
 
