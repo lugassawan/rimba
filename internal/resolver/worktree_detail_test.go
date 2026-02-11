@@ -86,3 +86,38 @@ func TestNewWorktreeDetailWithStatus(t *testing.T) {
 		t.Errorf("Status.Ahead = %d, want 1", d.Status.Ahead)
 	}
 }
+
+func TestSortDetailsByTask(t *testing.T) {
+	details := []resolver.WorktreeDetail{
+		{Task: "charlie"},
+		{Task: "alpha"},
+		{Task: "bravo"},
+	}
+
+	resolver.SortDetailsByTask(details)
+
+	want := []string{"alpha", "bravo", "charlie"}
+	for i, w := range want {
+		if details[i].Task != w {
+			t.Errorf("details[%d].Task = %q, want %q", i, details[i].Task, w)
+		}
+	}
+}
+
+func TestSortDetailsByTaskEmpty(t *testing.T) {
+	var details []resolver.WorktreeDetail
+	resolver.SortDetailsByTask(details) // should not panic
+}
+
+func TestNewWorktreeDetailUnknownPrefix(t *testing.T) {
+	const customBranch = "custom-branch"
+	prefixes := resolver.AllPrefixes()
+	d := resolver.NewWorktreeDetail(customBranch, prefixes, "/path", resolver.WorktreeStatus{}, false)
+
+	if d.Task != customBranch {
+		t.Errorf("Task = %q, want %q", d.Task, customBranch)
+	}
+	if d.Type != "" {
+		t.Errorf("Type = %q, want empty string", d.Type)
+	}
+}

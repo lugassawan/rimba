@@ -13,7 +13,8 @@ import (
 )
 
 // newRunner creates a git.Runner for command execution.
-func newRunner() git.Runner {
+// Defined as a variable to allow test overrides (same pattern as newUpdater).
+var newRunner = func() git.Runner {
 	return &git.ExecRunner{}
 }
 
