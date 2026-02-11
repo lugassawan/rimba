@@ -16,6 +16,7 @@ const (
 	flagAll              = "all"
 	flagSyncMerge        = "merge"
 	flagIncludeInherited = "include-inherited"
+	verbRebase           = "rebase"
 
 	hintAll              = "Sync all eligible worktrees at once"
 	hintSyncMerge        = "Use merge instead of rebase (preserves history, creates merge commits)"
@@ -202,7 +203,7 @@ func syncWorktree(cmd *cobra.Command, r git.Runner, mainBranch string, wt resolv
 	if err := doSync(r, wt.Path, mainBranch, useMerge); err != nil {
 		mu.Lock()
 		res.failed++
-		verb := "rebase"
+		verb := verbRebase
 		if useMerge {
 			verb = "merge"
 		}

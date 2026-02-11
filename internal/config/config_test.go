@@ -155,3 +155,43 @@ func TestSaveWriteError(t *testing.T) {
 		t.Fatal("expected error when writing to nonexistent directory")
 	}
 }
+
+func TestIsAutoDetectDeps(t *testing.T) {
+	boolPtr := func(b bool) *bool { return &b }
+
+	tests := []struct {
+		name string
+		cfg  config.Config
+		want bool
+	}{
+		{
+			name: "nil deps",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: "main"},
+			want: true,
+		},
+		{
+			name: "nil auto_detect",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: "main", Deps: &config.DepsConfig{}},
+			want: true,
+		},
+		{
+			name: "auto_detect true",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: "main", Deps: &config.DepsConfig{AutoDetect: boolPtr(true)}},
+			want: true,
+		},
+		{
+			name: "auto_detect false",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: "main", Deps: &config.DepsConfig{AutoDetect: boolPtr(false)}},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.cfg.IsAutoDetectDeps()
+			if got != tt.want {
+				t.Errorf("IsAutoDetectDeps() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
