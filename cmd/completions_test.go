@@ -11,7 +11,7 @@ func TestCompleteWorktreeTasks(t *testing.T) {
 		"HEAD abc123",
 		"branch refs/heads/main",
 		"",
-		"worktree /wt/feature-login",
+		wtFeatureLogin,
 		"HEAD def456",
 		"branch refs/heads/" + branchFeature,
 		"",
@@ -101,5 +101,50 @@ func TestCompleteWorktreeTasksError(t *testing.T) {
 	tasks := completeWorktreeTasks(cmd, "")
 	if tasks != nil {
 		t.Errorf("expected nil tasks on error, got %v", tasks)
+	}
+}
+
+func TestCompleteWorktreeTasksSkipsBare(t *testing.T) {
+	porcelain := strings.Join([]string{
+		"worktree /repo",
+		"HEAD abc123",
+		"bare",
+		"",
+		wtFeatureLogin,
+		"HEAD def456",
+		"branch refs/heads/" + branchFeature,
+		"",
+	}, "\n")
+
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return porcelain, nil },
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, _ := newTestCmd()
+	tasks := completeWorktreeTasks(cmd, "")
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task (bare filtered), got %d: %v", len(tasks), tasks)
+	}
+	if tasks[0] != "login" {
+		t.Errorf("task = %q, want %q", tasks[0], "login")
+	}
+}
+
+func TestCompleteBranchNamesError(t *testing.T) {
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return "", errGitFailed },
+		runInDir: noopRunInDir,
+	}
+
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, _ := newTestCmd()
+	branches := completeBranchNames(cmd, "")
+	if branches != nil {
+		t.Errorf("expected nil branches on error, got %v", branches)
 	}
 }

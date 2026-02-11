@@ -22,6 +22,8 @@ const (
 	msgCopyErr      = "CopyEntries: %v"
 	msgCopiedWant   = "copied = %v, want %v"
 	msgExpect1Entry = "expected 1 entry copied, got %d"
+	errContainsFmt  = "error = %q, want it to contain %q"
+	errPrefixCopyEnv = "copy .env:"
 )
 
 func TestCopyEntries(t *testing.T) {
@@ -110,8 +112,8 @@ func TestCopyEntriesDstError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when dst path is a directory")
 	}
-	if !strings.Contains(err.Error(), "copy .env:") {
-		t.Errorf("error = %q, want it to contain %q", err, "copy .env:")
+	if !strings.Contains(err.Error(), errPrefixCopyEnv) {
+		t.Errorf(errContainsFmt, err, errPrefixCopyEnv)
 	}
 }
 
@@ -312,6 +314,28 @@ func TestCopyEntriesSkipsSymlinksInDir(t *testing.T) {
 	}
 }
 
+func TestCopyEntriesStatError(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+
+	// Create a file but make the source directory unreadable
+	_ = os.WriteFile(filepath.Join(src, ".env"), []byte("SECRET"), 0644)
+
+	// Remove read permission from src dir so Stat fails with permission denied (not IsNotExist)
+	if err := os.Chmod(src, 0000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(src, 0755) })
+
+	_, err := fileutil.CopyEntries(src, dst, []string{".env"})
+	if err == nil {
+		t.Fatal("expected error when source dir is not readable")
+	}
+	if !strings.Contains(err.Error(), errPrefixCopyEnv) {
+		t.Errorf(errContainsFmt, err, errPrefixCopyEnv)
+	}
+}
+
 func TestCopyEntriesDirCopyError(t *testing.T) {
 	src := t.TempDir()
 	dst := t.TempDir()
@@ -330,6 +354,6 @@ func TestCopyEntriesDirCopyError(t *testing.T) {
 		t.Fatal("expected error when dst path conflicts")
 	}
 	if !strings.Contains(err.Error(), "copy "+dotConfig+":") {
-		t.Errorf("error = %q, want it to contain %q", err, "copy "+dotConfig+":")
+		t.Errorf(errContainsFmt, err, "copy "+dotConfig+":")
 	}
 }

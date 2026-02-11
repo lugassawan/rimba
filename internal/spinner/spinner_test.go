@@ -2,6 +2,7 @@ package spinner
 
 import (
 	"bytes"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -136,6 +137,124 @@ func TestNonAnimatedOutputHasNewlines(t *testing.T) {
 	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
 	if len(lines) != 2 {
 		t.Errorf("expected 2 lines, got %d: %q", len(lines), buf.String())
+	}
+}
+
+func TestIsTTYWithNoColorEnv(t *testing.T) {
+	prev, had := os.LookupEnv("NO_COLOR")
+	os.Setenv("NO_COLOR", "1")
+	defer func() {
+		if had {
+			os.Setenv("NO_COLOR", prev)
+		} else {
+			os.Unsetenv("NO_COLOR")
+		}
+	}()
+
+	// Even with a real file, NO_COLOR should make isTTY return false
+	f, err := os.CreateTemp("", "spinner-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close(); _ = os.Remove(f.Name()) }()
+
+	if isTTY(f) {
+		t.Error("expected isTTY=false when NO_COLOR is set")
+	}
+}
+
+func TestIsTTYWithNonFileWriter(t *testing.T) {
+	prev, had := os.LookupEnv("NO_COLOR")
+	os.Unsetenv("NO_COLOR")
+	defer func() {
+		if had {
+			os.Setenv("NO_COLOR", prev)
+		}
+	}()
+
+	var buf bytes.Buffer
+	if isTTY(&buf) {
+		t.Error("expected isTTY=false for bytes.Buffer")
+	}
+}
+
+func TestIsTTYWithFile(t *testing.T) {
+	prev, had := os.LookupEnv("NO_COLOR")
+	os.Unsetenv("NO_COLOR")
+	defer func() {
+		if had {
+			os.Setenv("NO_COLOR", prev)
+		}
+	}()
+
+	f, err := os.CreateTemp("", "spinner-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close(); _ = os.Remove(f.Name()) }()
+
+	// A regular file is not a TTY
+	if isTTY(f) {
+		t.Error("expected isTTY=false for regular file")
+	}
+}
+
+func TestAnimatedStartStop(t *testing.T) {
+	var buf bytes.Buffer
+	s := &Spinner{w: &buf, animated: true}
+
+	s.Start("Animated test")
+	time.Sleep(200 * time.Millisecond)
+	s.Stop()
+
+	got := buf.String()
+	if !strings.Contains(got, "Animated test") {
+		t.Errorf("expected output to contain message, got %q", got)
+	}
+	// clearLine writes \r\033[K
+	if !strings.Contains(got, "\033[K") {
+		t.Errorf("expected clearLine escape sequence, got %q", got)
+	}
+}
+
+func TestAnimatedUpdate(t *testing.T) {
+	var buf bytes.Buffer
+	s := &Spinner{w: &buf, animated: true}
+
+	s.Start("First")
+	time.Sleep(100 * time.Millisecond)
+	s.Update("Second")
+	time.Sleep(200 * time.Millisecond)
+	s.Stop()
+
+	got := buf.String()
+	if !strings.Contains(got, "Second") {
+		t.Errorf("expected output to contain updated message, got %q", got)
+	}
+}
+
+func TestAnimatedDoubleStop(t *testing.T) {
+	var buf bytes.Buffer
+	s := &Spinner{w: &buf, animated: true}
+
+	s.Start("Test")
+	time.Sleep(100 * time.Millisecond)
+	s.Stop()
+	s.Stop() // should not panic
+}
+
+func TestAnimatedStartWhileRunning(t *testing.T) {
+	var buf bytes.Buffer
+	s := &Spinner{w: &buf, animated: true}
+
+	s.Start("First")
+	s.Start("Second") // should update message, not start new goroutine
+	time.Sleep(200 * time.Millisecond)
+	s.Stop()
+
+	got := buf.String()
+	if !strings.Contains(got, "Second") {
+		t.Errorf("expected output to contain updated message, got %q", got)
 	}
 }
 

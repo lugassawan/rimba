@@ -17,6 +17,33 @@ const (
 	pathWtDone      = "/wt/feature-done"
 	pathWorktree    = "/worktree"
 	errExpected     = "expected error"
+
+	// Shared porcelain helpers
+	wtPrefix              = "worktree "
+	headMainBlock         = "\nHEAD abc\nbranch refs/heads/main\n"
+	cmdShowToplevel       = "--show-toplevel"
+	cmdRevParse           = "rev-parse"
+	dirtyOutput           = "M dirty.go"
+	headABC123            = "HEAD abc123"
+	branchRefMain         = "branch refs/heads/main"
+	headDEF456            = "HEAD def456"
+	branchRefFeatureLogin = "branch refs/heads/feature/login"
+	wtRepo                = "worktree /repo"
+	defaultRelativeWtDir  = "../worktrees"
+	pathWtFeatureLogin    = "/wt/feature-login"
+	branchBugfixTypo      = "bugfix/typo"
+	msgRemovedWorktree    = "Removed worktree"
+
+	wtFeatureLogin            = "worktree /wt/feature-login"
+	pathWorktreesFeatureLogin = "/worktrees/feature-login"
+	cmdRevList                = "rev-list"
+
+	// Shared fatalf format strings
+	fatalMergeRunE   = "mergeCmd.RunE: %v"
+	fatalCleanPrune  = "cleanPrune: %v"
+	fatalCleanMerged = "cleanMerged: %v"
+	fatalListRunE    = "listCmd.RunE: %v"
+	fatalSyncAll     = "syncAll: %v"
 )
 
 var errGitFailed = errors.New("git failed")

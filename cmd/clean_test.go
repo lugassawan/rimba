@@ -1,9 +1,14 @@
 package cmd
 
 import (
+	"bytes"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/lugassawan/rimba/internal/config"
+	"github.com/spf13/cobra"
 )
 
 // mergedWorktreeRunner returns a mockRunner that supports MergedBranches and ListWorktrees.
@@ -24,7 +29,7 @@ func mergedWorktreeRunner(mergedOut, worktreeOut string) *mockRunner {
 
 func TestFindMergedCandidatesFound(t *testing.T) {
 	worktreeOut := strings.Join([]string{
-		"worktree /repo",
+		wtRepo,
 		"HEAD abc123",
 		"branch refs/heads/main",
 		"",
@@ -52,7 +57,7 @@ func TestFindMergedCandidatesFound(t *testing.T) {
 }
 
 func TestFindMergedCandidatesNone(t *testing.T) {
-	r := mergedWorktreeRunner("", "worktree /repo\nHEAD abc\nbranch refs/heads/main\n")
+	r := mergedWorktreeRunner("", wtRepo + headMainBlock)
 	candidates, err := findMergedCandidates(r, branchMain)
 	if err != nil {
 		t.Fatalf("findMergedCandidates: %v", err)
@@ -181,3 +186,207 @@ func TestConfirmRemoval(t *testing.T) {
 		})
 	}
 }
+
+func newCleanPruneCmd() (*cobra.Command, *bytes.Buffer) {
+	cmd, buf := newTestCmd()
+	cmd.Flags().Bool(flagDryRun, false, "")
+	cmd.Flags().Bool(flagMerged, false, "")
+	return cmd, buf
+}
+
+func TestCleanPruneSuccess(t *testing.T) {
+	cmd, buf := newCleanPruneCmd()
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdWorktreeTest {
+				return "Removing worktrees/stale", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	err := cleanPrune(cmd, r)
+	if err != nil {
+		t.Fatalf(fatalCleanPrune, err)
+	}
+	if !strings.Contains(buf.String(), "Removing worktrees/stale") {
+		t.Errorf("output = %q, want prune output", buf.String())
+	}
+}
+
+func TestCleanPruneDryRunEmpty(t *testing.T) {
+	cmd, buf := newCleanPruneCmd()
+	_ = cmd.Flags().Set(flagDryRun, "true")
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return "", nil },
+		runInDir: noopRunInDir,
+	}
+
+	err := cleanPrune(cmd, r)
+	if err != nil {
+		t.Fatalf(fatalCleanPrune, err)
+	}
+	if !strings.Contains(buf.String(), "Nothing to prune") {
+		t.Errorf("output = %q, want 'Nothing to prune'", buf.String())
+	}
+}
+
+func TestCleanPruneNoDryRunEmpty(t *testing.T) {
+	cmd, buf := newCleanPruneCmd()
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return "", nil },
+		runInDir: noopRunInDir,
+	}
+
+	err := cleanPrune(cmd, r)
+	if err != nil {
+		t.Fatalf(fatalCleanPrune, err)
+	}
+	if !strings.Contains(buf.String(), "Pruned stale worktree references") {
+		t.Errorf("output = %q, want 'Pruned stale worktree references'", buf.String())
+	}
+}
+
+func TestCleanPruneError(t *testing.T) {
+	cmd, _ := newCleanPruneCmd()
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdWorktreeTest {
+				return "", errGitFailed
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	err := cleanPrune(cmd, r)
+	if err == nil {
+		t.Fatal("expected error from prune failure")
+	}
+}
+
+func cleanMergedTestRunner(t *testing.T, mergedOut, worktreeOut string) (*mockRunner, string) {
+	dir := t.TempDir()
+	cfg := &config.Config{DefaultSource: branchMain}
+	_ = config.Save(filepath.Join(dir, config.FileName), cfg)
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return dir, nil
+			}
+			if len(args) >= 1 && args[0] == cmdBranch {
+				return mergedOut, nil
+			}
+			if len(args) >= 1 && args[0] == cmdWorktreeTest {
+				return worktreeOut, nil
+			}
+			if len(args) >= 1 && args[0] == "fetch" {
+				return "", errors.New("no remote")
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+	return r, dir
+}
+
+func newCleanMergedCmd() (*cobra.Command, *bytes.Buffer) {
+	cmd, buf := newTestCmd()
+	cmd.Flags().Bool(flagDryRun, false, "")
+	cmd.Flags().Bool(flagForce, false, "")
+	cmd.Flags().Bool(flagMerged, false, "")
+	return cmd, buf
+}
+
+func cleanMergedWorktreeOut() string {
+	return strings.Join([]string{
+		wtRepo,
+		"HEAD abc123",
+		"branch refs/heads/main",
+		"",
+		"worktree " + pathWtDone,
+		"HEAD def456",
+		"branch refs/heads/" + branchDone,
+		"",
+	}, "\n")
+}
+
+func TestCleanMergedNoCandidates(t *testing.T) {
+	worktreeOut := cleanMergedWorktreeOut()
+	cmd, buf := newCleanMergedCmd()
+	r, _ := cleanMergedTestRunner(t, "", worktreeOut)
+
+	err := cleanMerged(cmd, r)
+	if err != nil {
+		t.Fatalf(fatalCleanMerged, err)
+	}
+	if !strings.Contains(buf.String(), "No merged worktrees found") {
+		t.Errorf("output = %q, want 'No merged worktrees found'", buf.String())
+	}
+}
+
+func TestCleanMergedDryRun(t *testing.T) {
+	worktreeOut := cleanMergedWorktreeOut()
+	cmd, buf := newCleanMergedCmd()
+	_ = cmd.Flags().Set(flagDryRun, "true")
+	r, _ := cleanMergedTestRunner(t, "  "+branchDone, worktreeOut)
+
+	err := cleanMerged(cmd, r)
+	if err != nil {
+		t.Fatalf(fatalCleanMerged, err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Merged worktrees:") {
+		t.Errorf("output = %q, want 'Merged worktrees:'", out)
+	}
+	if strings.Contains(out, "Cleaned") {
+		t.Errorf("dry-run should not show 'Cleaned'")
+	}
+}
+
+func TestCleanMergedAbort(t *testing.T) {
+	worktreeOut := cleanMergedWorktreeOut()
+	cmd, buf := newCleanMergedCmd()
+	cmd.SetIn(strings.NewReader("n\n"))
+	r, _ := cleanMergedTestRunner(t, "  "+branchDone, worktreeOut)
+
+	err := cleanMerged(cmd, r)
+	if err != nil {
+		t.Fatalf(fatalCleanMerged, err)
+	}
+	if !strings.Contains(buf.String(), "Aborted") {
+		t.Errorf("output = %q, want 'Aborted'", buf.String())
+	}
+}
+
+func TestCleanMergedForce(t *testing.T) {
+	worktreeOut := cleanMergedWorktreeOut()
+	cmd, buf := newCleanMergedCmd()
+	_ = cmd.Flags().Set(flagForce, "true")
+	r, _ := cleanMergedTestRunner(t, "  "+branchDone, worktreeOut)
+
+	err := cleanMerged(cmd, r)
+	if err != nil {
+		t.Fatalf(fatalCleanMerged, err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Cleaned") {
+		t.Errorf("output = %q, want 'Cleaned'", out)
+	}
+}
+
+func TestCleanMergedResolveError(t *testing.T) {
+	cmd, _ := newCleanMergedCmd()
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return "", errGitFailed },
+		runInDir: noopRunInDir,
+	}
+
+	err := cleanMerged(cmd, r)
+	if err == nil {
+		t.Fatal("expected error from resolveMainBranch failure")
+	}
+}
+
