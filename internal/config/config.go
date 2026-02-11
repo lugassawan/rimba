@@ -18,7 +18,55 @@ type Config struct {
 	CopyFiles     []string `toml:"copy_files"`
 	PostCreate    []string `toml:"post_create,omitempty"`
 
-	Deps *DepsConfig `toml:"deps,omitempty"`
+	Deps  *DepsConfig  `toml:"deps,omitempty"`
+	Fleet *FleetConfig `toml:"fleet,omitempty"`
+}
+
+// FleetConfig holds settings for fleet (AI agent orchestration).
+type FleetConfig struct {
+	StateDir      string                 `toml:"state_dir,omitempty"`
+	LogDir        string                 `toml:"log_dir,omitempty"`
+	DefaultAgent  string                 `toml:"default_agent,omitempty"`
+	MaxConcurrent int                    `toml:"max_concurrent,omitempty"`
+	Agents        map[string]AgentConfig `toml:"agents,omitempty"`
+}
+
+// AgentConfig defines how to launch a specific AI agent.
+type AgentConfig struct {
+	Command string   `toml:"command"`
+	Args    []string `toml:"args,omitempty"`
+}
+
+// FleetStateDir returns the fleet state directory, with a sensible default.
+func (c *Config) FleetStateDir() string {
+	if c.Fleet != nil && c.Fleet.StateDir != "" {
+		return c.Fleet.StateDir
+	}
+	return ".rimba/fleet"
+}
+
+// FleetLogDir returns the fleet log directory, with a sensible default.
+func (c *Config) FleetLogDir() string {
+	if c.Fleet != nil && c.Fleet.LogDir != "" {
+		return c.Fleet.LogDir
+	}
+	return ".rimba/fleet/logs"
+}
+
+// FleetDefaultAgent returns the default agent name.
+func (c *Config) FleetDefaultAgent() string {
+	if c.Fleet != nil && c.Fleet.DefaultAgent != "" {
+		return c.Fleet.DefaultAgent
+	}
+	return "claude"
+}
+
+// FleetMaxConcurrent returns the max concurrent agents.
+func (c *Config) FleetMaxConcurrent() int {
+	if c.Fleet != nil && c.Fleet.MaxConcurrent > 0 {
+		return c.Fleet.MaxConcurrent
+	}
+	return 4
 }
 
 // DepsConfig holds optional dependency management settings.
