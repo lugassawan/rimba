@@ -58,6 +58,10 @@ var updateCmd = &cobra.Command{
 		}
 		defer updater.CleanupTempDir(newBinary)
 
+		if err := updater.PrepareBinary(newBinary); err != nil {
+			return fmt.Errorf("preparing binary: %w", err)
+		}
+
 		currentBinary, err := os.Executable()
 		if err != nil {
 			return fmt.Errorf("locating current binary: %w", err)
