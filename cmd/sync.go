@@ -205,7 +205,7 @@ func syncWorktree(cmd *cobra.Command, r git.Runner, mainBranch string, wt resolv
 		res.failed++
 		verb := verbRebase
 		if useMerge {
-			verb = "merge"
+			verb = flagSyncMerge
 		}
 		res.failures = append(res.failures, fmt.Sprintf("  %s: To resolve: cd %s && git %s %s", wt.Branch, wt.Path, verb, mainBranch))
 		mu.Unlock()

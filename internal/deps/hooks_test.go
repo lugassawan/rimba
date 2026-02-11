@@ -12,11 +12,11 @@ func TestRunPostCreateHooksSuccess(t *testing.T) {
 	results := RunPostCreateHooks(dir, []string{"touch marker.txt"})
 
 	if len(results) != 1 {
-		t.Fatalf("expected 1 result, got %d", len(results))
+		t.Fatalf(fmtExpectedOneResult, len(results))
 	}
 
 	if results[0].Error != nil {
-		t.Errorf("expected no error, got %v", results[0].Error)
+		t.Errorf(fmtExpectedNoError, results[0].Error)
 	}
 
 	if _, err := os.Stat(filepath.Join(dir, "marker.txt")); os.IsNotExist(err) {
@@ -75,7 +75,7 @@ func TestRunPostCreateHooksShellFeatures(t *testing.T) {
 	})
 
 	if results[0].Error != nil {
-		t.Fatalf("expected no error, got %v", results[0].Error)
+		t.Fatalf(fmtExpectedNoError, results[0].Error)
 	}
 
 	data, err := os.ReadFile(filepath.Join(dir, "output.txt"))

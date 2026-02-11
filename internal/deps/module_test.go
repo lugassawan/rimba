@@ -206,13 +206,13 @@ func TestMergeWithConfigSupplement(t *testing.T) {
 	}
 
 	configModules := []config.ModuleConfig{
-		{Dir: "custom/deps", Lockfile: "custom.lock", Install: "custom install"},
+		{Dir: testDirCustomDeps, Lockfile: "custom.lock", Install: "custom install"},
 	}
 
 	result := MergeWithConfig(detected, configModules)
 
 	assertModuleCount(t, result, 2)
-	if result[1].Dir != "custom/deps" {
+	if result[1].Dir != testDirCustomDeps {
 		t.Errorf("expected custom/deps, got %s", result[1].Dir)
 	}
 }
@@ -225,6 +225,51 @@ func TestMergeWithConfigEmpty(t *testing.T) {
 	result := MergeWithConfig(detected, nil)
 
 	assertModuleCount(t, result, 1)
+}
+
+func TestPrefixDirsEmpty(t *testing.T) {
+	result := prefixDirs("api", nil)
+	if result != nil {
+		t.Errorf("expected nil, got %v", result)
+	}
+
+	result = prefixDirs("api", []string{})
+	if result != nil {
+		t.Errorf("expected nil for empty slice, got %v", result)
+	}
+}
+
+func TestPrefixDirsNonEmpty(t *testing.T) {
+	result := prefixDirs("api", []string{DirYarnCache, DirNodeModules})
+	if len(result) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(result))
+	}
+	if result[0] != filepath.Join("api", DirYarnCache) {
+		t.Errorf("result[0] = %q, want %q", result[0], filepath.Join("api", DirYarnCache))
+	}
+	if result[1] != filepath.Join("api", DirNodeModules) {
+		t.Errorf("result[1] = %q, want %q", result[1], filepath.Join("api", DirNodeModules))
+	}
+}
+
+func TestDetectModulesHiddenDirSkipped(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create a hidden directory with a lockfile — should be skipped
+	hiddenDir := filepath.Join(dir, ".hidden")
+	if err := os.MkdirAll(hiddenDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, hiddenDir, LockfilePnpm, "lockfile")
+
+	modules, err := DetectModules(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(modules) != 0 {
+		t.Errorf("expected 0 modules (hidden dirs skipped), got %d", len(modules))
+	}
 }
 
 func assertModuleCount(t *testing.T, modules []Module, expected int) {

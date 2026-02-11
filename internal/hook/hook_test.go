@@ -259,6 +259,61 @@ func TestRemoveBlock(t *testing.T) {
 	}
 }
 
+func TestRemoveBlockNoBeginMarker(t *testing.T) {
+	content := shebang + "\n\n" + userHook
+	result := removeBlock(content)
+	if result != content {
+		t.Errorf("removeBlock should return content unchanged when no markers present\ngot:  %q\nwant: %q", result, content)
+	}
+}
+
+func TestRemoveBlockCorruptBeginOnly(t *testing.T) {
+	// BEGIN at the very start of content, no END marker
+	content := BeginMarker + "\nsome corrupt content\nmore stuff"
+	result := removeBlock(content)
+	if result != "" {
+		t.Errorf("removeBlock should return empty string when BEGIN is at start and no END, got %q", result)
+	}
+}
+
+func TestCheckHasOtherWithoutInstalled(t *testing.T) {
+	dir := t.TempDir()
+	hookPath := filepath.Join(dir, HookName)
+
+	// Hook file with user content but no rimba block
+	content := shebang + "\n\n" + userHook
+	if err := os.WriteFile(hookPath, []byte(content), fileMode); err != nil {
+		t.Fatalf(fatalWriteHook, err)
+	}
+
+	s := Check(dir)
+	if s.Installed {
+		t.Error("expected Installed = false")
+	}
+	if !s.HasOther {
+		t.Error("expected HasOther = true")
+	}
+}
+
+func TestUninstallReadError(t *testing.T) {
+	dir := t.TempDir()
+	hookPath := filepath.Join(dir, HookName)
+
+	// Create a directory named "post-merge" instead of a file,
+	// so os.ReadFile fails with a non-IsNotExist error.
+	if err := os.Mkdir(hookPath, 0755); err != nil {
+		t.Fatalf("create directory: %v", err)
+	}
+
+	err := Uninstall(dir)
+	if err == nil {
+		t.Fatal("expected error when hook path is a directory")
+	}
+	if !strings.Contains(err.Error(), "read hook file") {
+		t.Errorf("error = %q, want to contain 'read hook file'", err.Error())
+	}
+}
+
 func TestRemoveBlockNoEndMarker(t *testing.T) {
 	// Simulate corrupt file: BEGIN without END
 	content := shebang + "\n\n" + userHook + "\n" + BeginMarker + "\nsome corrupt content"
@@ -269,5 +324,66 @@ func TestRemoveBlockNoEndMarker(t *testing.T) {
 	}
 	if !strings.Contains(result, userHook) {
 		t.Error("user content before block should be preserved")
+	}
+}
+
+func TestInstallReadError(t *testing.T) {
+	dir := t.TempDir()
+	hookPath := filepath.Join(dir, HookName)
+
+	// Create a directory named "post-merge" so os.ReadFile returns non-IsNotExist error
+	if err := os.Mkdir(hookPath, 0755); err != nil {
+		t.Fatalf("create directory: %v", err)
+	}
+
+	err := Install(dir, branchMain)
+	if err == nil {
+		t.Fatal("expected error when hook path is a directory")
+	}
+	if !strings.Contains(err.Error(), "read hook file") {
+		t.Errorf("error = %q, want to contain 'read hook file'", err.Error())
+	}
+}
+
+func TestInstallMkdirError(t *testing.T) {
+	// Use a file path as the hooks directory — MkdirAll should fail
+	tmpDir := t.TempDir()
+	blocker := filepath.Join(tmpDir, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	hooksDir := filepath.Join(blocker, "hooks")
+
+	err := Install(hooksDir, branchMain)
+	if err == nil {
+		t.Fatal("expected error from MkdirAll")
+	}
+	if !strings.Contains(err.Error(), "create hooks directory") {
+		t.Errorf("error = %q, want to contain 'create hooks directory'", err.Error())
+	}
+}
+
+func TestUninstallWriteError(t *testing.T) {
+	dir := t.TempDir()
+	hookPath := filepath.Join(dir, HookName)
+
+	// Create hook with rimba block AND user content so Uninstall tries WriteFile
+	content := shebang + "\n\n" + userHook + "\n" + HookBlock(branchMain) + "\n"
+	if err := os.WriteFile(hookPath, []byte(content), fileMode); err != nil {
+		t.Fatalf(fatalWriteHook, err)
+	}
+
+	// Make the hook file read-only so WriteFile fails
+	if err := os.Chmod(hookPath, 0444); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(hookPath, 0644) })
+
+	err := Uninstall(dir)
+	if err == nil {
+		t.Fatal("expected error when write fails")
+	}
+	if !strings.Contains(err.Error(), "write hook file") {
+		t.Errorf("error = %q, want to contain 'write hook file'", err.Error())
 	}
 }

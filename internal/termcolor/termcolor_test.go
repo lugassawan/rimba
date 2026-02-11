@@ -1,6 +1,7 @@
 package termcolor
 
 import (
+	"os"
 	"testing"
 )
 
@@ -47,5 +48,40 @@ func TestNewPainterForceDisable(t *testing.T) {
 	got := p.Paint("x", Red)
 	if got != "x" {
 		t.Errorf("forceDisable Paint() = %q, want %q", got, "x")
+	}
+}
+
+func TestNewPainterWithNoColorEnv(t *testing.T) {
+	prev, had := os.LookupEnv("NO_COLOR")
+	os.Setenv("NO_COLOR", "1")
+	defer func() {
+		if had {
+			os.Setenv("NO_COLOR", prev)
+		} else {
+			os.Unsetenv("NO_COLOR")
+		}
+	}()
+
+	p := NewPainter(false)
+	got := p.Paint("x", Red)
+	if got != "x" {
+		t.Errorf("NO_COLOR Paint() = %q, want %q", got, "x")
+	}
+}
+
+func TestNewPainterEnabled(t *testing.T) {
+	prev, had := os.LookupEnv("NO_COLOR")
+	os.Unsetenv("NO_COLOR")
+	defer func() {
+		if had {
+			os.Setenv("NO_COLOR", prev)
+		}
+	}()
+
+	p := NewPainter(false)
+	got := p.Paint("x", Red)
+	// Should have ANSI codes since forceDisable=false and NO_COLOR is unset
+	if got == "x" {
+		t.Error("expected ANSI-colored output when NO_COLOR is unset and forceDisable=false")
 	}
 }

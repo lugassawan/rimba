@@ -114,6 +114,34 @@ func TestEnsureGitignoreIdempotent(t *testing.T) {
 	}
 }
 
+func TestEnsureGitignoreReadError(t *testing.T) {
+	dir := t.TempDir()
+	// Create .gitignore as a directory so ReadFile returns non-IsNotExist error
+	if err := os.Mkdir(filepath.Join(dir, gitignoreFile), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := EnsureGitignore(dir, testEntry)
+	if err == nil {
+		t.Fatal("expected error when .gitignore is a directory")
+	}
+}
+
+func TestEnsureGitignoreOpenError(t *testing.T) {
+	dir := t.TempDir()
+
+	// Make directory read-only so OpenFile fails
+	if err := os.Chmod(dir, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0755) })
+
+	_, err := EnsureGitignore(dir, testEntry)
+	if err == nil {
+		t.Fatal("expected error when directory is read-only")
+	}
+}
+
 func readFile(t *testing.T, path string) string {
 	t.Helper()
 	data, err := os.ReadFile(path)
