@@ -72,6 +72,22 @@ const (
 	flagMergedE2E  = "--merged"
 	flagForceE2E   = "--force"
 	flagDryRunE2E  = "--dry-run"
+
+	// Shared test file content.
+	pkgA = "package a\n"
+	pkgB = "package b\n"
+
+	// Shared file names.
+	fileShared = "shared.go"
+	fileCommon = "common.go"
+
+	// Shared command strings.
+	cmdConflictCheck = "conflict-check"
+	cmdEchoHello     = "echo hello"
+
+	// Fleet test constants.
+	taskFleet     = "test-fleet-task"
+	fileFleetToml = "fleet.toml"
 )
 
 var (

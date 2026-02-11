@@ -12,10 +12,15 @@ import (
 
 const (
 	errWorktreeNotFound = "worktree not found for task %q"
-	flagForce           = "force"
-	flagNoColor         = "no-color"
-	flagSkipDeps        = "skip-deps"
-	flagSkipHooks       = "skip-hooks"
+
+	// Shared flag names used across multiple commands.
+	flagAll       = "all"
+	flagDirty     = "dirty"
+	flagForce     = "force"
+	flagNoColor   = "no-color"
+	flagSkipDeps  = "skip-deps"
+	flagSkipHooks = "skip-hooks"
+	flagType      = "type"
 
 	hintSkipDeps  = "Skip dependency installation (faster, but requires manual install)"
 	hintSkipHooks = "Skip post-create hooks (faster, but automation won't run)"

@@ -13,7 +13,6 @@ import (
 )
 
 const (
-	flagAll              = "all"
 	flagSyncMerge        = "merge"
 	flagIncludeInherited = "include-inherited"
 	verbRebase           = "rebase"

@@ -17,8 +17,6 @@ import (
 )
 
 const (
-	flagType   = "type"
-	flagDirty  = "dirty"
 	flagBehind = "behind"
 
 	hintType   = "Filter by prefix type (feature, bugfix, hotfix, etc.)"

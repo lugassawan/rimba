@@ -156,6 +156,54 @@ func TestSaveWriteError(t *testing.T) {
 	}
 }
 
+func TestFleetConfigDefaults(t *testing.T) {
+	baseCfg := config.Config{WorktreeDir: "../wt", DefaultSource: "main"}
+	emptyCfg := config.Config{WorktreeDir: "../wt", DefaultSource: "main", Fleet: &config.FleetConfig{}}
+
+	tests := []struct {
+		name   string
+		cfg    config.Config
+		method string
+		want   any
+	}{
+		// FleetStateDir
+		{"StateDir/nil fleet", baseCfg, "FleetStateDir", ".rimba/fleet"},
+		{"StateDir/empty state_dir", emptyCfg, "FleetStateDir", ".rimba/fleet"},
+		{"StateDir/custom state_dir", config.Config{WorktreeDir: "../wt", DefaultSource: "main", Fleet: &config.FleetConfig{StateDir: ".custom/state"}}, "FleetStateDir", ".custom/state"},
+		// FleetLogDir
+		{"LogDir/nil fleet", baseCfg, "FleetLogDir", ".rimba/fleet/logs"},
+		{"LogDir/empty log_dir", emptyCfg, "FleetLogDir", ".rimba/fleet/logs"},
+		{"LogDir/custom log_dir", config.Config{WorktreeDir: "../wt", DefaultSource: "main", Fleet: &config.FleetConfig{LogDir: ".custom/logs"}}, "FleetLogDir", ".custom/logs"},
+		// FleetDefaultAgent
+		{"DefaultAgent/nil fleet", baseCfg, "FleetDefaultAgent", "claude"},
+		{"DefaultAgent/empty default_agent", emptyCfg, "FleetDefaultAgent", "claude"},
+		{"DefaultAgent/custom default_agent", config.Config{WorktreeDir: "../wt", DefaultSource: "main", Fleet: &config.FleetConfig{DefaultAgent: "codex"}}, "FleetDefaultAgent", "codex"},
+		// FleetMaxConcurrent
+		{"MaxConcurrent/nil fleet", baseCfg, "FleetMaxConcurrent", 4},
+		{"MaxConcurrent/zero max_concurrent", emptyCfg, "FleetMaxConcurrent", 4},
+		{"MaxConcurrent/custom max_concurrent", config.Config{WorktreeDir: "../wt", DefaultSource: "main", Fleet: &config.FleetConfig{MaxConcurrent: 8}}, "FleetMaxConcurrent", 8},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got any
+			switch tt.method {
+			case "FleetStateDir":
+				got = tt.cfg.FleetStateDir()
+			case "FleetLogDir":
+				got = tt.cfg.FleetLogDir()
+			case "FleetDefaultAgent":
+				got = tt.cfg.FleetDefaultAgent()
+			case "FleetMaxConcurrent":
+				got = tt.cfg.FleetMaxConcurrent()
+			}
+			if got != tt.want {
+				t.Errorf("%s() = %v, want %v", tt.method, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestIsAutoDetectDeps(t *testing.T) {
 	boolPtr := func(b bool) *bool { return &b }
 
