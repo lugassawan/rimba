@@ -125,7 +125,7 @@ func TestRemoveMergedWorktreesRemoveFails(t *testing.T) {
 	cmd, buf := newTestCmd()
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == "remove" {
+			if len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == cmdRemove {
 				return "", errors.New("locked")
 			}
 			return "", nil
@@ -266,12 +266,12 @@ func TestCleanPruneError(t *testing.T) {
 	}
 }
 
-func cleanMergedTestRunner(t *testing.T, mergedOut, worktreeOut string) (*mockRunner, string) {
+func cleanMergedTestRunner(t *testing.T, mergedOut, worktreeOut string) *mockRunner {
 	dir := t.TempDir()
 	cfg := &config.Config{DefaultSource: branchMain}
 	_ = config.Save(filepath.Join(dir, config.FileName), cfg)
 
-	r := &mockRunner{
+	return &mockRunner{
 		run: func(args ...string) (string, error) {
 			if len(args) >= 2 && args[1] == cmdShowToplevel {
 				return dir, nil
@@ -289,7 +289,6 @@ func cleanMergedTestRunner(t *testing.T, mergedOut, worktreeOut string) (*mockRu
 		},
 		runInDir: noopRunInDir,
 	}
-	return r, dir
 }
 
 func newCleanMergedCmd() (*cobra.Command, *bytes.Buffer) {
@@ -316,7 +315,7 @@ func cleanMergedWorktreeOut() string {
 func TestCleanMergedNoCandidates(t *testing.T) {
 	worktreeOut := cleanMergedWorktreeOut()
 	cmd, buf := newCleanMergedCmd()
-	r, _ := cleanMergedTestRunner(t, "", worktreeOut)
+	r := cleanMergedTestRunner(t, "", worktreeOut)
 
 	err := cleanMerged(cmd, r)
 	if err != nil {
@@ -331,7 +330,7 @@ func TestCleanMergedDryRun(t *testing.T) {
 	worktreeOut := cleanMergedWorktreeOut()
 	cmd, buf := newCleanMergedCmd()
 	_ = cmd.Flags().Set(flagDryRun, "true")
-	r, _ := cleanMergedTestRunner(t, "  "+branchDone, worktreeOut)
+	r := cleanMergedTestRunner(t, "  "+branchDone, worktreeOut)
 
 	err := cleanMerged(cmd, r)
 	if err != nil {
@@ -350,7 +349,7 @@ func TestCleanMergedAbort(t *testing.T) {
 	worktreeOut := cleanMergedWorktreeOut()
 	cmd, buf := newCleanMergedCmd()
 	cmd.SetIn(strings.NewReader("n\n"))
-	r, _ := cleanMergedTestRunner(t, "  "+branchDone, worktreeOut)
+	r := cleanMergedTestRunner(t, "  "+branchDone, worktreeOut)
 
 	err := cleanMerged(cmd, r)
 	if err != nil {
@@ -365,7 +364,7 @@ func TestCleanMergedForce(t *testing.T) {
 	worktreeOut := cleanMergedWorktreeOut()
 	cmd, buf := newCleanMergedCmd()
 	_ = cmd.Flags().Set(flagForce, "true")
-	r, _ := cleanMergedTestRunner(t, "  "+branchDone, worktreeOut)
+	r := cleanMergedTestRunner(t, "  "+branchDone, worktreeOut)
 
 	err := cleanMerged(cmd, r)
 	if err != nil {

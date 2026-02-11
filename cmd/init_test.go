@@ -18,8 +18,8 @@ func TestInitSuccess(t *testing.T) {
 			if len(args) >= 2 && args[1] == cmdShowToplevel {
 				return repoDir, nil
 			}
-			if len(args) >= 1 && args[0] == "symbolic-ref" {
-				return "refs/remotes/origin/main", nil
+			if len(args) >= 1 && args[0] == cmdSymbolicRef {
+				return refsRemotesOriginMain, nil
 			}
 			return "", nil
 		},
@@ -68,8 +68,8 @@ func TestInitAlreadyExists(t *testing.T) {
 			if len(args) >= 2 && args[1] == cmdShowToplevel {
 				return repoDir, nil
 			}
-			if len(args) >= 1 && args[0] == "symbolic-ref" {
-				return "refs/remotes/origin/main", nil
+			if len(args) >= 1 && args[0] == cmdSymbolicRef {
+				return refsRemotesOriginMain, nil
 			}
 			return "", nil
 		},

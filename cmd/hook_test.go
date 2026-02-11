@@ -18,8 +18,8 @@ func hookTestRunner(repoDir string) *mockRunner {
 			if len(args) >= 2 && args[1] == "--git-common-dir" {
 				return filepath.Join(repoDir, ".git"), nil
 			}
-			if args[0] == "symbolic-ref" {
-				return "refs/remotes/origin/main", nil
+			if args[0] == cmdSymbolicRef {
+				return refsRemotesOriginMain, nil
 			}
 			return "", nil
 		},

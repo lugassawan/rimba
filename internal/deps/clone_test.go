@@ -1,6 +1,7 @@
 package deps
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -259,7 +260,7 @@ func TestCloneIfParentExistsNoParent(t *testing.T) {
 	relPath := filepath.Join("packages", "foo", "node_modules")
 
 	err := cloneIfParentExists(srcPath, dstWT, relPath)
-	if err != filepath.SkipDir {
+	if !errors.Is(err, filepath.SkipDir) {
 		t.Errorf("expected filepath.SkipDir, got: %v", err)
 	}
 
@@ -411,7 +412,7 @@ func TestCloneIfParentExistsCloneFails(t *testing.T) {
 	relPath := filepath.Join("packages", "foo", "node_modules")
 
 	err := cloneIfParentExists(srcPath, dstWT, relPath)
-	if err != filepath.SkipDir {
+	if !errors.Is(err, filepath.SkipDir) {
 		t.Errorf("expected filepath.SkipDir on clone failure, got: %v", err)
 	}
 }

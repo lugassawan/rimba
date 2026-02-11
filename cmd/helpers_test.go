@@ -47,8 +47,8 @@ func TestResolveMainBranchFallback(t *testing.T) {
 	dir := t.TempDir()
 
 	r := repoRootRunner(dir, func(args ...string) (string, error) {
-		if args[0] == "symbolic-ref" {
-			return "refs/remotes/origin/main", nil
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
 		}
 		return "", errors.New("unexpected")
 	})

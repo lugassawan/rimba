@@ -38,6 +38,14 @@ const (
 	pathWorktreesFeatureLogin = "/worktrees/feature-login"
 	cmdRevList                = "rev-list"
 
+	// Shared git command and value constants
+	cmdRemove            = "remove"
+	cmdSymbolicRef       = "symbolic-ref"
+	cmdStatus            = "status"
+	refsRemotesOriginMain = "refs/remotes/origin/main"
+	aheadBehindZero      = "0\t0"
+	repoPath             = "/repo"
+
 	// Shared fatalf format strings
 	fatalMergeRunE   = "mergeCmd.RunE: %v"
 	fatalCleanPrune  = "cleanPrune: %v"

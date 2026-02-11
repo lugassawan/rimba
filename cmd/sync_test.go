@@ -251,7 +251,7 @@ func TestSyncOneDirty(t *testing.T) {
 	r := &mockRunner{
 		run: func(_ ...string) (string, error) { return "", nil },
 		runInDir: func(_ string, args ...string) (string, error) {
-			if len(args) >= 1 && args[0] == "status" {
+			if len(args) >= 1 && args[0] == cmdStatus {
 				return dirtyOutput, nil
 			}
 			return "", nil
@@ -331,7 +331,7 @@ func TestSyncAllDirtySkip(t *testing.T) {
 	r := &mockRunner{
 		run: func(_ ...string) (string, error) { return "", nil },
 		runInDir: func(dir string, args ...string) (string, error) {
-			if len(args) >= 1 && args[0] == "status" {
+			if len(args) >= 1 && args[0] == cmdStatus {
 				if strings.Contains(dir, "login") {
 					return dirtyOutput, nil
 				}
@@ -389,7 +389,7 @@ func TestSyncWorktreeDirtyAndError(t *testing.T) {
 		r := &mockRunner{
 			run: func(_ ...string) (string, error) { return "", nil },
 			runInDir: func(_ string, args ...string) (string, error) {
-				if len(args) >= 1 && args[0] == "status" {
+				if len(args) >= 1 && args[0] == cmdStatus {
 					return "M file.go", nil
 				}
 				return "", nil
@@ -462,7 +462,7 @@ func TestSyncWorktreeMergeFailure(t *testing.T) {
 	r := &mockRunner{
 		run: func(_ ...string) (string, error) { return "", nil },
 		runInDir: func(_ string, args ...string) (string, error) {
-			if len(args) >= 1 && args[0] == "merge" {
+			if len(args) >= 1 && args[0] == flagSyncMerge {
 				return "", errors.New("merge conflict")
 			}
 			return "", nil

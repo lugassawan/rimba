@@ -18,7 +18,7 @@ func (m *benchMockRunner) Run(_ ...string) (string, error) { return "", nil }
 func (m *benchMockRunner) RunInDir(_ string, args ...string) (string, error) {
 	// Simulate IsDirty returning clean, AheadBehind returning 0/0
 	if len(args) > 0 && args[0] == cmdRevList {
-		return "0\t0", nil
+		return aheadBehindZero, nil
 	}
 	return "", nil
 }

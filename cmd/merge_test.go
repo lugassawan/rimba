@@ -11,22 +11,19 @@ import (
 
 const mergeWorktreeOut = "worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /wt/feature-login\nHEAD def456\nbranch refs/heads/feature/login\n\nworktree /wt/feature-dashboard\nHEAD ghi789\nbranch refs/heads/feature/dashboard\n"
 
-func mergeTestRunner(isDirty bool, mergeErr error) *mockRunner {
+func mergeTestRunner(mergeErr error) *mockRunner {
 	return &mockRunner{
 		run: func(args ...string) (string, error) {
 			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return "/repo", nil
+				return repoPath, nil
 			}
 			return mergeWorktreeOut, nil
 		},
 		runInDir: func(_ string, args ...string) (string, error) {
-			if len(args) >= 1 && args[0] == "status" {
-				if isDirty {
-					return dirtyOutput, nil
-				}
+			if len(args) >= 1 && args[0] == cmdStatus {
 				return "", nil
 			}
-			if len(args) >= 1 && args[0] == "merge" {
+			if len(args) >= 1 && args[0] == flagSyncMerge {
 				return "", mergeErr
 			}
 			return "", nil
@@ -36,7 +33,7 @@ func mergeTestRunner(isDirty bool, mergeErr error) *mockRunner {
 
 func TestMergeIntoMainSuccess(t *testing.T) {
 	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: defaultRelativeWtDir}
-	r := mergeTestRunner(false, nil)
+	r := mergeTestRunner(nil)
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -59,7 +56,7 @@ func TestMergeIntoMainSuccess(t *testing.T) {
 
 func TestMergeKeep(t *testing.T) {
 	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: defaultRelativeWtDir}
-	r := mergeTestRunner(false, nil)
+	r := mergeTestRunner(nil)
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -83,7 +80,7 @@ func TestMergeKeep(t *testing.T) {
 
 func TestMergeIntoWorktree(t *testing.T) {
 	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: defaultRelativeWtDir}
-	r := mergeTestRunner(false, nil)
+	r := mergeTestRunner(nil)
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -114,12 +111,12 @@ func TestMergeSourceDirty(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return "/repo", nil
+				return repoPath, nil
 			}
 			return mergeWorktreeOut, nil
 		},
 		runInDir: func(dir string, args ...string) (string, error) {
-			if len(args) >= 1 && args[0] == "status" {
+			if len(args) >= 1 && args[0] == cmdStatus {
 				if strings.Contains(dir, "login") {
 					return dirtyOutput, nil
 				}
@@ -152,13 +149,13 @@ func TestMergeTargetDirty(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return "/repo", nil
+				return repoPath, nil
 			}
 			return mergeWorktreeOut, nil
 		},
 		runInDir: func(dir string, args ...string) (string, error) {
-			if len(args) >= 1 && args[0] == "status" {
-				if dir == "/repo" {
+			if len(args) >= 1 && args[0] == cmdStatus {
+				if dir == repoPath {
 					return dirtyOutput, nil
 				}
 				return "", nil
@@ -184,7 +181,7 @@ func TestMergeTargetDirty(t *testing.T) {
 
 func TestMergeFails(t *testing.T) {
 	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: defaultRelativeWtDir}
-	r := mergeTestRunner(false, errors.New("conflict"))
+	r := mergeTestRunner(errors.New("conflict"))
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -206,7 +203,7 @@ func TestMergeFails(t *testing.T) {
 
 func TestMergeSourceNotFound(t *testing.T) {
 	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: defaultRelativeWtDir}
-	r := mergeTestRunner(false, nil)
+	r := mergeTestRunner(nil)
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -228,9 +225,9 @@ func TestMergeRemoveWorktreeFails(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return "/repo", nil
+				return repoPath, nil
 			}
-			if len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == "remove" {
+			if len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == cmdRemove {
 				return "", errors.New("locked")
 			}
 			return mergeWorktreeOut, nil
@@ -262,10 +259,10 @@ func TestMergeIntoWorktreeWithDelete(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return "/repo", nil
+				return repoPath, nil
 			}
 			// worktree remove succeeds
-			if len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == "remove" {
+			if len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == cmdRemove {
 				return "", nil
 			}
 			// branch -D succeeds
@@ -303,7 +300,7 @@ func TestMergeIntoWorktreeWithDelete(t *testing.T) {
 
 func TestMergeIntoTargetNotFound(t *testing.T) {
 	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: defaultRelativeWtDir}
-	r := mergeTestRunner(false, nil)
+	r := mergeTestRunner(nil)
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -329,10 +326,10 @@ func TestMergeDeleteBranchFails(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return "/repo", nil
+				return repoPath, nil
 			}
 			// worktree remove succeeds
-			if len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == "remove" {
+			if len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == cmdRemove {
 				return "", nil
 			}
 			// branch delete fails
@@ -368,12 +365,12 @@ func TestMergeTargetDirtyInto(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return "/repo", nil
+				return repoPath, nil
 			}
 			return mergeWorktreeOut, nil
 		},
 		runInDir: func(dir string, args ...string) (string, error) {
-			if len(args) >= 1 && args[0] == "status" {
+			if len(args) >= 1 && args[0] == cmdStatus {
 				// dashboard worktree is dirty
 				if strings.Contains(dir, "dashboard") {
 					return dirtyOutput, nil
@@ -410,15 +407,15 @@ func TestMergeWithNoFF(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return "/repo", nil
+				return repoPath, nil
 			}
 			return mergeWorktreeOut, nil
 		},
 		runInDir: func(_ string, args ...string) (string, error) {
-			if len(args) >= 1 && args[0] == "status" {
+			if len(args) >= 1 && args[0] == cmdStatus {
 				return "", nil
 			}
-			if len(args) >= 1 && args[0] == "merge" {
+			if len(args) >= 1 && args[0] == flagSyncMerge {
 				mergeArgs = append([]string{}, args...)
 				return "", nil
 			}

@@ -192,7 +192,8 @@ func TestListFilterByType(t *testing.T) {
 	}
 }
 
-func TestListDirtyFilter(t *testing.T) {
+func testListFilterNoMatch(t *testing.T, dirty, behind bool) {
+	t.Helper()
 	repoDir := t.TempDir()
 	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: "worktrees"}
 
@@ -215,13 +216,11 @@ func TestListDirtyFilter(t *testing.T) {
 			return worktreeOut, nil
 		},
 		runInDir: func(dir string, args ...string) (string, error) {
-			// IsDirty: status --porcelain → "" means clean
-			if len(args) >= 1 && args[0] == "status" {
+			if len(args) >= 1 && args[0] == cmdStatus {
 				return "", nil
 			}
-			// AheadBehind: rev-list --left-right --count → "0\t0" means no ahead/behind
 			if len(args) >= 1 && args[0] == cmdRevList {
-				return "0\t0", nil
+				return aheadBehindZero, nil
 			}
 			return "", nil
 		},
@@ -238,8 +237,8 @@ func TestListDirtyFilter(t *testing.T) {
 		listBehind = origBehind
 	}()
 	listType = ""
-	listDirty = true
-	listBehind = false
+	listDirty = dirty
+	listBehind = behind
 
 	cmd, buf := newTestCmd()
 	cmd.SetContext(config.WithConfig(context.Background(), cfg))
@@ -253,65 +252,12 @@ func TestListDirtyFilter(t *testing.T) {
 	}
 }
 
+func TestListDirtyFilter(t *testing.T) {
+	testListFilterNoMatch(t, true, false)
+}
+
 func TestListBehindFilter(t *testing.T) {
-	repoDir := t.TempDir()
-	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: "worktrees"}
-
-	worktreeOut := strings.Join([]string{
-		wtPrefix + repoDir,
-		headABC123,
-		branchRefMain,
-		"",
-		wtPrefix + repoDir + pathWorktreesFeatureLogin,
-		headDEF456,
-		branchRefFeatureLogin,
-		"",
-	}, "\n")
-
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return repoDir, nil
-			}
-			return worktreeOut, nil
-		},
-		runInDir: func(dir string, args ...string) (string, error) {
-			// IsDirty: status --porcelain → "" means clean
-			if len(args) >= 1 && args[0] == "status" {
-				return "", nil
-			}
-			// AheadBehind: rev-list --left-right --count → "0\t0" means no ahead/behind
-			if len(args) >= 1 && args[0] == cmdRevList {
-				return "0\t0", nil
-			}
-			return "", nil
-		},
-	}
-	restore := overrideNewRunner(r)
-	defer restore()
-
-	origType := listType
-	origDirty := listDirty
-	origBehind := listBehind
-	defer func() {
-		listType = origType
-		listDirty = origDirty
-		listBehind = origBehind
-	}()
-	listType = ""
-	listDirty = false
-	listBehind = true
-
-	cmd, buf := newTestCmd()
-	cmd.SetContext(config.WithConfig(context.Background(), cfg))
-
-	err := listCmd.RunE(cmd, nil)
-	if err != nil {
-		t.Fatalf(fatalListRunE, err)
-	}
-	if !strings.Contains(buf.String(), "No worktrees match the given filters") {
-		t.Errorf("output = %q, want 'No worktrees match the given filters'", buf.String())
-	}
+	testListFilterNoMatch(t, false, true)
 }
 
 func TestValidPrefixType(t *testing.T) {
@@ -346,12 +292,12 @@ func TestListDirtyFilterWithMatch(t *testing.T) {
 			return worktreeOut, nil
 		},
 		runInDir: func(dir string, args ...string) (string, error) {
-			if len(args) >= 1 && args[0] == "status" {
+			if len(args) >= 1 && args[0] == cmdStatus {
 				// feature-login is dirty
 				return dirtyOutput, nil
 			}
 			if len(args) >= 1 && args[0] == cmdRevList {
-				return "0\t0", nil
+				return aheadBehindZero, nil
 			}
 			return "", nil
 		},
@@ -410,7 +356,7 @@ func TestListBehindFilterWithMatch(t *testing.T) {
 			return worktreeOut, nil
 		},
 		runInDir: func(dir string, args ...string) (string, error) {
-			if len(args) >= 1 && args[0] == "status" {
+			if len(args) >= 1 && args[0] == cmdStatus {
 				return "", nil
 			}
 			if len(args) >= 1 && args[0] == cmdRevList {

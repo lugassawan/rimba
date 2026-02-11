@@ -28,7 +28,9 @@ func TestOpenPrintPath(t *testing.T) {
 	openCmd.SetOut(buf)
 	openCmd.SetErr(buf)
 	openCmd.SetArgs([]string{"login"})
-	openCmd.RunE(cmd, []string{"login"})
+	if err := openCmd.RunE(cmd, []string{"login"}); err != nil {
+		t.Fatalf("openCmd.RunE: %v", err)
+	}
 
 	out := buf.String()
 	if !strings.Contains(out, "/wt/feature-login") {
