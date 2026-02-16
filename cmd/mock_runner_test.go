@@ -46,8 +46,14 @@ const (
 	aheadBehindZero      = "0\t0"
 	repoPath             = "/repo"
 
+	taskLogin        = "login"
+	taskWantFmt      = "task = %q, want %q"
+	directiveWantFmt = "directive = %v, want ShellCompDirectiveNoFileComp"
+	filterByPrefix   = "filter by prefix"
+	useTestCmd       = "test-cmd"
+
 	// Shared fatalf format strings
-	fatalMergeRunE   = "mergeCmd.RunE: %v"
+	fatalMergeRunE = "mergeCmd.RunE: %v"
 	fatalCleanPrune  = "cleanPrune: %v"
 	fatalCleanMerged = "cleanMerged: %v"
 	fatalListRunE    = "listCmd.RunE: %v"

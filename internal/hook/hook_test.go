@@ -9,12 +9,13 @@ import (
 )
 
 const (
-	branchMain     = "main"
-	branchMaster   = "master"
-	userHook       = "echo 'user hook running'\n"
-	fatalInstall   = "Install: %v"
-	fatalReadHook  = "read hook: %v"
-	fatalWriteHook = "write hook: %v"
+	branchMain             = "main"
+	branchMaster           = "master"
+	userHook               = "echo 'user hook running'\n"
+	fatalInstall           = "Install: %v"
+	fatalReadHook          = "read hook: %v"
+	fatalWriteHook         = "write hook: %v"
+	errBeginMarkerRemoved  = "BEGIN marker should be removed"
 )
 
 func TestHookBlock(t *testing.T) {
@@ -249,7 +250,7 @@ func TestRemoveBlock(t *testing.T) {
 
 	result := removeBlock(content)
 	if strings.Contains(result, BeginMarker) {
-		t.Error("BEGIN marker should be removed")
+		t.Error(errBeginMarkerRemoved)
 	}
 	if strings.Contains(result, EndMarker) {
 		t.Error("END marker should be removed")
@@ -380,6 +381,83 @@ func TestUninstallWriteError(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(hookPath, 0644) })
 
 	err := Uninstall(dir)
+	if err == nil {
+		t.Fatal("expected error when write fails")
+	}
+	if !strings.Contains(err.Error(), "write hook file") {
+		t.Errorf("error = %q, want to contain 'write hook file'", err.Error())
+	}
+}
+
+func TestRemoveBlockBeginOnlyAtStart(t *testing.T) {
+	// BEGIN marker at very start of file with content before END
+	content := BeginMarker + "\nrimba hook content\n" + EndMarker + "\n"
+	result := removeBlock(content)
+	if strings.Contains(result, BeginMarker) {
+		t.Error(errBeginMarkerRemoved)
+	}
+	if strings.Contains(result, EndMarker) {
+		t.Error("END marker should be removed")
+	}
+	// After removing the block at the start, result should be empty
+	if result != "" {
+		t.Errorf("expected empty result, got %q", result)
+	}
+}
+
+func TestRemoveBlockContentAfterEnd(t *testing.T) {
+	// Rimba block at the start, user content after END
+	block := HookBlock(branchMain)
+	afterContent := "echo 'runs after rimba'\n"
+	content := shebang + "\n\n" + block + "\n" + afterContent
+
+	result := removeBlock(content)
+	if strings.Contains(result, BeginMarker) {
+		t.Error(errBeginMarkerRemoved)
+	}
+	if !strings.Contains(result, afterContent) {
+		t.Errorf("content after END should be preserved, got %q", result)
+	}
+	if !strings.HasPrefix(result, shebang) {
+		t.Errorf("shebang should be preserved at start, got %q", result)
+	}
+}
+
+func TestUninstallRemoveError(t *testing.T) {
+	dir := t.TempDir()
+	hookPath := filepath.Join(dir, HookName)
+
+	// Create hook with only rimba content (shebang-only after removal → file deleted)
+	content := shebang + "\n\n" + HookBlock(branchMain) + "\n"
+	if err := os.WriteFile(hookPath, []byte(content), fileMode); err != nil {
+		t.Fatalf(fatalWriteHook, err)
+	}
+
+	// Make directory read-only so os.Remove fails
+	if err := os.Chmod(dir, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0755) })
+
+	err := Uninstall(dir)
+	if err == nil {
+		t.Fatal("expected error when file removal fails")
+	}
+	if !strings.Contains(err.Error(), "remove hook file") {
+		t.Errorf("error = %q, want to contain 'remove hook file'", err.Error())
+	}
+}
+
+func TestInstallWriteError(t *testing.T) {
+	dir := t.TempDir()
+
+	// Make directory read-only so WriteFile fails
+	if err := os.Chmod(dir, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0755) })
+
+	err := Install(dir, branchMain)
 	if err == nil {
 		t.Fatal("expected error when write fails")
 	}

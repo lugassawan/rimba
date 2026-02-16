@@ -84,6 +84,67 @@ func TestFindMergedCandidatesError(t *testing.T) {
 	}
 }
 
+func TestFindMergedCandidatesWorktreeError(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdBranch {
+				return "  feature/done", nil // MergedBranches succeeds
+			}
+			if len(args) >= 1 && args[0] == cmdWorktreeTest {
+				return "", errGitFailed // ListWorktrees fails
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	_, err := findMergedCandidates(r, branchMain)
+	if err == nil {
+		t.Fatal("expected error from ListWorktrees failure")
+	}
+}
+
+func fetchFailRunner(topLevel, worktreeOut string) *mockRunner {
+	return &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return topLevel, nil
+			}
+			if args[0] == cmdSymbolicRef {
+				return refsRemotesOriginMain, nil
+			}
+			if len(args) >= 1 && args[0] == "fetch" {
+				return "", errors.New("no remote")
+			}
+			if len(args) >= 1 && args[0] == cmdBranch {
+				return "", nil
+			}
+			if len(args) >= 1 && args[0] == cmdWorktreeTest {
+				return worktreeOut, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+}
+
+func TestCleanMergedFetchFails(t *testing.T) {
+	worktreeOut := cleanMergedWorktreeOut()
+	cmd, buf := newCleanMergedCmd()
+	_ = cmd.Flags().Set(flagForce, "true")
+
+	r := fetchFailRunner(t.TempDir(), worktreeOut)
+
+	err := cleanMerged(cmd, r)
+	if err != nil {
+		t.Fatalf(fatalCleanMerged, err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Warning: fetch failed") {
+		t.Errorf("expected fetch warning, got %q", out)
+	}
+}
+
 func TestPrintMergedCandidates(t *testing.T) {
 	cmd, buf := newTestCmd()
 	candidates := []mergedCandidate{

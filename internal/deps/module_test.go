@@ -272,6 +272,45 @@ func TestDetectModulesHiddenDirSkipped(t *testing.T) {
 	}
 }
 
+func TestDetectSubdirModulesReadDirError(t *testing.T) {
+	dir := t.TempDir()
+
+	// Make directory unreadable so ReadDir fails
+	if err := os.Chmod(dir, 0000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0755) })
+
+	seenDirs := make(map[string]bool)
+	result := detectSubdirModules(dir, nil, seenDirs)
+
+	if len(result) != 0 {
+		t.Errorf("expected 0 modules on ReadDir error, got %d", len(result))
+	}
+}
+
+func TestMatchPresetsInSubdirSeenDirSkip(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create a subdir with a lockfile
+	subdir := "api"
+	if err := os.MkdirAll(filepath.Join(dir, subdir), 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(dir, subdir), LockfileGo, "hash")
+
+	// Pre-populate seenDirs with the expected dep dir
+	seenDirs := map[string]bool{
+		filepath.Join(subdir, DirVendor): true,
+	}
+
+	result := matchPresetsInSubdir(dir, subdir, nil, seenDirs)
+
+	if len(result) != 0 {
+		t.Errorf("expected 0 modules when seenDirs already has entry, got %d", len(result))
+	}
+}
+
 func assertModuleCount(t *testing.T, modules []Module, expected int) {
 	t.Helper()
 	if len(modules) != expected {
