@@ -1,6 +1,7 @@
 package deps
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -540,4 +541,115 @@ func TestManagerInstallWithInstallCmd(t *testing.T) {
 	if r.Error != nil {
 		t.Errorf("expected no error from InstallCmd, got %v", r.Error)
 	}
+}
+
+// errorRunner is a mockRunner that always returns an error from Run.
+type errorRunner struct {
+	err error
+}
+
+func (e *errorRunner) Run(_ ...string) (string, error)              { return "", e.err }
+func (e *errorRunner) RunInDir(_ string, _ ...string) (string, error) { return "", e.err }
+
+var errGitFailed = errors.New("git worktree list failed")
+
+func TestInstallListWorktreesError(t *testing.T) {
+	newWT := t.TempDir()
+	writeFile(t, newWT, LockfilePnpm, "content")
+
+	mgr := &Manager{Runner: &errorRunner{err: errGitFailed}}
+	modules := []Module{
+		{Dir: DirNodeModules, Lockfile: LockfilePnpm},
+	}
+
+	results := mgr.Install(newWT, modules)
+	if len(results) != 1 {
+		t.Fatalf(fmtExpectedOneResult, len(results))
+	}
+	if results[0].Error == nil {
+		t.Error("expected error from ListWorktrees failure")
+	}
+	if !errors.Is(results[0].Error, errGitFailed) {
+		t.Errorf("error = %v, want %v", results[0].Error, errGitFailed)
+	}
+}
+
+func TestInstallPreferSourceListWorktreesError(t *testing.T) {
+	newWT := t.TempDir()
+	sourceWT := t.TempDir()
+	writeFile(t, newWT, LockfilePnpm, "content")
+
+	mgr := &Manager{Runner: &errorRunner{err: errGitFailed}}
+	modules := []Module{
+		{Dir: DirNodeModules, Lockfile: LockfilePnpm},
+	}
+
+	results := mgr.InstallPreferSource(newWT, sourceWT, modules)
+	if len(results) != 1 {
+		t.Fatalf(fmtExpectedOneResult, len(results))
+	}
+	if results[0].Error == nil {
+		t.Error("expected error from ListWorktrees failure")
+	}
+	if !errors.Is(results[0].Error, errGitFailed) {
+		t.Errorf("error = %v, want %v", results[0].Error, errGitFailed)
+	}
+}
+
+func TestManagerInstallCloneFailFallback(t *testing.T) {
+	existingWT := t.TempDir()
+
+	lockContent := "same-lock-content"
+	writeFile(t, existingWT, LockfilePnpm, lockContent)
+
+	// Create module dir in existingWT so hash+stat pass
+	if err := os.MkdirAll(filepath.Join(existingWT, DirNodeModules), 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(existingWT, DirNodeModules), "pkg.json", "{}")
+
+	// newWT is inside a read-only parent so CloneModule cp can't write to it
+	parentDir := t.TempDir()
+	newWT := filepath.Join(parentDir, "new-wt")
+	if err := os.MkdirAll(newWT, 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, newWT, LockfilePnpm, lockContent)
+
+	// Make newWT read-only so cp -R node_modules can't create destination
+	if err := os.Chmod(newWT, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(newWT, 0755) })
+
+	runner := &mockRunner{worktreeOutput: mockWorktreeList(existingWT, newWT)}
+	mgr := &Manager{Runner: runner}
+
+	// CloneOnly=true: clone fails → returns wrapped error
+	t.Run("clone only error", func(t *testing.T) {
+		modules := []Module{
+			{Dir: DirNodeModules, Lockfile: LockfilePnpm, CloneOnly: true},
+		}
+		results := mgr.Install(newWT, modules)
+		if len(results) != 1 {
+			t.Fatalf(fmtExpectedOneResult, len(results))
+		}
+		if results[0].Error == nil {
+			t.Error("expected error when clone fails with CloneOnly=true")
+		}
+	})
+
+	// CloneOnly=false: clone fails → fallback to InstallCmd
+	t.Run("clone fail fallback to install", func(t *testing.T) {
+		modules := []Module{
+			{Dir: DirNodeModules, Lockfile: LockfilePnpm, InstallCmd: "echo fallback"},
+		}
+		results := mgr.Install(newWT, modules)
+		if len(results) != 1 {
+			t.Fatalf(fmtExpectedOneResult, len(results))
+		}
+		if results[0].Cloned {
+			t.Error("expected Cloned=false on clone failure")
+		}
+	})
 }

@@ -417,6 +417,53 @@ func TestCloneIfParentExistsCloneFails(t *testing.T) {
 	}
 }
 
+func TestCloneExtraDirsCloneError(t *testing.T) {
+	srcWT := t.TempDir()
+	dstWT := t.TempDir()
+
+	// Create extra dir source
+	extraSrc := filepath.Join(srcWT, ".yarn", "cache")
+	if err := os.MkdirAll(extraSrc, 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, extraSrc, "dep.zip", "cached")
+
+	// Block the destination parent with a regular file so CloneDir MkdirAll fails
+	blockFile := filepath.Join(dstWT, ".yarn")
+	if err := os.WriteFile(blockFile, []byte("not a dir"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := cloneExtraDirs(srcWT, dstWT, []string{".yarn/cache"})
+	if err == nil {
+		t.Fatal("expected error when extra dir clone fails")
+	}
+}
+
+func TestCloneDirRemoveAllError(t *testing.T) {
+	src := t.TempDir()
+	writeFile(t, src, testDataTxt, "hello")
+
+	// Create dst inside a parent that becomes read-only after dst is created
+	parent := t.TempDir()
+	dst := filepath.Join(parent, "target")
+	if err := os.MkdirAll(dst, 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, dst, "stale.txt", "old data")
+
+	// Make parent read-only so RemoveAll(dst) fails
+	if err := os.Chmod(parent, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(parent, 0755) })
+
+	err := CloneDir(src, dst)
+	if err == nil {
+		t.Fatal("expected error when RemoveAll fails on read-only parent")
+	}
+}
+
 func TestCloneRecursiveWithExtraDirs(t *testing.T) {
 	srcWT := t.TempDir()
 	dstWT := t.TempDir()
