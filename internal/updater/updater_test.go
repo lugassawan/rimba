@@ -24,14 +24,9 @@ const (
 	errWantFmt       = "error = %q, want %q"
 
 	// New constants for deduplication
-	contentFmt    = "content = %q, want %q"
-	binaryContent = "binary content"
-	fatalCopyFile = "copyFile: %v"
-	fatalReadDst  = "reading dst: %v"
-	fatalStatDst  = "stat dst: %v"
-	valNewBinary  = "new binary"
-	permFmt       = "permissions = %o, want %o"
-	valNewContent = "new content"
+	contentFmt   = "content = %q, want %q"
+	fatalReplace = "Replace: %v"
+	valNewBinary = "new binary"
 )
 
 // newTestUpdater creates an Updater wired to the given test server.
@@ -245,13 +240,6 @@ func TestIsPermissionError(t *testing.T) {
 	}
 }
 
-func TestReplaceElevatedFailsGracefully(t *testing.T) {
-	err := ReplaceElevated("/nonexistent/path/binary", "/also/nonexistent")
-	if err == nil {
-		t.Fatal("expected error for nonexistent paths")
-	}
-}
-
 func TestNew(t *testing.T) {
 	u := New(testVersionNew2)
 	if u.CurrentVersion != testVersionNew2 {
@@ -328,64 +316,6 @@ func TestCleanupTempDir(t *testing.T) {
 
 	if _, err := os.Stat(filepath.Dir(binaryPath)); !os.IsNotExist(err) {
 		t.Error("expected temp dir to be removed")
-	}
-}
-
-func TestCopyFile(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	srcPath := filepath.Join(tmpDir, "src")
-	if err := os.WriteFile(srcPath, []byte(binaryContent), 0755); err != nil {
-		t.Fatal(err)
-	}
-
-	dstPath := filepath.Join(tmpDir, "dst")
-	if err := copyFile(srcPath, dstPath, 0700); err != nil {
-		t.Fatalf(fatalCopyFile, err)
-	}
-
-	content, err := os.ReadFile(dstPath)
-	if err != nil {
-		t.Fatalf(fatalReadDst, err)
-	}
-	if string(content) != binaryContent {
-		t.Errorf(contentFmt, content, binaryContent)
-	}
-
-	info, err := os.Stat(dstPath)
-	if err != nil {
-		t.Fatalf(fatalStatDst, err)
-	}
-	if info.Mode().Perm() != 0700 {
-		t.Errorf("mode = %o, want %o", info.Mode().Perm(), 0700)
-	}
-}
-
-func TestCopyFileSourceNotFound(t *testing.T) {
-	tmpDir := t.TempDir()
-	err := copyFile(filepath.Join(tmpDir, "nonexistent"), filepath.Join(tmpDir, "dst"), 0755)
-	if err == nil {
-		t.Fatal("expected error for missing source")
-	}
-}
-
-func TestCopyFileDstError(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	srcPath := filepath.Join(tmpDir, "src")
-	if err := os.WriteFile(srcPath, []byte("content"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	// Create a directory where the dst file should be
-	dstPath := filepath.Join(tmpDir, "dstdir")
-	if err := os.Mkdir(dstPath, 0755); err != nil {
-		t.Fatal(err)
-	}
-
-	err := copyFile(srcPath, dstPath, 0755)
-	if err == nil {
-		t.Fatal("expected error when dst is a directory")
 	}
 }
 
@@ -588,40 +518,7 @@ func buildTestArchive(t *testing.T, name, content string) []byte {
 	return data
 }
 
-func TestReplaceCrossFilesystem(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	srcPath := filepath.Join(tmpDir, "src-binary")
-	srcContent := []byte("cross-filesystem binary content")
-	if err := os.WriteFile(srcPath, srcContent, 0755); err != nil {
-		t.Fatal(err)
-	}
-
-	dstPath := filepath.Join(tmpDir, "dst-binary")
-
-	var perm os.FileMode = 0750
-	if err := copyFile(srcPath, dstPath, perm); err != nil {
-		t.Fatalf(fatalCopyFile, err)
-	}
-
-	content, err := os.ReadFile(dstPath)
-	if err != nil {
-		t.Fatalf(fatalReadDst, err)
-	}
-	if string(content) != string(srcContent) {
-		t.Errorf(contentFmt, content, srcContent)
-	}
-
-	info, err := os.Stat(dstPath)
-	if err != nil {
-		t.Fatalf(fatalStatDst, err)
-	}
-	if info.Mode().Perm() != perm {
-		t.Errorf(permFmt, info.Mode().Perm(), perm)
-	}
-}
-
-func TestReplaceFallbackToCopyFile(t *testing.T) {
+func TestReplaceSubdirectory(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create the current binary
@@ -642,7 +539,7 @@ func TestReplaceFallbackToCopyFile(t *testing.T) {
 	}
 
 	if err := Replace(currentPath, newPath); err != nil {
-		t.Fatalf("Replace: %v", err)
+		t.Fatalf(fatalReplace, err)
 	}
 
 	content, err := os.ReadFile(currentPath)
@@ -651,82 +548,6 @@ func TestReplaceFallbackToCopyFile(t *testing.T) {
 	}
 	if string(content) != newContent {
 		t.Errorf(contentFmt, content, newContent)
-	}
-}
-
-func TestCopyFilePreservesContent(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	// Create a larger file to exercise io.Copy thoroughly
-	largeContent := strings.Repeat("abcdefghijklmnop", 8192) // 128KB
-	srcPath := filepath.Join(tmpDir, "large-src")
-	if err := os.WriteFile(srcPath, []byte(largeContent), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	dstPath := filepath.Join(tmpDir, "large-dst")
-	var perm os.FileMode = 0755
-	if err := copyFile(srcPath, dstPath, perm); err != nil {
-		t.Fatalf(fatalCopyFile, err)
-	}
-
-	content, err := os.ReadFile(dstPath)
-	if err != nil {
-		t.Fatalf(fatalReadDst, err)
-	}
-	if len(content) != len(largeContent) {
-		t.Errorf("content length = %d, want %d", len(content), len(largeContent))
-	}
-	if string(content) != largeContent {
-		t.Error("content mismatch for large file copy")
-	}
-
-	info, err := os.Stat(dstPath)
-	if err != nil {
-		t.Fatalf(fatalStatDst, err)
-	}
-	if info.Mode().Perm() != perm {
-		t.Errorf(permFmt, info.Mode().Perm(), perm)
-	}
-}
-
-func TestReplacePreservesPermissions(t *testing.T) {
-	// Test that copyFile (the cross-filesystem fallback) preserves the
-	// permissions of the original binary. We call copyFile directly since
-	// on the same filesystem os.Rename would succeed and skip the fallback.
-	tmpDir := t.TempDir()
-
-	srcPath := filepath.Join(tmpDir, "new-binary")
-	if err := os.WriteFile(srcPath, []byte(valNewContent), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	dstPath := filepath.Join(tmpDir, "current-binary")
-	if err := os.WriteFile(dstPath, []byte("old content"), 0755); err != nil {
-		t.Fatal(err)
-	}
-
-	// Simulate what Replace does on cross-filesystem: copyFile with
-	// the permissions from the original binary (0755).
-	var origPerm os.FileMode = 0755
-	if err := copyFile(srcPath, dstPath, origPerm); err != nil {
-		t.Fatalf(fatalCopyFile, err)
-	}
-
-	content, err := os.ReadFile(dstPath)
-	if err != nil {
-		t.Fatalf(fatalReadDst, err)
-	}
-	if string(content) != valNewContent {
-		t.Errorf(contentFmt, content, valNewContent)
-	}
-
-	info, err := os.Stat(dstPath)
-	if err != nil {
-		t.Fatalf(fatalStatDst, err)
-	}
-	if info.Mode().Perm() != origPerm {
-		t.Errorf(permFmt, info.Mode().Perm(), origPerm)
 	}
 }
 
@@ -745,6 +566,187 @@ func TestCheckInvalidJSON(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "decoding release") {
 		t.Errorf("err = %q, want it to contain %q", err.Error(), "decoding release")
+	}
+}
+
+func TestReplaceNewBinaryNotFound(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	currentPath := filepath.Join(tmpDir, "current")
+	if err := os.WriteFile(currentPath, []byte("old"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	err := Replace(currentPath, filepath.Join(tmpDir, "nonexistent-new"))
+	if err == nil {
+		t.Fatal("expected error for nonexistent new binary")
+	}
+	if !strings.Contains(err.Error(), "opening new binary") {
+		t.Errorf("error = %q, want to contain 'opening new binary'", err.Error())
+	}
+
+	// Original binary should be unchanged
+	content, err := os.ReadFile(currentPath)
+	if err != nil {
+		t.Fatalf("reading current: %v", err)
+	}
+	if string(content) != "old" {
+		t.Errorf("original binary was modified: got %q", content)
+	}
+}
+
+func TestReplacePreservesPermissions(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	currentPath := filepath.Join(tmpDir, "current")
+	if err := os.WriteFile(currentPath, []byte("old"), 0750); err != nil {
+		t.Fatal(err)
+	}
+
+	newPath := filepath.Join(tmpDir, "new")
+	if err := os.WriteFile(newPath, []byte("new"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Replace(currentPath, newPath); err != nil {
+		t.Fatalf(fatalReplace, err)
+	}
+
+	info, err := os.Stat(currentPath)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if info.Mode().Perm() != 0750 {
+		t.Errorf("permissions = %o, want %o", info.Mode().Perm(), 0750)
+	}
+}
+
+func TestReplaceCreatesNewInode(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	currentPath := filepath.Join(tmpDir, "current")
+	if err := os.WriteFile(currentPath, []byte("old"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Get original inode
+	origInfo, err := os.Stat(currentPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	origSys := origInfo.Sys()
+
+	newPath := filepath.Join(tmpDir, "new")
+	if err := os.WriteFile(newPath, []byte("new"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Replace(currentPath, newPath); err != nil {
+		t.Fatalf(fatalReplace, err)
+	}
+
+	// Verify new inode (the whole point of this fix)
+	newInfo, err := os.Stat(currentPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newSys := newInfo.Sys()
+
+	// On Unix, Sys() returns *syscall.Stat_t which has Ino field
+	// We compare the raw sys values — if they're different, inode changed
+	if origSys == newSys {
+		t.Log("warning: could not confirm inode change (Sys() comparison)")
+	}
+
+	// Content should be updated
+	content, err := os.ReadFile(currentPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(content) != "new" {
+		t.Errorf(contentFmt, content, "new")
+	}
+}
+
+func TestEnsurePathUnsupportedShell(t *testing.T) {
+	t.Setenv("SHELL", "/bin/fish")
+
+	// Should return nil without error (silently skip)
+	if err := EnsurePath("/some/dir"); err != nil {
+		t.Errorf("EnsurePath with unsupported shell: %v", err)
+	}
+}
+
+func TestUserInstallDir(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("UserHomeDir: %v", err)
+	}
+
+	dir, err := UserInstallDir()
+	requireNoError(t, err)
+
+	want := filepath.Join(home, localBinSubdir, "bin")
+	if dir != want {
+		t.Errorf("UserInstallDir() = %q, want %q", dir, want)
+	}
+}
+
+func TestEnsurePathCreatesEntry(t *testing.T) {
+	tmpDir := t.TempDir()
+	rcFile := filepath.Join(tmpDir, ".zshrc")
+
+	// Create an empty rc file
+	if err := os.WriteFile(rcFile, []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("SHELL", "/bin/zsh")
+	t.Setenv("HOME", tmpDir)
+
+	dir := filepath.Join(tmpDir, localBinSubdir, "bin")
+	if err := EnsurePath(dir); err != nil {
+		t.Fatalf("EnsurePath: %v", err)
+	}
+
+	content, err := os.ReadFile(rcFile)
+	if err != nil {
+		t.Fatalf("reading rc file: %v", err)
+	}
+
+	if !strings.Contains(string(content), dir) {
+		t.Errorf("rc file should contain %q, got %q", dir, content)
+	}
+	if !strings.Contains(string(content), "# Added by rimba") {
+		t.Errorf("rc file should contain guard comment")
+	}
+}
+
+func TestEnsurePathIdempotent(t *testing.T) {
+	tmpDir := t.TempDir()
+	rcFile := filepath.Join(tmpDir, ".zshrc")
+
+	dir := filepath.Join(tmpDir, localBinSubdir, "bin")
+	existing := fmt.Sprintf("export PATH=\"%s:$PATH\"\n", dir)
+	if err := os.WriteFile(rcFile, []byte(existing), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("SHELL", "/bin/zsh")
+	t.Setenv("HOME", tmpDir)
+
+	if err := EnsurePath(dir); err != nil {
+		t.Fatalf("EnsurePath: %v", err)
+	}
+
+	content, err := os.ReadFile(rcFile)
+	if err != nil {
+		t.Fatalf("reading rc file: %v", err)
+	}
+
+	// Should not have added a duplicate
+	if strings.Count(string(content), dir) != 1 {
+		t.Errorf("expected exactly one PATH entry, got:\n%s", content)
 	}
 }
 

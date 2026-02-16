@@ -72,27 +72,59 @@ var updateCmd = &cobra.Command{
 		}
 
 		s.Update("Installing...")
+		installedBinary := currentBinary
 		if err := updater.Replace(currentBinary, newBinary); err != nil {
 			if !updater.IsPermissionError(err) {
 				return fmt.Errorf("replacing binary: %w", err)
 			}
+
+			// Install to user-writable directory instead
 			s.Stop()
-			fmt.Fprintln(cmd.OutOrStdout(), "Elevated permissions required. Retrying with sudo...")
-			s.Start("Installing with sudo...")
-			if err := updater.ReplaceElevated(currentBinary, newBinary); err != nil {
-				return fmt.Errorf("replacing binary with sudo: %w", err)
+			userDir, dirErr := updater.UserInstallDir()
+			if dirErr != nil {
+				return fmt.Errorf("getting user install dir: %w", dirErr)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Cannot write to %s. Installing to %s instead.\n",
+				filepath.Dir(currentBinary), userDir)
+
+			if mkErr := os.MkdirAll(userDir, 0750); mkErr != nil {
+				return fmt.Errorf("creating install dir: %w", mkErr)
+			}
+
+			installedBinary = filepath.Join(userDir, "rimba")
+			s.Start("Installing...")
+			if _, statErr := os.Stat(installedBinary); os.IsNotExist(statErr) {
+				// First install to this directory — write directly
+				src, readErr := os.ReadFile(newBinary)
+				if readErr != nil {
+					return fmt.Errorf("reading new binary: %w", readErr)
+				}
+				if writeErr := os.WriteFile(installedBinary, src, 0755); writeErr != nil { //nolint:gosec // executable binary
+					return fmt.Errorf("writing binary: %w", writeErr)
+				}
+			} else if err := updater.Replace(installedBinary, newBinary); err != nil {
+				return fmt.Errorf("replacing binary: %w", err)
+			}
+
+			if pathErr := updater.EnsurePath(userDir); pathErr != nil {
+				return fmt.Errorf("updating PATH: %w", pathErr)
 			}
 		}
 
 		s.Stop()
 
 		// Verify the new binary works
-		out, err := exec.Command(filepath.Clean(currentBinary), "version").Output() //nolint:gosec // path comes from os.Executable
+		out, err := exec.Command(filepath.Clean(installedBinary), "version").Output() //nolint:gosec // path comes from os.Executable
 		if err != nil {
 			return fmt.Errorf("verifying new binary: %w", err)
 		}
 
 		fmt.Fprintf(cmd.OutOrStdout(), "Updated successfully: %s\n", strings.TrimSpace(string(out)))
+
+		// Print migration guidance if installed to a different location
+		if installedBinary != currentBinary {
+			fmt.Fprintf(cmd.OutOrStdout(), "\nTo complete migration, remove the old binary:\n  sudo rm %s\n", currentBinary)
+		}
 		return nil
 	},
 }
