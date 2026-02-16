@@ -29,9 +29,6 @@ archives:
 checksum:
   name_template: checksums.txt
 
-release:
-  name_template: "Release v{{ .Version }}"
-
 changelog:
   sort: asc
   abbrev: -1
