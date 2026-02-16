@@ -750,6 +750,100 @@ func TestEnsurePathIdempotent(t *testing.T) {
 	}
 }
 
+func TestEnsurePathBashShell(t *testing.T) {
+	tmpDir := t.TempDir()
+	rcFile := filepath.Join(tmpDir, ".bashrc")
+
+	if err := os.WriteFile(rcFile, []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("SHELL", "/bin/bash")
+	t.Setenv("HOME", tmpDir)
+
+	dir := filepath.Join(tmpDir, localBinSubdir, "bin")
+	if err := EnsurePath(dir); err != nil {
+		t.Fatalf("EnsurePath with bash: %v", err)
+	}
+
+	content, err := os.ReadFile(rcFile)
+	if err != nil {
+		t.Fatalf("reading .bashrc: %v", err)
+	}
+	if !strings.Contains(string(content), dir) {
+		t.Errorf(".bashrc should contain %q, got %q", dir, content)
+	}
+}
+
+func TestEnsurePathNoRcFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	t.Setenv("SHELL", "/bin/zsh")
+	t.Setenv("HOME", tmpDir)
+
+	// No .zshrc file exists — EnsurePath should create it
+	dir := filepath.Join(tmpDir, localBinSubdir, "bin")
+	if err := EnsurePath(dir); err != nil {
+		t.Fatalf("EnsurePath without rc file: %v", err)
+	}
+
+	rcFile := filepath.Join(tmpDir, ".zshrc")
+	content, err := os.ReadFile(rcFile)
+	if err != nil {
+		t.Fatalf("reading .zshrc: %v", err)
+	}
+	if !strings.Contains(string(content), dir) {
+		t.Errorf(".zshrc should contain %q, got %q", dir, content)
+	}
+}
+
+func TestEnsurePathOpenFileError(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	t.Setenv("SHELL", "/bin/zsh")
+	t.Setenv("HOME", tmpDir)
+
+	// Create .zshrc as a directory to cause OpenFile to fail
+	rcDir := filepath.Join(tmpDir, ".zshrc")
+	if err := os.MkdirAll(rcDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	dir := filepath.Join(tmpDir, localBinSubdir, "bin")
+	err := EnsurePath(dir)
+	if err == nil {
+		t.Fatal("expected error when rc file is a directory")
+	}
+}
+
+func TestReplaceCreateTempError(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	currentPath := filepath.Join(tmpDir, "current")
+	if err := os.WriteFile(currentPath, []byte("old"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	newPath := filepath.Join(tmpDir, "new")
+	if err := os.WriteFile(newPath, []byte("new"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Make directory read-only so CreateTemp fails
+	if err := os.Chmod(tmpDir, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(tmpDir, 0755) })
+
+	err := Replace(currentPath, newPath)
+	if err == nil {
+		t.Fatal("expected error from CreateTemp in read-only dir")
+	}
+	if !strings.Contains(err.Error(), "creating temp file") {
+		t.Errorf("error = %q, want to contain 'creating temp file'", err.Error())
+	}
+}
+
 func TestDownloadValidArchiveCleanup(t *testing.T) {
 	archiveData := buildTestArchive(t, "rimba", "#!/bin/sh\necho cleanup test\n")
 	srv := serveOctetStream(t, archiveData)
