@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -133,5 +135,77 @@ func TestRootHelpFunctionSubcommand(t *testing.T) {
 	}
 	if !strings.Contains(out, "a subcommand") {
 		t.Errorf("expected subcommand help text, got %q", out)
+	}
+}
+
+func TestExecute(t *testing.T) {
+	// Override newRunner to avoid real git commands
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return "", errGitFailed },
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	// Set args to "version" which has skipConfig annotation, so it won't fail
+	rootCmd.SetArgs([]string{"version"})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	buf := new(strings.Builder)
+	rootCmd.SetOut(buf)
+	rootCmd.SetErr(buf)
+	t.Cleanup(func() {
+		rootCmd.SetOut(nil)
+		rootCmd.SetErr(nil)
+	})
+
+	if err := Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "rimba") {
+		t.Errorf("expected version output to contain 'rimba', got %q", out)
+	}
+}
+
+func TestRootHelpFunctionRoot(t *testing.T) {
+	// Set up a test server that returns a newer version
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(hdrContentType, mimeJSON)
+		_, _ = w.Write([]byte(`{
+			"tag_name":"v99.0.0",
+			"assets":[
+				{"name":"rimba_99.0.0_linux_amd64.tar.gz","browser_download_url":"https://example.com/download"}
+			]
+		}`))
+	}))
+	t.Cleanup(srv.Close)
+	overrideNewUpdater(t, srv)
+
+	// Override version to something older so update hint triggers
+	origVersion := version
+	version = "v1.0.0"
+	t.Cleanup(func() { version = origVersion })
+
+	buf := new(strings.Builder)
+	rootCmd.SetOut(buf)
+	rootCmd.SetErr(buf)
+	t.Cleanup(func() {
+		rootCmd.SetOut(nil)
+		rootCmd.SetErr(nil)
+	})
+
+	rootCmd.HelpFunc()(rootCmd, nil)
+	out := buf.String()
+
+	// Banner should be printed for root command
+	if !strings.Contains(out, `rimba`) {
+		t.Errorf("expected banner to contain 'rimba', got %q", out)
+	}
+
+	// Update hint should be printed
+	if !strings.Contains(out, "Update available") {
+		t.Errorf("expected update hint in output, got %q", out)
 	}
 }
