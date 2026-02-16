@@ -22,6 +22,7 @@ const (
 	errExpectedInFmt = "expected %s in args %v"
 	fatalDefaultFmt  = "DefaultBranch: %v"
 	errBranchWantFmt = "branch = %q, want %q"
+	flagGitCommonDir = "--git-common-dir"
 )
 
 // mockRunner implements Runner with configurable closures for testing.
@@ -422,7 +423,7 @@ func TestHooksDirError(t *testing.T) {
 func TestHooksDirRelativePath(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == "--git-common-dir" {
+			if len(args) >= 2 && args[1] == flagGitCommonDir {
 				return ".git", nil
 			}
 			if len(args) >= 2 && args[1] == "--show-toplevel" {
@@ -446,7 +447,7 @@ func TestHooksDirRelativePath(t *testing.T) {
 func TestHooksDirAbsolutePath(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == "--git-common-dir" {
+			if len(args) >= 2 && args[1] == flagGitCommonDir {
 				return "/repo/.git", nil
 			}
 			return "", errors.New("unexpected command")
@@ -476,6 +477,49 @@ func TestRepoRootError(t *testing.T) {
 		t.Fatal("expected error from RepoRoot")
 	}
 	assertContains(t, err, errNotAGitRepo)
+}
+
+func TestHooksDirRelativePathRepoRootError(t *testing.T) {
+	callCount := 0
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			callCount++
+			if len(args) >= 2 && args[1] == flagGitCommonDir {
+				return ".git", nil // relative path
+			}
+			// RepoRoot call fails
+			return "", errors.New(errNotARepo)
+		},
+	}
+
+	_, err := HooksDir(r)
+	if err == nil {
+		t.Fatal("expected error from HooksDir when RepoRoot fails")
+	}
+	assertContains(t, err, errNotAGitRepo)
+}
+
+func TestListWorktreesBareEntry(t *testing.T) {
+	output := "worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /repo/.git/worktrees/bare\nHEAD def456\nbare\n"
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			return output, nil
+		},
+	}
+
+	entries, err := ListWorktrees(r)
+	if err != nil {
+		t.Fatalf("ListWorktrees: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(entries))
+	}
+	if !entries[1].Bare {
+		t.Error("expected second entry to be bare")
+	}
+	if entries[1].Branch != "" {
+		t.Errorf("expected empty branch for bare entry, got %q", entries[1].Branch)
+	}
 }
 
 func TestRepoNameError(t *testing.T) {

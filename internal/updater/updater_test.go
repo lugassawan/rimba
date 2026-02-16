@@ -2,6 +2,7 @@ package updater
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"fmt"
 	"net/http"
@@ -371,6 +372,64 @@ func TestCheckNetworkError(t *testing.T) {
 	_, err := u.Check()
 	if err == nil {
 		t.Fatal("expected error for network failure")
+	}
+}
+
+func TestCheckRequestError(t *testing.T) {
+	u := &Updater{
+		CurrentVersion: testVersion,
+		GOOS:           testOS,
+		GOARCH:         testArch,
+		Client:         http.DefaultClient,
+		APIEndpoint:    "\x7f://invalid", // control char causes NewRequest to fail
+	}
+
+	_, err := u.Check()
+	if err == nil {
+		t.Fatal("expected error for invalid URL")
+	}
+	if !strings.Contains(err.Error(), "creating request") {
+		t.Errorf("error = %q, want 'creating request'", err.Error())
+	}
+}
+
+func TestDownloadRequestError(t *testing.T) {
+	u := &Updater{
+		CurrentVersion: testVersion,
+		GOOS:           testOS,
+		GOARCH:         testArch,
+		Client:         http.DefaultClient,
+	}
+
+	_, err := u.Download("\x7f://invalid/archive.tar.gz")
+	if err == nil {
+		t.Fatal("expected error for invalid download URL")
+	}
+	if !strings.Contains(err.Error(), "creating download request") {
+		t.Errorf("error = %q, want 'creating download request'", err.Error())
+	}
+}
+
+func TestDownloadCorruptTarArchive(t *testing.T) {
+	// Create valid gzip wrapping invalid tar data
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	_, _ = gz.Write([]byte("this is not valid tar data"))
+	_ = gz.Close()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(contentTypeHdr, contentTypeOctet)
+		_, _ = w.Write(buf.Bytes())
+	}))
+	t.Cleanup(srv.Close)
+
+	u := newTestUpdater(srv)
+	_, err := u.Download(srv.URL + "/corrupt.tar.gz")
+	if err == nil {
+		t.Fatal("expected error for corrupt tar archive")
+	}
+	if !strings.Contains(err.Error(), "not found in archive") && !strings.Contains(err.Error(), "reading archive") {
+		t.Errorf("error = %q, want archive-related error", err.Error())
 	}
 }
 
