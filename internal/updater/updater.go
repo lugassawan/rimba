@@ -2,6 +2,7 @@ package updater
 
 import (
 	"archive/tar"
+	"bufio"
 	"compress/gzip"
 	"encoding/json"
 	"errors"
@@ -9,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -19,6 +19,7 @@ const (
 	defaultAPIEndpoint = "https://api.github.com"
 	repoPath           = "/repos/lugassawan/rimba/releases/latest"
 	binaryName         = "rimba"
+	localBinSubdir     = ".local"
 )
 
 // HTTPClient abstracts HTTP requests for testability.
@@ -198,8 +199,8 @@ func writeBinary(dst string, r io.Reader) (_ string, retErr error) {
 	return dst, nil
 }
 
-// Replace swaps the current binary with a new one. It first attempts an atomic
-// rename, falling back to a copy for cross-filesystem moves.
+// Replace atomically swaps the current binary with a new one via
+// temp-file-then-rename in the destination directory.
 func Replace(currentBinary, newBinary string) error {
 	// Resolve symlinks to get the real path
 	resolved, err := filepath.EvalSymlinks(currentBinary)
@@ -213,10 +214,44 @@ func Replace(currentBinary, newBinary string) error {
 		return fmt.Errorf("stat current binary: %w", err)
 	}
 
-	// Try atomic rename first
-	if err := os.Rename(newBinary, resolved); err != nil {
-		// Fallback: copy for cross-filesystem moves
-		return copyFile(newBinary, resolved, info.Mode())
+	// Create temp file in the same directory as the destination.
+	// Same filesystem guarantees os.Rename will succeed.
+	dir := filepath.Dir(resolved)
+	tmp, err := os.CreateTemp(dir, ".rimba-update-*")
+	if err != nil {
+		return fmt.Errorf("creating temp file: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer func() {
+		// Clean up temp file on any error (no-op if rename succeeded)
+		_ = os.Remove(tmpPath)
+	}()
+
+	// Copy new binary content into the temp file
+	src, err := os.Open(filepath.Clean(newBinary))
+	if err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("opening new binary: %w", err)
+	}
+	if _, err := io.Copy(tmp, src); err != nil {
+		_ = src.Close()
+		_ = tmp.Close()
+		return fmt.Errorf("copying binary: %w", err)
+	}
+	_ = src.Close()
+
+	// Set permissions from original binary
+	if err := tmp.Chmod(info.Mode().Perm()); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("setting permissions: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("closing temp file: %w", err)
+	}
+
+	// Atomic rename: new inode replaces old one
+	if err := os.Rename(tmpPath, resolved); err != nil {
+		return fmt.Errorf("replacing binary: %w", err)
 	}
 
 	return nil
@@ -232,59 +267,63 @@ func IsPermissionError(err error) bool {
 	return errors.Is(err, os.ErrPermission)
 }
 
-// ReplaceElevated replaces the current binary using sudo cp and sudo chmod.
-// Stdin, stdout, and stderr are connected to the terminal so sudo can prompt
-// for a password.
-func ReplaceElevated(currentBinary, newBinary string) error {
-	resolved, err := filepath.EvalSymlinks(currentBinary)
+// UserInstallDir returns ~/.local/bin as the user-writable install directory.
+func UserInstallDir() (string, error) {
+	home, err := os.UserHomeDir()
 	if err != nil {
-		return fmt.Errorf("resolving symlinks: %w", err)
+		return "", fmt.Errorf("getting home directory: %w", err)
 	}
-
-	info, err := os.Stat(resolved)
-	if err != nil {
-		return fmt.Errorf("stat current binary: %w", err)
-	}
-
-	cpCmd := exec.Command("sudo", "cp", newBinary, resolved) //nolint:gosec // paths from os.Executable
-	cpCmd.Stdin = os.Stdin
-	cpCmd.Stdout = os.Stdout
-	cpCmd.Stderr = os.Stderr
-	if err := cpCmd.Run(); err != nil {
-		return fmt.Errorf("sudo cp: %w", err)
-	}
-
-	perm := fmt.Sprintf("%o", info.Mode().Perm())
-	chmodCmd := exec.Command("sudo", "chmod", perm, resolved) //nolint:gosec // perm from os.Stat
-	chmodCmd.Stdin = os.Stdin
-	chmodCmd.Stdout = os.Stdout
-	chmodCmd.Stderr = os.Stderr
-	if err := chmodCmd.Run(); err != nil {
-		return fmt.Errorf("sudo chmod: %w", err)
-	}
-
-	return nil
+	return filepath.Join(home, localBinSubdir, "bin"), nil
 }
 
-func copyFile(src, dst string, perm os.FileMode) (retErr error) {
-	in, err := os.Open(filepath.Clean(src))
+// EnsurePath adds dir to the user's shell PATH config if not already present.
+// Detects shell from $SHELL, appends export with guard comment, idempotent.
+func EnsurePath(dir string) error {
+	shell := filepath.Base(os.Getenv("SHELL"))
+	home, err := os.UserHomeDir()
 	if err != nil {
-		return fmt.Errorf("opening new binary: %w", err)
+		return fmt.Errorf("getting home directory: %w", err)
 	}
-	defer func() { _ = in.Close() }()
 
-	out, err := os.OpenFile(filepath.Clean(dst), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm)
-	if err != nil {
-		return fmt.Errorf("opening destination: %w", err)
+	var rcFile string
+	switch shell {
+	case "zsh":
+		rcFile = filepath.Join(home, ".zshrc")
+	case "bash":
+		rcFile = filepath.Join(home, ".bashrc")
+	default:
+		// Unsupported shell — skip silently
+		return nil
 	}
-	defer func() {
-		if cerr := out.Close(); retErr == nil {
-			retErr = cerr
+
+	exportLine := fmt.Sprintf(`export PATH="%s:$PATH"`, dir)
+	guard := "# Added by rimba"
+
+	// Check if the export line already exists
+	if f, err := os.Open(rcFile); err == nil {
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			if strings.Contains(scanner.Text(), dir) && strings.Contains(scanner.Text(), "PATH") {
+				_ = f.Close()
+				return nil // already configured
+			}
 		}
-	}()
+		scanErr := scanner.Err()
+		_ = f.Close()
+		if scanErr != nil {
+			return fmt.Errorf("reading %s: %w", rcFile, scanErr)
+		}
+	}
 
-	if _, err := io.Copy(out, in); err != nil {
-		return fmt.Errorf("copying binary: %w", err)
+	// Append export line with guard comment
+	f, err := os.OpenFile(rcFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644) //nolint:gosec // user shell config
+	if err != nil {
+		return fmt.Errorf("opening %s: %w", rcFile, err)
+	}
+	defer func() { _ = f.Close() }()
+
+	if _, err := fmt.Fprintf(f, "\n%s\n%s\n", guard, exportLine); err != nil {
+		return fmt.Errorf("writing to %s: %w", rcFile, err)
 	}
 
 	return nil
