@@ -21,6 +21,7 @@
 - [Commands](#commands)
 - [Configuration](#configuration)
 - [Environment Variables](#environment-variables)
+- [Development](#development)
 - [License](#license)
 
 ## Features
@@ -395,6 +396,43 @@ work_dir = 'api'
 |----------|-------------|
 | `RIMBA_QUIET` | Suppress pre-execution hints (set to any value, e.g. `RIMBA_QUIET=1`) |
 | `NO_COLOR` | Disable colored output globally (per [no-color.org](https://no-color.org)) |
+
+## Development
+
+### Setup
+
+```sh
+git clone https://github.com/lugassawan/rimba.git
+cd rimba
+make hooks  # Activate git hooks
+make build  # Build the binary
+```
+
+### Git Hooks
+
+Running `make hooks` configures Git to use the hooks in `.githooks/`:
+
+- **pre-commit** — formats staged Go files with `gofmt` and runs `make lint`
+- **commit-msg** — enforces the `[type] Description` commit message format
+
+### Commit Convention
+
+All commit messages must follow the format `[type] Description`, where type is one of:
+
+| Type | Purpose |
+|------|---------|
+| `feat` | New feature |
+| `fix` | Bug fix |
+| `refactor` | Code restructuring (no behavior change) |
+| `test` | Adding or updating tests |
+| `ci` | CI/CD changes |
+| `docs` | Documentation |
+| `perf` | Performance improvement |
+| `chore` | Maintenance tasks |
+| `polish` | Minor improvements and cleanups |
+| `breaking` | Breaking changes |
+
+This convention is enforced locally by git hooks and in CI by PR title validation.
 
 ## License
 

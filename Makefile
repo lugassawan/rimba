@@ -6,7 +6,7 @@ LDFLAGS  = -s -w \
 	-X github.com/lugassawan/rimba/cmd.commit=$(COMMIT) \
 	-X github.com/lugassawan/rimba/cmd.date=$(DATE)
 
-.PHONY: build test test-short test-e2e test-coverage clean lint bench
+.PHONY: build test test-short test-e2e test-coverage clean lint bench hooks
 
 build:
 	go build -ldflags '$(LDFLAGS)' -o bin/rimba .
@@ -32,3 +32,7 @@ lint:
 
 bench:
 	go test -bench=. -benchmem -run=^$$ ./...
+
+hooks:
+	git config core.hooksPath .githooks
+	@echo "Git hooks activated from .githooks/"
