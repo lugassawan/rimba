@@ -152,7 +152,7 @@ func TestManagerInstallHashMismatch(t *testing.T) {
 	newWT := t.TempDir()
 
 	writeFile(t, existingWT, LockfilePnpm, "old content")
-	writeFile(t, newWT, LockfilePnpm, "new content")
+	writeFile(t, newWT, LockfilePnpm, valNewContent)
 
 	if err := os.MkdirAll(filepath.Join(existingWT, DirNodeModules), 0755); err != nil {
 		t.Fatal(err)

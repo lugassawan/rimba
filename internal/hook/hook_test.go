@@ -9,12 +9,13 @@ import (
 )
 
 const (
-	branchMain     = "main"
-	branchMaster   = "master"
-	userHook       = "echo 'user hook running'\n"
-	fatalInstall   = "Install: %v"
-	fatalReadHook  = "read hook: %v"
-	fatalWriteHook = "write hook: %v"
+	branchMain             = "main"
+	branchMaster           = "master"
+	userHook               = "echo 'user hook running'\n"
+	fatalInstall           = "Install: %v"
+	fatalReadHook          = "read hook: %v"
+	fatalWriteHook         = "write hook: %v"
+	errBeginMarkerRemoved  = "BEGIN marker should be removed"
 )
 
 func TestHookBlock(t *testing.T) {
@@ -249,7 +250,7 @@ func TestRemoveBlock(t *testing.T) {
 
 	result := removeBlock(content)
 	if strings.Contains(result, BeginMarker) {
-		t.Error("BEGIN marker should be removed")
+		t.Error(errBeginMarkerRemoved)
 	}
 	if strings.Contains(result, EndMarker) {
 		t.Error("END marker should be removed")
@@ -393,7 +394,7 @@ func TestRemoveBlockBeginOnlyAtStart(t *testing.T) {
 	content := BeginMarker + "\nrimba hook content\n" + EndMarker + "\n"
 	result := removeBlock(content)
 	if strings.Contains(result, BeginMarker) {
-		t.Error("BEGIN marker should be removed")
+		t.Error(errBeginMarkerRemoved)
 	}
 	if strings.Contains(result, EndMarker) {
 		t.Error("END marker should be removed")
@@ -412,7 +413,7 @@ func TestRemoveBlockContentAfterEnd(t *testing.T) {
 
 	result := removeBlock(content)
 	if strings.Contains(result, BeginMarker) {
-		t.Error("BEGIN marker should be removed")
+		t.Error(errBeginMarkerRemoved)
 	}
 	if !strings.Contains(result, afterContent) {
 		t.Errorf("content after END should be preserved, got %q", result)

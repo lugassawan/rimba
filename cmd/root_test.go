@@ -61,7 +61,7 @@ func TestPersistentPreRunERepoRootError(t *testing.T) {
 	defer restore()
 
 	preRunE := rootCmd.PersistentPreRunE
-	cmd := &cobra.Command{Use: "test-cmd"}
+	cmd := &cobra.Command{Use: useTestCmd}
 
 	err := preRunE(cmd, nil)
 	if err == nil {
@@ -77,7 +77,7 @@ func TestPersistentPreRunEConfigLoadError(t *testing.T) {
 	defer restore()
 
 	preRunE := rootCmd.PersistentPreRunE
-	cmd := &cobra.Command{Use: "test-cmd"}
+	cmd := &cobra.Command{Use: useTestCmd}
 	cmd.SetContext(context.Background())
 
 	err := preRunE(cmd, nil)
@@ -101,7 +101,7 @@ func TestPersistentPreRunESuccess(t *testing.T) {
 	defer restore()
 
 	preRunE := rootCmd.PersistentPreRunE
-	cmd := &cobra.Command{Use: "test-cmd"}
+	cmd := &cobra.Command{Use: useTestCmd}
 	cmd.SetContext(context.Background())
 
 	if err := preRunE(cmd, nil); err != nil {

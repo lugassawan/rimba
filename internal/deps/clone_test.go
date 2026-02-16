@@ -8,9 +8,12 @@ import (
 )
 
 const (
-	testFileTxt = "file.txt"
-	testPkgJSON = "pkg.json"
-	testDataTxt = "data.txt"
+	testFileTxt    = "file.txt"
+	testPkgJSON    = "pkg.json"
+	testDataTxt    = "data.txt"
+	testStaleTxt   = "stale.txt"
+	testDepZip     = "dep.zip"
+	valNewContent  = "new content"
 )
 
 func TestCloneDirBasic(t *testing.T) {
@@ -49,7 +52,7 @@ func TestCloneDirOverwritesExisting(t *testing.T) {
 	src := t.TempDir()
 	dst := filepath.Join(t.TempDir(), "dst")
 
-	writeFile(t, src, testFileTxt, "new content")
+	writeFile(t, src, testFileTxt, valNewContent)
 
 	if err := os.MkdirAll(dst, 0755); err != nil {
 		t.Fatal(err)
@@ -60,7 +63,7 @@ func TestCloneDirOverwritesExisting(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assertFileContent(t, filepath.Join(dst, testFileTxt), "new content")
+	assertFileContent(t, filepath.Join(dst, testFileTxt), valNewContent)
 
 	if _, err := os.Stat(filepath.Join(dst, "old.txt")); !os.IsNotExist(err) {
 		t.Error("expected old.txt to be removed")
@@ -75,7 +78,7 @@ func TestCloneDirOverwriteExisting(t *testing.T) {
 	if err := os.MkdirAll(dst, 0755); err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, dst, "stale.txt", "stale data")
+	writeFile(t, dst, testStaleTxt, "stale data")
 
 	// Create src with new content
 	writeFile(t, src, "fresh.txt", "fresh data")
@@ -88,7 +91,7 @@ func TestCloneDirOverwriteExisting(t *testing.T) {
 	assertFileContent(t, filepath.Join(dst, "fresh.txt"), "fresh data")
 
 	// Old content should be gone
-	if _, err := os.Stat(filepath.Join(dst, "stale.txt")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(dst, testStaleTxt)); !os.IsNotExist(err) {
 		t.Error("expected stale.txt to be removed after overwrite")
 	}
 }
@@ -426,7 +429,7 @@ func TestCloneExtraDirsCloneError(t *testing.T) {
 	if err := os.MkdirAll(extraSrc, 0755); err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, extraSrc, "dep.zip", "cached")
+	writeFile(t, extraSrc, testDepZip, "cached")
 
 	// Block the destination parent with a regular file so CloneDir MkdirAll fails
 	blockFile := filepath.Join(dstWT, ".yarn")
@@ -450,7 +453,7 @@ func TestCloneDirRemoveAllError(t *testing.T) {
 	if err := os.MkdirAll(dst, 0755); err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, dst, "stale.txt", "old data")
+	writeFile(t, dst, testStaleTxt, "old data")
 
 	// Make parent read-only so RemoveAll(dst) fails
 	if err := os.Chmod(parent, 0555); err != nil {
@@ -479,7 +482,7 @@ func TestCloneRecursiveWithExtraDirs(t *testing.T) {
 	if err := os.MkdirAll(yarnCache, 0755); err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, yarnCache, "dep.zip", "cached")
+	writeFile(t, yarnCache, testDepZip, "cached")
 
 	// Create nested app-a/node_modules
 	if err := os.MkdirAll(filepath.Join(srcWT, "app-a", DirNodeModules), 0755); err != nil {
@@ -509,5 +512,5 @@ func TestCloneRecursiveWithExtraDirs(t *testing.T) {
 	assertFileContent(t, filepath.Join(dstWT, "app-a", DirNodeModules, "app.json"), "app-a-deps")
 
 	// Verify extra dir (.yarn/cache) was cloned
-	assertFileContent(t, filepath.Join(dstWT, ".yarn", "cache", "dep.zip"), "cached")
+	assertFileContent(t, filepath.Join(dstWT, ".yarn", "cache", testDepZip), "cached")
 }

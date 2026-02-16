@@ -24,10 +24,13 @@ const (
 	contentTypeOctet = "application/octet-stream"
 	errWantFmt       = "error = %q, want %q"
 
-	// New constants for deduplication
+	// Shared format and value constants
 	contentFmt   = "content = %q, want %q"
 	fatalReplace = "Replace: %v"
 	valNewBinary = "new binary"
+	valNewContent = "new content"
+	testRcZshrc  = ".zshrc"
+	testShellZsh = "/bin/zsh"
 )
 
 // newTestUpdater creates an Updater wired to the given test server.
@@ -753,14 +756,14 @@ func TestUserInstallDir(t *testing.T) {
 
 func TestEnsurePathCreatesEntry(t *testing.T) {
 	tmpDir := t.TempDir()
-	rcFile := filepath.Join(tmpDir, ".zshrc")
+	rcFile := filepath.Join(tmpDir, testRcZshrc)
 
 	// Create an empty rc file
 	if err := os.WriteFile(rcFile, []byte(""), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	t.Setenv("SHELL", "/bin/zsh")
+	t.Setenv("SHELL", testShellZsh)
 	t.Setenv("HOME", tmpDir)
 
 	dir := filepath.Join(tmpDir, localBinSubdir, "bin")
@@ -783,7 +786,7 @@ func TestEnsurePathCreatesEntry(t *testing.T) {
 
 func TestEnsurePathIdempotent(t *testing.T) {
 	tmpDir := t.TempDir()
-	rcFile := filepath.Join(tmpDir, ".zshrc")
+	rcFile := filepath.Join(tmpDir, testRcZshrc)
 
 	dir := filepath.Join(tmpDir, localBinSubdir, "bin")
 	existing := fmt.Sprintf("export PATH=\"%s:$PATH\"\n", dir)
@@ -791,7 +794,7 @@ func TestEnsurePathIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("SHELL", "/bin/zsh")
+	t.Setenv("SHELL", testShellZsh)
 	t.Setenv("HOME", tmpDir)
 
 	if err := EnsurePath(dir); err != nil {
@@ -837,7 +840,7 @@ func TestEnsurePathBashShell(t *testing.T) {
 func TestEnsurePathNoRcFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	t.Setenv("SHELL", "/bin/zsh")
+	t.Setenv("SHELL", testShellZsh)
 	t.Setenv("HOME", tmpDir)
 
 	// No .zshrc file exists — EnsurePath should create it
@@ -846,7 +849,7 @@ func TestEnsurePathNoRcFile(t *testing.T) {
 		t.Fatalf("EnsurePath without rc file: %v", err)
 	}
 
-	rcFile := filepath.Join(tmpDir, ".zshrc")
+	rcFile := filepath.Join(tmpDir, testRcZshrc)
 	content, err := os.ReadFile(rcFile)
 	if err != nil {
 		t.Fatalf("reading .zshrc: %v", err)
@@ -859,11 +862,11 @@ func TestEnsurePathNoRcFile(t *testing.T) {
 func TestEnsurePathOpenFileError(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	t.Setenv("SHELL", "/bin/zsh")
+	t.Setenv("SHELL", testShellZsh)
 	t.Setenv("HOME", tmpDir)
 
 	// Create .zshrc as a directory to cause OpenFile to fail
-	rcDir := filepath.Join(tmpDir, ".zshrc")
+	rcDir := filepath.Join(tmpDir, testRcZshrc)
 	if err := os.MkdirAll(rcDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -947,7 +950,7 @@ func TestReplaceRenameError(t *testing.T) {
 	// For now, this test just verifies Replace handles a valid case.
 	// The Rename error path is hard to trigger without cross-device setups.
 	newPath := filepath.Join(tmpDir, "new")
-	if err := os.WriteFile(newPath, []byte("new content"), 0755); err != nil {
+	if err := os.WriteFile(newPath, []byte(valNewContent), 0755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -959,8 +962,8 @@ func TestReplaceRenameError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(content) != "new content" {
-		t.Errorf(contentFmt, content, "new content")
+	if string(content) != valNewContent {
+		t.Errorf(contentFmt, content, valNewContent)
 	}
 }
 
