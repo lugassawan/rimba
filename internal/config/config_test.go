@@ -156,6 +156,22 @@ func TestSaveWriteError(t *testing.T) {
 	}
 }
 
+func TestSaveWriteErrorReadOnlyDir(t *testing.T) {
+	dir := t.TempDir()
+
+	// Make directory read-only
+	if err := os.Chmod(dir, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0755) })
+
+	cfg := config.DefaultConfig("test", "main")
+	err := config.Save(filepath.Join(dir, config.FileName), cfg)
+	if err == nil {
+		t.Fatal("expected error when writing to read-only directory")
+	}
+}
+
 func TestIsAutoDetectDeps(t *testing.T) {
 	boolPtr := func(b bool) *bool { return &b }
 
