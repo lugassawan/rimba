@@ -357,3 +357,75 @@ func TestCopyEntriesDirCopyError(t *testing.T) {
 		t.Errorf(errContainsFmt, err, "copy "+dotConfig+":")
 	}
 }
+
+func TestCopyEntriesReadDirError(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+
+	// Create a source directory with a file, then make it unreadable
+	srcDir := filepath.Join(src, dotConfig)
+	_ = os.Mkdir(srcDir, 0755)
+	_ = os.WriteFile(filepath.Join(srcDir, appTOML), []byte("data"), 0644)
+
+	// Make the directory unreadable (Stat succeeds but ReadDir fails)
+	if err := os.Chmod(srcDir, 0000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(srcDir, 0755) })
+
+	_, err := fileutil.CopyEntries(src, dst, []string{dotConfig})
+	if err == nil {
+		t.Fatal("expected error when source directory is unreadable")
+	}
+	if !strings.Contains(err.Error(), "copy "+dotConfig+":") {
+		t.Errorf(errContainsFmt, err, "copy "+dotConfig+":")
+	}
+}
+
+func TestCopyEntriesCopyFileError(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+
+	// Create a source file
+	_ = os.WriteFile(filepath.Join(src, ".env"), []byte(testSecret), 0644)
+
+	// Make the destination directory read-only so OpenFile (write) fails
+	if err := os.Chmod(dst, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dst, 0755) })
+
+	_, err := fileutil.CopyEntries(src, dst, []string{".env"})
+	if err == nil {
+		t.Fatal("expected error when destination is read-only")
+	}
+	if !strings.Contains(err.Error(), errPrefixCopyEnv) {
+		t.Errorf(errContainsFmt, err, errPrefixCopyEnv)
+	}
+}
+
+func TestCopyEntriesRecursiveCopyDirError(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+
+	// Create a nested directory structure: .config/sub/deep.toml
+	subDir := filepath.Join(src, dotConfig, "sub")
+	_ = os.MkdirAll(subDir, 0755)
+	_ = os.WriteFile(filepath.Join(subDir, "deep.toml"), []byte("deep"), 0644)
+
+	// Create .config in dst, then make it read-only so nested MkdirAll fails
+	dstConfig := filepath.Join(dst, dotConfig)
+	_ = os.Mkdir(dstConfig, 0755)
+	if err := os.Chmod(dstConfig, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dstConfig, 0755) })
+
+	_, err := fileutil.CopyEntries(src, dst, []string{dotConfig})
+	if err == nil {
+		t.Fatal("expected error when nested directory copy fails")
+	}
+	if !strings.Contains(err.Error(), "copy "+dotConfig+":") {
+		t.Errorf(errContainsFmt, err, "copy "+dotConfig+":")
+	}
+}
