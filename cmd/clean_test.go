@@ -33,9 +33,9 @@ func TestFindMergedCandidatesFound(t *testing.T) {
 		"HEAD abc123",
 		"branch refs/heads/main",
 		"",
-		"worktree " + pathWtDone,
+		wtDone,
 		"HEAD def456",
-		"branch refs/heads/" + branchDone,
+		branchRefPrefix + branchDone,
 		"",
 		"worktree /wt/feature-active",
 		"HEAD ghi789",
@@ -44,9 +44,35 @@ func TestFindMergedCandidatesFound(t *testing.T) {
 	}, "\n")
 
 	r := mergedWorktreeRunner("  "+branchDone+"\n  bugfix/old", worktreeOut)
-	candidates, err := findMergedCandidates(r, branchMain)
+	candidates, err := findMergedCandidates(r, branchMain, branchMain)
 	if err != nil {
-		t.Fatalf("findMergedCandidates: %v", err)
+		t.Fatalf(fatalFindMerged, err)
+	}
+	if len(candidates) != 1 {
+		t.Fatalf("got %d candidates, want 1", len(candidates))
+	}
+	if candidates[0].branch != branchDone {
+		t.Errorf("branch = %q, want %q", candidates[0].branch, branchDone)
+	}
+}
+
+func TestFindMergedCandidatesRemoteRef(t *testing.T) {
+	worktreeOut := strings.Join([]string{
+		wtRepo,
+		headABC123,
+		branchRefMain,
+		"",
+		wtDone,
+		headDEF456,
+		branchRefPrefix + branchDone,
+		"",
+	}, "\n")
+
+	// mergeRef differs from mainBranch — simulates post-fetch scenario
+	r := mergedWorktreeRunner("  "+branchDone+"\n  main", worktreeOut)
+	candidates, err := findMergedCandidates(r, "origin/"+branchMain, branchMain)
+	if err != nil {
+		t.Fatalf(fatalFindMerged, err)
 	}
 	if len(candidates) != 1 {
 		t.Fatalf("got %d candidates, want 1", len(candidates))
@@ -58,9 +84,9 @@ func TestFindMergedCandidatesFound(t *testing.T) {
 
 func TestFindMergedCandidatesNone(t *testing.T) {
 	r := mergedWorktreeRunner("", wtRepo + headMainBlock)
-	candidates, err := findMergedCandidates(r, branchMain)
+	candidates, err := findMergedCandidates(r, branchMain, branchMain)
 	if err != nil {
-		t.Fatalf("findMergedCandidates: %v", err)
+		t.Fatalf(fatalFindMerged, err)
 	}
 	if len(candidates) != 0 {
 		t.Errorf("expected 0 candidates, got %d", len(candidates))
@@ -78,7 +104,7 @@ func TestFindMergedCandidatesError(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	_, err := findMergedCandidates(r, branchMain)
+	_, err := findMergedCandidates(r, branchMain, branchMain)
 	if err == nil {
 		t.Fatal(errExpected)
 	}
@@ -98,33 +124,9 @@ func TestFindMergedCandidatesWorktreeError(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	_, err := findMergedCandidates(r, branchMain)
+	_, err := findMergedCandidates(r, branchMain, branchMain)
 	if err == nil {
 		t.Fatal("expected error from ListWorktrees failure")
-	}
-}
-
-func fetchFailRunner(topLevel, worktreeOut string) *mockRunner {
-	return &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return topLevel, nil
-			}
-			if args[0] == cmdSymbolicRef {
-				return refsRemotesOriginMain, nil
-			}
-			if len(args) >= 1 && args[0] == "fetch" {
-				return "", errors.New("no remote")
-			}
-			if len(args) >= 1 && args[0] == cmdBranch {
-				return "", nil
-			}
-			if len(args) >= 1 && args[0] == cmdWorktreeTest {
-				return worktreeOut, nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
 	}
 }
 
@@ -133,7 +135,29 @@ func TestCleanMergedFetchFails(t *testing.T) {
 	cmd, buf := newCleanMergedCmd()
 	_ = cmd.Flags().Set(flagForce, "true")
 
-	r := fetchFailRunner(t.TempDir(), worktreeOut)
+	var mergedRef string
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return t.TempDir(), nil
+			}
+			if args[0] == cmdSymbolicRef {
+				return refsRemotesOriginMain, nil
+			}
+			if args[0] == cmdFetch {
+				return "", errors.New("no remote")
+			}
+			if args[0] == cmdBranch {
+				mergedRef = args[len(args)-1]
+				return "", nil
+			}
+			if args[0] == cmdWorktreeTest {
+				return worktreeOut, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
 
 	err := cleanMerged(cmd, r)
 	if err != nil {
@@ -142,6 +166,52 @@ func TestCleanMergedFetchFails(t *testing.T) {
 	out := buf.String()
 	if !strings.Contains(out, "Warning: fetch failed") {
 		t.Errorf("expected fetch warning, got %q", out)
+	}
+	if mergedRef != branchMain {
+		t.Errorf("merged ref = %q, want %q (local fallback)", mergedRef, branchMain)
+	}
+}
+
+func TestCleanMergedFetchSucceeds(t *testing.T) {
+	worktreeOut := cleanMergedWorktreeOut()
+	cmd, buf := newCleanMergedCmd()
+	_ = cmd.Flags().Set(flagForce, "true")
+
+	var mergedRef string
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return t.TempDir(), nil
+			}
+			if args[0] == cmdSymbolicRef {
+				return refsRemotesOriginMain, nil
+			}
+			if args[0] == cmdFetch {
+				return "", nil // fetch succeeds
+			}
+			if args[0] == cmdBranch {
+				mergedRef = args[len(args)-1]
+				return "", nil
+			}
+			if args[0] == cmdWorktreeTest {
+				return worktreeOut, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	err := cleanMerged(cmd, r)
+	if err != nil {
+		t.Fatalf(fatalCleanMerged, err)
+	}
+	out := buf.String()
+	if strings.Contains(out, "Warning: fetch failed") {
+		t.Errorf("unexpected fetch warning in output: %q", out)
+	}
+	wantRef := "origin/" + branchMain
+	if mergedRef != wantRef {
+		t.Errorf("merged ref = %q, want %q", mergedRef, wantRef)
 	}
 }
 
@@ -343,7 +413,7 @@ func cleanMergedTestRunner(t *testing.T, mergedOut, worktreeOut string) *mockRun
 			if len(args) >= 1 && args[0] == cmdWorktreeTest {
 				return worktreeOut, nil
 			}
-			if len(args) >= 1 && args[0] == "fetch" {
+			if len(args) >= 1 && args[0] == cmdFetch {
 				return "", errors.New("no remote")
 			}
 			return "", nil
@@ -366,9 +436,9 @@ func cleanMergedWorktreeOut() string {
 		"HEAD abc123",
 		"branch refs/heads/main",
 		"",
-		"worktree " + pathWtDone,
+		wtDone,
 		"HEAD def456",
-		"branch refs/heads/" + branchDone,
+		branchRefPrefix + branchDone,
 		"",
 	}, "\n")
 }

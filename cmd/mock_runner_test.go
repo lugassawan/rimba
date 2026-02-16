@@ -34,11 +34,14 @@ const (
 	branchBugfixTypo      = "bugfix/typo"
 	msgRemovedWorktree    = "Removed worktree"
 
+	branchRefPrefix           = "branch refs/heads/"
+	wtDone                    = "worktree " + pathWtDone
 	wtFeatureLogin            = "worktree /wt/feature-login"
 	pathWorktreesFeatureLogin = "/worktrees/feature-login"
 	cmdRevList                = "rev-list"
 
 	// Shared git command and value constants
+	cmdFetch             = "fetch"
 	cmdRemove            = "remove"
 	cmdSymbolicRef       = "symbolic-ref"
 	cmdStatus            = "status"
@@ -53,7 +56,8 @@ const (
 	useTestCmd       = "test-cmd"
 
 	// Shared fatalf format strings
-	fatalMergeRunE = "mergeCmd.RunE: %v"
+	fatalFindMerged  = "findMergedCandidates: %v"
+	fatalMergeRunE   = "mergeCmd.RunE: %v"
 	fatalCleanPrune  = "cleanPrune: %v"
 	fatalCleanMerged = "cleanMerged: %v"
 	fatalListRunE    = "listCmd.RunE: %v"

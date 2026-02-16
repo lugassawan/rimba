@@ -15,7 +15,7 @@ func TestCompleteWorktreeTasks(t *testing.T) {
 		"",
 		wtFeatureLogin,
 		"HEAD def456",
-		"branch refs/heads/" + branchFeature,
+		branchRefPrefix + branchFeature,
 		"",
 		"worktree /wt/bugfix-typo",
 		"HEAD ghi789",
@@ -114,7 +114,7 @@ func TestCompleteWorktreeTasksSkipsBare(t *testing.T) {
 		"",
 		wtFeatureLogin,
 		"HEAD def456",
-		"branch refs/heads/" + branchFeature,
+		branchRefPrefix + branchFeature,
 		"",
 	}, "\n")
 

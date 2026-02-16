@@ -80,7 +80,7 @@ func TestListWorktreeInfos(t *testing.T) {
 		"",
 		"worktree /repo-worktrees/feature-login",
 		"HEAD def456",
-		"branch refs/heads/" + branchFeature,
+		branchRefPrefix + branchFeature,
 		"",
 	}, "\n")
 
@@ -122,7 +122,7 @@ func TestFindWorktree(t *testing.T) {
 		"",
 		"worktree /repo-worktrees/feature-login",
 		"HEAD def456",
-		"branch refs/heads/" + branchFeature,
+		branchRefPrefix + branchFeature,
 		"",
 	}, "\n")
 
