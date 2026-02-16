@@ -46,8 +46,10 @@ const (
 	aheadBehindZero      = "0\t0"
 	repoPath             = "/repo"
 
+	taskLogin = "login"
+
 	// Shared fatalf format strings
-	fatalMergeRunE   = "mergeCmd.RunE: %v"
+	fatalMergeRunE = "mergeCmd.RunE: %v"
 	fatalCleanPrune  = "cleanPrune: %v"
 	fatalCleanMerged = "cleanMerged: %v"
 	fatalListRunE    = "listCmd.RunE: %v"
