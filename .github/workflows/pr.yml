@@ -1,0 +1,33 @@
+name: PR Validation
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+    branches: [main]
+
+jobs:
+  validate-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          # Keep in sync with .githooks/commit-msg
+          PATTERN='^\[(feat|fix|refactor|test|ci|docs|perf|chore|polish|breaking)\] .+'
+          if ! echo "$PR_TITLE" | grep -qE "$PATTERN"; then
+            echo "::error::PR title must match format: [type] Description (e.g. [feat] Add new feature)"
+            echo ""
+            echo "Allowed types: feat, fix, refactor, test, ci, docs, perf, chore, polish, breaking"
+            exit 1
+          fi
+
+      - name: Validate PR description
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          TRIMMED=$(echo "$PR_BODY" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          if [ -z "$TRIMMED" ]; then
+            echo "::error::PR description must not be empty"
+            exit 1
+          fi
