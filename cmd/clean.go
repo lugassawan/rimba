@@ -99,14 +99,17 @@ func cleanMerged(cmd *cobra.Command, r git.Runner) error {
 	defer s.Stop()
 
 	// Fetch latest (non-fatal)
+	mergeRef := mainBranch
 	s.Start("Fetching from origin...")
 	if err := git.Fetch(r, "origin"); err != nil {
 		s.Stop()
 		fmt.Fprintf(cmd.OutOrStdout(), "Warning: fetch failed (no remote?): continuing with local state\n")
+	} else {
+		mergeRef = "origin/" + mainBranch
 	}
 
 	s.Update("Analyzing branches...")
-	candidates, err := findMergedCandidates(r, mainBranch)
+	candidates, err := findMergedCandidates(r, mergeRef, mainBranch)
 	if err != nil {
 		return err
 	}
@@ -134,8 +137,8 @@ func cleanMerged(cmd *cobra.Command, r git.Runner) error {
 	return nil
 }
 
-func findMergedCandidates(r git.Runner, mainBranch string) ([]mergedCandidate, error) {
-	mergedList, err := git.MergedBranches(r, mainBranch)
+func findMergedCandidates(r git.Runner, mergeRef, mainBranch string) ([]mergedCandidate, error) {
+	mergedList, err := git.MergedBranches(r, mergeRef)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list merged branches: %w", err)
 	}
