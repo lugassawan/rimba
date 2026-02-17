@@ -149,14 +149,24 @@ TASK            TYPE     BRANCH              PATH              STATUS
 
 ### `rimba open <task> [command args...]`
 
-Open a worktree or run a command inside it. When called with just a task name, prints the worktree path. When given additional arguments, executes that command inside the worktree directory.
+Open a worktree or run a command inside it. When called with just a task name, prints the worktree path. When given additional arguments, executes that command inside the worktree directory. Supports configurable shortcuts via the `[open]` config section.
 
 ```sh
 rimba open my-task              # Print worktree path
 cd $(rimba open my-task)        # Navigate to worktree
-rimba open my-task code .       # Open in VS Code
-rimba open my-task claude       # Launch claude in worktree
+rimba open my-task --ide        # Run the 'ide' shortcut
+rimba open my-task --agent      # Run the 'agent' shortcut
+rimba open my-task -w test      # Run a named shortcut
+rimba open my-task npm start    # Run an inline command
 ```
+
+| Flag | Description |
+|------|-------------|
+| `--ide` | Run the `ide` shortcut from `[open]` config |
+| `--agent` | Run the `agent` shortcut from `[open]` config |
+| `-w`, `--with` | Run any named shortcut from `[open]` config |
+
+> **Note:** `--ide`, `--agent`, and `--with` are mutually exclusive with each other and with inline command arguments. Shortcuts are configured in the `[open]` section of `.rimba.toml` (see [Configuration](#configuration)).
 
 ### `rimba remove <task>`
 
@@ -350,6 +360,12 @@ copy_files = ['.env', '.env.local', '.envrc', '.tool-versions', '.vscode']
 # Post-create hooks (run in new worktree directory)
 post_create = ['./gradlew build']
 
+# Open shortcuts (used by `rimba open --ide`, `--agent`, `-w`)
+[open]
+ide = 'code .'
+agent = 'claude'
+test = 'npm test'
+
 # Dependency management (optional — auto-detect is on by default)
 [deps]
 auto_detect = true
@@ -373,6 +389,7 @@ work_dir = 'api'
 | `default_source` | Branch to create worktrees from | Default branch (e.g. `main`) |
 | `copy_files` | Files or directories to copy from repo root into new worktrees | `.env`, `.env.local`, `.envrc`, `.tool-versions` |
 | `post_create` | Shell commands to run in new worktrees after creation | (none) |
+| `open.<name>` | Named shortcut command for `rimba open --with <name>` | (none) |
 | `deps.auto_detect` | Auto-detect dependency modules from lockfiles | `true` |
 | `deps.modules[].dir` | Dependency directory to clone (e.g. `node_modules`) | — |
 | `deps.modules[].lockfile` | Lockfile used to match worktrees (e.g. `pnpm-lock.yaml`) | — |

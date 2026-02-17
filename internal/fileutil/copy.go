@@ -82,7 +82,7 @@ func copyFile(src, dst string) (retErr error) {
 		return err
 	}
 
-	out, err := os.OpenFile(filepath.Clean(dst), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode())
+	out, err := os.OpenFile(filepath.Clean(dst), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode()) //nolint:gosec // dst is derived from config copy_files, not user input
 	if err != nil {
 		return err
 	}

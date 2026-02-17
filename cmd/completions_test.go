@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"context"
 	"strings"
 	"testing"
 
+	"github.com/lugassawan/rimba/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -162,6 +164,86 @@ func assertContainsAll(t *testing.T, items []string, want ...string) {
 		if !found[w] {
 			t.Errorf("expected %q in completions %v", w, items)
 		}
+	}
+}
+
+func TestCompleteOpenShortcuts(t *testing.T) {
+	cfg := &config.Config{
+		WorktreeDir:   "../wt",
+		DefaultSource: "main",
+		Open: map[string]string{
+			"ide":   "code .",
+			"agent": "claude",
+			"test":  "npm test",
+		},
+	}
+
+	t.Run("returns all config keys", func(t *testing.T) {
+		cmd, _ := newTestCmd()
+		cmd.SetContext(config.WithConfig(context.Background(), cfg))
+		names := completeOpenShortcuts(cmd, "")
+		if len(names) != 3 {
+			t.Fatalf("expected 3 shortcuts, got %d: %v", len(names), names)
+		}
+		// Should be sorted
+		if names[0] != "agent" || names[1] != "ide" || names[2] != "test" {
+			t.Errorf("names = %v, want [agent ide test]", names)
+		}
+	})
+
+	t.Run("filters by prefix", func(t *testing.T) {
+		cmd, _ := newTestCmd()
+		cmd.SetContext(config.WithConfig(context.Background(), cfg))
+		names := completeOpenShortcuts(cmd, "i")
+		if len(names) != 1 {
+			t.Fatalf("expected 1 shortcut, got %d: %v", len(names), names)
+		}
+		if names[0] != "ide" {
+			t.Errorf("name = %q, want %q", names[0], "ide")
+		}
+	})
+
+	t.Run("nil config returns nil", func(t *testing.T) {
+		cmd, _ := newTestCmd()
+		cmd.SetContext(context.Background())
+		names := completeOpenShortcuts(cmd, "")
+		if names != nil {
+			t.Errorf("expected nil for no config, got %v", names)
+		}
+	})
+
+	t.Run("nil open section returns nil", func(t *testing.T) {
+		cfgNoOpen := &config.Config{WorktreeDir: "../wt", DefaultSource: "main"}
+		cmd, _ := newTestCmd()
+		cmd.SetContext(config.WithConfig(context.Background(), cfgNoOpen))
+		names := completeOpenShortcuts(cmd, "")
+		if names != nil {
+			t.Errorf("expected nil for nil Open, got %v", names)
+		}
+	})
+}
+
+func TestOpenWithFlagCompletion(t *testing.T) {
+	fn, ok := openCmd.GetFlagCompletionFunc(flagWith)
+	if !ok {
+		t.Fatal("no completion function registered for --with flag")
+	}
+
+	cfg := &config.Config{
+		WorktreeDir:   "../wt",
+		DefaultSource: "main",
+		Open:          map[string]string{"ide": "code .", "test": "npm test"},
+	}
+	ctx := config.WithConfig(context.Background(), cfg)
+	openCmd.SetContext(ctx)
+	t.Cleanup(func() { openCmd.SetContext(context.TODO()) })
+
+	names, directive := fn(openCmd, nil, "")
+	if directive != cobra.ShellCompDirectiveNoFileComp {
+		t.Errorf(directiveWantFmt, directive)
+	}
+	if len(names) != 2 {
+		t.Fatalf("expected 2 shortcuts, got %d: %v", len(names), names)
 	}
 }
 
