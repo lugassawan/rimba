@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"sort"
 	"strings"
 
+	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/spf13/cobra"
@@ -28,6 +30,23 @@ func completeWorktreeTasks(_ *cobra.Command, toComplete string) []string {
 		}
 	}
 	return tasks
+}
+
+// completeOpenShortcuts returns shortcut names from [open] config for shell completion.
+func completeOpenShortcuts(cmd *cobra.Command, toComplete string) []string {
+	cfg := config.FromContext(cmd.Context())
+	if cfg == nil || cfg.Open == nil {
+		return nil
+	}
+
+	var names []string
+	for k := range cfg.Open {
+		if strings.HasPrefix(k, toComplete) {
+			names = append(names, k)
+		}
+	}
+	sort.Strings(names)
+	return names
 }
 
 // completeBranchNames returns branch names for shell completion.

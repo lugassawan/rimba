@@ -11,6 +11,12 @@ import (
 	"github.com/lugassawan/rimba/internal/config"
 )
 
+const (
+	testRepoName = "test-repo"
+	fatalSave    = "Save: %v"
+	fatalLoad    = "Load: %v"
+)
+
 func TestDefaultConfig(t *testing.T) {
 	cfg := config.DefaultConfig("myrepo", "main")
 
@@ -30,14 +36,14 @@ func TestSaveAndLoad(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, config.FileName)
 
-	original := config.DefaultConfig("test-repo", "main")
+	original := config.DefaultConfig(testRepoName, "main")
 	if err := config.Save(path, original); err != nil {
-		t.Fatalf("Save: %v", err)
+		t.Fatalf(fatalSave, err)
 	}
 
 	loaded, err := config.Load(path)
 	if err != nil {
-		t.Fatalf("Load: %v", err)
+		t.Fatalf(fatalLoad, err)
 	}
 
 	if !reflect.DeepEqual(original, loaded) {
@@ -169,6 +175,49 @@ func TestSaveWriteErrorReadOnlyDir(t *testing.T) {
 	err := config.Save(filepath.Join(dir, config.FileName), cfg)
 	if err == nil {
 		t.Fatal("expected error when writing to read-only directory")
+	}
+}
+
+func TestSaveAndLoadWithOpen(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, config.FileName)
+
+	original := config.DefaultConfig(testRepoName, "main")
+	original.Open = map[string]string{
+		"ide":   "code .",
+		"agent": "claude",
+		"test":  "npm test",
+	}
+	if err := config.Save(path, original); err != nil {
+		t.Fatalf(fatalSave, err)
+	}
+
+	loaded, err := config.Load(path)
+	if err != nil {
+		t.Fatalf(fatalLoad, err)
+	}
+
+	if !reflect.DeepEqual(original, loaded) {
+		t.Errorf("loaded config differs:\n  got:  %+v\n  want: %+v", loaded, original)
+	}
+}
+
+func TestLoadWithoutOpenSection(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, config.FileName)
+
+	original := config.DefaultConfig(testRepoName, "main")
+	if err := config.Save(path, original); err != nil {
+		t.Fatalf(fatalSave, err)
+	}
+
+	loaded, err := config.Load(path)
+	if err != nil {
+		t.Fatalf(fatalLoad, err)
+	}
+
+	if loaded.Open != nil {
+		t.Errorf("expected nil Open field, got %v", loaded.Open)
 	}
 }
 

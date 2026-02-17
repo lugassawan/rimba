@@ -250,7 +250,7 @@ func Replace(currentBinary, newBinary string) error {
 	}
 
 	// Atomic rename: new inode replaces old one
-	if err := os.Rename(tmpPath, resolved); err != nil {
+	if err := os.Rename(tmpPath, resolved); err != nil { //nolint:gosec // resolved is the current binary path, not user input
 		return fmt.Errorf("replacing binary: %w", err)
 	}
 

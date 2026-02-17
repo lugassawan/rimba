@@ -18,7 +18,8 @@ type Config struct {
 	CopyFiles     []string `toml:"copy_files"`
 	PostCreate    []string `toml:"post_create,omitempty"`
 
-	Deps *DepsConfig `toml:"deps,omitempty"`
+	Deps *DepsConfig       `toml:"deps,omitempty"`
+	Open map[string]string `toml:"open,omitempty"`
 }
 
 // DepsConfig holds optional dependency management settings.
