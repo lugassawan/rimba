@@ -8,6 +8,7 @@ import (
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
+	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
@@ -119,18 +120,18 @@ func syncOne(sc syncContext, task string, worktrees []resolver.WorktreeInfo, pre
 		verb = "Merging"
 	}
 	sc.s.Update(fmt.Sprintf("%s onto %s...", verb, sc.cfg.DefaultSource))
-	if err := doSync(sc.r, wt.Path, sc.cfg.DefaultSource, useMerge); err != nil {
+	if err := operations.SyncBranch(sc.r, wt.Path, sc.cfg.DefaultSource, useMerge); err != nil {
 		return err
 	}
 
 	sc.s.Stop()
-	fmt.Fprintf(sc.cmd.OutOrStdout(), "%s %s onto %s\n", syncMethodLabel(useMerge), wt.Branch, sc.cfg.DefaultSource)
+	fmt.Fprintf(sc.cmd.OutOrStdout(), "%s %s onto %s\n", operations.SyncMethodLabel(useMerge), wt.Branch, sc.cfg.DefaultSource)
 	return nil
 }
 
 func syncAll(sc syncContext, worktrees []resolver.WorktreeInfo, prefixes []string, useMerge, includeInherited bool) error { //nolint:unparam // error return matches RunE contract
-	allTasks := collectTasks(worktrees, prefixes)
-	eligible := filterEligible(worktrees, prefixes, sc.cfg.DefaultSource, allTasks, includeInherited)
+	allTasks := operations.CollectTasks(worktrees, prefixes)
+	eligible := operations.FilterEligible(worktrees, prefixes, sc.cfg.DefaultSource, allTasks, includeInherited)
 
 	var res syncResult
 	var mu sync.Mutex
@@ -160,30 +161,6 @@ func syncAll(sc syncContext, worktrees []resolver.WorktreeInfo, prefixes []strin
 	return nil
 }
 
-func collectTasks(worktrees []resolver.WorktreeInfo, prefixes []string) []string {
-	tasks := make([]string, 0, len(worktrees))
-	for _, wt := range worktrees {
-		task, _ := resolver.TaskFromBranch(wt.Branch, prefixes)
-		tasks = append(tasks, task)
-	}
-	return tasks
-}
-
-func filterEligible(worktrees []resolver.WorktreeInfo, prefixes []string, mainBranch string, allTasks []string, includeInherited bool) []resolver.WorktreeInfo {
-	var eligible []resolver.WorktreeInfo
-	for _, wt := range worktrees {
-		if wt.Branch == mainBranch || wt.Branch == "" {
-			continue
-		}
-		task, _ := resolver.TaskFromBranch(wt.Branch, prefixes)
-		if !includeInherited && resolver.IsInherited(task, allTasks) {
-			continue
-		}
-		eligible = append(eligible, wt)
-	}
-	return eligible
-}
-
 func syncWorktree(cmd *cobra.Command, r git.Runner, mainBranch string, wt resolver.WorktreeInfo, useMerge bool, res *syncResult, mu *sync.Mutex) {
 	dirty, err := git.IsDirty(r, wt.Path)
 	if err != nil {
@@ -201,7 +178,7 @@ func syncWorktree(cmd *cobra.Command, r git.Runner, mainBranch string, wt resolv
 		return
 	}
 
-	if err := doSync(r, wt.Path, mainBranch, useMerge); err != nil {
+	if err := operations.SyncBranch(r, wt.Path, mainBranch, useMerge); err != nil {
 		mu.Lock()
 		res.failed++
 		verb := verbRebase
@@ -218,7 +195,7 @@ func syncWorktree(cmd *cobra.Command, r git.Runner, mainBranch string, wt resolv
 }
 
 func printSyncSummary(cmd *cobra.Command, mainBranch string, useMerge bool, res *syncResult) {
-	fmt.Fprintf(cmd.OutOrStdout(), "%s %d worktree(s) onto %s", syncMethodLabel(useMerge), res.synced, mainBranch)
+	fmt.Fprintf(cmd.OutOrStdout(), "%s %d worktree(s) onto %s", operations.SyncMethodLabel(useMerge), res.synced, mainBranch)
 	if res.skippedDirty > 0 {
 		fmt.Fprintf(cmd.OutOrStdout(), ", %d skipped (dirty)", res.skippedDirty)
 	}
@@ -230,23 +207,4 @@ func printSyncSummary(cmd *cobra.Command, mainBranch string, useMerge bool, res 
 	for _, f := range res.failures {
 		fmt.Fprintln(cmd.OutOrStdout(), f)
 	}
-}
-
-func syncMethodLabel(useMerge bool) string {
-	if useMerge {
-		return "Merged"
-	}
-	return "Rebased"
-}
-
-func doSync(r git.Runner, dir, mainBranch string, useMerge bool) error {
-	if useMerge {
-		return git.Merge(r, dir, mainBranch, false)
-	}
-	if err := git.Rebase(r, dir, mainBranch); err != nil {
-		// Abort the failed rebase to leave worktree in a clean state
-		_ = git.AbortRebase(r, dir)
-		return err
-	}
-	return nil
 }
