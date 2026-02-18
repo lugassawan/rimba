@@ -39,3 +39,17 @@ func FindWorktree(r git.Runner, task string) (resolver.WorktreeInfo, error) {
 	}
 	return wt, nil
 }
+
+// FilterByType returns worktrees whose branch prefix matches the given type string.
+// For example, typeStr "feature" matches branches with prefix "feature/".
+func FilterByType(worktrees []resolver.WorktreeInfo, prefixes []string, typeStr string) []resolver.WorktreeInfo {
+	target := typeStr + "/"
+	var out []resolver.WorktreeInfo
+	for _, wt := range worktrees {
+		_, matchedPrefix := resolver.TaskFromBranch(wt.Branch, prefixes)
+		if matchedPrefix == target {
+			out = append(out, wt)
+		}
+	}
+	return out
+}

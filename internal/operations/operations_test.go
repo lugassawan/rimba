@@ -3,6 +3,8 @@ package operations
 import (
 	"strings"
 	"testing"
+
+	"github.com/lugassawan/rimba/internal/resolver"
 )
 
 func TestListWorktreeInfos(t *testing.T) {
@@ -88,5 +90,36 @@ func TestFindWorktreeError(t *testing.T) {
 	}
 	if _, err := FindWorktree(r, "login"); err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestFilterByType(t *testing.T) {
+	prefixes := resolver.AllPrefixes()
+	worktrees := []resolver.WorktreeInfo{
+		{Branch: branchFeature},
+		{Branch: branchBugfixTypo},
+		{Branch: branchMain},
+		{Branch: "feature/signup"},
+	}
+
+	features := FilterByType(worktrees, prefixes, "feature")
+	if len(features) != 2 {
+		t.Fatalf("expected 2 feature worktrees, got %d", len(features))
+	}
+	if features[0].Branch != branchFeature {
+		t.Errorf("features[0] = %q, want %q", features[0].Branch, branchFeature)
+	}
+	if features[1].Branch != "feature/signup" {
+		t.Errorf("features[1] = %q, want %q", features[1].Branch, "feature/signup")
+	}
+
+	bugfixes := FilterByType(worktrees, prefixes, "bugfix")
+	if len(bugfixes) != 1 {
+		t.Fatalf("expected 1 bugfix worktree, got %d", len(bugfixes))
+	}
+
+	hotfixes := FilterByType(worktrees, prefixes, "hotfix")
+	if len(hotfixes) != 0 {
+		t.Errorf("expected 0 hotfix worktrees, got %d", len(hotfixes))
 	}
 }
