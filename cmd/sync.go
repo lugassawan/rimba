@@ -18,7 +18,6 @@ const (
 	flagAll              = "all"
 	flagSyncMerge        = "merge"
 	flagIncludeInherited = "include-inherited"
-	verbRebase           = "rebase"
 
 	hintAll              = "Sync all eligible worktrees at once"
 	hintSyncMerge        = "Use merge instead of rebase (preserves history, creates merge commits)"
@@ -162,36 +161,25 @@ func syncAll(sc syncContext, worktrees []resolver.WorktreeInfo, prefixes []strin
 }
 
 func syncWorktree(cmd *cobra.Command, r git.Runner, mainBranch string, wt resolver.WorktreeInfo, useMerge bool, res *syncResult, mu *sync.Mutex) {
-	dirty, err := git.IsDirty(r, wt.Path)
-	if err != nil {
-		mu.Lock()
-		fmt.Fprintf(cmd.OutOrStdout(), "Warning: could not check status of %s: %v\n", wt.Branch, err)
-		res.skippedDirty++
-		mu.Unlock()
-		return
-	}
-	if dirty {
-		mu.Lock()
-		fmt.Fprintf(cmd.OutOrStdout(), "Skipping %s (dirty)\n", wt.Branch)
-		res.skippedDirty++
-		mu.Unlock()
-		return
-	}
+	sr := operations.SyncWorktree(r, mainBranch, wt, useMerge)
 
-	if err := operations.SyncBranch(r, wt.Path, mainBranch, useMerge); err != nil {
-		mu.Lock()
-		res.failed++
-		verb := verbRebase
-		if useMerge {
-			verb = flagSyncMerge
-		}
-		res.failures = append(res.failures, fmt.Sprintf("  %s: To resolve: cd %s && git %s %s", wt.Branch, wt.Path, verb, mainBranch))
-		mu.Unlock()
-		return
-	}
 	mu.Lock()
-	res.synced++
-	mu.Unlock()
+	defer mu.Unlock()
+
+	switch {
+	case sr.Skipped:
+		res.skippedDirty++
+		if sr.SkipReason == "dirty" {
+			fmt.Fprintf(cmd.OutOrStdout(), "Skipping %s (dirty)\n", sr.Branch)
+		} else {
+			fmt.Fprintf(cmd.OutOrStdout(), "Warning: %s: %s\n", sr.Branch, sr.SkipReason)
+		}
+	case sr.Failed:
+		res.failed++
+		res.failures = append(res.failures, fmt.Sprintf("  %s: To resolve: %s", sr.Branch, sr.FailureHint))
+	default:
+		res.synced++
+	}
 }
 
 func printSyncSummary(cmd *cobra.Command, mainBranch string, useMerge bool, res *syncResult) {

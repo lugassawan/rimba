@@ -2,10 +2,13 @@ package operations
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/resolver"
 )
+
+const cmdRebase = "rebase"
 
 func TestCollectTasks(t *testing.T) {
 	prefixes := resolver.AllPrefixes()
@@ -134,11 +137,11 @@ func TestSyncBranchRebaseFailTriggersAbort(t *testing.T) {
 	r := &mockRunner{
 		run: func(_ ...string) (string, error) { return "", nil },
 		runInDir: func(_ string, args ...string) (string, error) {
-			if len(args) >= 2 && args[0] == "rebase" && args[1] == "--abort" {
+			if len(args) >= 2 && args[0] == cmdRebase && args[1] == "--abort" {
 				abortCalled = true
 				return "", nil
 			}
-			if len(args) >= 1 && args[0] == "rebase" {
+			if len(args) >= 1 && args[0] == cmdRebase {
 				return "", errors.New("conflict")
 			}
 			return "", nil
@@ -160,5 +163,105 @@ func TestSyncBranchMergeSuccess(t *testing.T) {
 	}
 	if err := SyncBranch(r, "/worktree", branchMain, true); err != nil {
 		t.Fatalf("SyncBranch merge: %v", err)
+	}
+}
+
+func TestSyncWorktreeClean(t *testing.T) {
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return "", nil },
+		runInDir: noopRunInDir,
+	}
+	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
+	res := SyncWorktree(r, branchMain, wt, false)
+
+	if !res.Synced {
+		t.Error("expected Synced=true")
+	}
+	if res.Skipped || res.Failed {
+		t.Errorf("unexpected Skipped=%v Failed=%v", res.Skipped, res.Failed)
+	}
+	if res.Branch != branchFeature {
+		t.Errorf("Branch = %q, want %q", res.Branch, branchFeature)
+	}
+}
+
+func TestSyncWorktreeDirty(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) { return "", nil },
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == "status" {
+				return "M file.go", nil
+			}
+			return "", nil
+		},
+	}
+	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
+	res := SyncWorktree(r, branchMain, wt, false)
+
+	if !res.Skipped {
+		t.Error("expected Skipped=true for dirty worktree")
+	}
+	if res.SkipReason != "dirty" {
+		t.Errorf("SkipReason = %q, want %q", res.SkipReason, "dirty")
+	}
+}
+
+func TestSyncWorktreeIsDirtyError(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) { return "", nil },
+		runInDir: func(_ string, _ ...string) (string, error) {
+			return "", errGitFailed
+		},
+	}
+	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
+	res := SyncWorktree(r, branchMain, wt, false)
+
+	if !res.Skipped {
+		t.Error("expected Skipped=true for IsDirty error")
+	}
+	if !strings.Contains(res.SkipReason, "could not check status") {
+		t.Errorf("SkipReason = %q, want 'could not check status'", res.SkipReason)
+	}
+}
+
+func TestSyncWorktreeSyncFailure(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) { return "", nil },
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdRebase {
+				return "", errors.New("conflict")
+			}
+			return "", nil
+		},
+	}
+	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
+	res := SyncWorktree(r, branchMain, wt, false)
+
+	if !res.Failed {
+		t.Error("expected Failed=true")
+	}
+	if !strings.Contains(res.FailureHint, "rebase") {
+		t.Errorf("FailureHint = %q, want 'rebase'", res.FailureHint)
+	}
+}
+
+func TestSyncWorktreeMergeFailure(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) { return "", nil },
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == "merge" {
+				return "", errors.New("merge conflict")
+			}
+			return "", nil
+		},
+	}
+	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
+	res := SyncWorktree(r, branchMain, wt, true)
+
+	if !res.Failed {
+		t.Error("expected Failed=true")
+	}
+	if !strings.Contains(res.FailureHint, "merge") {
+		t.Errorf("FailureHint = %q, want 'merge'", res.FailureHint)
 	}
 }
