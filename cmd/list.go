@@ -10,6 +10,7 @@ import (
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
+	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/lugassawan/rimba/internal/termcolor"
@@ -146,30 +147,13 @@ var listCmd = &cobra.Command{
 				sem <- struct{}{}
 				defer func() { <-sem }()
 
-				var status resolver.WorktreeStatus
-				if dirty, err := git.IsDirty(r, c.entry.Path); err == nil && dirty {
-					status.Dirty = true
-				}
-				ahead, behind, _ := git.AheadBehind(r, c.entry.Path)
-				status.Ahead = ahead
-				status.Behind = behind
-
+				status := operations.CollectWorktreeStatus(r, c.entry.Path)
 				rows[idx] = resolver.NewWorktreeDetail(c.entry.Branch, prefixes, c.displayPath, status, c.isCurrent)
 			}(i, c)
 		}
 		wg.Wait()
 
-		filtered := rows[:0]
-		for _, row := range rows {
-			if listDirty && !row.Status.Dirty {
-				continue
-			}
-			if listBehind && row.Status.Behind == 0 {
-				continue
-			}
-			filtered = append(filtered, row)
-		}
-		rows = filtered
+		rows = operations.FilterDetailsByStatus(rows, listDirty, listBehind)
 
 		s.Stop()
 

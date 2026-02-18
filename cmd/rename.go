@@ -6,7 +6,7 @@ import (
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
-	"github.com/lugassawan/rimba/internal/resolver"
+	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
 )
@@ -44,33 +44,16 @@ var renameCmd = &cobra.Command{
 			return err
 		}
 
-		prefixes := resolver.AllPrefixes()
-
-		_, matchedPrefix := resolver.TaskFromBranch(wt.Branch, prefixes)
-		if matchedPrefix == "" {
-			matchedPrefix, _ = resolver.PrefixString(resolver.DefaultPrefixType)
-		}
-
-		newBranch := resolver.BranchName(matchedPrefix, newTask)
-
-		if git.BranchExists(r, newBranch) {
-			return fmt.Errorf("branch %q already exists", newBranch)
-		}
-
 		wtDir := filepath.Join(repoRoot, cfg.WorktreeDir)
-		newPath := resolver.WorktreePath(wtDir, newBranch)
 
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
 
 		force, _ := cmd.Flags().GetBool("force")
 		s.Start("Renaming worktree...")
-		if err := git.MoveWorktree(r, wt.Path, newPath, force); err != nil {
-			return err
-		}
 
-		if err := git.RenameBranch(r, wt.Branch, newBranch); err != nil {
-			return fmt.Errorf("worktree moved but failed to rename branch %q: %w\nTo complete manually: git branch -m %s %s", wt.Branch, err, wt.Branch, newBranch)
+		if _, err := operations.RenameWorktree(r, wt, newTask, wtDir, force); err != nil {
+			return err
 		}
 
 		s.Stop()
