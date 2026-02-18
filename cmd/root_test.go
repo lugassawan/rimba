@@ -111,6 +111,7 @@ func TestPersistentPreRunESuccess(t *testing.T) {
 	loaded := config.FromContext(cmd.Context())
 	if loaded == nil {
 		t.Fatal("expected config in context after successful PreRunE")
+		return
 	}
 	if loaded.DefaultSource != "main" {
 		t.Errorf("DefaultSource = %q, want %q", loaded.DefaultSource, "main")

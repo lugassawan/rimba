@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -444,14 +445,7 @@ func TestMergeWithNoFF(t *testing.T) {
 	}
 
 	// Verify --no-ff was passed to merge
-	foundNoFF := false
-	for _, arg := range mergeArgs {
-		if arg == "--no-ff" {
-			foundNoFF = true
-			break
-		}
-	}
-	if !foundNoFF {
+	if !slices.Contains(mergeArgs, "--no-ff") {
 		t.Errorf("merge args = %v, want --no-ff to be present", mergeArgs)
 	}
 }

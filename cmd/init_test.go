@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -93,7 +93,7 @@ func TestInitRepoRootError(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return "", fmt.Errorf("not a git repository")
+				return "", errors.New("not a git repository")
 			}
 			return "", nil
 		},

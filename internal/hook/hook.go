@@ -30,6 +30,7 @@ type Status struct {
 
 // HookBlock returns the marker-delimited block with the branch guard embedded.
 func HookBlock(branch string) string {
+	//nolint:dupword // shell script has two "fi" closings
 	return fmt.Sprintf(`%s
 # Installed by rimba — do not edit this block manually
 if command -v rimba >/dev/null 2>&1; then
@@ -114,7 +115,7 @@ func Check(hooksDir string) Status {
 	content := string(existing)
 	installed := containsBlock(content)
 
-	hasOther := false
+	var hasOther bool
 	if installed {
 		cleaned := removeBlock(content)
 		hasOther = !isShebangOnly(cleaned)
@@ -134,15 +135,15 @@ func containsBlock(content string) bool {
 }
 
 func removeBlock(content string) string {
-	beginIdx := strings.Index(content, BeginMarker)
-	if beginIdx == -1 {
+	before, afterBegin, found := strings.Cut(content, BeginMarker)
+	if !found {
 		return content
 	}
 
-	endIdx := strings.Index(content, EndMarker)
-	if endIdx == -1 {
+	_, afterEnd, found := strings.Cut(afterBegin, EndMarker)
+	if !found {
 		// Corrupt: BEGIN without END — remove from BEGIN to end of file
-		before := strings.TrimRight(content[:beginIdx], "\n")
+		before = strings.TrimRight(before, "\n")
 		if before == "" {
 			return ""
 		}
@@ -150,10 +151,7 @@ func removeBlock(content string) string {
 	}
 
 	// Remove from BEGIN marker through END marker (including trailing newline)
-	after := content[endIdx+len(EndMarker):]
-	after = strings.TrimLeft(after, "\n")
-
-	before := content[:beginIdx]
+	after := strings.TrimLeft(afterEnd, "\n")
 	before = strings.TrimRight(before, "\n")
 
 	if before == "" {

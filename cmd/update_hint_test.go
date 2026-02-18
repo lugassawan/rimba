@@ -51,6 +51,7 @@ func TestCheckUpdateHintNewVersionAvailable(t *testing.T) {
 	result := collectHint(ch)
 	if result == nil {
 		t.Fatal("expected non-nil result for available update")
+		return
 	}
 	if result.LatestVersion != testVersionNew {
 		t.Errorf("LatestVersion = %q, want %q", result.LatestVersion, testVersionNew)
@@ -142,6 +143,7 @@ func TestCollectHintValue(t *testing.T) {
 	result := collectHint(ch)
 	if result == nil {
 		t.Fatal("expected non-nil result")
+		return
 	}
 	if result.LatestVersion != testVersionOther {
 		t.Errorf("LatestVersion = %q, want %q", result.LatestVersion, testVersionOther)
