@@ -219,6 +219,54 @@ func TestRunContextCancellation(t *testing.T) {
 	}
 }
 
+func TestShellRunnerSuccess(t *testing.T) {
+	runner := ShellRunner()
+	dir := t.TempDir()
+
+	stdout, stderr, exitCode, err := runner(context.Background(), dir, "echo hello")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if exitCode != 0 {
+		t.Errorf("expected exit 0, got %d", exitCode)
+	}
+	if got := string(stdout); got != "hello\n" {
+		t.Errorf("stdout = %q, want %q", got, "hello\n")
+	}
+	if len(stderr) != 0 {
+		t.Errorf("expected empty stderr, got %q", string(stderr))
+	}
+}
+
+func TestShellRunnerNonZeroExit(t *testing.T) {
+	runner := ShellRunner()
+	dir := t.TempDir()
+
+	stdout, stderr, exitCode, err := runner(context.Background(), dir, "echo fail >&2; exit 42")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if exitCode != 42 {
+		t.Errorf("expected exit 42, got %d", exitCode)
+	}
+	if len(stdout) != 0 {
+		t.Errorf("expected empty stdout, got %q", string(stdout))
+	}
+	if got := string(stderr); got != "fail\n" {
+		t.Errorf("stderr = %q, want %q", got, "fail\n")
+	}
+}
+
+func TestShellRunnerProcessError(t *testing.T) {
+	runner := ShellRunner()
+
+	// Use a non-existent directory to cause a start error.
+	_, _, _, err := runner(context.Background(), "/nonexistent-dir-abc123", "echo hi")
+	if err == nil {
+		t.Fatal("expected error for non-existent directory")
+	}
+}
+
 func TestRunStdoutStderrSeparate(t *testing.T) {
 	results := Run(context.Background(), Config{
 		Targets: []Target{{Path: "/tmp", Task: "x"}},

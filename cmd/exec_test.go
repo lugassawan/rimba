@@ -174,6 +174,40 @@ func TestFilterDirtyWorktrees(t *testing.T) {
 	}
 }
 
+func TestExecTypeFlagCompletion(t *testing.T) {
+	fn, ok := execCmd.GetFlagCompletionFunc(flagType)
+	if !ok {
+		t.Fatal("no completion function registered for --type flag")
+	}
+
+	t.Run("all types", func(t *testing.T) {
+		types, directive := fn(execCmd, nil, "")
+		if directive != cobra.ShellCompDirectiveNoFileComp {
+			t.Errorf(directiveWantFmt, directive)
+		}
+		if len(types) == 0 {
+			t.Fatal("expected at least one type completion")
+		}
+	})
+
+	t.Run("filter by prefix", func(t *testing.T) {
+		types, _ := fn(execCmd, nil, "bug")
+		if len(types) != 1 {
+			t.Fatalf("expected 1 type, got %d: %v", len(types), types)
+		}
+		if types[0] != benchFilterType {
+			t.Errorf("type = %q, want %q", types[0], benchFilterType)
+		}
+	})
+
+	t.Run("no match", func(t *testing.T) {
+		types, _ := fn(execCmd, nil, "zzz")
+		if len(types) != 0 {
+			t.Errorf("expected 0 types for 'zzz', got %d: %v", len(types), types)
+		}
+	})
+}
+
 func testExecSpinner(cmd *cobra.Command) *spinner.Spinner {
 	return spinner.New(spinnerOpts(cmd))
 }
