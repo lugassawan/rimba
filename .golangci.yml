@@ -6,17 +6,30 @@ linters:
     - bodyclose
     - copyloopvar
     - dupl
+    - dupword
     - errname
     - errorlint
     - fatcontext
+    - forcetypeassert
     - goconst
     - gocritic
     - gocyclo
     - gosec
+    - intrange
+    - misspell
+    - modernize
+    - nakedret
     - nilerr
+    - nilnil
+    - perfsprint
     - prealloc
+    - predeclared
+    - recvcheck
+    - thelper
     - unconvert
     - unparam
+    - usestdlibvars
+    - wastedassign
     - whitespace
   settings:
     gocyclo:

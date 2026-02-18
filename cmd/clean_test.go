@@ -83,7 +83,7 @@ func TestFindMergedCandidatesRemoteRef(t *testing.T) {
 }
 
 func TestFindMergedCandidatesNone(t *testing.T) {
-	r := mergedWorktreeRunner("", wtRepo + headMainBlock)
+	r := mergedWorktreeRunner("", wtRepo+headMainBlock)
 	candidates, err := findMergedCandidates(r, branchMain, branchMain)
 	if err != nil {
 		t.Fatalf(fatalFindMerged, err)
@@ -398,6 +398,7 @@ func TestCleanPruneError(t *testing.T) {
 }
 
 func cleanMergedTestRunner(t *testing.T, mergedOut, worktreeOut string) *mockRunner {
+	t.Helper()
 	dir := t.TempDir()
 	cfg := &config.Config{DefaultSource: branchMain}
 	_ = config.Save(filepath.Join(dir, config.FileName), cfg)
@@ -519,4 +520,3 @@ func TestCleanMergedResolveError(t *testing.T) {
 		t.Fatal("expected error from resolveMainBranch failure")
 	}
 }
-

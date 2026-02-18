@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -25,12 +26,12 @@ const (
 	errWantFmt       = "error = %q, want %q"
 
 	// Shared format and value constants
-	contentFmt   = "content = %q, want %q"
-	fatalReplace = "Replace: %v"
-	valNewBinary = "new binary"
+	contentFmt    = "content = %q, want %q"
+	fatalReplace  = "Replace: %v"
+	valNewBinary  = "new binary"
 	valNewContent = "new content"
-	testRcZshrc  = ".zshrc"
-	testShellZsh = "/bin/zsh"
+	testRcZshrc   = ".zshrc"
+	testShellZsh  = "/bin/zsh"
 )
 
 // newTestUpdater creates an Updater wired to the given test server.
@@ -231,7 +232,7 @@ func TestIsPermissionError(t *testing.T) {
 	}{
 		{"wrapped permission error", fmt.Errorf("opening destination: %w", os.ErrPermission), true},
 		{"direct permission error", os.ErrPermission, true},
-		{"other error", fmt.Errorf("something else"), false},
+		{"other error", errors.New("something else"), false},
 		{"nil error", nil, false},
 	}
 
@@ -480,7 +481,7 @@ func TestWriteBinaryCopyError(t *testing.T) {
 	tmpDir := t.TempDir()
 	dst := filepath.Join(tmpDir, "binary")
 
-	r := &errorReader{err: fmt.Errorf("read error")}
+	r := &errorReader{err: errors.New("read error")}
 	_, err := writeBinary(dst, r)
 	if err == nil {
 		t.Fatal("expected error from io.Copy failure")

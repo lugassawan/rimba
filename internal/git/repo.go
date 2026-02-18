@@ -1,6 +1,7 @@
 package git
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -70,5 +71,5 @@ func DefaultBranch(r Runner) (string, error) {
 		return "master", nil
 	}
 
-	return "", fmt.Errorf("could not detect default branch (no main or master found)")
+	return "", errors.New("could not detect default branch (no main or master found)")
 }

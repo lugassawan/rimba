@@ -50,8 +50,8 @@ func newBenchRepo(b *testing.B) string {
 // addBenchWorktrees creates n worktrees in the repo.
 func addBenchWorktrees(b *testing.B, repo string, n int) []string {
 	b.Helper()
-	var paths []string
-	for i := 0; i < n; i++ {
+	paths := make([]string, 0, n)
+	for i := range n {
 		branch := filepath.Join("feature", "bench-"+string(rune('a'+i)))
 		wtPath := filepath.Join(filepath.Dir(repo), "wt-"+string(rune('a'+i)))
 		cmd := exec.Command("git", "worktree", "add", "-b", branch, wtPath, "main")

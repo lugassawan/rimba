@@ -67,7 +67,7 @@ var hookUninstallCmd = &cobra.Command{
 
 		err = hook.Uninstall(hooksDir)
 		if errors.Is(err, hook.ErrNotInstalled) {
-			return fmt.Errorf("rimba post-merge hook is not installed")
+			return errors.New("rimba post-merge hook is not installed")
 		}
 		if err != nil {
 			return err

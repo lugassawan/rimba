@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -40,7 +41,7 @@ var initCmd = &cobra.Command{
 
 		configPath := filepath.Join(repoRoot, config.FileName)
 		if _, err := os.Stat(configPath); err == nil {
-			return fmt.Errorf(".rimba.toml already exists (use a text editor to modify it)")
+			return errors.New(".rimba.toml already exists (use a text editor to modify it)")
 		}
 
 		cfg := config.DefaultConfig(repoName, defaultBranch)

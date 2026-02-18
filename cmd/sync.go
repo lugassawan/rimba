@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
@@ -65,7 +66,7 @@ var syncCmd = &cobra.Command{
 		includeInherited, _ := cmd.Flags().GetBool(flagIncludeInherited)
 
 		if !all && len(args) == 0 {
-			return fmt.Errorf("provide a task name or use --all to sync all worktrees")
+			return errors.New("provide a task name or use --all to sync all worktrees")
 		}
 
 		hint.New(cmd, hintPainter(cmd)).

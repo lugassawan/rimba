@@ -76,7 +76,7 @@ func IsDevVersion(v string) bool {
 func (u *Updater) Check() (*CheckResult, error) {
 	url := u.APIEndpoint + repoPath
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
@@ -125,7 +125,7 @@ func (u *Updater) Check() (*CheckResult, error) {
 // Download fetches a tar.gz archive from the given URL and extracts the binary
 // to a temporary directory. Returns the path to the extracted binary.
 func (u *Updater) Download(url string) (string, error) {
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return "", fmt.Errorf("creating download request: %w", err)
 	}
