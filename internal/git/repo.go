@@ -35,6 +35,26 @@ func RepoName(r Runner) (string, error) {
 	return filepath.Base(root), nil
 }
 
+// MainRepoRoot returns the absolute path to the main repository root.
+// Unlike RepoRoot, this always returns the main repo root even when called
+// from within a worktree. Uses --git-common-dir whose parent is the main root.
+func MainRepoRoot(r Runner) (string, error) {
+	commonDir, err := r.Run(cmdRevParse, "--git-common-dir")
+	if err != nil {
+		return "", fmt.Errorf("not a git repository: %w", err)
+	}
+
+	if !filepath.IsAbs(commonDir) {
+		root, err := RepoRoot(r)
+		if err != nil {
+			return "", err
+		}
+		commonDir = filepath.Join(root, commonDir)
+	}
+
+	return filepath.Clean(filepath.Dir(commonDir)), nil
+}
+
 // HooksDir returns the absolute path to the repository's hooks directory.
 // Uses git rev-parse --git-common-dir for worktree compatibility.
 func HooksDir(r Runner) (string, error) {
