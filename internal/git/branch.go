@@ -1,7 +1,10 @@
 package git
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // BranchExists checks whether a local branch exists.
@@ -69,6 +72,39 @@ func MergedBranches(r Runner, branch string) ([]string, error) {
 		line = strings.TrimSpace(line)
 		line = strings.TrimPrefix(line, "* ")
 		line = strings.TrimPrefix(line, "+ ")
+		if line != "" {
+			branches = append(branches, line)
+		}
+	}
+	return branches, nil
+}
+
+// LastCommitTime returns the time of the last commit on the given branch.
+func LastCommitTime(r Runner, branch string) (time.Time, error) {
+	out, err := r.Run("log", "-1", "--format=%ct", branch)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("last commit time for %s: %w", branch, err)
+	}
+	out = strings.TrimSpace(out)
+	if out == "" {
+		return time.Time{}, fmt.Errorf("no commits on branch %s", branch)
+	}
+	ts, err := strconv.ParseInt(out, 10, 64)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("parse commit timestamp %q: %w", out, err)
+	}
+	return time.Unix(ts, 0), nil
+}
+
+// LocalBranches returns the list of local branch names.
+func LocalBranches(r Runner) ([]string, error) {
+	out, err := r.Run("branch", "--format=%(refname:short)")
+	if err != nil {
+		return nil, err
+	}
+	var branches []string
+	for line := range strings.SplitSeq(out, "\n") {
+		line = strings.TrimSpace(line)
 		if line != "" {
 			branches = append(branches, line)
 		}

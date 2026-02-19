@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/termcolor"
@@ -25,6 +26,20 @@ func typeColor(t string) termcolor.Color {
 		return termcolor.Gray
 	default:
 		return ""
+	}
+}
+
+// ageColor returns a color based on the age of a commit time.
+// Green for <3 days, Yellow for 3-14 days, Red for >14 days.
+func ageColor(commitTime time.Time) termcolor.Color {
+	age := time.Since(commitTime)
+	switch {
+	case age < 3*24*time.Hour:
+		return termcolor.Green
+	case age < 14*24*time.Hour:
+		return termcolor.Yellow
+	default:
+		return termcolor.Red
 	}
 }
 
