@@ -10,7 +10,7 @@ import (
 // mergeBenchMockRunner simulates IsDirty calls.
 type mergeBenchMockRunner struct{}
 
-func (m *mergeBenchMockRunner) Run(_ ...string) (string, error)              { return "", nil }
+func (m *mergeBenchMockRunner) Run(_ ...string) (string, error)                { return "", nil }
 func (m *mergeBenchMockRunner) RunInDir(_ string, _ ...string) (string, error) { return "", nil }
 
 func BenchmarkDirtyChecksSequential(b *testing.B) {

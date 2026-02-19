@@ -8,12 +8,12 @@ import (
 )
 
 const (
-	testFileTxt    = "file.txt"
-	testPkgJSON    = "pkg.json"
-	testDataTxt    = "data.txt"
-	testStaleTxt   = "stale.txt"
-	testDepZip     = "dep.zip"
-	valNewContent  = "new content"
+	testFileTxt   = "file.txt"
+	testPkgJSON   = "pkg.json"
+	testDataTxt   = "data.txt"
+	testStaleTxt  = "stale.txt"
+	testDepZip    = "dep.zip"
+	valNewContent = "new content"
 )
 
 func TestCloneDirBasic(t *testing.T) {

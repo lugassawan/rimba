@@ -548,7 +548,7 @@ type errorRunner struct {
 	err error
 }
 
-func (e *errorRunner) Run(_ ...string) (string, error)              { return "", e.err }
+func (e *errorRunner) Run(_ ...string) (string, error)                { return "", e.err }
 func (e *errorRunner) RunInDir(_ string, _ ...string) (string, error) { return "", e.err }
 
 var errGitFailed = errors.New("git worktree list failed")
