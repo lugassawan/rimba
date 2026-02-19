@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/conflict"
+	"github.com/lugassawan/rimba/internal/termcolor"
 )
 
 const (
@@ -189,6 +191,70 @@ func TestConflictCheckDryMerge(t *testing.T) {
 	}
 	if !strings.Contains(out, "shared.go") {
 		t.Errorf("output should contain conflict file 'shared.go', got:\n%s", out)
+	}
+}
+
+func TestHasConflictsTrue(t *testing.T) {
+	results := []conflict.DryMergeResult{
+		{Branch1: branchFeatureA, Branch2: branchFeatureB, HasConflicts: false},
+		{Branch1: branchFeatureA, Branch2: branchFeatureC, HasConflicts: true, ConflictFiles: []string{"shared.go"}},
+	}
+	if !hasConflicts(results) {
+		t.Error("hasConflicts should return true when at least one result has conflicts")
+	}
+}
+
+func TestHasConflictsFalse(t *testing.T) {
+	results := []conflict.DryMergeResult{
+		{Branch1: branchFeatureA, Branch2: branchFeatureB, HasConflicts: false},
+	}
+	if hasConflicts(results) {
+		t.Error("hasConflicts should return false when no results have conflicts")
+	}
+}
+
+func TestHasConflictsEmpty(t *testing.T) {
+	if hasConflicts(nil) {
+		t.Error("hasConflicts should return false for nil input")
+	}
+}
+
+func TestRenderDryMergeResultsNoConflicts(t *testing.T) {
+	cmd, buf := newTestCmd()
+	noColor, _ := cmd.Flags().GetBool(flagNoColor)
+	p := termcolor.NewPainter(noColor)
+
+	results := []conflict.DryMergeResult{
+		{Branch1: branchFeatureA, Branch2: branchFeatureB, HasConflicts: false},
+	}
+
+	renderDryMergeResults(cmd, p, results, nil)
+
+	if buf.String() != "" {
+		t.Errorf("expected empty output for no conflicts, got %q", buf.String())
+	}
+}
+
+func TestRenderOverlapTableBranchWithoutPrefix(t *testing.T) {
+	cmd, buf := newTestCmd()
+	noColor, _ := cmd.Flags().GetBool(flagNoColor)
+	p := termcolor.NewPainter(noColor)
+
+	result := &conflict.CheckResult{
+		Overlaps: []conflict.FileOverlap{
+			{
+				File:     "shared.go",
+				Branches: []string{"custom-branch", "another-branch"},
+				Severity: conflict.SeverityLow,
+			},
+		},
+		TotalBranches: 2,
+	}
+
+	renderOverlapTable(cmd, p, result, nil)
+	out := buf.String()
+	if !strings.Contains(out, "custom-branch") {
+		t.Errorf("expected branch name without prefix, got: %s", out)
 	}
 }
 

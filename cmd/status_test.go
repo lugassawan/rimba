@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"errors"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -73,6 +76,78 @@ func TestStatusWithWorktrees(t *testing.T) {
 	}
 	if !strings.Contains(output, taskLogin) {
 		t.Errorf("expected task 'login', got: %q", output)
+	}
+}
+
+// statusMultiRunner creates a mockRunner with dirty, stale, and unknown-age worktrees.
+func statusMultiRunner() *mockRunner {
+	oldTimestamp := strconv.FormatInt(time.Now().Add(-30*24*time.Hour).Unix(), 10)
+	recentTimestamp := strconv.FormatInt(time.Now().Add(-1*time.Hour).Unix(), 10)
+
+	return &mockRunner{
+		run: statusMultiRunFunc(oldTimestamp, recentTimestamp),
+		runInDir: func(dir string, args ...string) (string, error) {
+			if args[0] == cmdStatus && dir == pathWtFeatureLogin {
+				return dirtyOutput, nil
+			}
+			if args[0] == cmdRevList && dir == pathWtFeatureLogin {
+				return "3\t0", nil // behind=3, ahead=0
+			}
+			if args[0] == cmdRevList {
+				return aheadBehindZero, nil
+			}
+			return "", nil
+		},
+	}
+}
+
+func statusMultiRunFunc(oldTS, recentTS string) func(args ...string) (string, error) {
+	return func(args ...string) (string, error) {
+		switch {
+		case args[0] == cmdRevParse && args[1] == cmdShowToplevel:
+			return repoPath, nil
+		case args[0] == cmdSymbolicRef:
+			return refsRemotesOriginMain, nil
+		case args[0] == cmdWorktreeTest && args[1] == cmdList:
+			return strings.Join([]string{
+				wtRepo + headMainBlock,
+				wtFeatureLogin, headDEF456, branchRefFeatureLogin, "",
+				"worktree /wt/feature-old", "HEAD ghi789", "branch refs/heads/feature/old", "",
+				"worktree /wt/bugfix-typo", "HEAD jkl012", "branch refs/heads/" + branchBugfixTypo, "",
+			}, "\n"), nil
+		case args[0] == cmdLog:
+			branch := args[len(args)-1]
+			if branch == "feature/old" {
+				return oldTS + "\told commit", nil
+			}
+			if branch == branchBugfixTypo {
+				return "", errors.New("no commits")
+			}
+			return recentTS + "\trecent commit", nil
+		}
+		return "", nil
+	}
+}
+
+func TestStatusDirtyBehindStaleUnknown(t *testing.T) {
+	restore := overrideNewRunner(statusMultiRunner())
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().Int(flagStaleDays, 14, "")
+	if err := statusCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("statusCmd.RunE: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "Worktrees:") {
+		t.Errorf("expected 'Worktrees:' header, got: %q", output)
+	}
+	if !strings.Contains(output, "stale") {
+		t.Errorf("expected 'stale' marker for old worktree, got: %q", output)
+	}
+	if !strings.Contains(output, "unknown") {
+		t.Errorf("expected 'unknown' age for failed commit info, got: %q", output)
 	}
 }
 

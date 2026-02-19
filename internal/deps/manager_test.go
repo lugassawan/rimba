@@ -653,3 +653,105 @@ func TestManagerInstallCloneFailFallback(t *testing.T) {
 		}
 	})
 }
+
+func TestManagerInstallWithWorkDir(t *testing.T) {
+	existingWT := t.TempDir()
+	newWT := t.TempDir()
+
+	// Create a subdirectory for WorkDir
+	subDir := filepath.Join(newWT, "frontend")
+	if err := os.MkdirAll(subDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	lockContent := "same-lock"
+	writeFile(t, existingWT, LockfilePnpm, lockContent)
+	writeFile(t, newWT, LockfilePnpm, lockContent)
+
+	// No matching module dir in existingWT → falls through to InstallCmd with WorkDir
+	runner := &mockRunner{worktreeOutput: mockWorktreeList(existingWT, newWT)}
+	mgr := &Manager{Runner: runner}
+
+	modules := []Module{
+		{
+			Dir:        DirNodeModules,
+			Lockfile:   LockfilePnpm,
+			InstallCmd: "echo ok",
+			WorkDir:    "frontend",
+		},
+	}
+
+	results := mgr.Install(newWT, modules)
+	if len(results) != 1 {
+		t.Fatalf(fmtExpectedOneResult, len(results))
+	}
+	if results[0].Error != nil {
+		t.Errorf(fmtExpectedNoError, results[0].Error)
+	}
+}
+
+func TestManagerInstallNoInstallCmd(t *testing.T) {
+	// Module with a lockfile (hash != ""), no matching source has the
+	// module dir, CloneOnly=false, InstallCmd="" → falls through to
+	// the final return at installModule line 136.
+	existingWT := t.TempDir()
+	newWT := t.TempDir()
+
+	lockContent := "same-content"
+	writeFile(t, existingWT, LockfilePnpm, lockContent)
+	writeFile(t, newWT, LockfilePnpm, lockContent)
+
+	// existingWT does NOT have node_modules → no match
+	runner := &mockRunner{worktreeOutput: mockWorktreeList(existingWT, newWT)}
+	mgr := &Manager{Runner: runner}
+	modules := []Module{
+		{Dir: DirNodeModules, Lockfile: LockfilePnpm}, // no InstallCmd
+	}
+
+	results := mgr.Install(newWT, modules)
+	if len(results) != 1 {
+		t.Fatalf(fmtExpectedOneResult, len(results))
+	}
+	r := results[0]
+	if r.Cloned {
+		t.Error("expected Cloned=false")
+	}
+	if r.Error != nil {
+		t.Errorf(fmtExpectedNoError, r.Error)
+	}
+}
+
+func TestRunInstallError(t *testing.T) {
+	dir := t.TempDir()
+	mod := Module{
+		Dir:        DirNodeModules,
+		InstallCmd: "/nonexistent-command-xyz",
+	}
+
+	err := runInstall(dir, mod)
+	if err == nil {
+		t.Fatal("expected error from runInstall with invalid command")
+	}
+	if !strings.Contains(err.Error(), "install") {
+		t.Errorf("error = %q, want to contain 'install'", err.Error())
+	}
+}
+
+func TestResolveModulesConfigWithWorkDir(t *testing.T) {
+	dir := t.TempDir()
+
+	configModules := []config.ModuleConfig{
+		{Dir: "frontend/node_modules", Lockfile: "frontend/pnpm-lock.yaml", Install: "pnpm install", WorkDir: "frontend"},
+	}
+
+	modules, err := ResolveModules(dir, false, configModules, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(modules) != 1 {
+		t.Fatalf("expected 1 module, got %d", len(modules))
+	}
+	if modules[0].WorkDir != "frontend" {
+		t.Errorf("WorkDir = %q, want %q", modules[0].WorkDir, "frontend")
+	}
+}

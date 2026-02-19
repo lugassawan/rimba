@@ -267,6 +267,40 @@ func TestShellRunnerProcessError(t *testing.T) {
 	}
 }
 
+func TestRunCancelledBeforeSemaphore(t *testing.T) {
+	// Pre-cancel + concurrency=1 + 3 targets.
+	// At most 1 goroutine acquires the single semaphore slot;
+	// the remaining goroutines are blocked with a full semaphore,
+	// so ctx.Done() is the only available case (lines 67-70).
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	results := Run(ctx, Config{
+		Targets: []Target{
+			{Path: "/a", Task: "a"},
+			{Path: "/b", Task: "b"},
+			{Path: "/c", Task: "c"},
+		},
+		Command:     "cmd",
+		Concurrency: 1,
+		Runner: func(_ context.Context, _, _ string) ([]byte, []byte, int, error) {
+			return nil, nil, 0, nil
+		},
+	})
+
+	cancelled := 0
+	for _, r := range results {
+		if r.Cancelled {
+			cancelled++
+		}
+	}
+	// With 1 slot and 3 goroutines, at least 2 must take ctx.Done()
+	// before acquiring the semaphore.
+	if cancelled < 2 {
+		t.Errorf("expected at least 2 cancelled, got %d", cancelled)
+	}
+}
+
 func TestRunStdoutStderrSeparate(t *testing.T) {
 	results := Run(context.Background(), Config{
 		Targets: []Target{{Path: "/tmp", Task: "x"}},

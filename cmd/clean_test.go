@@ -818,6 +818,79 @@ func TestFindStaleCandidatesWorktreeError(t *testing.T) {
 	}
 }
 
+func TestFindStaleCandidatesCommitError(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == cmdWorktreeTest && args[1] == cmdList {
+				return strings.Join([]string{
+					wtRepo, headABC123, branchRefMain, "",
+					wtFeatureLogin, headDEF456, branchRefFeatureLogin, "",
+				}, "\n"), nil
+			}
+			if args[0] == cmdLog {
+				return "", errGitFailed
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	candidates, err := findStaleCandidates(r, branchMain, 14)
+	if err != nil {
+		t.Fatalf("findStaleCandidates: %v", err)
+	}
+	if len(candidates) != 0 {
+		t.Errorf("expected 0 candidates (commit error skipped), got %d", len(candidates))
+	}
+}
+
+func TestCleanMergedFindCandidatesError(t *testing.T) {
+	cmd, _ := newCleanMergedCmd()
+	// resolveMainBranch succeeds but findMergedCandidates fails (MergedBranches error)
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == cmdSymbolicRef {
+				return refsRemotesOriginMain, nil
+			}
+			if args[0] == cmdFetch {
+				return "", errors.New("no remote")
+			}
+			if args[0] == cmdBranch {
+				return "", errGitFailed
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	err := cleanMerged(cmd, r)
+	if err == nil {
+		t.Fatal("expected error from findMergedCandidates failure")
+	}
+}
+
+func TestCleanStaleFindCandidatesError(t *testing.T) {
+	cmd, _ := newCleanStaleCmd()
+	// resolveMainBranch succeeds but findStaleCandidates fails (ListWorktrees error)
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == cmdSymbolicRef {
+				return refsRemotesOriginMain, nil
+			}
+			if args[0] == cmdWorktreeTest {
+				return "", errGitFailed
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	err := cleanStale(cmd, r)
+	if err == nil {
+		t.Fatal("expected error from findStaleCandidates failure")
+	}
+}
+
 func TestFindStaleCandidatesSkipsBareAndEmpty(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {

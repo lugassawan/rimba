@@ -103,6 +103,29 @@ func TestFindArchivedBranchByTaskExtraction(t *testing.T) {
 	}
 }
 
+func TestFindArchivedBranchSkipsActiveInFallback(t *testing.T) {
+	// Branch "bugfix/some-task" matches task "some-task" via extraction,
+	// but it's active in a worktree → should be skipped in fallback.
+	mr := &mockRunner{
+		run: func(args ...string) (string, error) {
+			switch {
+			case args[0] == cmdBranch:
+				return "main\nbugfix/some-task", nil
+			case args[0] == cmdWorktreeTest && args[1] == cmdList:
+				return "worktree /repo\nHEAD abc\nbranch refs/heads/main\n\n" +
+					"worktree /wt/bugfix-some-task\nHEAD def\nbranch refs/heads/bugfix/some-task\n", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	_, err := FindArchivedBranch(mr, "some-task")
+	if err == nil {
+		t.Fatal("expected error when only matching branch is active")
+	}
+}
+
 func TestFindArchivedBranchError(t *testing.T) {
 	mr := &mockRunner{
 		run: func(args ...string) (string, error) {
