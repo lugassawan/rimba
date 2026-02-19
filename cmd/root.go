@@ -16,6 +16,8 @@ const (
 	flagNoColor         = "no-color"
 	flagSkipDeps        = "skip-deps"
 	flagSkipHooks       = "skip-hooks"
+	flagStaleDays       = "stale-days"
+	defaultStaleDays    = 14
 
 	hintSkipDeps  = "Skip dependency installation (faster, but requires manual install)"
 	hintSkipHooks = "Skip post-create hooks (faster, but automation won't run)"

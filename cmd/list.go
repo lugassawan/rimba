@@ -217,7 +217,7 @@ var listCmd = &cobra.Command{
 
 // listArchivedBranches shows branches not associated with any active worktree.
 func listArchivedBranches(cmd *cobra.Command, r git.Runner, mainBranch string) error {
-	archived, err := findArchivedBranches(r, mainBranch)
+	archived, err := operations.ListArchivedBranches(r, mainBranch)
 	if err != nil {
 		return err
 	}

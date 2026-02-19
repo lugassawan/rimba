@@ -26,14 +26,13 @@ const (
 	hintForce        = "Skip confirmation prompt"
 )
 
-type mergedCandidate struct {
+type cleanCandidate struct {
 	path   string
 	branch string
 }
 
 type staleCandidate struct {
-	path       string
-	branch     string
+	cleanCandidate
 	lastCommit time.Time
 }
 
@@ -151,12 +150,12 @@ func cleanMerged(cmd *cobra.Command, r git.Runner) error {
 		return nil
 	}
 
-	removed := removeMergedWorktrees(cmd, r, candidates)
+	removed := removeWorktrees(cmd, r, candidates)
 	fmt.Fprintf(cmd.OutOrStdout(), "Cleaned %d merged worktree(s).\n", removed)
 	return nil
 }
 
-func findMergedCandidates(r git.Runner, mergeRef, mainBranch string) ([]mergedCandidate, error) {
+func findMergedCandidates(r git.Runner, mergeRef, mainBranch string) ([]cleanCandidate, error) {
 	mergedList, err := git.MergedBranches(r, mergeRef)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list merged branches: %w", err)
@@ -172,19 +171,16 @@ func findMergedCandidates(r git.Runner, mergeRef, mainBranch string) ([]mergedCa
 		return nil, err
 	}
 
-	var candidates []mergedCandidate
-	for _, e := range entries {
-		if e.Branch == "" || e.Branch == mainBranch {
-			continue
-		}
+	var candidates []cleanCandidate
+	for _, e := range git.FilterEntries(entries, mainBranch) {
 		if mergedSet[e.Branch] {
-			candidates = append(candidates, mergedCandidate{path: e.Path, branch: e.Branch})
+			candidates = append(candidates, cleanCandidate{path: e.Path, branch: e.Branch})
 		}
 	}
 	return candidates, nil
 }
 
-func printMergedCandidates(cmd *cobra.Command, candidates []mergedCandidate) {
+func printMergedCandidates(cmd *cobra.Command, candidates []cleanCandidate) {
 	prefixes := resolver.AllPrefixes()
 	fmt.Fprintln(cmd.OutOrStdout(), "Merged worktrees:")
 	for _, c := range candidates {
@@ -201,7 +197,7 @@ func confirmRemoval(cmd *cobra.Command, count int, label string) bool {
 	return answer == "y" || answer == "yes"
 }
 
-func removeMergedWorktrees(cmd *cobra.Command, r git.Runner, candidates []mergedCandidate) int {
+func removeWorktrees(cmd *cobra.Command, r git.Runner, candidates []cleanCandidate) int {
 	var removed int
 	for _, c := range candidates {
 		if err := git.RemoveWorktree(r, c.path, false); err != nil {
@@ -262,13 +258,12 @@ func cleanStale(cmd *cobra.Command, r git.Runner) error {
 		return nil
 	}
 
-	// Convert stale candidates to merged candidates for reuse of removal logic
-	merged := make([]mergedCandidate, len(candidates))
+	toRemove := make([]cleanCandidate, len(candidates))
 	for i, c := range candidates {
-		merged[i] = mergedCandidate{path: c.path, branch: c.branch}
+		toRemove[i] = c.cleanCandidate
 	}
 
-	removed := removeMergedWorktrees(cmd, r, merged)
+	removed := removeWorktrees(cmd, r, toRemove)
 	fmt.Fprintf(cmd.OutOrStdout(), "Cleaned %d stale worktree(s).\n", removed)
 	return nil
 }
@@ -282,11 +277,7 @@ func findStaleCandidates(r git.Runner, mainBranch string, staleDays int) ([]stal
 	threshold := time.Now().Add(-time.Duration(staleDays) * 24 * time.Hour)
 
 	var candidates []staleCandidate
-	for _, e := range entries {
-		if e.Bare || e.Branch == "" || e.Branch == mainBranch {
-			continue
-		}
-
+	for _, e := range git.FilterEntries(entries, mainBranch) {
 		ct, err := git.LastCommitTime(r, e.Branch)
 		if err != nil {
 			continue
@@ -294,9 +285,8 @@ func findStaleCandidates(r git.Runner, mainBranch string, staleDays int) ([]stal
 
 		if ct.Before(threshold) {
 			candidates = append(candidates, staleCandidate{
-				path:       e.Path,
-				branch:     e.Branch,
-				lastCommit: ct,
+				cleanCandidate: cleanCandidate{path: e.Path, branch: e.Branch},
+				lastCommit:     ct,
 			})
 		}
 	}
