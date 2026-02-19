@@ -55,6 +55,11 @@ const (
 	taskMergeSrc    = "merge-src"
 	taskMergeDelSrc = "merge-del-src"
 
+	// Conflict-check and merge-plan test constants.
+	taskConflictA = "cc-task-a"
+	taskConflictB = "cc-task-b"
+	taskConflictC = "cc-task-c"
+
 	// Shared test data.
 	fileFromMain    = "from-main.txt"
 	contentMainChg  = "main change"
@@ -69,9 +74,9 @@ const (
 	msgSaveConfig = "save config: %v"
 
 	// Shared flags.
-	flagMergedE2E  = "--merged"
-	flagForceE2E   = "--force"
-	flagDryRunE2E  = "--dry-run"
+	flagMergedE2E = "--merged"
+	flagForceE2E  = "--force"
+	flagDryRunE2E = "--dry-run"
 )
 
 var (
