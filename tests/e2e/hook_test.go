@@ -1,7 +1,10 @@
 package e2e_test
 
 import (
+	"bytes"
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -10,10 +13,7 @@ import (
 	"github.com/lugassawan/rimba/testutil"
 )
 
-const (
-	hookFileName   = hook.HookName
-	fatalReadHook  = "read hook: %v"
-)
+const fatalReadHook = "read hook: %v"
 
 func TestHookInstall(t *testing.T) {
 	if testing.Short() {
@@ -24,27 +24,40 @@ func TestHookInstall(t *testing.T) {
 
 	r := rimbaSuccess(t, repo, "hook", "install")
 	assertContains(t, r.Stdout, "Installed post-merge hook")
+	assertContains(t, r.Stdout, "Installed pre-commit hook")
 
-	// Verify file exists and is executable
-	hookPath := filepath.Join(repo, ".git", "hooks", hookFileName)
-	info, err := os.Stat(hookPath)
+	// Verify post-merge file exists and is executable
+	postMergePath := filepath.Join(repo, ".git", "hooks", hook.PostMergeHook)
+	info, err := os.Stat(postMergePath)
 	if err != nil {
-		t.Fatalf("hook file should exist: %v", err)
+		t.Fatalf("post-merge hook file should exist: %v", err)
 	}
 	if info.Mode().Perm()&0111 == 0 {
-		t.Error("hook file should be executable")
+		t.Error("post-merge hook file should be executable")
+	}
+
+	// Verify pre-commit file exists and is executable
+	preCommitPath := filepath.Join(repo, ".git", "hooks", hook.PreCommitHook)
+	info, err = os.Stat(preCommitPath)
+	if err != nil {
+		t.Fatalf("pre-commit hook file should exist: %v", err)
+	}
+	if info.Mode().Perm()&0111 == 0 {
+		t.Error("pre-commit hook file should be executable")
 	}
 
 	// Verify content has rimba markers
-	content, err := os.ReadFile(hookPath)
-	if err != nil {
-		t.Fatalf(fatalReadHook, err)
-	}
-	if !strings.Contains(string(content), hook.BeginMarker) {
-		t.Error("hook file should contain BEGIN marker")
-	}
-	if !strings.Contains(string(content), hook.EndMarker) {
-		t.Error("hook file should contain END marker")
+	for _, hookPath := range []string{postMergePath, preCommitPath} {
+		content, err := os.ReadFile(hookPath)
+		if err != nil {
+			t.Fatalf(fatalReadHook, err)
+		}
+		if !strings.Contains(string(content), hook.BeginMarker) {
+			t.Errorf("%s should contain BEGIN marker", hookPath)
+		}
+		if !strings.Contains(string(content), hook.EndMarker) {
+			t.Errorf("%s should contain END marker", hookPath)
+		}
 	}
 }
 
@@ -70,11 +83,17 @@ func TestHookUninstall(t *testing.T) {
 
 	rimbaSuccess(t, repo, "hook", "install")
 	r := rimbaSuccess(t, repo, "hook", "uninstall")
-	assertContains(t, r.Stdout, "Uninstalled")
+	assertContains(t, r.Stdout, "Uninstalled rimba post-merge hook")
+	assertContains(t, r.Stdout, "Uninstalled rimba pre-commit hook")
 
-	hookPath := filepath.Join(repo, ".git", "hooks", hookFileName)
-	if _, err := os.Stat(hookPath); !os.IsNotExist(err) {
-		t.Error("hook file should be removed after uninstall")
+	postMergePath := filepath.Join(repo, ".git", "hooks", hook.PostMergeHook)
+	if _, err := os.Stat(postMergePath); !os.IsNotExist(err) {
+		t.Error("post-merge hook file should be removed after uninstall")
+	}
+
+	preCommitPath := filepath.Join(repo, ".git", "hooks", hook.PreCommitHook)
+	if _, err := os.Stat(preCommitPath); !os.IsNotExist(err) {
+		t.Error("pre-commit hook file should be removed after uninstall")
 	}
 }
 
@@ -97,12 +116,14 @@ func TestHookStatus(t *testing.T) {
 
 	// Before install
 	r := rimbaSuccess(t, repo, "hook", "status")
-	assertContains(t, r.Stdout, "not installed")
+	assertContains(t, r.Stdout, "post-merge hook is not installed")
+	assertContains(t, r.Stdout, "pre-commit hook is not installed")
 
 	// After install
 	rimbaSuccess(t, repo, "hook", "install")
 	r = rimbaSuccess(t, repo, "hook", "status")
-	assertContains(t, r.Stdout, "is installed")
+	assertContains(t, r.Stdout, "post-merge hook is installed")
+	assertContains(t, r.Stdout, "pre-commit hook is installed")
 }
 
 func TestHookPreservesExistingHook(t *testing.T) {
@@ -112,20 +133,20 @@ func TestHookPreservesExistingHook(t *testing.T) {
 
 	repo := setupRepo(t)
 
-	// Create a user hook first
+	// Create a user hook in post-merge first
 	hooksDir := filepath.Join(repo, ".git", "hooks")
 	if err := os.MkdirAll(hooksDir, 0755); err != nil {
 		t.Fatalf("mkdir hooks: %v", err)
 	}
 	userContent := "#!/bin/sh\necho 'user hook'\n"
-	if err := os.WriteFile(filepath.Join(hooksDir, hookFileName), []byte(userContent), 0755); err != nil {
+	if err := os.WriteFile(filepath.Join(hooksDir, hook.PostMergeHook), []byte(userContent), 0755); err != nil {
 		t.Fatalf("write user hook: %v", err)
 	}
 
 	// Install rimba hook
 	rimbaSuccess(t, repo, "hook", "install")
 
-	content, err := os.ReadFile(filepath.Join(hooksDir, hookFileName))
+	content, err := os.ReadFile(filepath.Join(hooksDir, hook.PostMergeHook))
 	if err != nil {
 		t.Fatalf(fatalReadHook, err)
 	}
@@ -139,10 +160,10 @@ func TestHookPreservesExistingHook(t *testing.T) {
 		t.Error("rimba block should be present after install")
 	}
 
-	// Uninstall rimba hook
+	// Uninstall rimba hooks
 	rimbaSuccess(t, repo, "hook", "uninstall")
 
-	content, err = os.ReadFile(filepath.Join(hooksDir, hookFileName))
+	content, err = os.ReadFile(filepath.Join(hooksDir, hook.PostMergeHook))
 	if err != nil {
 		t.Fatalf("read hook after uninstall: %v", err)
 	}
@@ -188,4 +209,78 @@ func TestHookPostMergeRuns(t *testing.T) {
 
 	// Verify the merge worked (file exists)
 	assertFileExists(t, filepath.Join(repo, "hook-test.txt"))
+}
+
+func TestHookPreCommitBlocksMainCommit(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupRepo(t)
+	rimbaSuccess(t, repo, "hook", "install")
+
+	// Try to commit on main — should be blocked
+	testutil.CreateFile(t, repo, "blocked.txt", "should not commit")
+	testutil.GitCmd(t, repo, "add", ".")
+
+	// Run git commit directly — expect failure
+	r := gitCommitResult(t, repo, "blocked commit on main")
+	if r.ExitCode == 0 {
+		t.Fatal("git commit on main should fail with pre-commit hook installed")
+	}
+	if !strings.Contains(r.Stderr, "direct commits to main are not allowed") &&
+		!strings.Contains(r.Stdout, "direct commits to main are not allowed") {
+		t.Errorf("expected protection message, got:\nstdout: %s\nstderr: %s", r.Stdout, r.Stderr)
+	}
+}
+
+func TestHookPreCommitAllowsBranchCommit(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupRepo(t)
+	rimbaSuccess(t, repo, "hook", "install")
+
+	// Switch to a feature branch
+	testutil.GitCmd(t, repo, "checkout", "-b", "feature/test-branch")
+	testutil.CreateFile(t, repo, "allowed.txt", "should commit fine")
+	testutil.GitCmd(t, repo, "add", ".")
+
+	// Commit should succeed on a feature branch
+	r := gitCommitResult(t, repo, "allowed commit on branch")
+	if r.ExitCode != 0 {
+		t.Fatalf("git commit on feature branch should succeed, got exit %d\nstdout: %s\nstderr: %s",
+			r.ExitCode, r.Stdout, r.Stderr)
+	}
+}
+
+// gitCommitResult runs `git commit` in the repo and returns the result.
+func gitCommitResult(t *testing.T, dir, msg string) result {
+	t.Helper()
+
+	cmd := exec.Command("git", "commit", "-m", msg)
+	cmd.Dir = dir
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+
+	r := result{
+		Stdout: stdout.String(),
+		Stderr: stderr.String(),
+	}
+
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			r.ExitCode = exitErr.ExitCode()
+		} else {
+			t.Fatalf("failed to run git commit: %v", err)
+		}
+	}
+
+	return r
 }

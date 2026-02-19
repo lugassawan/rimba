@@ -45,6 +45,9 @@ func TestHookInstallSuccess(t *testing.T) {
 	if !strings.Contains(out, "Installed post-merge hook") {
 		t.Errorf("output = %q, want 'Installed post-merge hook'", out)
 	}
+	if !strings.Contains(out, "Installed pre-commit hook") {
+		t.Errorf("output = %q, want 'Installed pre-commit hook'", out)
+	}
 }
 
 func TestHookInstallAlreadyInstalled(t *testing.T) {
@@ -53,7 +56,8 @@ func TestHookInstallAlreadyInstalled(t *testing.T) {
 	_ = config.Save(filepath.Join(repoDir, config.FileName), cfg)
 
 	hooksDir := filepath.Join(repoDir, ".git", "hooks")
-	_ = hook.Install(hooksDir, branchMain)
+	_ = hook.Install(hooksDir, hook.PostMergeHook, hook.PostMergeBlock(branchMain))
+	_ = hook.Install(hooksDir, hook.PreCommitHook, hook.PreCommitBlock())
 
 	r := hookTestRunner(repoDir)
 	restore := overrideNewRunner(r)
@@ -64,8 +68,12 @@ func TestHookInstallAlreadyInstalled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("hookInstallCmd.RunE: %v", err)
 	}
-	if !strings.Contains(buf.String(), "already installed") {
-		t.Errorf("output = %q, want 'already installed'", buf.String())
+	out := buf.String()
+	if !strings.Contains(out, "post-merge hook is already installed") {
+		t.Errorf("output = %q, want 'post-merge hook is already installed'", out)
+	}
+	if !strings.Contains(out, "pre-commit hook is already installed") {
+		t.Errorf("output = %q, want 'pre-commit hook is already installed'", out)
 	}
 }
 
@@ -73,7 +81,8 @@ func TestHookUninstallSuccess(t *testing.T) {
 	repoDir := t.TempDir()
 
 	hooksDir := filepath.Join(repoDir, ".git", "hooks")
-	_ = hook.Install(hooksDir, branchMain)
+	_ = hook.Install(hooksDir, hook.PostMergeHook, hook.PostMergeBlock(branchMain))
+	_ = hook.Install(hooksDir, hook.PreCommitHook, hook.PreCommitBlock())
 
 	r := hookTestRunner(repoDir)
 	restore := overrideNewRunner(r)
@@ -84,8 +93,12 @@ func TestHookUninstallSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("hookUninstallCmd.RunE: %v", err)
 	}
-	if !strings.Contains(buf.String(), "Uninstalled") {
-		t.Errorf("output = %q, want 'Uninstalled'", buf.String())
+	out := buf.String()
+	if !strings.Contains(out, "Uninstalled rimba post-merge hook") {
+		t.Errorf("output = %q, want 'Uninstalled rimba post-merge hook'", out)
+	}
+	if !strings.Contains(out, "Uninstalled rimba pre-commit hook") {
+		t.Errorf("output = %q, want 'Uninstalled rimba pre-commit hook'", out)
 	}
 }
 
@@ -110,7 +123,8 @@ func TestHookStatusInstalled(t *testing.T) {
 	repoDir := t.TempDir()
 
 	hooksDir := filepath.Join(repoDir, ".git", "hooks")
-	_ = hook.Install(hooksDir, branchMain)
+	_ = hook.Install(hooksDir, hook.PostMergeHook, hook.PostMergeBlock(branchMain))
+	_ = hook.Install(hooksDir, hook.PreCommitHook, hook.PreCommitBlock())
 
 	r := hookTestRunner(repoDir)
 	restore := overrideNewRunner(r)
@@ -121,8 +135,12 @@ func TestHookStatusInstalled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("hookStatusCmd.RunE: %v", err)
 	}
-	if !strings.Contains(buf.String(), "is installed") {
-		t.Errorf("output = %q, want 'is installed'", buf.String())
+	out := buf.String()
+	if !strings.Contains(out, "post-merge hook is installed") {
+		t.Errorf("output = %q, want 'post-merge hook is installed'", out)
+	}
+	if !strings.Contains(out, "pre-commit hook is installed") {
+		t.Errorf("output = %q, want 'pre-commit hook is installed'", out)
 	}
 }
 
@@ -138,7 +156,11 @@ func TestHookStatusNotInstalled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("hookStatusCmd.RunE: %v", err)
 	}
-	if !strings.Contains(buf.String(), "not installed") {
-		t.Errorf("output = %q, want 'not installed'", buf.String())
+	out := buf.String()
+	if !strings.Contains(out, "post-merge hook is not installed") {
+		t.Errorf("output = %q, want 'post-merge hook is not installed'", out)
+	}
+	if !strings.Contains(out, "pre-commit hook is not installed") {
+		t.Errorf("output = %q, want 'pre-commit hook is not installed'", out)
 	}
 }
