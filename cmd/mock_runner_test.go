@@ -41,13 +41,15 @@ const (
 	cmdRevList                = "rev-list"
 
 	// Shared git command and value constants
-	cmdFetch             = "fetch"
-	cmdRemove            = "remove"
-	cmdSymbolicRef       = "symbolic-ref"
-	cmdStatus            = "status"
+	cmdList               = "list"
+	cmdDiff               = "diff"
+	cmdFetch              = "fetch"
+	cmdRemove             = "remove"
+	cmdSymbolicRef        = "symbolic-ref"
+	cmdStatus             = "status"
 	refsRemotesOriginMain = "refs/remotes/origin/main"
-	aheadBehindZero      = "0\t0"
-	repoPath             = "/repo"
+	aheadBehindZero       = "0\t0"
+	repoPath              = "/repo"
 
 	taskLogin        = "login"
 	taskWantFmt      = "task = %q, want %q"
