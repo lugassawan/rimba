@@ -68,6 +68,30 @@ func TestHooksDir(t *testing.T) {
 	}
 }
 
+func TestHooksDirWithCoreHooksPath(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+
+	// Set core.hooksPath to .githooks
+	testutil.GitCmd(t, repo, "config", "core.hooksPath", ".githooks")
+
+	r := &git.ExecRunner{Dir: repo}
+	dir, err := git.HooksDir(r)
+	if err != nil {
+		t.Fatalf("HooksDir: %v", err)
+	}
+
+	// Resolve symlinks for macOS /private/var vs /var
+	wantDir, _ := filepath.EvalSymlinks(filepath.Join(repo, ".githooks"))
+	gotDir, _ := filepath.EvalSymlinks(dir)
+	if gotDir != wantDir {
+		t.Errorf("HooksDir = %q, want %q", gotDir, wantDir)
+	}
+}
+
 func TestMainRepoRoot(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipIntegration)

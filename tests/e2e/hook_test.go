@@ -15,6 +15,24 @@ import (
 
 const fatalReadHook = "read hook: %v"
 
+// resolveHooksDir returns the hooks directory for a repo, respecting core.hooksPath.
+func resolveHooksDir(t *testing.T, repo string) string {
+	t.Helper()
+	cmd := exec.Command("git", "config", "core.hooksPath")
+	cmd.Dir = repo
+	out, err := cmd.Output()
+	if err == nil {
+		p := strings.TrimSpace(string(out))
+		if p != "" {
+			if filepath.IsAbs(p) {
+				return p
+			}
+			return filepath.Join(repo, p)
+		}
+	}
+	return filepath.Join(repo, ".git", "hooks")
+}
+
 func TestHookInstall(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
@@ -27,7 +45,8 @@ func TestHookInstall(t *testing.T) {
 	assertContains(t, r.Stdout, "Installed pre-commit hook")
 
 	// Verify post-merge file exists and is executable
-	postMergePath := filepath.Join(repo, ".git", "hooks", hook.PostMergeHook)
+	hooksDir := resolveHooksDir(t, repo)
+	postMergePath := filepath.Join(hooksDir, hook.PostMergeHook)
 	info, err := os.Stat(postMergePath)
 	if err != nil {
 		t.Fatalf("post-merge hook file should exist: %v", err)
@@ -37,7 +56,7 @@ func TestHookInstall(t *testing.T) {
 	}
 
 	// Verify pre-commit file exists and is executable
-	preCommitPath := filepath.Join(repo, ".git", "hooks", hook.PreCommitHook)
+	preCommitPath := filepath.Join(hooksDir, hook.PreCommitHook)
 	info, err = os.Stat(preCommitPath)
 	if err != nil {
 		t.Fatalf("pre-commit hook file should exist: %v", err)
@@ -86,12 +105,13 @@ func TestHookUninstall(t *testing.T) {
 	assertContains(t, r.Stdout, "Uninstalled rimba post-merge hook")
 	assertContains(t, r.Stdout, "Uninstalled rimba pre-commit hook")
 
-	postMergePath := filepath.Join(repo, ".git", "hooks", hook.PostMergeHook)
+	hooksDir := resolveHooksDir(t, repo)
+	postMergePath := filepath.Join(hooksDir, hook.PostMergeHook)
 	if _, err := os.Stat(postMergePath); !os.IsNotExist(err) {
 		t.Error("post-merge hook file should be removed after uninstall")
 	}
 
-	preCommitPath := filepath.Join(repo, ".git", "hooks", hook.PreCommitHook)
+	preCommitPath := filepath.Join(hooksDir, hook.PreCommitHook)
 	if _, err := os.Stat(preCommitPath); !os.IsNotExist(err) {
 		t.Error("pre-commit hook file should be removed after uninstall")
 	}
@@ -134,7 +154,7 @@ func TestHookPreservesExistingHook(t *testing.T) {
 	repo := setupRepo(t)
 
 	// Create a user hook in post-merge first
-	hooksDir := filepath.Join(repo, ".git", "hooks")
+	hooksDir := resolveHooksDir(t, repo)
 	if err := os.MkdirAll(hooksDir, 0755); err != nil {
 		t.Fatalf("mkdir hooks: %v", err)
 	}
@@ -187,6 +207,50 @@ func TestHookWorksWithoutInit(t *testing.T) {
 	rimbaSuccess(t, repo, "hook", "install")
 	rimbaSuccess(t, repo, "hook", "status")
 	rimbaSuccess(t, repo, "hook", "uninstall")
+}
+
+func TestHookInstallWithCoreHooksPath(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupRepo(t)
+
+	// Set core.hooksPath to .githooks
+	testutil.GitCmd(t, repo, "config", "core.hooksPath", ".githooks")
+
+	// Install hooks — should go into .githooks/, not .git/hooks/
+	rimbaSuccess(t, repo, "hook", "install")
+
+	customDir := filepath.Join(repo, ".githooks")
+	postMergePath := filepath.Join(customDir, hook.PostMergeHook)
+	if _, err := os.Stat(postMergePath); err != nil {
+		t.Fatalf("post-merge hook should exist in .githooks/: %v", err)
+	}
+	preCommitPath := filepath.Join(customDir, hook.PreCommitHook)
+	if _, err := os.Stat(preCommitPath); err != nil {
+		t.Fatalf("pre-commit hook should exist in .githooks/: %v", err)
+	}
+
+	// Verify hooks are NOT in .git/hooks/
+	defaultDir := filepath.Join(repo, ".git", "hooks")
+	if _, err := os.Stat(filepath.Join(defaultDir, hook.PostMergeHook)); err == nil {
+		t.Error("post-merge hook should NOT exist in .git/hooks/ when core.hooksPath is set")
+	}
+
+	// Status should report installed
+	r := rimbaSuccess(t, repo, "hook", "status")
+	assertContains(t, r.Stdout, "post-merge hook is installed")
+	assertContains(t, r.Stdout, "pre-commit hook is installed")
+
+	// Uninstall should remove from .githooks/
+	rimbaSuccess(t, repo, "hook", "uninstall")
+	if _, err := os.Stat(postMergePath); !os.IsNotExist(err) {
+		t.Error("post-merge hook should be removed from .githooks/ after uninstall")
+	}
+	if _, err := os.Stat(preCommitPath); !os.IsNotExist(err) {
+		t.Error("pre-commit hook should be removed from .githooks/ after uninstall")
+	}
 }
 
 func TestHookPostMergeRuns(t *testing.T) {

@@ -25,6 +25,7 @@ const (
 	fatalDefaultFmt  = "DefaultBranch: %v"
 	errBranchWantFmt = "branch = %q, want %q"
 	flagGitCommonDir = "--git-common-dir"
+	flagShowToplevel = "--show-toplevel"
 	fakeTree         = "tree123"
 	fakeTempCommit   = "temp456"
 )
@@ -427,10 +428,13 @@ func TestHooksDirError(t *testing.T) {
 func TestHooksDirRelativePath(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
+			if args[0] == cmdConfig {
+				return "", errors.New("not configured")
+			}
 			if len(args) >= 2 && args[1] == flagGitCommonDir {
 				return fakeGitDir, nil
 			}
-			if len(args) >= 2 && args[1] == "--show-toplevel" {
+			if len(args) >= 2 && args[1] == flagShowToplevel {
 				return fakeRepoDir, nil
 			}
 			return "", errors.New("unexpected command")
@@ -452,6 +456,9 @@ func TestHooksDirAbsolutePath(t *testing.T) {
 	absGitDir := filepath.Join(fakeRepoDir, fakeGitDir)
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
+			if args[0] == cmdConfig {
+				return "", errors.New("not configured")
+			}
 			if len(args) >= 2 && args[1] == flagGitCommonDir {
 				return absGitDir, nil
 			}
@@ -485,10 +492,11 @@ func TestRepoRootError(t *testing.T) {
 }
 
 func TestHooksDirRelativePathRepoRootError(t *testing.T) {
-	callCount := 0
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
-			callCount++
+			if args[0] == cmdConfig {
+				return "", errors.New("not configured")
+			}
 			if len(args) >= 2 && args[1] == flagGitCommonDir {
 				return fakeGitDir, nil // relative path
 			}
@@ -502,6 +510,70 @@ func TestHooksDirRelativePathRepoRootError(t *testing.T) {
 		t.Fatal("expected error from HooksDir when RepoRoot fails")
 	}
 	assertContains(t, err, errNotAGitRepo)
+}
+
+func TestHooksDirCoreHooksPathAbsolute(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == cmdConfig {
+				return "/custom/hooks", nil
+			}
+			return "", errors.New("unexpected command")
+		},
+	}
+
+	dir, err := HooksDir(r)
+	if err != nil {
+		t.Fatalf("HooksDir: %v", err)
+	}
+
+	if dir != "/custom/hooks" {
+		t.Errorf("HooksDir = %q, want %q", dir, "/custom/hooks")
+	}
+}
+
+func TestHooksDirCoreHooksPathRelative(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == cmdConfig {
+				return ".githooks", nil
+			}
+			if len(args) >= 2 && args[1] == flagGitCommonDir {
+				return fakeGitDir, nil
+			}
+			if len(args) >= 2 && args[1] == flagShowToplevel {
+				return fakeRepoDir, nil
+			}
+			return "", errors.New("unexpected command")
+		},
+	}
+
+	dir, err := HooksDir(r)
+	if err != nil {
+		t.Fatalf("HooksDir: %v", err)
+	}
+
+	want := filepath.Join(fakeRepoDir, ".githooks")
+	if dir != want {
+		t.Errorf("HooksDir = %q, want %q", dir, want)
+	}
+}
+
+func TestHooksDirCoreHooksPathRelativeRepoRootError(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == cmdConfig {
+				return ".githooks", nil
+			}
+			// MainRepoRoot → resolveCommonDir fails
+			return "", errors.New(errNotARepo)
+		},
+	}
+
+	_, err := HooksDir(r)
+	if err == nil {
+		t.Fatal("expected error from HooksDir when MainRepoRoot fails")
+	}
 }
 
 func TestListWorktreesBareEntry(t *testing.T) {
@@ -706,7 +778,7 @@ func TestMainRepoRootRelativePath(t *testing.T) {
 			if len(args) >= 2 && args[1] == flagGitCommonDir {
 				return fakeGitDir, nil
 			}
-			if len(args) >= 2 && args[1] == "--show-toplevel" {
+			if len(args) >= 2 && args[1] == flagShowToplevel {
 				return fakeRepoDir, nil
 			}
 			return "", errors.New("unexpected command")
