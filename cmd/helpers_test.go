@@ -10,10 +10,13 @@ import (
 	"github.com/lugassawan/rimba/internal/config"
 )
 
-// repoRootRunner returns a mockRunner whose RepoRoot resolves to dir.
+// repoRootRunner returns a mockRunner whose RepoRoot/MainRepoRoot resolves to dir.
 func repoRootRunner(dir string, extra func(args ...string) (string, error)) *mockRunner {
 	return &mockRunner{
 		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdGitCommonDir {
+				return filepath.Join(dir, ".git"), nil
+			}
 			if len(args) >= 2 && args[1] == "--show-toplevel" {
 				return dir, nil
 			}

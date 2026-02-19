@@ -23,6 +23,7 @@ const (
 	wtPrefix              = "worktree "
 	headMainBlock         = "\nHEAD abc\nbranch refs/heads/main\n"
 	cmdShowToplevel       = "--show-toplevel"
+	cmdGitCommonDir       = "--git-common-dir"
 	cmdRevParse           = "rev-parse"
 	dirtyOutput           = "M dirty.go"
 	headABC123            = "HEAD abc123"
