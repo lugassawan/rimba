@@ -1,8 +1,25 @@
 package conflict
 
 import (
+	"errors"
+	"strings"
 	"testing"
+
+	"github.com/lugassawan/rimba/internal/resolver"
 )
+
+// mockRunner implements git.Runner for testing within the conflict package.
+type mockRunner struct {
+	run func(args ...string) (string, error)
+}
+
+func (m *mockRunner) Run(args ...string) (string, error) {
+	return m.run(args...)
+}
+
+func (m *mockRunner) RunInDir(_ string, _ ...string) (string, error) {
+	return "", nil
+}
 
 func TestDetectOverlapsNoOverlap(t *testing.T) {
 	diffs := map[string][]string{
@@ -154,5 +171,186 @@ func TestSeverityLabel(t *testing.T) {
 				t.Errorf("SeverityLabel = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestCollectDiffsSuccess(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			// args: diff --name-only main...feature/x
+			if args[0] == "diff" && strings.Contains(args[2], "feature/a") {
+				return "file-a.go\nshared.go", nil
+			}
+			if args[0] == "diff" && strings.Contains(args[2], "feature/b") {
+				return "file-b.go\nshared.go", nil
+			}
+			return "", nil
+		},
+	}
+
+	branches := []resolver.WorktreeInfo{
+		{Branch: "feature/a", Path: "/wt/a"},
+		{Branch: "feature/b", Path: "/wt/b"},
+	}
+
+	diffs, err := CollectDiffs(r, "main", branches)
+	if err != nil {
+		t.Fatalf("CollectDiffs: %v", err)
+	}
+	if len(diffs) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(diffs))
+	}
+	if len(diffs["feature/a"]) != 2 {
+		t.Errorf("feature/a files = %d, want 2", len(diffs["feature/a"]))
+	}
+	if len(diffs["feature/b"]) != 2 {
+		t.Errorf("feature/b files = %d, want 2", len(diffs["feature/b"]))
+	}
+}
+
+func TestCollectDiffsEmpty(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			return "", nil
+		},
+	}
+
+	diffs, err := CollectDiffs(r, "main", nil)
+	if err != nil {
+		t.Fatalf("CollectDiffs: %v", err)
+	}
+	if len(diffs) != 0 {
+		t.Errorf("expected empty diffs, got %d", len(diffs))
+	}
+}
+
+func TestCollectDiffsError(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			return "", errors.New("git diff failed")
+		},
+	}
+
+	branches := []resolver.WorktreeInfo{
+		{Branch: "feature/a", Path: "/wt/a"},
+	}
+
+	_, err := CollectDiffs(r, "main", branches)
+	if err == nil {
+		t.Fatal("expected error from CollectDiffs")
+	}
+	if !strings.Contains(err.Error(), "diff feature/a") {
+		t.Errorf("error = %q, want to contain branch name", err.Error())
+	}
+}
+
+func TestDryMergeAllClean(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			return "abc123", nil // clean merge
+		},
+	}
+
+	branches := []resolver.WorktreeInfo{
+		{Branch: "feature/a", Path: "/wt/a"},
+		{Branch: "feature/b", Path: "/wt/b"},
+	}
+
+	results, err := DryMergeAll(r, branches)
+	if err != nil {
+		t.Fatalf("DryMergeAll: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 pair result, got %d", len(results))
+	}
+	if results[0].HasConflicts {
+		t.Error("expected no conflicts")
+	}
+	if results[0].Branch1 != "feature/a" || results[0].Branch2 != "feature/b" {
+		t.Errorf("branches = %q/%q, want feature/a/feature/b", results[0].Branch1, results[0].Branch2)
+	}
+}
+
+func TestDryMergeAllConflicts(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			return "abc123\nCONFLICT (content): Merge conflict in shared.go", errors.New("exit status 1")
+		},
+	}
+
+	branches := []resolver.WorktreeInfo{
+		{Branch: "feature/a", Path: "/wt/a"},
+		{Branch: "feature/b", Path: "/wt/b"},
+	}
+
+	results, err := DryMergeAll(r, branches)
+	if err != nil {
+		t.Fatalf("DryMergeAll: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 pair result, got %d", len(results))
+	}
+	if !results[0].HasConflicts {
+		t.Error("expected conflicts")
+	}
+	if len(results[0].ConflictFiles) != 1 || results[0].ConflictFiles[0] != "shared.go" {
+		t.Errorf("ConflictFiles = %v, want [shared.go]", results[0].ConflictFiles)
+	}
+}
+
+func TestDryMergeAllError(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			return "", errors.New("not a valid object")
+		},
+	}
+
+	branches := []resolver.WorktreeInfo{
+		{Branch: "feature/a", Path: "/wt/a"},
+		{Branch: "feature/b", Path: "/wt/b"},
+	}
+
+	_, err := DryMergeAll(r, branches)
+	if err == nil {
+		t.Fatal("expected error from DryMergeAll")
+	}
+}
+
+func TestDryMergeAllThreeBranches(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			return "abc123", nil
+		},
+	}
+
+	branches := []resolver.WorktreeInfo{
+		{Branch: "feature/a", Path: "/wt/a"},
+		{Branch: "feature/b", Path: "/wt/b"},
+		{Branch: "feature/c", Path: "/wt/c"},
+	}
+
+	results, err := DryMergeAll(r, branches)
+	if err != nil {
+		t.Fatalf("DryMergeAll: %v", err)
+	}
+	// 3 branches = 3 pairs: (a,b), (a,c), (b,c)
+	if len(results) != 3 {
+		t.Fatalf("expected 3 pair results, got %d", len(results))
+	}
+}
+
+func TestDryMergeAllEmpty(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			return "", nil
+		},
+	}
+
+	results, err := DryMergeAll(r, nil)
+	if err != nil {
+		t.Fatalf("DryMergeAll: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected empty results, got %d", len(results))
 	}
 }
