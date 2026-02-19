@@ -12,6 +12,8 @@ import (
 
 const taskNotMerged = "not-merged"
 
+const flagStaleE2E = "--stale"
+
 func TestCleanPrunesStale(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
@@ -202,8 +204,6 @@ func TestCleanMergedWorksWithoutInit(t *testing.T) {
 	r := rimbaSuccess(t, repo, "clean", flagMergedE2E, flagForceE2E)
 	assertContains(t, r.Stdout, "No merged worktrees found")
 }
-
-const flagStaleE2E = "--stale"
 
 func TestCleanStaleDetects(t *testing.T) {
 	if testing.Short() {
