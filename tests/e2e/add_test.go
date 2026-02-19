@@ -324,6 +324,115 @@ func TestAddHintsSuppressedByRIMBAQUIET(t *testing.T) {
 	assertNotContains(t, r.Stderr, "Options:")
 }
 
+func TestAddCopiesFromMainRepoRoot(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupRepo(t)
+
+	// Create a gitignored file that only exists at the main repo root
+	testutil.CreateFile(t, repo, ".claude", "claude-config")
+
+	rimbaSuccess(t, repo, "init")
+
+	// Override copy_files to include .claude
+	cfg := loadConfig(t, repo)
+	cfg.CopyFiles = []string{".claude"}
+	if err := config.Save(filepath.Join(repo, configFile), cfg); err != nil {
+		t.Fatalf(msgSaveConfig, err)
+	}
+
+	// Create a first worktree
+	rimbaSuccess(t, repo, "add", "first-wt")
+
+	// Now run rimba add FROM the first worktree — this is the key scenario.
+	// RepoRoot would return the worktree path, but MainRepoRoot returns the main repo.
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	firstBranch := resolver.BranchName(defaultPrefix, "first-wt")
+	firstWtPath := resolver.WorktreePath(wtDir, firstBranch)
+
+	r := rimbaSuccess(t, firstWtPath, "add", "second-wt")
+	assertContains(t, r.Stdout, "Created worktree")
+
+	// Verify .claude was copied to the second worktree
+	secondBranch := resolver.BranchName(defaultPrefix, "second-wt")
+	secondWtPath := resolver.WorktreePath(wtDir, secondBranch)
+	assertFileExists(t, filepath.Join(secondWtPath, ".claude"))
+
+	data, err := os.ReadFile(filepath.Join(secondWtPath, ".claude"))
+	if err != nil {
+		t.Fatalf("failed to read copied .claude: %v", err)
+	}
+	if string(data) != "claude-config" {
+		t.Errorf("expected .claude content %q, got %q", "claude-config", string(data))
+	}
+}
+
+func TestAddCopiesNestedFile(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupRepo(t)
+
+	// Create a nested file in the repo root
+	subDir := filepath.Join(repo, dotVscode)
+	if err := os.Mkdir(subDir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	testutil.CreateFile(t, subDir, "settings.local.json", `{"local":true}`)
+
+	rimbaSuccess(t, repo, "init")
+
+	// Override copy_files to include the nested file path (not directory)
+	cfg := loadConfig(t, repo)
+	cfg.CopyFiles = []string{dotVscode + "/settings.local.json"}
+	if err := config.Save(filepath.Join(repo, configFile), cfg); err != nil {
+		t.Fatalf(msgSaveConfig, err)
+	}
+
+	rimbaSuccess(t, repo, "add", "nested-file-task")
+
+	// Verify the nested file was copied with parent dir created
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch := resolver.BranchName(defaultPrefix, "nested-file-task")
+	wtPath := resolver.WorktreePath(wtDir, branch)
+	assertFileExists(t, filepath.Join(wtPath, dotVscode, "settings.local.json"))
+
+	data, err := os.ReadFile(filepath.Join(wtPath, dotVscode, "settings.local.json"))
+	if err != nil {
+		t.Fatalf("failed to read copied file: %v", err)
+	}
+	if string(data) != `{"local":true}` {
+		t.Errorf("expected content %q, got %q", `{"local":true}`, string(data))
+	}
+}
+
+func TestAddShowsSkippedFiles(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupRepo(t)
+
+	// Create only one of the listed files
+	testutil.CreateFile(t, repo, ".env", "SECRET=value")
+
+	rimbaSuccess(t, repo, "init")
+
+	// Override copy_files to include both existing and non-existing entries
+	cfg := loadConfig(t, repo)
+	cfg.CopyFiles = []string{".env", ".nonexistent", ".also-missing"}
+	if err := config.Save(filepath.Join(repo, configFile), cfg); err != nil {
+		t.Fatalf(msgSaveConfig, err)
+	}
+
+	r := rimbaSuccess(t, repo, "add", "skipped-test")
+	assertContains(t, r.Stdout, "Copied: [.env]")
+	assertContains(t, r.Stdout, "Skipped (not found): [.nonexistent .also-missing]")
+}
+
 // loadConfig is a test helper that loads the rimba config from a repo.
 func loadConfig(t *testing.T, repo string) *config.Config {
 	t.Helper()
