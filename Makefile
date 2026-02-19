@@ -18,7 +18,7 @@ test-short:
 	go test ./... -v -short -count=1
 
 clean:
-	rm -rf bin/
+	rm -rf bin/ custom-gcl
 
 test-e2e:
 	go test ./tests/e2e/ -v -count=1 -timeout 120s
@@ -27,8 +27,11 @@ test-coverage:
 	go test ./... -coverprofile=coverage.out -count=1
 	go tool cover -func=coverage.out
 
-lint:
-	golangci-lint run ./...
+lint: custom-gcl
+	./custom-gcl run ./...
+
+custom-gcl:
+	golangci-lint custom
 
 bench:
 	go test -bench=. -benchmem -run=^$$ ./...

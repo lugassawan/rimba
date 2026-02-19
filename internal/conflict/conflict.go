@@ -124,9 +124,10 @@ func CollectDiffs(r git.Runner, mainBranch string, branches []resolver.WorktreeI
 	return diffs, nil
 }
 
+type pair struct{ i, j int }
+
 // DryMergeAll runs git merge-tree for all unique branch pairs, in parallel.
 func DryMergeAll(r git.Runner, branches []resolver.WorktreeInfo) ([]DryMergeResult, error) {
-	type pair struct{ i, j int }
 	var pairs []pair
 	for i := range branches {
 		for j := i + 1; j < len(branches); j++ {

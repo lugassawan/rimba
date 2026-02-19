@@ -20,6 +20,13 @@ const (
 	defaultStaleDays = 14
 )
 
+type statusEntry struct {
+	entry      git.WorktreeEntry
+	status     resolver.WorktreeStatus
+	commitTime time.Time
+	hasTime    bool
+}
+
 func init() {
 	statusCmd.Flags().Int(flagStaleDays, defaultStaleDays, "Number of days after which a worktree is considered stale")
 	rootCmd.AddCommand(statusCmd)
@@ -62,13 +69,6 @@ var statusCmd = &cobra.Command{
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
 		s.Start("Collecting worktree status...")
-
-		type statusEntry struct {
-			entry      git.WorktreeEntry
-			status     resolver.WorktreeStatus
-			commitTime time.Time
-			hasTime    bool
-		}
 
 		results := make([]statusEntry, len(candidates))
 		var wg sync.WaitGroup
