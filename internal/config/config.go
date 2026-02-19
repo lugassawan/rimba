@@ -36,6 +36,12 @@ type ModuleConfig struct {
 	WorkDir  string `toml:"work_dir,omitempty"`
 }
 
+// Validation error messages for required config fields.
+const (
+	ErrMsgEmptyWorktreeDir   = "worktree_dir must not be empty"
+	ErrMsgEmptyDefaultSource = "default_source must not be empty"
+)
+
 // IsAutoDetectDeps returns whether automatic dependency detection is enabled.
 // Defaults to true when Deps or AutoDetect is not configured.
 func (c *Config) IsAutoDetectDeps() bool {
@@ -44,12 +50,6 @@ func (c *Config) IsAutoDetectDeps() bool {
 	}
 	return *c.Deps.AutoDetect
 }
-
-// Validation error messages for required config fields.
-const (
-	ErrMsgEmptyWorktreeDir   = "worktree_dir must not be empty"
-	ErrMsgEmptyDefaultSource = "default_source must not be empty"
-)
 
 // Validate checks that required config fields are present.
 func (c *Config) Validate() error {

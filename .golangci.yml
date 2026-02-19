@@ -31,7 +31,12 @@ linters:
     - usestdlibvars
     - wastedassign
     - whitespace
+    - rimbalint
   settings:
+    custom:
+      rimbalint:
+        type: "module"
+        description: "Rimba custom lint rules (nolocalstruct, nolateconst)"
     gocyclo:
       min-complexity: 15
     goconst:

@@ -27,6 +27,7 @@ go.work.sum
 # Build output
 bin/
 dist/
+custom-gcl
 
 # env file
 .env
