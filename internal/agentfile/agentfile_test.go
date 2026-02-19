@@ -532,3 +532,198 @@ func TestUninstallReadError(t *testing.T) {
 		t.Errorf("error = %q, want to contain 'read file'", err.Error())
 	}
 }
+
+func TestInstallBlockSkipsOnPathConflict(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create .github as a file to block MkdirAll for block-based copilot file
+	blocker := filepath.Join(dir, ".github")
+	if err := os.WriteFile(blocker, []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	results, err := Install(dir)
+	if err != nil {
+		t.Fatalf("Install should succeed with block path conflict, got: %v", err)
+	}
+
+	for _, r := range results {
+		if r.RelPath == filepath.Join(".github", "copilot-instructions.md") {
+			if r.Action != actionSkipped {
+				t.Errorf("copilot-instructions.md action = %q, want %q", r.Action, actionSkipped)
+			}
+		}
+	}
+}
+
+func TestInstallWholeWriteError(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create .cursor/rules/ directory then make it read-only
+	rulesDir := filepath.Join(dir, ".cursor", "rules")
+	if err := os.MkdirAll(rulesDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(rulesDir, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(rulesDir, 0755) })
+
+	// Install just a whole-file spec that targets .cursor/rules/rimba.mdc
+	spec := Spec{
+		RelPath: filepath.Join(".cursor", "rules", "rimba.mdc"),
+		Kind:    KindWhole,
+		Content: func() string { return "test" },
+	}
+	_, err := installOne(dir, spec)
+	if err == nil {
+		t.Fatal("expected error when directory is read-only")
+	}
+	if !strings.Contains(err.Error(), "write file") {
+		t.Errorf("error = %q, want to contain 'write file'", err.Error())
+	}
+}
+
+func TestInstallBlockWriteError(t *testing.T) {
+	dir := t.TempDir()
+
+	// Make the directory read-only so WriteFile fails for AGENTS.md
+	if err := os.Chmod(dir, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0755) })
+
+	spec := Spec{
+		RelPath: "AGENTS.md",
+		Kind:    KindBlock,
+		Content: agentsBlock,
+	}
+	_, err := installOne(dir, spec)
+	if err == nil {
+		t.Fatal("expected error when directory is read-only")
+	}
+	if !strings.Contains(err.Error(), "write file") {
+		t.Errorf("error = %q, want to contain 'write file'", err.Error())
+	}
+}
+
+func TestUninstallWholeRemoveError(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create the file then make directory read-only
+	skillDir := filepath.Join(dir, ".claude", "skills", "rimba")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	skillPath := filepath.Join(skillDir, "SKILL.md")
+	if err := os.WriteFile(skillPath, []byte("content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(skillDir, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(skillDir, 0755) })
+
+	spec := Spec{
+		RelPath: filepath.Join(".claude", "skills", "rimba", "SKILL.md"),
+		Kind:    KindWhole,
+		Content: claudeSkillContent,
+	}
+	_, err := uninstallOne(dir, spec)
+	if err == nil {
+		t.Fatal("expected error when directory is read-only")
+	}
+	if !strings.Contains(err.Error(), "remove file") {
+		t.Errorf("error = %q, want to contain 'remove file'", err.Error())
+	}
+}
+
+func TestUninstallBlockNoMarkers(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create AGENTS.md without rimba markers
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("# User content\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	spec := Spec{
+		RelPath: "AGENTS.md",
+		Kind:    KindBlock,
+		Content: agentsBlock,
+	}
+	r, err := uninstallOne(dir, spec)
+	if err != nil {
+		t.Fatalf("uninstallOne: %v", err)
+	}
+	if r.Action != actionSkipped {
+		t.Errorf("action = %q, want %q", r.Action, actionSkipped)
+	}
+}
+
+func TestUninstallBlockRemoveError(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create AGENTS.md with only rimba block (will try to remove file)
+	content := agentsBlock() + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Make directory read-only so os.Remove fails
+	if err := os.Chmod(dir, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0755) })
+
+	spec := Spec{
+		RelPath: "AGENTS.md",
+		Kind:    KindBlock,
+		Content: agentsBlock,
+	}
+	_, err := uninstallOne(dir, spec)
+	if err == nil {
+		t.Fatal("expected error when directory is read-only")
+	}
+	if !strings.Contains(err.Error(), "remove file") {
+		t.Errorf("error = %q, want to contain 'remove file'", err.Error())
+	}
+}
+
+func TestUninstallBlockWriteError(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create AGENTS.md with user content + rimba block (will try to write cleaned content)
+	content := "# User content\n\n" + agentsBlock() + "\n"
+	agentsPath := filepath.Join(dir, "AGENTS.md")
+	if err := os.WriteFile(agentsPath, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Make file read-only so WriteFile fails
+	if err := os.Chmod(agentsPath, 0444); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(agentsPath, 0644) })
+
+	spec := Spec{
+		RelPath: "AGENTS.md",
+		Kind:    KindBlock,
+		Content: agentsBlock,
+	}
+	_, err := uninstallOne(dir, spec)
+	if err == nil {
+		t.Fatal("expected error when file is read-only")
+	}
+	if !strings.Contains(err.Error(), "write file") {
+		t.Errorf("error = %q, want to contain 'write file'", err.Error())
+	}
+}
+
+func TestRemoveBlockCorruptBeginAtStart(t *testing.T) {
+	// BEGIN at the very start of content, no END marker
+	content := BeginMarker + "\nsome corrupt content"
+	result := removeBlock(content)
+	if result != "" {
+		t.Errorf("expected empty result when BEGIN is at start with no END, got %q", result)
+	}
+}
