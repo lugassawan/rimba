@@ -31,3 +31,28 @@ jobs:
             echo "::error::PR description must not be empty"
             exit 1
           fi
+
+      - name: Validate issue reference
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          # Allow ad-hoc PRs that explicitly opt out with "N/A" on its own line
+          if echo "$PR_BODY" | grep -qE '^\s*N/A\s*$'; then
+            echo "Issue reference opted out with N/A — skipping check"
+            exit 0
+          fi
+
+          # Require a GitHub closing keyword (case-insensitive)
+          if ! echo "$PR_BODY" | grep -iqE '(close[sd]?|fix(e[sd])?|resolve[sd]?) #[0-9]+'; then
+            echo "::error::PR body must reference an issue with a closing keyword"
+            echo ""
+            echo "Add one of these to your PR description:"
+            echo "  Closes #123"
+            echo "  Fixes #123"
+            echo "  Resolves #123"
+            echo ""
+            echo "For ad-hoc changes without an issue, add 'N/A' on its own line."
+            echo ""
+            echo "See: https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue"
+            exit 1
+          fi
