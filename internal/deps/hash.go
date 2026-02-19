@@ -9,8 +9,8 @@ import (
 
 // ModuleWithHash pairs a Module with its lockfile hash.
 type ModuleWithHash struct {
-	Module Module
-	Hash   string
+	Module Module `json:"module"`
+	Hash   string `json:"hash"`
 }
 
 // HashLockfile computes the SHA-256 hex digest of a lockfile.

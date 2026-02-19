@@ -20,24 +20,24 @@ const (
 
 // FileOverlap represents a file that is modified in multiple branches.
 type FileOverlap struct {
-	File     string
-	Branches []string
-	Severity Severity
+	File     string   `json:"file"`
+	Branches []string `json:"branches"`
+	Severity Severity `json:"severity"`
 }
 
 // CheckResult holds the outcome of an overlap detection.
 type CheckResult struct {
-	Overlaps      []FileOverlap
-	TotalFiles    int
-	TotalBranches int
+	Overlaps      []FileOverlap `json:"overlaps"`
+	TotalFiles    int           `json:"total_files"`
+	TotalBranches int           `json:"total_branches"`
 }
 
 // DryMergeResult holds the outcome of a simulated merge between two branches.
 type DryMergeResult struct {
-	Branch1       string
-	Branch2       string
-	HasConflicts  bool
-	ConflictFiles []string
+	Branch1       string   `json:"branch1"`
+	Branch2       string   `json:"branch2"`
+	HasConflicts  bool     `json:"has_conflicts"`
+	ConflictFiles []string `json:"conflict_files,omitempty"`
 }
 
 // DetectOverlaps analyzes a map of branch→files and returns files modified in 2+ branches.

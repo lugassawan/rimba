@@ -14,9 +14,9 @@ type RunFunc func(ctx context.Context, dir, command string) (stdout, stderr []by
 
 // Target represents a worktree to execute a command in.
 type Target struct {
-	Path   string
-	Branch string
-	Task   string
+	Path   string `json:"path"`
+	Branch string `json:"branch"`
+	Task   string `json:"task"`
 }
 
 // Config bundles all parameters for a parallel execution run.
