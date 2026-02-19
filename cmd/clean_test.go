@@ -612,6 +612,132 @@ func TestCleanStaleDryRun(t *testing.T) {
 	}
 }
 
+func TestCleanStaleNoCandidates(t *testing.T) {
+	recentTimestamp := strconv.FormatInt(time.Now().Add(-1*time.Hour).Unix(), 10)
+	cmd, buf := newCleanStaleCmd()
+
+	dir := t.TempDir()
+	cfg := &config.Config{DefaultSource: branchMain}
+	_ = config.Save(filepath.Join(dir, config.FileName), cfg)
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return dir, nil
+			}
+			if args[0] == cmdWorktreeTest && args[1] == cmdList {
+				return strings.Join([]string{
+					wtRepo, headABC123, branchRefMain, "",
+					wtFeatureLogin, headDEF456, branchRefFeatureLogin, "",
+				}, "\n"), nil
+			}
+			if args[0] == cmdLog {
+				return recentTimestamp, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	err := cleanStale(cmd, r)
+	if err != nil {
+		t.Fatalf("cleanStale: %v", err)
+	}
+	if !strings.Contains(buf.String(), "No stale worktrees found") {
+		t.Errorf("output = %q, want 'No stale worktrees found'", buf.String())
+	}
+}
+
+func TestCleanStaleAbort(t *testing.T) {
+	oldTimestamp := strconv.FormatInt(time.Now().Add(-30*24*time.Hour).Unix(), 10)
+	cmd, buf := newCleanStaleCmd()
+	cmd.SetIn(strings.NewReader("n\n"))
+
+	dir := t.TempDir()
+	cfg := &config.Config{DefaultSource: branchMain}
+	_ = config.Save(filepath.Join(dir, config.FileName), cfg)
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return dir, nil
+			}
+			if args[0] == cmdWorktreeTest && args[1] == cmdList {
+				return strings.Join([]string{
+					wtRepo, headABC123, branchRefMain, "",
+					wtFeatureLogin, headDEF456, branchRefFeatureLogin, "",
+				}, "\n"), nil
+			}
+			if args[0] == cmdLog {
+				return oldTimestamp, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	err := cleanStale(cmd, r)
+	if err != nil {
+		t.Fatalf("cleanStale: %v", err)
+	}
+	if !strings.Contains(buf.String(), "Aborted") {
+		t.Errorf("output = %q, want 'Aborted'", buf.String())
+	}
+}
+
+func TestCleanStaleResolveError(t *testing.T) {
+	cmd, _ := newCleanStaleCmd()
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return "", errGitFailed },
+		runInDir: noopRunInDir,
+	}
+
+	err := cleanStale(cmd, r)
+	if err == nil {
+		t.Fatal("expected error from resolveMainBranch failure")
+	}
+}
+
+func TestFindStaleCandidatesWorktreeError(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == cmdWorktreeTest {
+				return "", errGitFailed
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	_, err := findStaleCandidates(r, branchMain, 14)
+	if err == nil {
+		t.Fatal("expected error from ListWorktrees failure")
+	}
+}
+
+func TestFindStaleCandidatesSkipsBareAndEmpty(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == cmdWorktreeTest && args[1] == cmdList {
+				return strings.Join([]string{
+					wtRepo, headABC123, "bare", "",
+					"worktree /wt/detached", "HEAD def456", "",
+				}, "\n"), nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	candidates, err := findStaleCandidates(r, branchMain, 14)
+	if err != nil {
+		t.Fatalf("findStaleCandidates: %v", err)
+	}
+	if len(candidates) != 0 {
+		t.Errorf("expected 0 candidates (bare + detached filtered), got %d", len(candidates))
+	}
+}
+
 func TestCleanStaleForce(t *testing.T) {
 	oldTimestamp := strconv.FormatInt(time.Now().Add(-30*24*time.Hour).Unix(), 10)
 	cmd, buf := newCleanStaleCmd()

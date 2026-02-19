@@ -58,6 +58,9 @@ const (
 	filterByPrefix   = "filter by prefix"
 	useTestCmd       = "test-cmd"
 
+	// Shared branch list outputs
+	branchListArchived = "main\nfeature/archived-task\nfeature/active-task"
+
 	// Shared fatalf format strings
 	fatalFindMerged  = "findMergedCandidates: %v"
 	fatalMergeRunE   = "mergeCmd.RunE: %v"

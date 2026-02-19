@@ -36,3 +36,11 @@ func TestFormatAgeSince(t *testing.T) {
 		})
 	}
 }
+
+func TestFormatAge(t *testing.T) {
+	// FormatAge delegates to FormatAgeSince with time.Now(); just verify it returns something sensible.
+	got := resolver.FormatAge(time.Now().Add(-2 * time.Hour))
+	if got != "2h ago" {
+		t.Errorf("FormatAge(2h ago) = %q, want %q", got, "2h ago")
+	}
+}
