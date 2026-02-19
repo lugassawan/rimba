@@ -61,6 +61,59 @@ func TestCopyEntries(t *testing.T) {
 	}
 }
 
+func TestCopyEntriesNestedFile(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+
+	// Create a nested file: sub/file.json
+	subDir := filepath.Join(src, "sub")
+	_ = os.MkdirAll(subDir, 0755)
+	_ = os.WriteFile(filepath.Join(subDir, "file.json"), []byte(`{"key":"val"}`), 0644)
+
+	// Copy the nested file path (not the directory)
+	copied, err := fileutil.CopyEntries(src, dst, []string{"sub/file.json"})
+	if err != nil {
+		t.Fatalf(msgCopyErr, err)
+	}
+
+	want := []string{"sub/file.json"}
+	if !reflect.DeepEqual(copied, want) {
+		t.Errorf(msgCopiedWant, copied, want)
+	}
+
+	// Verify parent directory was created and file was copied
+	data, err := os.ReadFile(filepath.Join(dst, "sub", "file.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != `{"key":"val"}` {
+		t.Errorf("file.json content = %q, want %q", data, `{"key":"val"}`)
+	}
+}
+
+func TestSkippedEntries(t *testing.T) {
+	tests := []struct {
+		name      string
+		requested []string
+		copied    []string
+		want      []string
+	}{
+		{"all_copied", []string{".env", ".envrc"}, []string{".env", ".envrc"}, nil},
+		{"some_skipped", []string{".env", ".envrc", ".tool-versions"}, []string{".env"}, []string{".envrc", ".tool-versions"}},
+		{"all_skipped", []string{".env", ".envrc"}, nil, []string{".env", ".envrc"}},
+		{"empty_requested", nil, nil, nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := fileutil.SkippedEntries(tt.requested, tt.copied)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("SkippedEntries = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCopyEntriesPreservesPermissions(t *testing.T) {
 	src := t.TempDir()
 	dst := t.TempDir()
