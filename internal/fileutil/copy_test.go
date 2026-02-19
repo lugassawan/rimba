@@ -457,6 +457,94 @@ func TestCopyEntriesCopyFileError(t *testing.T) {
 	}
 }
 
+func TestCopyEntriesNestedFileMkdirError(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+
+	// Create a nested file: deep/sub/file.json
+	deepDir := filepath.Join(src, "deep", "sub")
+	_ = os.MkdirAll(deepDir, 0755)
+	_ = os.WriteFile(filepath.Join(deepDir, "file.json"), []byte(`{}`), 0644)
+
+	// Block parent creation: place a regular file where "deep" dir needs to be
+	_ = os.WriteFile(filepath.Join(dst, "deep"), []byte("conflict"), 0644)
+
+	_, err := fileutil.CopyEntries(src, dst, []string{"deep/sub/file.json"})
+	if err == nil {
+		t.Fatal("expected error when MkdirAll for nested file fails")
+	}
+	if !strings.Contains(err.Error(), "copy deep/sub/file.json:") {
+		t.Errorf(errContainsFmt, err, "copy deep/sub/file.json:")
+	}
+}
+
+func TestCopyEntriesCopyFileOpenError(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+
+	// Create a source file and make it unreadable
+	srcFile := filepath.Join(src, ".env")
+	_ = os.WriteFile(srcFile, []byte(testSecret), 0644)
+	if err := os.Chmod(srcFile, 0000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(srcFile, 0644) })
+
+	_, err := fileutil.CopyEntries(src, dst, []string{".env"})
+	if err == nil {
+		t.Fatal("expected error when source file is unreadable")
+	}
+	if !strings.Contains(err.Error(), errPrefixCopyEnv) {
+		t.Errorf(errContainsFmt, err, errPrefixCopyEnv)
+	}
+}
+
+func TestCopyEntriesDirStatError(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+
+	// Create a directory structure where the source dir is accessible
+	// but contains a subdirectory that is stat-able at top level but
+	// causes error when copying due to dst conflict.
+	srcDir := filepath.Join(src, dotConfig)
+	subDir := filepath.Join(srcDir, "sub")
+	_ = os.MkdirAll(subDir, 0755)
+	_ = os.WriteFile(filepath.Join(subDir, "file.txt"), []byte("data"), 0644)
+
+	// Create a file at dst/.config/sub which will block MkdirAll for the nested dir
+	_ = os.MkdirAll(filepath.Join(dst, dotConfig), 0755)
+	_ = os.WriteFile(filepath.Join(dst, dotConfig, "sub"), []byte("conflict"), 0644)
+
+	_, err := fileutil.CopyEntries(src, dst, []string{dotConfig})
+	if err == nil {
+		t.Fatal("expected error when nested destination path conflicts")
+	}
+}
+
+func TestCopyEntriesDirCopyFileError(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+
+	// Create a directory with an unreadable file to trigger copyFile
+	// error inside copyDir recursion (copy.go line 68-70).
+	srcDir := filepath.Join(src, dotConfig)
+	_ = os.Mkdir(srcDir, 0755)
+	unreadable := filepath.Join(srcDir, "secret.toml")
+	_ = os.WriteFile(unreadable, []byte("data"), 0644)
+	if err := os.Chmod(unreadable, 0000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(unreadable, 0644) })
+
+	_, err := fileutil.CopyEntries(src, dst, []string{dotConfig})
+	if err == nil {
+		t.Fatal("expected error when file inside directory is unreadable")
+	}
+	if !strings.Contains(err.Error(), "copy "+dotConfig+":") {
+		t.Errorf(errContainsFmt, err, "copy "+dotConfig+":")
+	}
+}
+
 func TestCopyEntriesRecursiveCopyDirError(t *testing.T) {
 	src := t.TempDir()
 	dst := t.TempDir()

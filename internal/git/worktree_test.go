@@ -109,6 +109,35 @@ func TestRemoveWorktree(t *testing.T) {
 	}
 }
 
+func TestFilterEntries(t *testing.T) {
+	entries := []git.WorktreeEntry{
+		{Path: "/repo", Branch: "main", Bare: false},
+		{Path: "/repo/.bare", Branch: "", Bare: true},
+		{Path: "/wt/detached", Branch: "", Bare: false},
+		{Path: "/wt/feature-a", Branch: "feature/a", Bare: false},
+		{Path: "/wt/feature-b", Branch: "feature/b", Bare: false},
+	}
+
+	got := git.FilterEntries(entries, "main")
+
+	if len(got) != 2 {
+		t.Fatalf("FilterEntries returned %d entries, want 2", len(got))
+	}
+	if got[0].Branch != "feature/a" {
+		t.Errorf("got[0].Branch = %q, want %q", got[0].Branch, "feature/a")
+	}
+	if got[1].Branch != "feature/b" {
+		t.Errorf("got[1].Branch = %q, want %q", got[1].Branch, "feature/b")
+	}
+}
+
+func TestFilterEntriesEmpty(t *testing.T) {
+	got := git.FilterEntries(nil, "main")
+	if len(got) != 0 {
+		t.Errorf("FilterEntries(nil) returned %d entries, want 0", len(got))
+	}
+}
+
 func TestMoveWorktree(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipIntegration)

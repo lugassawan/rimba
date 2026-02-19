@@ -339,6 +339,31 @@ func TestDryMergeAllThreeBranches(t *testing.T) {
 	}
 }
 
+func TestDetectOverlapsMixedSeveritySortBothDirections(t *testing.T) {
+	// With 4+ overlaps of mixed severity, the sort algorithm calls the
+	// comparator with a=low, b=high (triggering `return 1` at line 83).
+	diffs := map[string][]string{
+		"feature/a": {"alpha.go", "beta.go", "gamma.go", "delta.go"},
+		"feature/b": {"alpha.go", "beta.go", "gamma.go", "delta.go"},
+		"feature/c": {"alpha.go", "gamma.go"},
+	}
+
+	result := DetectOverlaps(diffs)
+	// alpha.go: 3 branches → high, beta.go: 2 → low, gamma.go: 3 → high, delta.go: 2 → low
+	if len(result.Overlaps) != 4 {
+		t.Fatalf("expected 4 overlaps, got %d", len(result.Overlaps))
+	}
+	// High severity should come first
+	for i, o := range result.Overlaps {
+		if i < 2 && o.Severity != SeverityHigh {
+			t.Errorf("overlap[%d] severity = %q, want high", i, o.Severity)
+		}
+		if i >= 2 && o.Severity != SeverityLow {
+			t.Errorf("overlap[%d] severity = %q, want low", i, o.Severity)
+		}
+	}
+}
+
 func TestDryMergeAllEmpty(t *testing.T) {
 	r := &mockRunner{
 		run: func(_ ...string) (string, error) {

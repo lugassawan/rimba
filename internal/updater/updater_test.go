@@ -813,6 +813,29 @@ func TestEnsurePathIdempotent(t *testing.T) {
 	}
 }
 
+func TestEnsurePathScannerError(t *testing.T) {
+	tmpDir := t.TempDir()
+	rcFile := filepath.Join(tmpDir, testRcZshrc)
+
+	// Create a line exceeding bufio.MaxScanTokenSize (64KB) to trigger scanner error
+	longLine := strings.Repeat("x", 70000) + "\n"
+	if err := os.WriteFile(rcFile, []byte(longLine), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("SHELL", testShellZsh)
+	t.Setenv("HOME", tmpDir)
+
+	dir := filepath.Join(tmpDir, localBinSubdir, "bin")
+	err := EnsurePath(dir)
+	if err == nil {
+		t.Fatal("expected error from scanner exceeding token size")
+	}
+	if !strings.Contains(err.Error(), "reading") {
+		t.Errorf("error = %q, want to contain 'reading'", err.Error())
+	}
+}
+
 func TestEnsurePathBashShell(t *testing.T) {
 	tmpDir := t.TempDir()
 	rcFile := filepath.Join(tmpDir, ".bashrc")
@@ -866,16 +889,22 @@ func TestEnsurePathOpenFileError(t *testing.T) {
 	t.Setenv("SHELL", testShellZsh)
 	t.Setenv("HOME", tmpDir)
 
-	// Create .zshrc as a directory to cause OpenFile to fail
-	rcDir := filepath.Join(tmpDir, testRcZshrc)
-	if err := os.MkdirAll(rcDir, 0755); err != nil {
+	// Create .zshrc as a read-only file with content that doesn't match
+	// the target path. Scanner reads fine, finds no match, then OpenFile
+	// with O_WRONLY fails because the file is not writable.
+	rcFile := filepath.Join(tmpDir, testRcZshrc)
+	if err := os.WriteFile(rcFile, []byte("# existing config\n"), 0444); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = os.Chmod(rcFile, 0644) })
 
 	dir := filepath.Join(tmpDir, localBinSubdir, "bin")
 	err := EnsurePath(dir)
 	if err == nil {
-		t.Fatal("expected error when rc file is a directory")
+		t.Fatal("expected error when rc file is read-only")
+	}
+	if !strings.Contains(err.Error(), "opening") {
+		t.Errorf("error = %q, want to contain 'opening'", err.Error())
 	}
 }
 

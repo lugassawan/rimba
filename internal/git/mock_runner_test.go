@@ -763,6 +763,70 @@ func TestMainRepoRootRelativePathRepoRootError(t *testing.T) {
 	assertContains(t, err, errNotAGitRepo)
 }
 
+func TestLastCommitInfoEmptyOutput(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			return "", nil
+		},
+	}
+	_, _, err := LastCommitInfo(r, branchFeature)
+	if err == nil {
+		t.Fatal("expected error for empty output")
+	}
+	assertContains(t, err, "no commits on branch")
+}
+
+func TestLastCommitInfoMalformed(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			return "no-tab-separator", nil
+		},
+	}
+	_, _, err := LastCommitInfo(r, branchFeature)
+	if err == nil {
+		t.Fatal("expected error for malformed output")
+	}
+	assertContains(t, err, "malformed commit info")
+}
+
+func TestLastCommitInfoBadTimestamp(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			return "not-a-number\tcommit subject", nil
+		},
+	}
+	_, _, err := LastCommitInfo(r, branchFeature)
+	if err == nil {
+		t.Fatal("expected error for non-numeric timestamp")
+	}
+	assertContains(t, err, "parse commit timestamp")
+}
+
+func TestLastCommitInfoRunError(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			return "", errors.New(errNotARepo)
+		},
+	}
+	_, _, err := LastCommitInfo(r, branchFeature)
+	if err == nil {
+		t.Fatal("expected error from runner failure")
+	}
+	assertContains(t, err, "last commit info")
+}
+
+func TestLocalBranchesError(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			return "", errors.New(errNotARepo)
+		},
+	}
+	_, err := LocalBranches(r)
+	if err == nil {
+		t.Fatal("expected error from LocalBranches")
+	}
+}
+
 func TestRepoNameError(t *testing.T) {
 	r := &mockRunner{
 		run: func(_ ...string) (string, error) {
