@@ -11,11 +11,27 @@ import (
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
+	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/lugassawan/rimba/internal/termcolor"
 	"github.com/spf13/cobra"
 )
+
+type listJSONItem struct {
+	Task      string                  `json:"task"`
+	Type      string                  `json:"type"`
+	Branch    string                  `json:"branch"`
+	Path      string                  `json:"path"`
+	IsCurrent bool                    `json:"is_current"`
+	Status    resolver.WorktreeStatus `json:"status"`
+}
+
+type listArchivedJSONItem struct {
+	Task   string `json:"task"`
+	Type   string `json:"type"`
+	Branch string `json:"branch"`
+}
 
 const (
 	flagType     = "type"
@@ -103,6 +119,9 @@ var listCmd = &cobra.Command{
 		}
 
 		if len(entries) == 0 {
+			if isJSON(cmd) {
+				return output.WriteJSON(cmd.OutOrStdout(), version, "list", make([]listJSONItem, 0))
+			}
 			fmt.Fprintln(cmd.OutOrStdout(), "No worktrees found.")
 			return nil
 		}
@@ -115,11 +134,13 @@ var listCmd = &cobra.Command{
 		cwdResolved, _ := filepath.EvalSymlinks(cwd)
 		cwdResolved = filepath.Clean(cwdResolved)
 
-		hint.New(cmd, hintPainter(cmd)).
-			Add(flagType, hintType).
-			Add(flagDirty, hintDirty).
-			Add(flagBehind, hintBehind).
-			Show()
+		if !isJSON(cmd) {
+			hint.New(cmd, hintPainter(cmd)).
+				Add(flagType, hintType).
+				Add(flagDirty, hintDirty).
+				Add(flagBehind, hintBehind).
+				Show()
+		}
 
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
@@ -174,11 +195,29 @@ var listCmd = &cobra.Command{
 		s.Stop()
 
 		if len(rows) == 0 {
+			if isJSON(cmd) {
+				return output.WriteJSON(cmd.OutOrStdout(), version, "list", make([]listJSONItem, 0))
+			}
 			fmt.Fprintln(cmd.OutOrStdout(), "No worktrees match the given filters.")
 			return nil
 		}
 
 		resolver.SortDetailsByTask(rows)
+
+		if isJSON(cmd) {
+			items := make([]listJSONItem, len(rows))
+			for i, r := range rows {
+				items[i] = listJSONItem{
+					Task:      r.Task,
+					Type:      r.Type,
+					Branch:    r.Branch,
+					Path:      r.Path,
+					IsCurrent: r.IsCurrent,
+					Status:    r.Status,
+				}
+			}
+			return output.WriteJSON(cmd.OutOrStdout(), version, "list", items)
+		}
 
 		// Setup color painter
 		noColor, _ := cmd.Flags().GetBool(flagNoColor)
@@ -222,6 +261,18 @@ func listArchivedBranches(cmd *cobra.Command, r git.Runner, mainBranch string) e
 		return err
 	}
 
+	prefixes := resolver.AllPrefixes()
+
+	if isJSON(cmd) {
+		items := make([]listArchivedJSONItem, 0, len(archived))
+		for _, b := range archived {
+			task, matchedPrefix := resolver.TaskFromBranch(b, prefixes)
+			typeName := strings.TrimSuffix(matchedPrefix, "/")
+			items = append(items, listArchivedJSONItem{Task: task, Type: typeName, Branch: b})
+		}
+		return output.WriteJSON(cmd.OutOrStdout(), version, "list", items)
+	}
+
 	if len(archived) == 0 {
 		fmt.Fprintln(cmd.OutOrStdout(), "No archived branches found.")
 		return nil
@@ -229,7 +280,6 @@ func listArchivedBranches(cmd *cobra.Command, r git.Runner, mainBranch string) e
 
 	noColor, _ := cmd.Flags().GetBool(flagNoColor)
 	p := termcolor.NewPainter(noColor)
-	prefixes := resolver.AllPrefixes()
 
 	tbl := termcolor.NewTable(2)
 	tbl.AddRow(

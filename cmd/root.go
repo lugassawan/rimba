@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/lugassawan/rimba/internal/config"
@@ -13,6 +14,7 @@ import (
 const (
 	errWorktreeNotFound = "worktree not found for task %q"
 	flagForce           = "force"
+	flagJSON            = "json"
 	flagNoColor         = "no-color"
 	flagSkipDeps        = "skip-deps"
 	flagSkipHooks       = "skip-hooks"
@@ -23,12 +25,17 @@ const (
 	hintSkipHooks = "Skip post-create hooks (faster, but automation won't run)"
 )
 
+// commandName stores the resolved command name for JSON error reporting.
+var commandName string
+
 var rootCmd = &cobra.Command{
 	Use:           "rimba",
 	Short:         "Git worktree lifecycle manager",
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		commandName = strings.TrimPrefix(cmd.CommandPath(), "rimba ")
+
 		// Skip config for Cobra internals (completion, __complete)
 		if cmd.Name() == "completion" || cmd.Name() == "__complete" {
 			return nil
@@ -57,6 +64,7 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
+	rootCmd.PersistentFlags().Bool(flagJSON, false, "output in JSON format")
 	rootCmd.PersistentFlags().Bool(flagNoColor, false, "disable colored output")
 
 	originalHelp := rootCmd.HelpFunc()
@@ -73,6 +81,17 @@ func init() {
 			}
 		}
 	})
+}
+
+// IsJSONMode returns true if the --json flag was set on the root command.
+func IsJSONMode() bool {
+	v, _ := rootCmd.PersistentFlags().GetBool(flagJSON)
+	return v
+}
+
+// CommandName returns the resolved command name from the last execution.
+func CommandName() string {
+	return commandName
 }
 
 func Execute() error {

@@ -99,11 +99,13 @@ func noopRunInDir(_ string, _ ...string) (string, error) {
 	return "", nil
 }
 
-// newTestCmd creates a cobra.Command with --no-color flag and a bytes.Buffer for output capture.
+// newTestCmd creates a cobra.Command with --no-color and --json flags
+// and a bytes.Buffer for output capture.
 func newTestCmd() (*cobra.Command, *bytes.Buffer) {
 	buf := new(bytes.Buffer)
 	cmd := &cobra.Command{Use: "test"}
 	cmd.Flags().Bool(flagNoColor, true, "")
+	cmd.Flags().Bool(flagJSON, false, "")
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
 	return cmd, buf

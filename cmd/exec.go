@@ -11,11 +11,29 @@ import (
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
+	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/lugassawan/rimba/internal/termcolor"
 	"github.com/spf13/cobra"
 )
+
+type execJSONData struct {
+	Command string           `json:"command"`
+	Results []execJSONResult `json:"results"`
+	Success bool             `json:"success"`
+}
+
+type execJSONResult struct {
+	Task      string `json:"task"`
+	Branch    string `json:"branch"`
+	Path      string `json:"path"`
+	ExitCode  int    `json:"exit_code"`
+	Stdout    string `json:"stdout"`
+	Stderr    string `json:"stderr"`
+	Error     string `json:"error,omitempty"`
+	Cancelled bool   `json:"cancelled,omitempty"`
+}
 
 const (
 	flagFailFast    = "fail-fast"
@@ -76,13 +94,15 @@ var execCmd = &cobra.Command{
 			return fmt.Errorf("invalid type %q; valid types: %s", typeFilter, strings.Join(valid, ", "))
 		}
 
-		hint.New(cmd, hintPainter(cmd)).
-			Add(flagAll, hintExecAll).
-			Add(flagType, hintExecType).
-			Add(flagDirty, hintExecDirty).
-			Add(flagFailFast, hintFailFast).
-			Add(flagConcurrency, hintConcurrency).
-			Show()
+		if !isJSON(cmd) {
+			hint.New(cmd, hintPainter(cmd)).
+				Add(flagAll, hintExecAll).
+				Add(flagType, hintExecType).
+				Add(flagDirty, hintExecDirty).
+				Add(flagFailFast, hintFailFast).
+				Add(flagConcurrency, hintConcurrency).
+				Show()
+		}
 
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
@@ -134,6 +154,35 @@ var execCmd = &cobra.Command{
 		})
 
 		s.Stop()
+
+		if isJSON(cmd) {
+			jsonResults := make([]execJSONResult, len(results))
+			for i, r := range results {
+				jr := execJSONResult{
+					Task:      r.Target.Task,
+					Branch:    r.Target.Branch,
+					Path:      r.Target.Path,
+					ExitCode:  r.ExitCode,
+					Stdout:    string(r.Stdout),
+					Stderr:    string(r.Stderr),
+					Cancelled: r.Cancelled,
+				}
+				if r.Err != nil {
+					jr.Error = r.Err.Error()
+				}
+				jsonResults[i] = jr
+			}
+			data := execJSONData{
+				Command: args[0],
+				Results: jsonResults,
+				Success: !hasFailure(results),
+			}
+			_ = output.WriteJSON(cmd.OutOrStdout(), version, "exec", data)
+			if hasFailure(results) {
+				return &output.SilentError{ExitCode: 1}
+			}
+			return nil
+		}
 
 		noColor, _ := cmd.Flags().GetBool(flagNoColor)
 		p := termcolor.NewPainter(noColor)

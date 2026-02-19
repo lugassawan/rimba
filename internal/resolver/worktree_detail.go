@@ -9,19 +9,19 @@ import (
 
 // WorktreeStatus holds the structured git status of a worktree.
 type WorktreeStatus struct {
-	Dirty  bool
-	Ahead  int
-	Behind int
+	Dirty  bool `json:"dirty"`
+	Ahead  int  `json:"ahead"`
+	Behind int  `json:"behind"`
 }
 
 // WorktreeDetail holds the resolved view of a worktree with extracted task and type.
 type WorktreeDetail struct {
-	Task      string
-	Type      string
-	Branch    string
-	Path      string
-	IsCurrent bool
-	Status    WorktreeStatus
+	Task      string         `json:"task"`
+	Type      string         `json:"type"`
+	Branch    string         `json:"branch"`
+	Path      string         `json:"path"`
+	IsCurrent bool           `json:"is_current"`
+	Status    WorktreeStatus `json:"status"`
 }
 
 // NewWorktreeDetail constructs a WorktreeDetail by resolving the task name and type

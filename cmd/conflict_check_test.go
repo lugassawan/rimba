@@ -2,19 +2,24 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/conflict"
+	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/termcolor"
 )
 
 const (
-	branchFeatureA = "feature/a"
-	branchFeatureB = "feature/b"
-	branchFeatureC = "feature/c"
+	branchFeatureA    = "feature/a"
+	branchFeatureB    = "feature/b"
+	branchFeatureC    = "feature/c"
+	diffOutputFileA   = "file-a.go"
+	diffOutputSharedA = "shared.go\na-only.go"
+	diffOutputSharedB = "shared.go\nb-only.go"
 )
 
 func testConflictCheckConfig() *config.Config {
@@ -71,7 +76,7 @@ func TestConflictCheckNoOverlaps(t *testing.T) {
 			}
 			if args[0] == cmdDiff {
 				if strings.Contains(args[2], branchFeatureA) {
-					return "file-a.go", nil
+					return diffOutputFileA, nil
 				}
 				return "file-b.go", nil
 			}
@@ -102,9 +107,9 @@ func TestConflictCheckWithOverlaps(t *testing.T) {
 			}
 			if args[0] == cmdDiff {
 				if strings.Contains(args[2], branchFeatureA) {
-					return "shared.go\na-only.go", nil
+					return diffOutputSharedA, nil
 				}
-				return "shared.go\nb-only.go", nil
+				return diffOutputSharedB, nil
 			}
 			return "", nil
 		},
@@ -255,6 +260,99 @@ func TestRenderOverlapTableBranchWithoutPrefix(t *testing.T) {
 	out := buf.String()
 	if !strings.Contains(out, "custom-branch") {
 		t.Errorf("expected branch name without prefix, got: %s", out)
+	}
+}
+
+func TestConflictCheckJSONNoOverlaps(t *testing.T) {
+	cmd, buf := newTestCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	cfg := testConflictCheckConfig()
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == cmdWorktreeTest && args[1] == cmdList {
+				return worktreeListOutput(branchFeatureA, branchFeatureB), nil
+			}
+			if args[0] == cmdDiff {
+				if strings.Contains(args[2], branchFeatureA) {
+					return diffOutputFileA, nil
+				}
+				return "file-b.go", nil
+			}
+			return "", nil
+		},
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	err := conflictCheckCmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	var env output.Envelope
+	if err := json.Unmarshal(buf.Bytes(), &env); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if env.Command != "conflict-check" {
+		t.Errorf("command = %q, want %q", env.Command, "conflict-check")
+	}
+	dataMap, ok := env.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("data type = %T, want map[string]any", env.Data)
+	}
+	overlaps, ok := dataMap["overlaps"].([]any)
+	if !ok {
+		t.Fatalf("overlaps type = %T, want []any", dataMap["overlaps"])
+	}
+	if len(overlaps) != 0 {
+		t.Errorf("expected 0 overlaps, got %d", len(overlaps))
+	}
+}
+
+func TestConflictCheckJSONWithOverlaps(t *testing.T) {
+	cmd, buf := newTestCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	cfg := testConflictCheckConfig()
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == cmdWorktreeTest && args[1] == cmdList {
+				return worktreeListOutput(branchFeatureA, branchFeatureB), nil
+			}
+			if args[0] == cmdDiff {
+				if strings.Contains(args[2], branchFeatureA) {
+					return diffOutputSharedA, nil
+				}
+				return diffOutputSharedB, nil
+			}
+			return "", nil
+		},
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	err := conflictCheckCmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	var env output.Envelope
+	if err := json.Unmarshal(buf.Bytes(), &env); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	dataMap, ok := env.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("data type = %T, want map[string]any", env.Data)
+	}
+	overlaps, ok := dataMap["overlaps"].([]any)
+	if !ok {
+		t.Fatalf("overlaps type = %T, want []any", dataMap["overlaps"])
+	}
+	if len(overlaps) != 1 {
+		t.Errorf("expected 1 overlap, got %d", len(overlaps))
 	}
 }
 

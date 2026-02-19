@@ -1,12 +1,14 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/lugassawan/rimba/internal/output"
 	"github.com/spf13/cobra"
 )
 
@@ -148,6 +150,89 @@ func TestStatusDirtyBehindStaleUnknown(t *testing.T) {
 	}
 	if !strings.Contains(output, "unknown") {
 		t.Errorf("expected 'unknown' age for failed commit info, got: %q", output)
+	}
+}
+
+func TestStatusJSON(t *testing.T) {
+	restore := overrideNewRunner(statusMultiRunner())
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	cmd.Flags().Int(flagStaleDays, 14, "")
+	if err := statusCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("statusCmd.RunE: %v", err)
+	}
+
+	var env output.Envelope
+	if err := json.Unmarshal(buf.Bytes(), &env); err != nil {
+		t.Fatalf("invalid JSON: %v\noutput: %s", err, buf.String())
+	}
+	if env.Command != "status" {
+		t.Errorf("command = %q, want %q", env.Command, "status")
+	}
+
+	dataMap, ok := env.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("data type = %T, want map[string]any", env.Data)
+	}
+	summary, ok := dataMap["summary"].(map[string]any)
+	if !ok {
+		t.Fatalf("summary type = %T, want map[string]any", dataMap["summary"])
+	}
+	if total, _ := summary["total"].(float64); total != 3 {
+		t.Errorf("summary.total = %v, want 3", total)
+	}
+
+	worktrees, ok := dataMap["worktrees"].([]any)
+	if !ok {
+		t.Fatalf("worktrees type = %T, want []any", dataMap["worktrees"])
+	}
+	if len(worktrees) != 3 {
+		t.Errorf("worktrees length = %d, want 3", len(worktrees))
+	}
+}
+
+func TestStatusJSONNoWorktrees(t *testing.T) {
+	restore := overrideNewRunner(&mockRunner{
+		run: func(args ...string) (string, error) {
+			switch {
+			case args[0] == cmdRevParse && args[1] == cmdShowToplevel:
+				return repoPath, nil
+			case args[0] == cmdSymbolicRef:
+				return refsRemotesOriginMain, nil
+			case args[0] == cmdWorktreeTest && args[1] == cmdList:
+				return wtRepo + headMainBlock, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	})
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	if err := statusCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("statusCmd.RunE: %v", err)
+	}
+
+	var env output.Envelope
+	if err := json.Unmarshal(buf.Bytes(), &env); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if env.Command != "status" {
+		t.Errorf("command = %q, want %q", env.Command, "status")
+	}
+	dataMap, ok := env.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("data type = %T, want map[string]any", env.Data)
+	}
+	worktrees, ok := dataMap["worktrees"].([]any)
+	if !ok {
+		t.Fatalf("worktrees type = %T, want []any", dataMap["worktrees"])
+	}
+	if len(worktrees) != 0 {
+		t.Errorf("worktrees length = %d, want 0", len(worktrees))
 	}
 }
 
