@@ -19,7 +19,9 @@ These flags are available on every command via the root `rimba` command:
 
 ### rimba init
 
-Initialize rimba in the current repository. Detects the repo root, creates `.rimba.toml`, and sets up the worktree directory.
+Initialize rimba in the current repository. Detects the repo root, creates `.rimba.toml`, sets up the worktree directory, and installs agent instruction files (`AGENTS.md`, `.github/copilot-instructions.md`, `.cursor/rules/rimba.mdc`, `.claude/skills/rimba/SKILL.md`).
+
+If `.rimba.toml` already exists, config creation is skipped but agent files are still installed or updated.
 
 ```sh
 rimba init

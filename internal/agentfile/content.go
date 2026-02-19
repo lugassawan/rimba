@@ -27,7 +27,7 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 
 | Concern | Commands |
 |---------|----------|
-| Create & navigate | ` + "`" + `rimba add <task>` + "`" + `, ` + "`" + `rimba open <task>` + "`" + `, ` + "`" + `rimba cd <task>` + "`" + ` |
+| Create & navigate | ` + "`" + `rimba add <task>` + "`" + `, ` + "`" + `rimba open <task>` + "`" + ` |
 | Inspect | ` + "`" + `rimba list` + "`" + `, ` + "`" + `rimba status` + "`" + `, ` + "`" + `rimba log [task]` + "`" + ` |
 | Sync & merge | ` + "`" + `rimba sync [task]` + "`" + `, ` + "`" + `rimba merge <task>` + "`" + ` |
 | Clean up | ` + "`" + `rimba clean --merged` + "`" + `, ` + "`" + `rimba archive <task>` + "`" + `, ` + "`" + `rimba remove <task>` + "`" + ` |
@@ -38,7 +38,7 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 **Create a worktree and start working:**
 ` + "```" + `sh
 rimba add my-feature        # creates worktree + branch
-rimba cd my-feature         # prints cd command (use: cd $(rimba cd my-feature))
+rimba open my-feature       # prints worktree path (use: cd $(rimba open my-feature))
 ` + "```" + `
 
 **Check health and clean up stale worktrees:**
@@ -123,7 +123,7 @@ See AGENTS.md at the repo root for full documentation.
 1. ` + "`" + `rimba add <task>` + "`" + ` — create worktree + branch
 2. ` + "`" + `rimba list` + "`" + ` — list all worktrees
 3. ` + "`" + `rimba status` + "`" + ` — health overview (dirty, stale, behind)
-4. ` + "`" + `rimba cd <task>` + "`" + ` — print path for cd
+4. ` + "`" + `rimba open <task>` + "`" + ` — print path or run shortcut (--ide, --agent)
 5. ` + "`" + `rimba sync [task]` + "`" + ` — rebase worktree(s) onto source
 6. ` + "`" + `rimba merge <task>` + "`" + ` — fast-forward merge into source
 7. ` + "`" + `rimba remove <task>` + "`" + ` — delete worktree + branch
@@ -175,7 +175,7 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 | Start a new task | ` + "`" + `rimba add <task>` + "`" + ` |
 | See all worktrees | ` + "`" + `rimba list` + "`" + ` or ` + "`" + `rimba list --json` + "`" + ` |
 | Check worktree health | ` + "`" + `rimba status` + "`" + ` |
-| Navigate to a worktree | ` + "`" + `cd $(rimba cd <task>)` + "`" + ` |
+| Navigate to a worktree | ` + "`" + `cd $(rimba open <task>)` + "`" + ` |
 | Update from source branch | ` + "`" + `rimba sync <task>` + "`" + ` or ` + "`" + `rimba sync` + "`" + ` (all) |
 | Finish a feature | ` + "`" + `rimba merge <task>` + "`" + ` then ` + "`" + `rimba remove <task>` + "`" + ` |
 | Clean up merged work | ` + "`" + `rimba clean --merged` + "`" + ` |
