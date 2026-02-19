@@ -1,0 +1,41 @@
+---
+description: rimba git worktree manager commands and workflows
+globs:
+  - "*.go"
+  - ".rimba.toml"
+alwaysApply: false
+---
+
+# rimba — Git Worktree Manager
+
+See AGENTS.md at the repo root for full documentation.
+
+## Top Commands
+
+1. `rimba add <task>` — create worktree + branch
+2. `rimba list` — list all worktrees
+3. `rimba status` — health overview (dirty, stale, behind)
+4. `rimba cd <task>` — print path for cd
+5. `rimba sync [task]` — rebase worktree(s) onto source
+6. `rimba merge <task>` — fast-forward merge into source
+7. `rimba remove <task>` — delete worktree + branch
+8. `rimba archive <task>` — remove worktree, keep branch
+9. `rimba exec <cmd>` — run across all worktrees
+10. `rimba clean --merged` — remove merged worktrees
+
+## Workflow Recipes
+
+**New feature:** `rimba add <task>` then work in the worktree directory.
+**Finish feature:** `rimba merge <task>` then `rimba remove <task>`.
+**Housekeeping:** `rimba status` then `rimba clean --merged`.
+
+## JSON Output
+
+Use `--json` with: list, status, exec, conflict-check, deps status.
+Envelope: `{"version", "command", "data"}` or `{"version", "command", "error", "code"}`.
+
+## Best Practices
+
+- Prefer `archive` over `remove` to keep branches for reference.
+- Use `--force` only when you understand the implications.
+- Never modify `.rimba.toml` without asking the user.

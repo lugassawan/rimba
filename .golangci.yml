@@ -66,3 +66,5 @@ linters:
     rules:
       - path: (_test\.go|testutil/)
         linters: [gosec]
+      - path: internal/agentfile/content\.go
+        linters: [dupl]

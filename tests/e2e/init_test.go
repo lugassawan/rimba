@@ -54,7 +54,7 @@ func TestInitConfigDefaults(t *testing.T) {
 	}
 }
 
-func TestInitFailsIfAlreadyInitialized(t *testing.T) {
+func TestInitExistingConfigInstallsAgentFiles(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
 	}
@@ -62,8 +62,10 @@ func TestInitFailsIfAlreadyInitialized(t *testing.T) {
 	repo := setupRepo(t)
 	rimbaSuccess(t, repo, "init")
 
-	r := rimbaFail(t, repo, "init")
-	assertContains(t, r.Stderr, "already exists")
+	// Re-running init should succeed and update agent files
+	r := rimbaSuccess(t, repo, "init")
+	assertContains(t, r.Stdout, "already exists")
+	assertContains(t, r.Stdout, "Agent:")
 }
 
 func TestInitAddsToGitignore(t *testing.T) {
