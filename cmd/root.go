@@ -22,8 +22,8 @@ const (
 )
 
 var rootCmd = &cobra.Command{
-	Use:          "rimba",
-	Short:        "Git worktree lifecycle manager",
+	Use:           "rimba",
+	Short:         "Git worktree lifecycle manager",
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {

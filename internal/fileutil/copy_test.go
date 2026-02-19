@@ -11,18 +11,18 @@ import (
 )
 
 const (
-	testSecret      = "SECRET=123"
-	dotEnvrc        = ".envrc"
-	dotVscode       = ".vscode"
-	dotConfig       = ".config"
-	dotEmpty        = ".empty"
-	dotSecret       = ".secret"
-	settingsJSON    = "settings.json"
-	appTOML         = "app.toml"
-	msgCopyErr      = "CopyEntries: %v"
-	msgCopiedWant   = "copied = %v, want %v"
-	msgExpect1Entry = "expected 1 entry copied, got %d"
-	errContainsFmt  = "error = %q, want it to contain %q"
+	testSecret       = "SECRET=123"
+	dotEnvrc         = ".envrc"
+	dotVscode        = ".vscode"
+	dotConfig        = ".config"
+	dotEmpty         = ".empty"
+	dotSecret        = ".secret"
+	settingsJSON     = "settings.json"
+	appTOML          = "app.toml"
+	msgCopyErr       = "CopyEntries: %v"
+	msgCopiedWant    = "copied = %v, want %v"
+	msgExpect1Entry  = "expected 1 entry copied, got %d"
+	errContainsFmt   = "error = %q, want it to contain %q"
 	errPrefixCopyEnv = "copy .env:"
 )
 
