@@ -13,6 +13,7 @@ const (
 	flagVerify      = "--verify"
 	cmdCommitTree   = "commit-tree"
 	cmdCherry       = "cherry"
+	cmdConfig       = "config"
 	treeSuffix      = "^{tree}"
 	cherryMerged    = "- "
 )
@@ -47,8 +48,24 @@ func MainRepoRoot(r Runner) (string, error) {
 }
 
 // HooksDir returns the absolute path to the repository's hooks directory.
-// Uses git rev-parse --git-common-dir for worktree compatibility.
+// Respects core.hooksPath if configured, otherwise falls back to
+// <git-common-dir>/hooks for worktree compatibility.
 func HooksDir(r Runner) (string, error) {
+	// Check if core.hooksPath is configured (overrides default)
+	hooksPath, err := r.Run(cmdConfig, "core.hooksPath")
+	if err == nil && hooksPath != "" {
+		if filepath.IsAbs(hooksPath) {
+			return hooksPath, nil
+		}
+		// Relative path: resolve against main repo root
+		root, err := MainRepoRoot(r)
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(root, hooksPath), nil
+	}
+
+	// Default: <git-common-dir>/hooks
 	commonDir, err := resolveCommonDir(r)
 	if err != nil {
 		return "", err
