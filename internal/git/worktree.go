@@ -92,6 +92,19 @@ func ListWorktrees(r Runner) ([]WorktreeEntry, error) {
 	return entries, nil
 }
 
+// FilterEntries returns entries with bare worktrees, empty branches, and the
+// main branch removed. This is the common pre-filter for status, log, and clean.
+func FilterEntries(entries []WorktreeEntry, mainBranch string) []WorktreeEntry {
+	var out []WorktreeEntry
+	for _, e := range entries {
+		if e.Bare || e.Branch == "" || e.Branch == mainBranch {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
 // Prune runs `git worktree prune` to clean up stale worktree references.
 func Prune(r Runner, dryRun bool) (string, error) {
 	args := []string{cmdWorktree, "prune"}

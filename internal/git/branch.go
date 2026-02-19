@@ -81,19 +81,8 @@ func MergedBranches(r Runner, branch string) ([]string, error) {
 
 // LastCommitTime returns the time of the last commit on the given branch.
 func LastCommitTime(r Runner, branch string) (time.Time, error) {
-	out, err := r.Run("log", "-1", "--format=%ct", branch)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("last commit time for %s: %w", branch, err)
-	}
-	out = strings.TrimSpace(out)
-	if out == "" {
-		return time.Time{}, fmt.Errorf("no commits on branch %s", branch)
-	}
-	ts, err := strconv.ParseInt(out, 10, 64)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("parse commit timestamp %q: %w", out, err)
-	}
-	return time.Unix(ts, 0), nil
+	t, _, err := LastCommitInfo(r, branch)
+	return t, err
 }
 
 // LastCommitInfo returns the time and subject of the last commit on the given branch.
