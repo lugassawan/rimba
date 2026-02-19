@@ -23,6 +23,8 @@ const (
 	fatalDefaultFmt  = "DefaultBranch: %v"
 	errBranchWantFmt = "branch = %q, want %q"
 	flagGitCommonDir = "--git-common-dir"
+	fakeTree         = "tree123"
+	fakeTempCommit   = "temp456"
 )
 
 // mockRunner implements Runner with configurable closures for testing.
@@ -519,6 +521,165 @@ func TestListWorktreesBareEntry(t *testing.T) {
 	}
 	if entries[1].Branch != "" {
 		t.Errorf("expected empty branch for bare entry, got %q", entries[1].Branch)
+	}
+}
+
+func TestIsSquashMerged(t *testing.T) {
+	step := 0
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			step++
+			switch step {
+			case 1: // merge-base
+				return fakeSHA, nil
+			case 2: // rev-parse branch^{tree}
+				return fakeTree, nil
+			case 3: // commit-tree
+				return fakeTempCommit, nil
+			case 4: // cherry
+				return "- abc789", nil
+			}
+			return "", errors.New("unexpected call")
+		},
+	}
+
+	merged, err := IsSquashMerged(r, branchMain, branchFeature)
+	if err != nil {
+		t.Fatalf("IsSquashMerged: %v", err)
+	}
+	if !merged {
+		t.Error("expected squash-merged branch to be detected")
+	}
+}
+
+func TestIsSquashMergedNotMerged(t *testing.T) {
+	step := 0
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			step++
+			switch step {
+			case 1:
+				return fakeSHA, nil
+			case 2:
+				return fakeTree, nil
+			case 3:
+				return fakeTempCommit, nil
+			case 4:
+				return "+ abc789", nil
+			}
+			return "", errors.New("unexpected call")
+		},
+	}
+
+	merged, err := IsSquashMerged(r, branchMain, branchFeature)
+	if err != nil {
+		t.Fatalf("IsSquashMerged: %v", err)
+	}
+	if merged {
+		t.Error("expected non-squash-merged branch to not be detected")
+	}
+}
+
+func TestIsSquashMergedMergeBaseError(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			return "", errors.New(errNotARepo)
+		},
+	}
+
+	_, err := IsSquashMerged(r, branchMain, branchFeature)
+	if err == nil {
+		t.Fatal("expected error from MergeBase failure")
+	}
+}
+
+func TestIsSquashMergedRevParseError(t *testing.T) {
+	step := 0
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			step++
+			if step == 1 {
+				return fakeSHA, nil
+			}
+			return "", errors.New("rev-parse failed")
+		},
+	}
+
+	_, err := IsSquashMerged(r, branchMain, branchFeature)
+	if err == nil {
+		t.Fatal("expected error from rev-parse failure")
+	}
+}
+
+func TestIsSquashMergedCommitTreeError(t *testing.T) {
+	step := 0
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			step++
+			switch step {
+			case 1:
+				return fakeSHA, nil
+			case 2:
+				return fakeTree, nil
+			}
+			return "", errors.New("commit-tree failed")
+		},
+	}
+
+	_, err := IsSquashMerged(r, branchMain, branchFeature)
+	if err == nil {
+		t.Fatal("expected error from commit-tree failure")
+	}
+}
+
+func TestIsSquashMergedEmptyCherry(t *testing.T) {
+	step := 0
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			step++
+			switch step {
+			case 1:
+				return fakeSHA, nil
+			case 2:
+				return fakeTree, nil
+			case 3:
+				return fakeTempCommit, nil
+			case 4:
+				return "", nil
+			}
+			return "", errors.New("unexpected call")
+		},
+	}
+
+	merged, err := IsSquashMerged(r, branchMain, branchFeature)
+	if err != nil {
+		t.Fatalf("IsSquashMerged: %v", err)
+	}
+	if merged {
+		t.Error("expected empty cherry output to not indicate squash-merge")
+	}
+}
+
+func TestIsSquashMergedCherryError(t *testing.T) {
+	step := 0
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			step++
+			switch step {
+			case 1:
+				return fakeSHA, nil
+			case 2:
+				return fakeTree, nil
+			case 3:
+				return fakeTempCommit, nil
+			}
+			return "", errors.New("cherry failed")
+		},
+	}
+
+	_, err := IsSquashMerged(r, branchMain, branchFeature)
+	if err == nil {
+		t.Fatal("expected error from cherry failure")
 	}
 }
 

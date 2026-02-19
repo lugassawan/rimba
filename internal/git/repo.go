@@ -11,6 +11,10 @@ const (
 	refsHeadsPrefix = "refs/heads/"
 	cmdRevParse     = "rev-parse"
 	flagVerify      = "--verify"
+	cmdCommitTree   = "commit-tree"
+	cmdCherry       = "cherry"
+	treeSuffix      = "^{tree}"
+	cherryMerged    = "- "
 )
 
 // RepoRoot returns the absolute path to the repository root.

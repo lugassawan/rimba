@@ -259,6 +259,110 @@ func TestCleanStaleForceE2E(t *testing.T) {
 	assertFileNotExists(t, wtPath)
 }
 
+// cleanSquashMergeSetup creates a worktree, makes a commit, and squash-merges it
+// into main (using git merge --squash + git commit) so the branch content is in
+// main but git branch --merged can't detect it.
+// Returns the worktree path.
+func cleanSquashMergeSetup(t *testing.T, repo, task string) string {
+	t.Helper()
+	rimbaSuccess(t, repo, "add", task)
+
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch := resolver.BranchName(defaultPrefix, task)
+	wtPath := resolver.WorktreePath(wtDir, branch)
+
+	// Make a commit in the worktree
+	testutil.CreateFile(t, wtPath, task+".txt", "content from "+task)
+	testutil.GitCmd(t, wtPath, "add", ".")
+	testutil.GitCmd(t, wtPath, "commit", "-m", "add "+task)
+
+	// Squash merge into main (from repo root)
+	testutil.GitCmd(t, repo, "merge", "--squash", branch)
+	testutil.GitCmd(t, repo, "commit", "-m", "squash merge "+task)
+
+	return wtPath
+}
+
+func TestCleanMergedDetectsSquash(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupCleanInitializedRepo(t)
+	cleanSquashMergeSetup(t, repo, "squash-detect")
+
+	r := rimbaSuccess(t, repo, "clean", flagMergedE2E, flagDryRunE2E)
+	assertContains(t, r.Stdout, "Merged worktrees:")
+	assertContains(t, r.Stdout, "squash-detect")
+}
+
+func TestCleanMergedSquashForce(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupCleanInitializedRepo(t)
+	wtPath := cleanSquashMergeSetup(t, repo, "squash-force")
+
+	r := rimbaSuccess(t, repo, "clean", flagMergedE2E, flagForceE2E)
+	assertContains(t, r.Stdout, msgRemovedWorktree)
+	assertContains(t, r.Stdout, msgDeletedBranch)
+	assertContains(t, r.Stdout, "Cleaned 1 merged worktree(s)")
+
+	// Worktree should be gone
+	assertFileNotExists(t, wtPath)
+
+	// Branch should be gone
+	out := testutil.GitCmd(t, repo, "branch", flagBranchList)
+	if strings.Contains(out, defaultPrefix+"squash-force") {
+		t.Error("expected branch to be deleted")
+	}
+}
+
+func TestCleanMergedKeepsUnmergedWithSquash(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupCleanInitializedRepo(t)
+	cleanSquashMergeSetup(t, repo, "squash-merged")
+
+	// Add an unmerged worktree
+	rimbaSuccess(t, repo, "add", taskNotMerged)
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	unmergedBranch := resolver.BranchName(defaultPrefix, taskNotMerged)
+	unmergedPath := resolver.WorktreePath(wtDir, unmergedBranch)
+	testutil.CreateFile(t, unmergedPath, "wt-only.txt", "unmerged content")
+	testutil.GitCmd(t, unmergedPath, "add", ".")
+	testutil.GitCmd(t, unmergedPath, "commit", "-m", "unmerged commit")
+
+	r := rimbaSuccess(t, repo, "clean", flagMergedE2E, flagForceE2E)
+	assertContains(t, r.Stdout, "squash-merged")
+	assertNotContains(t, r.Stdout, taskNotMerged)
+
+	// Unmerged worktree should still exist
+	assertFileExists(t, unmergedPath)
+}
+
+func TestCleanMergedBothRegularAndSquash(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupCleanInitializedRepo(t)
+	// One regular merge
+	cleanMergeSetup(t, repo, "regular-merged")
+	// One squash merge
+	cleanSquashMergeSetup(t, repo, "squash-merged2")
+
+	r := rimbaSuccess(t, repo, "clean", flagMergedE2E, flagDryRunE2E)
+	assertContains(t, r.Stdout, "Merged worktrees:")
+	assertContains(t, r.Stdout, "regular-merged")
+	assertContains(t, r.Stdout, "squash-merged2")
+}
+
 func TestCleanStaleMutualExclusive(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)

@@ -175,6 +175,16 @@ func findMergedCandidates(r git.Runner, mergeRef, mainBranch string) ([]cleanCan
 	for _, e := range git.FilterEntries(entries, mainBranch) {
 		if mergedSet[e.Branch] {
 			candidates = append(candidates, cleanCandidate{path: e.Path, branch: e.Branch})
+			continue
+		}
+
+		// Fallback: squash-merge detection
+		squashed, err := git.IsSquashMerged(r, mergeRef, e.Branch)
+		if err != nil {
+			continue
+		}
+		if squashed {
+			candidates = append(candidates, cleanCandidate{path: e.Path, branch: e.Branch})
 		}
 	}
 	return candidates, nil
