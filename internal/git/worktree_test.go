@@ -50,6 +50,43 @@ func TestAddAndListWorktrees(t *testing.T) {
 	}
 }
 
+func TestAddWorktreeFromBranch(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	// Create a branch first
+	testutil.GitCmd(t, repo, "branch", "feat/existing")
+
+	wtPath := filepath.Join(filepath.Dir(repo), "wt-from-branch")
+	if err := git.AddWorktreeFromBranch(r, wtPath, "feat/existing"); err != nil {
+		t.Fatalf("AddWorktreeFromBranch: %v", err)
+	}
+
+	if _, err := os.Stat(wtPath); err != nil {
+		t.Fatalf("worktree dir not created: %v", err)
+	}
+
+	entries, err := git.ListWorktrees(r)
+	if err != nil {
+		t.Fatalf("ListWorktrees: %v", err)
+	}
+
+	found := false
+	for _, e := range entries {
+		if e.Branch == "feat/existing" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("worktree with branch feat/existing not found in list")
+	}
+}
+
 func TestRemoveWorktree(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipIntegration)

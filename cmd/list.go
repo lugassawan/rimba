@@ -18,9 +18,10 @@ import (
 )
 
 const (
-	flagType   = "type"
-	flagDirty  = "dirty"
-	flagBehind = "behind"
+	flagType     = "type"
+	flagDirty    = "dirty"
+	flagBehind   = "behind"
+	flagArchived = "archived"
 
 	hintType   = "Filter by prefix type (feature, bugfix, hotfix, etc.)"
 	hintDirty  = "Show only worktrees with uncommitted changes"
@@ -35,9 +36,10 @@ type candidate struct {
 }
 
 var (
-	listType   string
-	listDirty  bool
-	listBehind bool
+	listType     string
+	listDirty    bool
+	listBehind   bool
+	listArchived bool
 )
 
 func init() {
@@ -46,6 +48,11 @@ func init() {
 	listCmd.Flags().StringVar(&listType, flagType, "", "filter by prefix type (e.g. feature, bugfix)")
 	listCmd.Flags().BoolVar(&listDirty, flagDirty, false, "show only dirty worktrees")
 	listCmd.Flags().BoolVar(&listBehind, flagBehind, false, "show only worktrees behind upstream")
+	listCmd.Flags().BoolVar(&listArchived, flagArchived, false, "show archived branches (not in any active worktree)")
+
+	listCmd.MarkFlagsMutuallyExclusive(flagArchived, flagType)
+	listCmd.MarkFlagsMutuallyExclusive(flagArchived, flagDirty)
+	listCmd.MarkFlagsMutuallyExclusive(flagArchived, flagBehind)
 
 	_ = listCmd.RegisterFlagCompletionFunc(flagType, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		var types []string
@@ -64,6 +71,15 @@ var listCmd = &cobra.Command{
 	Short: "List all worktrees",
 	Long:  "Lists all git worktrees with their branch, path, and status (dirty, ahead/behind).",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if listArchived {
+			r := newRunner()
+			mainBranch, err := resolveMainBranch(r)
+			if err != nil {
+				return err
+			}
+			return listArchivedBranches(cmd, r, mainBranch)
+		}
+
 		cfg := config.FromContext(cmd.Context())
 
 		if listType != "" && !resolver.ValidPrefixType(listType) {
@@ -197,4 +213,45 @@ var listCmd = &cobra.Command{
 		tbl.Render(cmd.OutOrStdout())
 		return nil
 	},
+}
+
+// listArchivedBranches shows branches not associated with any active worktree.
+func listArchivedBranches(cmd *cobra.Command, r git.Runner, mainBranch string) error {
+	archived, err := findArchivedBranches(r, mainBranch)
+	if err != nil {
+		return err
+	}
+
+	if len(archived) == 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), "No archived branches found.")
+		return nil
+	}
+
+	noColor, _ := cmd.Flags().GetBool(flagNoColor)
+	p := termcolor.NewPainter(noColor)
+	prefixes := resolver.AllPrefixes()
+
+	tbl := termcolor.NewTable(2)
+	tbl.AddRow(
+		p.Paint("TASK", termcolor.Bold),
+		p.Paint("TYPE", termcolor.Bold),
+		p.Paint("BRANCH", termcolor.Bold),
+	)
+
+	for _, b := range archived {
+		task, matchedPrefix := resolver.TaskFromBranch(b, prefixes)
+		typeName := strings.TrimSuffix(matchedPrefix, "/")
+
+		typeCell := typeName
+		if c := typeColor(typeName); c != "" {
+			typeCell = p.Paint(typeCell, c)
+		}
+
+		tbl.AddRow("  "+task, typeCell, b)
+	}
+
+	fmt.Fprintln(cmd.OutOrStdout(), "Archived branches:")
+	tbl.Render(cmd.OutOrStdout())
+	fmt.Fprintf(cmd.OutOrStdout(), "\nTo restore: rimba restore <task>\n")
+	return nil
 }
