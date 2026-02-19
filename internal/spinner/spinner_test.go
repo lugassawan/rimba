@@ -199,6 +199,29 @@ func TestIsTTYWithFile(t *testing.T) {
 	}
 }
 
+func TestIsTTYStatError(t *testing.T) {
+	prev, had := os.LookupEnv("NO_COLOR")
+	os.Unsetenv("NO_COLOR")
+	defer func() {
+		if had {
+			os.Setenv("NO_COLOR", prev)
+		}
+	}()
+
+	f, err := os.CreateTemp("", "spinner-stat-err")
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := f.Name()
+	// Close file descriptor so Stat() fails
+	_ = f.Close()
+	_ = os.Remove(name)
+
+	if isTTY(f) {
+		t.Error("expected isTTY=false when Stat fails on closed file")
+	}
+}
+
 func TestAnimatedStartStop(t *testing.T) {
 	var buf bytes.Buffer
 	s := &Spinner{w: &buf, animated: true}

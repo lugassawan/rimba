@@ -170,6 +170,53 @@ func TestExecute(t *testing.T) {
 	}
 }
 
+func TestIsJSONModeDefault(t *testing.T) {
+	// Reset flag to default
+	_ = rootCmd.PersistentFlags().Set(flagJSON, "false")
+	if IsJSONMode() {
+		t.Error("IsJSONMode() should be false by default")
+	}
+}
+
+func TestIsJSONModeTrue(t *testing.T) {
+	_ = rootCmd.PersistentFlags().Set(flagJSON, "true")
+	t.Cleanup(func() { _ = rootCmd.PersistentFlags().Set(flagJSON, "false") })
+
+	if !IsJSONMode() {
+		t.Error("IsJSONMode() should be true after setting flag")
+	}
+}
+
+func TestCommandNameDefault(t *testing.T) {
+	old := commandName
+	commandName = ""
+	t.Cleanup(func() { commandName = old })
+
+	if got := CommandName(); got != "" {
+		t.Errorf("CommandName() = %q, want empty", got)
+	}
+}
+
+func TestCommandNameAfterPreRun(t *testing.T) {
+	old := commandName
+	t.Cleanup(func() { commandName = old })
+
+	// Simulate PersistentPreRunE setting commandName
+	cmd := &cobra.Command{Use: "test-sub"}
+	rootCmd.AddCommand(cmd)
+	defer rootCmd.RemoveCommand(cmd)
+
+	cmd.Annotations = map[string]string{"skipConfig": "true"}
+	preRunE := rootCmd.PersistentPreRunE
+	if err := preRunE(cmd, nil); err != nil {
+		t.Fatalf("PreRunE: %v", err)
+	}
+
+	if got := CommandName(); got != "test-sub" {
+		t.Errorf("CommandName() = %q, want %q", got, "test-sub")
+	}
+}
+
 func TestRootHelpFunctionRoot(t *testing.T) {
 	// Set up a test server that returns a newer version
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

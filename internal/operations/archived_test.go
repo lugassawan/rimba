@@ -103,6 +103,61 @@ func TestFindArchivedBranchByTaskExtraction(t *testing.T) {
 	}
 }
 
+func TestFindArchivedBranchExactMatchSkipsActive(t *testing.T) {
+	// Branch name matches task exactly but is active → falls through to task extraction
+	mr := &mockRunner{
+		run: func(args ...string) (string, error) {
+			switch {
+			case args[0] == cmdBranch:
+				// "my-task" is an exact match, "bugfix/my-task" matches via extraction
+				return "main\nmy-task\nbugfix/my-task", nil
+			case args[0] == cmdWorktreeTest && args[1] == cmdList:
+				// "my-task" is active (checked out), "bugfix/my-task" is not
+				return "worktree /repo\nHEAD abc\nbranch refs/heads/main\n\n" +
+					"worktree /wt/my-task\nHEAD def\nbranch refs/heads/my-task\n", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	branch, err := FindArchivedBranch(mr, "my-task")
+	if err != nil {
+		t.Fatalf("FindArchivedBranch: %v", err)
+	}
+	// Should skip "my-task" (active) and find "bugfix/my-task" via task extraction
+	if branch != "bugfix/my-task" {
+		t.Errorf("branch = %q, want %q", branch, "bugfix/my-task")
+	}
+}
+
+func TestFindArchivedBranchPrefixMatchSkipsActive(t *testing.T) {
+	// Prefix+task match exists but is active → falls through to exact match
+	mr := &mockRunner{
+		run: func(args ...string) (string, error) {
+			switch {
+			case args[0] == cmdBranch:
+				return "main\nfeature/task-x\ntask-x", nil
+			case args[0] == cmdWorktreeTest && args[1] == cmdList:
+				// "feature/task-x" is active
+				return "worktree /repo\nHEAD abc\nbranch refs/heads/main\n\n" +
+					"worktree /wt/feature-task-x\nHEAD def\nbranch refs/heads/feature/task-x\n", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	branch, err := FindArchivedBranch(mr, "task-x")
+	if err != nil {
+		t.Fatalf("FindArchivedBranch: %v", err)
+	}
+	// Should skip "feature/task-x" (active) and find "task-x" via exact match
+	if branch != "task-x" {
+		t.Errorf("branch = %q, want %q", branch, "task-x")
+	}
+}
+
 func TestFindArchivedBranchSkipsActiveInFallback(t *testing.T) {
 	// Branch "bugfix/some-task" matches task "some-task" via extraction,
 	// but it's active in a worktree → should be skipped in fallback.
