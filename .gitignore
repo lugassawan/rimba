@@ -44,3 +44,6 @@ local.properties
 *local.yml
 *local.xml
 *local.json
+
+# Worktrees
+.worktrees/

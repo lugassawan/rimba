@@ -1,6 +1,13 @@
 #!/bin/sh
 # Pre-commit hook: format staged Go files and run linter.
 
+# Prevent direct commits to main/master
+_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+if [ "$_branch" = "main" ] || [ "$_branch" = "master" ]; then
+    echo "ERROR: Direct commits to '$_branch' are not allowed."
+    exit 1
+fi
+
 set -e
 
 # Format staged Go files

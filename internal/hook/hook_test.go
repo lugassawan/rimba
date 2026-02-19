@@ -9,17 +9,23 @@ import (
 )
 
 const (
-	branchMain             = "main"
-	branchMaster           = "master"
-	userHook               = "echo 'user hook running'\n"
-	fatalInstall           = "Install: %v"
-	fatalReadHook          = "read hook: %v"
-	fatalWriteHook         = "write hook: %v"
-	errBeginMarkerRemoved  = "BEGIN marker should be removed"
+	branchMain            = "main"
+	branchMaster          = "master"
+	userHook              = "echo 'user hook running'\n"
+	fatalInstall          = "Install: %v"
+	fatalReadHook         = "read hook: %v"
+	fatalWriteHook        = "write hook: %v"
+	errBeginMarkerRemoved = "BEGIN marker should be removed"
 )
 
-func TestHookBlock(t *testing.T) {
-	block := HookBlock(branchMain)
+func postMergeBlock() string {
+	return PostMergeBlock(branchMain)
+}
+
+// --- PostMergeBlock (post-merge) tests ---
+
+func TestPostMergeBlock(t *testing.T) {
+	block := PostMergeBlock(branchMain)
 
 	if !strings.Contains(block, BeginMarker) {
 		t.Error("block missing BEGIN marker")
@@ -38,22 +44,49 @@ func TestHookBlock(t *testing.T) {
 	}
 }
 
-func TestHookBlockCustomBranch(t *testing.T) {
-	block := HookBlock(branchMaster)
+func TestPostMergeBlockCustomBranch(t *testing.T) {
+	block := PostMergeBlock(branchMaster)
 
 	if !strings.Contains(block, `"master"`) {
 		t.Errorf("block should contain master branch guard, got:\n%s", block)
 	}
 }
 
+// --- PreCommitBlock tests ---
+
+func TestPreCommitBlock(t *testing.T) {
+	block := PreCommitBlock()
+
+	if !strings.Contains(block, BeginMarker) {
+		t.Error("block missing BEGIN marker")
+	}
+	if !strings.Contains(block, EndMarker) {
+		t.Error("block missing END marker")
+	}
+	if !strings.Contains(block, `"main"`) {
+		t.Error("block missing guard for main")
+	}
+	if !strings.Contains(block, `"master"`) {
+		t.Error("block missing guard for master")
+	}
+	if !strings.Contains(block, "exit 1") {
+		t.Error("block missing exit 1")
+	}
+	if !strings.Contains(block, "rimba add") {
+		t.Error("block missing hint to use rimba add")
+	}
+}
+
+// --- Install tests (post-merge) ---
+
 func TestInstallNewFile(t *testing.T) {
 	dir := t.TempDir()
 
-	if err := Install(dir, branchMain); err != nil {
+	if err := Install(dir, PostMergeHook, postMergeBlock()); err != nil {
 		t.Fatalf(fatalInstall, err)
 	}
 
-	hookPath := filepath.Join(dir, HookName)
+	hookPath := filepath.Join(dir, PostMergeHook)
 	content, err := os.ReadFile(hookPath)
 	if err != nil {
 		t.Fatalf(fatalReadHook, err)
@@ -81,14 +114,14 @@ func TestInstallNewFile(t *testing.T) {
 
 func TestInstallAppendToExisting(t *testing.T) {
 	dir := t.TempDir()
-	hookPath := filepath.Join(dir, HookName)
+	hookPath := filepath.Join(dir, PostMergeHook)
 
 	existing := shebang + "\n\n" + userHook
 	if err := os.WriteFile(hookPath, []byte(existing), fileMode); err != nil {
 		t.Fatalf("write existing hook: %v", err)
 	}
 
-	if err := Install(dir, branchMain); err != nil {
+	if err := Install(dir, PostMergeHook, postMergeBlock()); err != nil {
 		t.Fatalf(fatalInstall, err)
 	}
 
@@ -109,11 +142,11 @@ func TestInstallAppendToExisting(t *testing.T) {
 func TestInstallAlreadyInstalled(t *testing.T) {
 	dir := t.TempDir()
 
-	if err := Install(dir, branchMain); err != nil {
+	if err := Install(dir, PostMergeHook, postMergeBlock()); err != nil {
 		t.Fatalf("first Install: %v", err)
 	}
 
-	err := Install(dir, branchMain)
+	err := Install(dir, PostMergeHook, postMergeBlock())
 	if !errors.Is(err, ErrAlreadyInstalled) {
 		t.Fatalf("second Install: got %v, want ErrAlreadyInstalled", err)
 	}
@@ -122,25 +155,84 @@ func TestInstallAlreadyInstalled(t *testing.T) {
 func TestInstallCreatesHooksDir(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "hooks")
 
-	if err := Install(dir, branchMain); err != nil {
+	if err := Install(dir, PostMergeHook, postMergeBlock()); err != nil {
 		t.Fatalf(fatalInstall, err)
 	}
 
-	if _, err := os.Stat(filepath.Join(dir, HookName)); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, PostMergeHook)); err != nil {
 		t.Fatalf("hook file should exist: %v", err)
 	}
 }
 
+// --- Install tests (pre-commit) ---
+
+func TestInstallPreCommitNewFile(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := Install(dir, PreCommitHook, PreCommitBlock()); err != nil {
+		t.Fatalf(fatalInstall, err)
+	}
+
+	hookPath := filepath.Join(dir, PreCommitHook)
+	content, err := os.ReadFile(hookPath)
+	if err != nil {
+		t.Fatalf(fatalReadHook, err)
+	}
+
+	s := string(content)
+	if !strings.HasPrefix(s, shebang) {
+		t.Error("hook file should start with shebang")
+	}
+	if !strings.Contains(s, `"main"`) {
+		t.Error("pre-commit hook missing main guard")
+	}
+	if !strings.Contains(s, `"master"`) {
+		t.Error("pre-commit hook missing master guard")
+	}
+	if !strings.Contains(s, "exit 1") {
+		t.Error("pre-commit hook missing exit 1")
+	}
+}
+
+func TestInstallPreCommitAppendToExisting(t *testing.T) {
+	dir := t.TempDir()
+	hookPath := filepath.Join(dir, PreCommitHook)
+
+	existing := shebang + "\n\n" + userHook
+	if err := os.WriteFile(hookPath, []byte(existing), fileMode); err != nil {
+		t.Fatalf("write existing hook: %v", err)
+	}
+
+	if err := Install(dir, PreCommitHook, PreCommitBlock()); err != nil {
+		t.Fatalf(fatalInstall, err)
+	}
+
+	content, err := os.ReadFile(hookPath)
+	if err != nil {
+		t.Fatalf(fatalReadHook, err)
+	}
+
+	s := string(content)
+	if !strings.Contains(s, userHook) {
+		t.Error("existing user hook content should be preserved")
+	}
+	if !strings.Contains(s, "exit 1") {
+		t.Error("pre-commit block should be appended")
+	}
+}
+
+// --- Uninstall tests (post-merge) ---
+
 func TestUninstallRemovesBlock(t *testing.T) {
 	dir := t.TempDir()
-	hookPath := filepath.Join(dir, HookName)
+	hookPath := filepath.Join(dir, PostMergeHook)
 
-	existing := shebang + "\n\n" + userHook + "\n" + HookBlock(branchMain) + "\n"
+	existing := shebang + "\n\n" + userHook + "\n" + postMergeBlock() + "\n"
 	if err := os.WriteFile(hookPath, []byte(existing), fileMode); err != nil {
 		t.Fatalf(fatalWriteHook, err)
 	}
 
-	if err := Uninstall(dir); err != nil {
+	if err := Uninstall(dir, PostMergeHook); err != nil {
 		t.Fatalf("Uninstall: %v", err)
 	}
 
@@ -160,14 +252,14 @@ func TestUninstallRemovesBlock(t *testing.T) {
 
 func TestUninstallRemovesEmptyFile(t *testing.T) {
 	dir := t.TempDir()
-	hookPath := filepath.Join(dir, HookName)
+	hookPath := filepath.Join(dir, PostMergeHook)
 
-	content := shebang + "\n\n" + HookBlock(branchMain) + "\n"
+	content := shebang + "\n\n" + postMergeBlock() + "\n"
 	if err := os.WriteFile(hookPath, []byte(content), fileMode); err != nil {
 		t.Fatalf(fatalWriteHook, err)
 	}
 
-	if err := Uninstall(dir); err != nil {
+	if err := Uninstall(dir, PostMergeHook); err != nil {
 		t.Fatalf("Uninstall: %v", err)
 	}
 
@@ -179,7 +271,7 @@ func TestUninstallRemovesEmptyFile(t *testing.T) {
 func TestUninstallNotInstalled(t *testing.T) {
 	dir := t.TempDir()
 
-	err := Uninstall(dir)
+	err := Uninstall(dir, PostMergeHook)
 	if !errors.Is(err, ErrNotInstalled) {
 		t.Fatalf("Uninstall: got %v, want ErrNotInstalled", err)
 	}
@@ -187,25 +279,46 @@ func TestUninstallNotInstalled(t *testing.T) {
 
 func TestUninstallNoBlock(t *testing.T) {
 	dir := t.TempDir()
-	hookPath := filepath.Join(dir, HookName)
+	hookPath := filepath.Join(dir, PostMergeHook)
 
 	if err := os.WriteFile(hookPath, []byte(shebang+"\n"+userHook), fileMode); err != nil {
 		t.Fatalf(fatalWriteHook, err)
 	}
 
-	err := Uninstall(dir)
+	err := Uninstall(dir, PostMergeHook)
 	if !errors.Is(err, ErrNotInstalled) {
 		t.Fatalf("Uninstall: got %v, want ErrNotInstalled", err)
 	}
 }
 
-func TestCheckInstalled(t *testing.T) {
+// --- Uninstall tests (pre-commit) ---
+
+func TestUninstallPreCommit(t *testing.T) {
 	dir := t.TempDir()
-	if err := Install(dir, branchMain); err != nil {
+
+	if err := Install(dir, PreCommitHook, PreCommitBlock()); err != nil {
 		t.Fatalf(fatalInstall, err)
 	}
 
-	s := Check(dir)
+	if err := Uninstall(dir, PreCommitHook); err != nil {
+		t.Fatalf("Uninstall: %v", err)
+	}
+
+	hookPath := filepath.Join(dir, PreCommitHook)
+	if _, err := os.Stat(hookPath); !os.IsNotExist(err) {
+		t.Error("pre-commit hook file should be deleted when only rimba content remains")
+	}
+}
+
+// --- Check tests (post-merge) ---
+
+func TestCheckInstalled(t *testing.T) {
+	dir := t.TempDir()
+	if err := Install(dir, PostMergeHook, postMergeBlock()); err != nil {
+		t.Fatalf(fatalInstall, err)
+	}
+
+	s := Check(dir, PostMergeHook)
 	if !s.Installed {
 		t.Error("expected Installed = true")
 	}
@@ -220,7 +333,7 @@ func TestCheckInstalled(t *testing.T) {
 func TestCheckNotInstalled(t *testing.T) {
 	dir := t.TempDir()
 
-	s := Check(dir)
+	s := Check(dir, PostMergeHook)
 	if s.Installed {
 		t.Error("expected Installed = false")
 	}
@@ -228,14 +341,14 @@ func TestCheckNotInstalled(t *testing.T) {
 
 func TestCheckHasOtherContent(t *testing.T) {
 	dir := t.TempDir()
-	hookPath := filepath.Join(dir, HookName)
+	hookPath := filepath.Join(dir, PostMergeHook)
 
-	content := shebang + "\n\n" + userHook + "\n" + HookBlock(branchMain) + "\n"
+	content := shebang + "\n\n" + userHook + "\n" + postMergeBlock() + "\n"
 	if err := os.WriteFile(hookPath, []byte(content), fileMode); err != nil {
 		t.Fatalf(fatalWriteHook, err)
 	}
 
-	s := Check(dir)
+	s := Check(dir, PostMergeHook)
 	if !s.Installed {
 		t.Error("expected Installed = true")
 	}
@@ -244,8 +357,65 @@ func TestCheckHasOtherContent(t *testing.T) {
 	}
 }
 
+// --- Check tests (pre-commit) ---
+
+func TestCheckPreCommit(t *testing.T) {
+	dir := t.TempDir()
+
+	s := Check(dir, PreCommitHook)
+	if s.Installed {
+		t.Error("expected Installed = false before install")
+	}
+
+	if err := Install(dir, PreCommitHook, PreCommitBlock()); err != nil {
+		t.Fatalf(fatalInstall, err)
+	}
+
+	s = Check(dir, PreCommitHook)
+	if !s.Installed {
+		t.Error("expected Installed = true after install")
+	}
+}
+
+// --- Both hooks independent ---
+
+func TestBothHooksIndependent(t *testing.T) {
+	dir := t.TempDir()
+
+	// Install both hooks
+	if err := Install(dir, PostMergeHook, postMergeBlock()); err != nil {
+		t.Fatalf("install post-merge: %v", err)
+	}
+	if err := Install(dir, PreCommitHook, PreCommitBlock()); err != nil {
+		t.Fatalf("install pre-commit: %v", err)
+	}
+
+	// Both should be installed
+	if !Check(dir, PostMergeHook).Installed {
+		t.Error("post-merge should be installed")
+	}
+	if !Check(dir, PreCommitHook).Installed {
+		t.Error("pre-commit should be installed")
+	}
+
+	// Uninstall post-merge only
+	if err := Uninstall(dir, PostMergeHook); err != nil {
+		t.Fatalf("uninstall post-merge: %v", err)
+	}
+
+	// Post-merge should be gone, pre-commit should survive
+	if Check(dir, PostMergeHook).Installed {
+		t.Error("post-merge should be uninstalled")
+	}
+	if !Check(dir, PreCommitHook).Installed {
+		t.Error("pre-commit should still be installed after uninstalling post-merge")
+	}
+}
+
+// --- removeBlock tests ---
+
 func TestRemoveBlock(t *testing.T) {
-	block := HookBlock(branchMain)
+	block := postMergeBlock()
 	content := shebang + "\n\n" + userHook + "\n" + block + "\n"
 
 	result := removeBlock(content)
@@ -279,7 +449,7 @@ func TestRemoveBlockCorruptBeginOnly(t *testing.T) {
 
 func TestCheckHasOtherWithoutInstalled(t *testing.T) {
 	dir := t.TempDir()
-	hookPath := filepath.Join(dir, HookName)
+	hookPath := filepath.Join(dir, PostMergeHook)
 
 	// Hook file with user content but no rimba block
 	content := shebang + "\n\n" + userHook
@@ -287,7 +457,7 @@ func TestCheckHasOtherWithoutInstalled(t *testing.T) {
 		t.Fatalf(fatalWriteHook, err)
 	}
 
-	s := Check(dir)
+	s := Check(dir, PostMergeHook)
 	if s.Installed {
 		t.Error("expected Installed = false")
 	}
@@ -298,7 +468,7 @@ func TestCheckHasOtherWithoutInstalled(t *testing.T) {
 
 func TestUninstallReadError(t *testing.T) {
 	dir := t.TempDir()
-	hookPath := filepath.Join(dir, HookName)
+	hookPath := filepath.Join(dir, PostMergeHook)
 
 	// Create a directory named "post-merge" instead of a file,
 	// so os.ReadFile fails with a non-IsNotExist error.
@@ -306,7 +476,7 @@ func TestUninstallReadError(t *testing.T) {
 		t.Fatalf("create directory: %v", err)
 	}
 
-	err := Uninstall(dir)
+	err := Uninstall(dir, PostMergeHook)
 	if err == nil {
 		t.Fatal("expected error when hook path is a directory")
 	}
@@ -330,14 +500,14 @@ func TestRemoveBlockNoEndMarker(t *testing.T) {
 
 func TestInstallReadError(t *testing.T) {
 	dir := t.TempDir()
-	hookPath := filepath.Join(dir, HookName)
+	hookPath := filepath.Join(dir, PostMergeHook)
 
 	// Create a directory named "post-merge" so os.ReadFile returns non-IsNotExist error
 	if err := os.Mkdir(hookPath, 0755); err != nil {
 		t.Fatalf("create directory: %v", err)
 	}
 
-	err := Install(dir, branchMain)
+	err := Install(dir, PostMergeHook, postMergeBlock())
 	if err == nil {
 		t.Fatal("expected error when hook path is a directory")
 	}
@@ -355,7 +525,7 @@ func TestInstallMkdirError(t *testing.T) {
 	}
 	hooksDir := filepath.Join(blocker, "hooks")
 
-	err := Install(hooksDir, branchMain)
+	err := Install(hooksDir, PostMergeHook, postMergeBlock())
 	if err == nil {
 		t.Fatal("expected error from MkdirAll")
 	}
@@ -366,10 +536,10 @@ func TestInstallMkdirError(t *testing.T) {
 
 func TestUninstallWriteError(t *testing.T) {
 	dir := t.TempDir()
-	hookPath := filepath.Join(dir, HookName)
+	hookPath := filepath.Join(dir, PostMergeHook)
 
 	// Create hook with rimba block AND user content so Uninstall tries WriteFile
-	content := shebang + "\n\n" + userHook + "\n" + HookBlock(branchMain) + "\n"
+	content := shebang + "\n\n" + userHook + "\n" + postMergeBlock() + "\n"
 	if err := os.WriteFile(hookPath, []byte(content), fileMode); err != nil {
 		t.Fatalf(fatalWriteHook, err)
 	}
@@ -380,7 +550,7 @@ func TestUninstallWriteError(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(hookPath, 0644) })
 
-	err := Uninstall(dir)
+	err := Uninstall(dir, PostMergeHook)
 	if err == nil {
 		t.Fatal("expected error when write fails")
 	}
@@ -407,7 +577,7 @@ func TestRemoveBlockBeginOnlyAtStart(t *testing.T) {
 
 func TestRemoveBlockContentAfterEnd(t *testing.T) {
 	// Rimba block at the start, user content after END
-	block := HookBlock(branchMain)
+	block := postMergeBlock()
 	afterContent := "echo 'runs after rimba'\n"
 	content := shebang + "\n\n" + block + "\n" + afterContent
 
@@ -425,10 +595,10 @@ func TestRemoveBlockContentAfterEnd(t *testing.T) {
 
 func TestUninstallRemoveError(t *testing.T) {
 	dir := t.TempDir()
-	hookPath := filepath.Join(dir, HookName)
+	hookPath := filepath.Join(dir, PostMergeHook)
 
 	// Create hook with only rimba content (shebang-only after removal → file deleted)
-	content := shebang + "\n\n" + HookBlock(branchMain) + "\n"
+	content := shebang + "\n\n" + postMergeBlock() + "\n"
 	if err := os.WriteFile(hookPath, []byte(content), fileMode); err != nil {
 		t.Fatalf(fatalWriteHook, err)
 	}
@@ -439,7 +609,7 @@ func TestUninstallRemoveError(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(dir, 0755) })
 
-	err := Uninstall(dir)
+	err := Uninstall(dir, PostMergeHook)
 	if err == nil {
 		t.Fatal("expected error when file removal fails")
 	}
@@ -457,7 +627,7 @@ func TestInstallWriteError(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(dir, 0755) })
 
-	err := Install(dir, branchMain)
+	err := Install(dir, PostMergeHook, postMergeBlock())
 	if err == nil {
 		t.Fatal("expected error when write fails")
 	}

@@ -9,11 +9,14 @@ import (
 )
 
 const (
-	BeginMarker = "# BEGIN RIMBA HOOK"
-	EndMarker   = "# END RIMBA HOOK"
-	HookName    = "post-merge"
-	shebang     = "#!/bin/sh"
-	fileMode    = 0755
+	// Markers delimit the rimba-managed block within a hook file.
+	// Each hook type lives in its own file, so shared markers do not collide.
+	BeginMarker   = "# BEGIN RIMBA HOOK"
+	EndMarker     = "# END RIMBA HOOK"
+	PostMergeHook = "post-merge"
+	PreCommitHook = "pre-commit"
+	shebang       = "#!/bin/sh"
+	fileMode      = 0755
 )
 
 var (
@@ -21,15 +24,15 @@ var (
 	ErrNotInstalled     = errors.New("rimba hook is not installed")
 )
 
-// Status describes the current state of the post-merge hook.
+// Status describes the current state of a hook.
 type Status struct {
 	Installed bool
 	HookPath  string
 	HasOther  bool // true if hook file has non-rimba content
 }
 
-// HookBlock returns the marker-delimited block with the branch guard embedded.
-func HookBlock(branch string) string {
+// PostMergeBlock returns the marker-delimited block with the branch guard embedded.
+func PostMergeBlock(branch string) string {
 	//nolint:dupword // shell script has two "fi" closings
 	return fmt.Sprintf(`%s
 # Installed by rimba — do not edit this block manually
@@ -42,13 +45,13 @@ fi
 %s`, BeginMarker, branch, EndMarker)
 }
 
-// Install creates or appends the rimba hook block to the post-merge hook file.
-func Install(hooksDir, branch string) error {
+// Install creates or appends the rimba hook block to the given hook file.
+func Install(hooksDir, hookName, block string) error {
 	if err := os.MkdirAll(hooksDir, 0750); err != nil { //nolint:gosec // hooks dir needs exec bit for git
 		return fmt.Errorf("create hooks directory: %w", err)
 	}
 
-	hookPath := filepath.Join(hooksDir, HookName)
+	hookPath := filepath.Join(hooksDir, hookName)
 	existing, err := os.ReadFile(hookPath)
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("read hook file: %w", err)
@@ -59,7 +62,6 @@ func Install(hooksDir, branch string) error {
 		return ErrAlreadyInstalled
 	}
 
-	block := HookBlock(branch)
 	var newContent string
 	if content == "" {
 		newContent = shebang + "\n\n" + block + "\n"
@@ -74,9 +76,9 @@ func Install(hooksDir, branch string) error {
 	return nil
 }
 
-// Uninstall removes the rimba hook block from the post-merge hook file.
-func Uninstall(hooksDir string) error {
-	hookPath := filepath.Join(hooksDir, HookName)
+// Uninstall removes the rimba hook block from the given hook file.
+func Uninstall(hooksDir, hookName string) error {
+	hookPath := filepath.Join(hooksDir, hookName)
 	existing, err := os.ReadFile(hookPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -104,9 +106,9 @@ func Uninstall(hooksDir string) error {
 	return nil
 }
 
-// Check inspects the current state of the post-merge hook.
-func Check(hooksDir string) Status {
-	hookPath := filepath.Join(hooksDir, HookName)
+// Check inspects the current state of the given hook.
+func Check(hooksDir, hookName string) Status {
+	hookPath := filepath.Join(hooksDir, hookName)
 	existing, err := os.ReadFile(hookPath)
 	if err != nil {
 		return Status{HookPath: hookPath}
@@ -128,6 +130,21 @@ func Check(hooksDir string) Status {
 		HookPath:  hookPath,
 		HasOther:  hasOther,
 	}
+}
+
+// PreCommitBlock returns the marker-delimited block that prevents direct commits
+// to main/master. Both branch names are hardcoded because the protection should
+// apply regardless of which default branch the repository uses.
+func PreCommitBlock() string {
+	return fmt.Sprintf(`%s
+# Installed by rimba — do not edit this block manually
+_rimba_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+if [ "$_rimba_branch" = "main" ] || [ "$_rimba_branch" = "master" ]; then
+  echo "rimba: direct commits to $_rimba_branch are not allowed."
+  echo "       Use 'rimba add <task>' to create a worktree branch."
+  exit 1
+fi
+%s`, BeginMarker, EndMarker)
 }
 
 func containsBlock(content string) bool {
