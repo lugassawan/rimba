@@ -2,10 +2,12 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/resolver"
 )
 
@@ -412,6 +414,175 @@ func TestListArchivedBranchesError(t *testing.T) {
 	err := listArchivedBranches(cmd, r, branchMain)
 	if err == nil {
 		t.Fatal("expected error from ListArchivedBranches failure")
+	}
+}
+
+func TestListJSONEmpty(t *testing.T) {
+	repoDir := t.TempDir()
+	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: "worktrees"}
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	origType := listType
+	origDirty := listDirty
+	origBehind := listBehind
+	defer func() {
+		listType = origType
+		listDirty = origDirty
+		listBehind = origBehind
+	}()
+	listType = ""
+	listDirty = false
+	listBehind = false
+
+	cmd, buf := newTestCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	err := listCmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf(fatalListRunE, err)
+	}
+
+	var env output.Envelope
+	if err := json.Unmarshal(buf.Bytes(), &env); err != nil {
+		t.Fatalf("invalid JSON: %v\noutput: %s", err, buf.String())
+	}
+	if env.Command != cmdList {
+		t.Errorf("command = %q, want %q", env.Command, cmdList)
+	}
+	arr, ok := env.Data.([]any)
+	if !ok {
+		t.Fatalf("data type = %T, want []any", env.Data)
+	}
+	if len(arr) != 0 {
+		t.Errorf("data length = %d, want 0", len(arr))
+	}
+}
+
+func TestListJSONWithWorktrees(t *testing.T) {
+	repoDir := t.TempDir()
+	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: "worktrees"}
+
+	worktreeOut := strings.Join([]string{
+		wtPrefix + repoDir,
+		headABC123,
+		branchRefMain,
+		"",
+		wtPrefix + repoDir + pathWorktreesFeatureLogin,
+		headDEF456,
+		branchRefFeatureLogin,
+		"",
+	}, "\n")
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			return worktreeOut, nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	origType := listType
+	origDirty := listDirty
+	origBehind := listBehind
+	defer func() {
+		listType = origType
+		listDirty = origDirty
+		listBehind = origBehind
+	}()
+	listType = ""
+	listDirty = false
+	listBehind = false
+
+	cmd, buf := newTestCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	err := listCmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf(fatalListRunE, err)
+	}
+
+	var env output.Envelope
+	if err := json.Unmarshal(buf.Bytes(), &env); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if env.Command != cmdList {
+		t.Errorf("command = %q, want %q", env.Command, cmdList)
+	}
+	arr, ok := env.Data.([]any)
+	if !ok {
+		t.Fatalf("data type = %T, want []any", env.Data)
+	}
+	if len(arr) == 0 {
+		t.Error("expected at least one worktree in JSON output")
+	}
+	// Verify first item has expected fields
+	item, ok := arr[0].(map[string]any)
+	if !ok {
+		t.Fatalf("item type = %T, want map[string]any", arr[0])
+	}
+	if _, exists := item["task"]; !exists {
+		t.Error("item missing 'task' field")
+	}
+	if _, exists := item["branch"]; !exists {
+		t.Error("item missing 'branch' field")
+	}
+}
+
+func TestListArchivedJSON(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == cmdBranch {
+				return branchListArchived, nil
+			}
+			if args[0] == cmdWorktreeTest && args[1] == cmdList {
+				return strings.Join([]string{
+					wtRepo, headABC123, branchRefMain, "",
+					"worktree /wt/feature-active-task", "HEAD def456", "branch refs/heads/feature/active-task", "",
+				}, "\n"), nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	cmd, buf := newTestCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+
+	err := listArchivedBranches(cmd, r, branchMain)
+	if err != nil {
+		t.Fatalf("listArchivedBranches: %v", err)
+	}
+
+	var env output.Envelope
+	if err := json.Unmarshal(buf.Bytes(), &env); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if env.Command != cmdList {
+		t.Errorf("command = %q, want %q", env.Command, cmdList)
+	}
+	arr, ok := env.Data.([]any)
+	if !ok {
+		t.Fatalf("data type = %T, want []any", env.Data)
+	}
+	if len(arr) != 1 {
+		t.Errorf("expected 1 archived branch, got %d", len(arr))
 	}
 }
 

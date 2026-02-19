@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/deps"
+	"github.com/lugassawan/rimba/internal/output"
 )
 
 func TestDepsStatusSuccess(t *testing.T) {
@@ -116,6 +118,68 @@ func TestDepsStatusNoModules(t *testing.T) {
 	out := buf.String()
 	if !strings.Contains(out, "(no modules detected)") {
 		t.Errorf("output missing '(no modules detected)', got %q", out)
+	}
+}
+
+func TestDepsStatusJSON(t *testing.T) {
+	repoDir := t.TempDir()
+	worktreeDir := t.TempDir()
+
+	_ = os.WriteFile(filepath.Join(repoDir, deps.LockfilePnpm), []byte("lock-main"), 0644)
+	_ = os.WriteFile(filepath.Join(worktreeDir, deps.LockfilePnpm), []byte("lock-feature"), 0644)
+
+	worktreeOut := strings.Join([]string{
+		wtPrefix + repoDir,
+		headABC123,
+		branchRefMain,
+		"",
+		wtPrefix + worktreeDir,
+		headDEF456,
+		branchRefFeatureLogin,
+		"",
+	}, "\n")
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			return worktreeOut, nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	autoDetect := true
+	cfg := &config.Config{
+		DefaultSource: branchMain,
+		WorktreeDir:   "worktrees",
+		Deps:          &config.DepsConfig{AutoDetect: &autoDetect},
+	}
+
+	cmd, buf := newTestCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	err := depsStatusCmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf("depsStatusCmd.RunE: %v", err)
+	}
+
+	var env output.Envelope
+	if err := json.Unmarshal(buf.Bytes(), &env); err != nil {
+		t.Fatalf("invalid JSON: %v\noutput: %s", err, buf.String())
+	}
+	if env.Command != "deps status" {
+		t.Errorf("command = %q, want %q", env.Command, "deps status")
+	}
+	arr, ok := env.Data.([]any)
+	if !ok {
+		t.Fatalf("data type = %T, want []any", env.Data)
+	}
+	if len(arr) != 2 {
+		t.Errorf("expected 2 worktrees, got %d", len(arr))
 	}
 }
 

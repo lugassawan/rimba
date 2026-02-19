@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/executor"
+	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/lugassawan/rimba/internal/termcolor"
@@ -141,6 +143,69 @@ func TestPrintExecResultsError(t *testing.T) {
 	}
 	if !strings.Contains(out, "git failed") {
 		t.Errorf("expected error message in output, got: %s", out)
+	}
+}
+
+func TestPrintExecResultsJSON(t *testing.T) {
+	cmd, buf := newTestCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+
+	results := []executor.Result{
+		{
+			Target:   executor.Target{Branch: "feature/login", Task: "login", Path: "/wt/login"},
+			Stdout:   []byte("hello\n"),
+			ExitCode: 0,
+		},
+		{
+			Target:   executor.Target{Branch: "feature/fail", Task: "fail", Path: "/wt/fail"},
+			ExitCode: 1,
+			Stderr:   []byte("error\n"),
+		},
+	}
+
+	// Simulate the JSON output path from exec command
+	jsonResults := make([]execJSONResult, len(results))
+	for i, r := range results {
+		jr := execJSONResult{
+			Task:     r.Target.Task,
+			Branch:   r.Target.Branch,
+			Path:     r.Target.Path,
+			ExitCode: r.ExitCode,
+			Stdout:   string(r.Stdout),
+			Stderr:   string(r.Stderr),
+		}
+		if r.Err != nil {
+			jr.Error = r.Err.Error()
+		}
+		jsonResults[i] = jr
+	}
+	data := execJSONData{
+		Command: "echo hello",
+		Results: jsonResults,
+		Success: !hasFailure(results),
+	}
+	_ = output.WriteJSON(cmd.OutOrStdout(), version, "exec", data)
+
+	var env output.Envelope
+	if err := json.Unmarshal(buf.Bytes(), &env); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if env.Command != "exec" {
+		t.Errorf("command = %q, want %q", env.Command, "exec")
+	}
+	dataMap, ok := env.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("data type = %T, want map[string]any", env.Data)
+	}
+	if dataMap["success"] != false {
+		t.Error("expected success=false when one command fails")
+	}
+	resultsArr, ok := dataMap["results"].([]any)
+	if !ok {
+		t.Fatalf("results type = %T, want []any", dataMap["results"])
+	}
+	if len(resultsArr) != 2 {
+		t.Errorf("results length = %d, want 2", len(resultsArr))
 	}
 }
 
