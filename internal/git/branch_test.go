@@ -193,3 +193,57 @@ func TestIsDirty(t *testing.T) {
 		t.Error("repo with untracked file should be dirty")
 	}
 }
+
+func TestIsSquashMergedIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	// Create a feature branch with a commit
+	testutil.GitCmd(t, repo, "checkout", "-b", "feature/squash-test")
+	testutil.CreateFile(t, repo, "squash.txt", "squash content")
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "feature commit")
+
+	// Go back to main and squash-merge
+	testutil.GitCmd(t, repo, "checkout", "main")
+	testutil.GitCmd(t, repo, "merge", "--squash", "feature/squash-test")
+	testutil.GitCmd(t, repo, "commit", "-m", "squash merge feature")
+
+	// The branch should be detected as squash-merged
+	merged, err := git.IsSquashMerged(r, "main", "feature/squash-test")
+	if err != nil {
+		t.Fatalf("IsSquashMerged: %v", err)
+	}
+	if !merged {
+		t.Error("expected squash-merged branch to be detected")
+	}
+}
+
+func TestIsSquashMergedIntegrationNotMerged(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	// Create a feature branch with a commit but don't merge it
+	testutil.GitCmd(t, repo, "checkout", "-b", "feature/unmerged")
+	testutil.CreateFile(t, repo, "unmerged.txt", "unmerged content")
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "unmerged commit")
+
+	testutil.GitCmd(t, repo, "checkout", "main")
+
+	merged, err := git.IsSquashMerged(r, "main", "feature/unmerged")
+	if err != nil {
+		t.Fatalf("IsSquashMerged: %v", err)
+	}
+	if merged {
+		t.Error("expected unmerged branch to not be detected as squash-merged")
+	}
+}

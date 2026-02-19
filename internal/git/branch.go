@@ -58,6 +58,35 @@ func AheadBehind(r Runner, dir string) (ahead, behind int, _ error) {
 	return a, b, nil
 }
 
+// IsSquashMerged checks whether a branch's content has been squash-merged into mergeRef.
+// It uses the commit-tree + cherry technique: create a synthetic commit with the
+// branch's tree on the merge-base, then check if that content is already in mergeRef.
+// Note: each call creates an unreferenced commit object in the git store; these are
+// cleaned up automatically by git gc.
+func IsSquashMerged(r Runner, mergeRef, branch string) (bool, error) {
+	mergeBase, err := MergeBase(r, mergeRef, branch)
+	if err != nil {
+		return false, err
+	}
+
+	tree, err := r.Run(cmdRevParse, branch+treeSuffix)
+	if err != nil {
+		return false, err
+	}
+
+	tempCommit, err := r.Run(cmdCommitTree, tree, "-p", mergeBase, "-m", "temp")
+	if err != nil {
+		return false, err
+	}
+
+	out, err := r.Run(cmdCherry, mergeRef, tempCommit)
+	if err != nil {
+		return false, err
+	}
+
+	return strings.HasPrefix(out, cherryMerged), nil
+}
+
 // MergedBranches returns branches that have been merged into the given branch.
 // Runs `git branch --merged <branch>` and parses the output.
 func MergedBranches(r Runner, branch string) ([]string, error) {

@@ -132,6 +132,109 @@ func TestFindMergedCandidatesWorktreeError(t *testing.T) {
 	}
 }
 
+// squashWorktreeRunner returns a mockRunner that supports MergedBranches, ListWorktrees,
+// and squash-merge detection (merge-base, rev-parse, commit-tree, cherry).
+func squashWorktreeRunner(mergedOut, worktreeOut string, cherryResult string, cherryErr error) *mockRunner {
+	return &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdBranch {
+				return mergedOut, nil
+			}
+			if len(args) >= 1 && args[0] == cmdWorktreeTest {
+				return worktreeOut, nil
+			}
+			if len(args) >= 1 && args[0] == cmdMergeBase {
+				return "base123", nil
+			}
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return "tree456", nil
+			}
+			if len(args) >= 1 && args[0] == cmdCommitTree {
+				return "temp789", nil
+			}
+			if len(args) >= 1 && args[0] == cmdCherry {
+				return cherryResult, cherryErr
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+}
+
+func squashWorktreeOut() string {
+	return strings.Join([]string{
+		wtRepo,
+		headABC123,
+		branchRefMain,
+		"",
+		"worktree " + pathWtSquash,
+		headDEF456,
+		branchRefPrefix + branchSquash,
+		"",
+	}, "\n")
+}
+
+func TestFindMergedCandidatesSquashMerge(t *testing.T) {
+	// Branch not in mergedSet, but detected via squash-merge fallback
+	r := squashWorktreeRunner("", squashWorktreeOut(), "- abc789", nil)
+	candidates, err := findMergedCandidates(r, branchMain, branchMain)
+	if err != nil {
+		t.Fatalf(fatalFindMerged, err)
+	}
+	if len(candidates) != 1 {
+		t.Fatalf("got %d candidates, want 1", len(candidates))
+	}
+	if candidates[0].branch != branchSquash {
+		t.Errorf("branch = %q, want %q", candidates[0].branch, branchSquash)
+	}
+}
+
+func TestFindMergedCandidatesSquashError(t *testing.T) {
+	// Squash detection errors are gracefully skipped
+	r := squashWorktreeRunner("", squashWorktreeOut(), "", errGitFailed)
+	candidates, err := findMergedCandidates(r, branchMain, branchMain)
+	if err != nil {
+		t.Fatalf(fatalFindMerged, err)
+	}
+	if len(candidates) != 0 {
+		t.Errorf("expected 0 candidates (squash error skipped), got %d", len(candidates))
+	}
+}
+
+func TestFindMergedCandidatesBothMergeTypes(t *testing.T) {
+	// One branch via regular merge, one via squash fallback
+	worktreeOut := strings.Join([]string{
+		wtRepo,
+		headABC123,
+		branchRefMain,
+		"",
+		wtDone,
+		headDEF456,
+		branchRefPrefix + branchDone,
+		"",
+		"worktree " + pathWtSquash,
+		"HEAD ghi789",
+		branchRefPrefix + branchSquash,
+		"",
+	}, "\n")
+
+	r := squashWorktreeRunner("  "+branchDone, worktreeOut, "- abc789", nil)
+	candidates, err := findMergedCandidates(r, branchMain, branchMain)
+	if err != nil {
+		t.Fatalf(fatalFindMerged, err)
+	}
+	if len(candidates) != 2 {
+		t.Fatalf("got %d candidates, want 2", len(candidates))
+	}
+	// First should be the regular merged one, second the squash-merged one
+	if candidates[0].branch != branchDone {
+		t.Errorf("candidates[0].branch = %q, want %q", candidates[0].branch, branchDone)
+	}
+	if candidates[1].branch != branchSquash {
+		t.Errorf("candidates[1].branch = %q, want %q", candidates[1].branch, branchSquash)
+	}
+}
+
 func TestCleanMergedFetchFails(t *testing.T) {
 	worktreeOut := cleanMergedWorktreeOut()
 	cmd, buf := newCleanMergedCmd()
