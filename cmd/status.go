@@ -10,11 +10,38 @@ import (
 
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
+	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/lugassawan/rimba/internal/termcolor"
 	"github.com/spf13/cobra"
 )
+
+type statusJSONData struct {
+	Summary   statusJSONSummary `json:"summary"`
+	Worktrees []statusJSONItem  `json:"worktrees"`
+	StaleDays int               `json:"stale_days"`
+}
+
+type statusJSONSummary struct {
+	Total  int `json:"total"`
+	Dirty  int `json:"dirty"`
+	Stale  int `json:"stale"`
+	Behind int `json:"behind"`
+}
+
+type statusJSONItem struct {
+	Task   string                  `json:"task"`
+	Type   string                  `json:"type"`
+	Branch string                  `json:"branch"`
+	Status resolver.WorktreeStatus `json:"status"`
+	Age    *statusJSONAge          `json:"age"`
+}
+
+type statusJSONAge struct {
+	LastCommit string `json:"last_commit"`
+	Stale      bool   `json:"stale"`
+}
 
 type statusEntry struct {
 	entry      git.WorktreeEntry
@@ -48,12 +75,19 @@ var statusCmd = &cobra.Command{
 
 		candidates := git.FilterEntries(entries, mainBranch)
 
+		staleDays, _ := cmd.Flags().GetInt(flagStaleDays)
+
 		if len(candidates) == 0 {
+			if isJSON(cmd) {
+				return output.WriteJSON(cmd.OutOrStdout(), version, "status", statusJSONData{
+					Summary:   statusJSONSummary{},
+					Worktrees: make([]statusJSONItem, 0),
+					StaleDays: staleDays,
+				})
+			}
 			fmt.Fprintln(cmd.OutOrStdout(), "No worktrees found.")
 			return nil
 		}
-
-		staleDays, _ := cmd.Flags().GetInt(flagStaleDays)
 
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
@@ -61,6 +95,10 @@ var statusCmd = &cobra.Command{
 
 		results := collectStatuses(r, candidates, s)
 		s.Stop()
+
+		if isJSON(cmd) {
+			return writeStatusJSON(cmd, results, staleDays)
+		}
 
 		noColor, _ := cmd.Flags().GetBool(flagNoColor)
 		p := termcolor.NewPainter(noColor)
@@ -162,6 +200,55 @@ func renderStatusDashboard(out io.Writer, p *termcolor.Painter, results []status
 	}
 
 	tbl.Render(out)
+}
+
+// writeStatusJSON builds the JSON output for the status command.
+func writeStatusJSON(cmd *cobra.Command, results []statusEntry, staleDays int) error {
+	staleThreshold := time.Now().Add(-time.Duration(staleDays) * 24 * time.Hour)
+	prefixes := resolver.AllPrefixes()
+
+	var summary statusJSONSummary
+	summary.Total = len(results)
+
+	items := make([]statusJSONItem, 0, len(results))
+	for _, r := range results {
+		if r.status.Dirty {
+			summary.Dirty++
+		}
+		if r.status.Behind > 0 {
+			summary.Behind++
+		}
+
+		task, matchedPrefix := resolver.TaskFromBranch(r.entry.Branch, prefixes)
+		typeName := strings.TrimSuffix(matchedPrefix, "/")
+
+		item := statusJSONItem{
+			Task:   task,
+			Type:   typeName,
+			Branch: r.entry.Branch,
+			Status: r.status,
+		}
+
+		if r.hasTime {
+			stale := r.commitTime.Before(staleThreshold)
+			if stale {
+				summary.Stale++
+			}
+			item.Age = &statusJSONAge{
+				LastCommit: r.commitTime.UTC().Format(time.RFC3339),
+				Stale:      stale,
+			}
+		}
+
+		items = append(items, item)
+	}
+
+	data := statusJSONData{
+		Summary:   summary,
+		Worktrees: items,
+		StaleDays: staleDays,
+	}
+	return output.WriteJSON(cmd.OutOrStdout(), version, "status", data)
 }
 
 // colorCount formats a count with color if non-zero.

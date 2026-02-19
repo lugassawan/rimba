@@ -8,11 +8,19 @@ import (
 	"github.com/lugassawan/rimba/internal/conflict"
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
+	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/lugassawan/rimba/internal/termcolor"
 	"github.com/spf13/cobra"
 )
+
+type conflictCheckJSONData struct {
+	Overlaps      []conflict.FileOverlap    `json:"overlaps"`
+	DryMerges     []conflict.DryMergeResult `json:"dry_merges,omitempty"`
+	TotalFiles    int                       `json:"total_files"`
+	TotalBranches int                       `json:"total_branches"`
+}
 
 const (
 	flagDryMerge = "dry-merge"
@@ -44,13 +52,20 @@ var conflictCheckCmd = &cobra.Command{
 		eligible := operations.FilterEligible(worktrees, prefixes, cfg.DefaultSource, allTasks, true)
 
 		if len(eligible) == 0 {
+			if isJSON(cmd) {
+				return output.WriteJSON(cmd.OutOrStdout(), version, "conflict-check", conflictCheckJSONData{
+					Overlaps: make([]conflict.FileOverlap, 0),
+				})
+			}
 			fmt.Fprintln(cmd.OutOrStdout(), "No active worktree branches found.")
 			return nil
 		}
 
-		hint.New(cmd, hintPainter(cmd)).
-			Add(flagDryMerge, hintDryMerge).
-			Show()
+		if !isJSON(cmd) {
+			hint.New(cmd, hintPainter(cmd)).
+				Add(flagDryMerge, hintDryMerge).
+				Show()
+		}
 
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
@@ -74,6 +89,22 @@ var conflictCheckCmd = &cobra.Command{
 		}
 
 		s.Stop()
+
+		if isJSON(cmd) {
+			overlaps := result.Overlaps
+			if overlaps == nil {
+				overlaps = make([]conflict.FileOverlap, 0)
+			}
+			data := conflictCheckJSONData{
+				Overlaps:      overlaps,
+				TotalFiles:    result.TotalFiles,
+				TotalBranches: result.TotalBranches,
+			}
+			if dryMerge {
+				data.DryMerges = dryResults
+			}
+			return output.WriteJSON(cmd.OutOrStdout(), version, "conflict-check", data)
+		}
 
 		noColor, _ := cmd.Flags().GetBool(flagNoColor)
 		p := termcolor.NewPainter(noColor)

@@ -1,11 +1,13 @@
 package cmd
 
 import (
+	"io"
 	"path/filepath"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
+	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/lugassawan/rimba/internal/termcolor"
@@ -24,10 +26,20 @@ func hintPainter(cmd *cobra.Command) *termcolor.Painter {
 	return termcolor.NewPainter(noColor)
 }
 
+// isJSON returns true if the --json flag is set on the given command.
+func isJSON(cmd *cobra.Command) bool {
+	return output.IsJSON(cmd)
+}
+
 // spinnerOpts returns spinner options derived from the cobra command flags.
+// In JSON mode the spinner is silenced by writing to io.Discard.
 func spinnerOpts(cmd *cobra.Command) spinner.Options {
 	noColor, _ := cmd.Flags().GetBool(flagNoColor)
-	return spinner.Options{Writer: cmd.ErrOrStderr(), NoColor: noColor}
+	w := cmd.ErrOrStderr()
+	if isJSON(cmd) {
+		w = io.Discard
+	}
+	return spinner.Options{Writer: w, NoColor: noColor}
 }
 
 // resolveMainBranch tries to get the main branch from config, falling back to DefaultBranch.

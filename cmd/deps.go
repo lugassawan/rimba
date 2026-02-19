@@ -7,10 +7,18 @@ import (
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/deps"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
 )
+
+type depsStatusJSONItem struct {
+	Branch  string                `json:"branch"`
+	Path    string                `json:"path"`
+	Modules []deps.ModuleWithHash `json:"modules"`
+	Error   string                `json:"error,omitempty"`
+}
 
 func init() {
 	depsCmd.AddCommand(depsStatusCmd)
@@ -36,8 +44,6 @@ var depsStatusCmd = &cobra.Command{
 			return err
 		}
 
-		out := cmd.OutOrStdout()
-
 		var configModules []config.ModuleConfig
 		if cfg.Deps != nil {
 			configModules = cfg.Deps.Modules
@@ -47,6 +53,44 @@ var depsStatusCmd = &cobra.Command{
 		for i, w := range worktrees {
 			existingPaths[i] = w.Path
 		}
+
+		if isJSON(cmd) {
+			items := make([]depsStatusJSONItem, 0, len(worktrees))
+			for _, wt := range worktrees {
+				item := depsStatusJSONItem{
+					Branch: wt.Branch,
+					Path:   wt.Path,
+				}
+
+				modules, err := deps.ResolveModules(wt.Path, cfg.IsAutoDetectDeps(), configModules, existingPaths)
+				if err != nil {
+					item.Error = err.Error()
+					item.Modules = make([]deps.ModuleWithHash, 0)
+					items = append(items, item)
+					continue
+				}
+
+				if len(modules) == 0 {
+					item.Modules = make([]deps.ModuleWithHash, 0)
+					items = append(items, item)
+					continue
+				}
+
+				hashed, err := deps.HashModules(wt.Path, modules)
+				if err != nil {
+					item.Error = err.Error()
+					item.Modules = make([]deps.ModuleWithHash, 0)
+					items = append(items, item)
+					continue
+				}
+
+				item.Modules = hashed
+				items = append(items, item)
+			}
+			return output.WriteJSON(cmd.OutOrStdout(), version, "deps status", items)
+		}
+
+		out := cmd.OutOrStdout()
 
 		for _, wt := range worktrees {
 			modules, err := deps.ResolveModules(wt.Path, cfg.IsAutoDetectDeps(), configModules, existingPaths)
