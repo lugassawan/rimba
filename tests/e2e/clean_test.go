@@ -202,3 +202,71 @@ func TestCleanMergedWorksWithoutInit(t *testing.T) {
 	r := rimbaSuccess(t, repo, "clean", flagMergedE2E, flagForceE2E)
 	assertContains(t, r.Stdout, "No merged worktrees found")
 }
+
+const flagStaleE2E = "--stale"
+
+func TestCleanStaleDetects(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", "stale-detect")
+
+	// Use --stale-days 0 so all worktrees are stale
+	r := rimbaSuccess(t, repo, "clean", flagStaleE2E, flagDryRunE2E, "--stale-days", "0")
+	assertContains(t, r.Stdout, "Stale worktrees:")
+	assertContains(t, r.Stdout, "stale-detect")
+}
+
+func TestCleanStaleDryRunE2E(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", "stale-dry")
+
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch := resolver.BranchName(defaultPrefix, "stale-dry")
+	wtPath := resolver.WorktreePath(wtDir, branch)
+
+	// Use --stale-days 0 with dry run
+	r := rimbaSuccess(t, repo, "clean", flagStaleE2E, flagDryRunE2E, "--stale-days", "0")
+	assertContains(t, r.Stdout, "stale-dry")
+	// Worktree should still exist (dry run)
+	assertFileExists(t, wtPath)
+}
+
+func TestCleanStaleForceE2E(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", "stale-force")
+
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch := resolver.BranchName(defaultPrefix, "stale-force")
+	wtPath := resolver.WorktreePath(wtDir, branch)
+
+	// Use --stale-days 0 + --force to remove immediately
+	r := rimbaSuccess(t, repo, "clean", flagStaleE2E, flagForceE2E, "--stale-days", "0")
+	assertContains(t, r.Stdout, "Cleaned 1 stale worktree(s)")
+
+	assertFileNotExists(t, wtPath)
+}
+
+func TestCleanStaleMutualExclusive(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+
+	// --merged and --stale should be mutually exclusive
+	r := rimbaFail(t, repo, "clean", flagMergedE2E, flagStaleE2E)
+	assertContains(t, r.Stderr, "if any flags in the group")
+}

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
@@ -15,10 +16,13 @@ import (
 const (
 	flagDryRun = "dry-run"
 	flagMerged = "merged"
+	flagStale  = "stale"
 
 	hintMerged       = "Remove worktrees whose branches are already merged into main"
+	hintStale        = "Remove worktrees with no recent commits (configure with --stale-days)"
 	hintDryRunPrune  = "Preview what would be pruned without making changes"
 	hintDryRunMerged = "Preview what would be removed without making changes"
+	hintDryRunStale  = "Preview what would be removed without making changes"
 	hintForce        = "Skip confirmation prompt"
 )
 
@@ -27,10 +31,20 @@ type mergedCandidate struct {
 	branch string
 }
 
+type staleCandidate struct {
+	path       string
+	branch     string
+	lastCommit time.Time
+}
+
 func init() {
 	cleanCmd.Flags().Bool(flagDryRun, false, "Show what would be pruned/removed without making changes")
 	cleanCmd.Flags().Bool(flagMerged, false, "Remove worktrees whose branches are merged into main")
-	cleanCmd.Flags().Bool(flagForce, false, "Skip confirmation prompt when used with --merged")
+	cleanCmd.Flags().Bool(flagStale, false, "Remove worktrees with no recent commits")
+	cleanCmd.Flags().Int(flagStaleDays, defaultStaleDays, "Number of days to consider a worktree stale (used with --stale)")
+	cleanCmd.Flags().Bool(flagForce, false, "Skip confirmation prompt when used with --merged or --stale")
+
+	cleanCmd.MarkFlagsMutuallyExclusive(flagMerged, flagStale)
 
 	rootCmd.AddCommand(cleanCmd)
 }
@@ -43,11 +57,16 @@ var cleanCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		r := newRunner()
 		merged, _ := cmd.Flags().GetBool(flagMerged)
+		stale, _ := cmd.Flags().GetBool(flagStale)
 
-		if merged {
+		switch {
+		case merged:
 			return cleanMerged(cmd, r)
+		case stale:
+			return cleanStale(cmd, r)
+		default:
+			return cleanPrune(cmd, r)
 		}
-		return cleanPrune(cmd, r)
 	},
 }
 
@@ -127,7 +146,7 @@ func cleanMerged(cmd *cobra.Command, r git.Runner) error {
 		return nil
 	}
 
-	if !force && !confirmRemoval(cmd, len(candidates)) {
+	if !force && !confirmRemoval(cmd, len(candidates), "merged") {
 		fmt.Fprintln(cmd.OutOrStdout(), "Aborted.")
 		return nil
 	}
@@ -174,8 +193,8 @@ func printMergedCandidates(cmd *cobra.Command, candidates []mergedCandidate) {
 	}
 }
 
-func confirmRemoval(cmd *cobra.Command, count int) bool {
-	fmt.Fprintf(cmd.OutOrStdout(), "\nRemove %d merged worktree(s)? [y/N] ", count)
+func confirmRemoval(cmd *cobra.Command, count int, label string) bool {
+	fmt.Fprintf(cmd.OutOrStdout(), "\nRemove %d %s worktree(s)? [y/N] ", count, label)
 	reader := bufio.NewReader(cmd.InOrStdin())
 	answer, _ := reader.ReadString('\n')
 	answer = strings.TrimSpace(strings.ToLower(answer))
@@ -199,4 +218,97 @@ func removeMergedWorktrees(cmd *cobra.Command, r git.Runner, candidates []merged
 		removed++
 	}
 	return removed
+}
+
+func cleanStale(cmd *cobra.Command, r git.Runner) error {
+	dryRun, _ := cmd.Flags().GetBool(flagDryRun)
+	force, _ := cmd.Flags().GetBool(flagForce)
+	staleDays, _ := cmd.Flags().GetInt(flagStaleDays)
+
+	mainBranch, err := resolveMainBranch(r)
+	if err != nil {
+		return err
+	}
+
+	hint.New(cmd, hintPainter(cmd)).
+		Add(flagDryRun, hintDryRunStale).
+		Add(flagForce, hintForce).
+		Add(flagStaleDays, "Customize the staleness threshold (default: 14 days)").
+		Show()
+
+	s := spinner.New(spinnerOpts(cmd))
+	defer s.Stop()
+
+	s.Start("Analyzing worktree activity...")
+	candidates, err := findStaleCandidates(r, mainBranch, staleDays)
+	if err != nil {
+		return err
+	}
+	s.Stop()
+
+	if len(candidates) == 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), "No stale worktrees found.")
+		return nil
+	}
+
+	printStaleCandidates(cmd, candidates)
+
+	if dryRun {
+		return nil
+	}
+
+	if !force && !confirmRemoval(cmd, len(candidates), "stale") {
+		fmt.Fprintln(cmd.OutOrStdout(), "Aborted.")
+		return nil
+	}
+
+	// Convert stale candidates to merged candidates for reuse of removal logic
+	merged := make([]mergedCandidate, len(candidates))
+	for i, c := range candidates {
+		merged[i] = mergedCandidate{path: c.path, branch: c.branch}
+	}
+
+	removed := removeMergedWorktrees(cmd, r, merged)
+	fmt.Fprintf(cmd.OutOrStdout(), "Cleaned %d stale worktree(s).\n", removed)
+	return nil
+}
+
+func findStaleCandidates(r git.Runner, mainBranch string, staleDays int) ([]staleCandidate, error) {
+	entries, err := git.ListWorktrees(r)
+	if err != nil {
+		return nil, err
+	}
+
+	threshold := time.Now().Add(-time.Duration(staleDays) * 24 * time.Hour)
+
+	var candidates []staleCandidate
+	for _, e := range entries {
+		if e.Bare || e.Branch == "" || e.Branch == mainBranch {
+			continue
+		}
+
+		ct, err := git.LastCommitTime(r, e.Branch)
+		if err != nil {
+			continue
+		}
+
+		if ct.Before(threshold) {
+			candidates = append(candidates, staleCandidate{
+				path:       e.Path,
+				branch:     e.Branch,
+				lastCommit: ct,
+			})
+		}
+	}
+	return candidates, nil
+}
+
+func printStaleCandidates(cmd *cobra.Command, candidates []staleCandidate) {
+	prefixes := resolver.AllPrefixes()
+	fmt.Fprintln(cmd.OutOrStdout(), "Stale worktrees:")
+	for _, c := range candidates {
+		task, _ := resolver.TaskFromBranch(c.branch, prefixes)
+		age := resolver.FormatAge(c.lastCommit)
+		fmt.Fprintf(cmd.OutOrStdout(), "  %s (%s) — last commit: %s\n", task, c.branch, age)
+	}
 }

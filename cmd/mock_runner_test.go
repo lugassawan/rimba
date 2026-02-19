@@ -10,6 +10,7 @@ import (
 
 const (
 	cmdBranch       = "branch"
+	cmdLog          = "log"
 	cmdWorktreeTest = "worktree"
 	branchMain      = "main"
 	branchFeature   = "feature/login"
@@ -56,6 +57,9 @@ const (
 	directiveWantFmt = "directive = %v, want ShellCompDirectiveNoFileComp"
 	filterByPrefix   = "filter by prefix"
 	useTestCmd       = "test-cmd"
+
+	// Shared branch list outputs
+	branchListArchived = "main\nfeature/archived-task\nfeature/active-task"
 
 	// Shared fatalf format strings
 	fatalFindMerged  = "findMergedCandidates: %v"

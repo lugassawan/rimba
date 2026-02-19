@@ -316,6 +316,84 @@ func TestAddSourceFlagCompletion(t *testing.T) {
 	})
 }
 
+func TestCompleteArchivedTasks(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			switch {
+			case args[0] == cmdRevParse && args[1] == cmdShowToplevel:
+				return repoPath, nil
+			case args[0] == cmdSymbolicRef:
+				return refsRemotesOriginMain, nil
+			case args[0] == cmdBranch:
+				return branchListArchived, nil
+			case args[0] == cmdWorktreeTest && args[1] == cmdList:
+				return strings.Join([]string{
+					wtRepo, headABC123, branchRefMain, "",
+					"worktree /wt/feature-active-task", "HEAD def456", "branch refs/heads/feature/active-task", "",
+				}, "\n"), nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, _ := newTestCmd()
+
+	t.Run("returns archived tasks", func(t *testing.T) {
+		tasks := completeArchivedTasks(cmd, "")
+		if len(tasks) != 1 {
+			t.Fatalf("expected 1 task, got %d: %v", len(tasks), tasks)
+		}
+		if tasks[0] != "archived-task" {
+			t.Errorf("task = %q, want %q", tasks[0], "archived-task")
+		}
+	})
+
+	t.Run("filters by prefix", func(t *testing.T) {
+		tasks := completeArchivedTasks(cmd, "arch")
+		if len(tasks) != 1 {
+			t.Fatalf("expected 1 task, got %d: %v", len(tasks), tasks)
+		}
+	})
+
+	t.Run("no match", func(t *testing.T) {
+		tasks := completeArchivedTasks(cmd, "zzz")
+		if len(tasks) != 0 {
+			t.Errorf("expected 0 tasks, got %d: %v", len(tasks), tasks)
+		}
+	})
+}
+
+func TestCompleteArchivedTasksError(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == cmdRevParse {
+				return repoPath, nil
+			}
+			if args[0] == cmdSymbolicRef {
+				return refsRemotesOriginMain, nil
+			}
+			if args[0] == cmdBranch {
+				return "", errGitFailed
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, _ := newTestCmd()
+	tasks := completeArchivedTasks(cmd, "")
+	if tasks != nil {
+		t.Errorf("expected nil tasks on error, got %v", tasks)
+	}
+}
+
 func TestMergeIntoFlagCompletion(t *testing.T) {
 	fn, ok := mergeCmd.GetFlagCompletionFunc(flagInto)
 	if !ok {
