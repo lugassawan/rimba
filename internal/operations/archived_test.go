@@ -1,0 +1,205 @@
+package operations
+
+import (
+	"testing"
+)
+
+const (
+	cmdBranch       = "branch"
+	cmdWorktreeTest = "worktree"
+	cmdList         = "list"
+
+	branchListArchived = "main\nfeature/archived-task\nfeature/active-task"
+)
+
+func TestFindArchivedBranch(t *testing.T) {
+	mr := &mockRunner{
+		run: func(args ...string) (string, error) {
+			switch {
+			case args[0] == cmdBranch:
+				return branchListArchived, nil
+			case args[0] == cmdWorktreeTest && args[1] == cmdList:
+				return "worktree /repo\nHEAD abc\nbranch refs/heads/main\n\n" +
+					"worktree /wt/feature-active-task\nHEAD abc\nbranch refs/heads/feature/active-task\n", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	branch, err := FindArchivedBranch(mr, "archived-task")
+	if err != nil {
+		t.Fatalf("FindArchivedBranch: %v", err)
+	}
+	if branch != "feature/archived-task" {
+		t.Errorf("branch = %q, want %q", branch, "feature/archived-task")
+	}
+}
+
+func TestFindArchivedBranchNotFound(t *testing.T) {
+	mr := &mockRunner{
+		run: func(args ...string) (string, error) {
+			switch {
+			case args[0] == cmdBranch:
+				return "main\nfeature/active-task", nil
+			case args[0] == cmdWorktreeTest && args[1] == cmdList:
+				return "worktree /repo\nHEAD abc\nbranch refs/heads/main\n\n" +
+					"worktree /wt/feature-active-task\nHEAD abc\nbranch refs/heads/feature/active-task\n", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	_, err := FindArchivedBranch(mr, "nonexistent")
+	if err == nil {
+		t.Fatal("expected error for nonexistent archived branch")
+	}
+}
+
+func TestFindArchivedBranchExactMatch(t *testing.T) {
+	mr := &mockRunner{
+		run: func(args ...string) (string, error) {
+			switch {
+			case args[0] == cmdBranch:
+				return "main\nmy-custom-branch", nil
+			case args[0] == cmdWorktreeTest && args[1] == cmdList:
+				return "worktree /repo\nHEAD abc\nbranch refs/heads/main\n", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	branch, err := FindArchivedBranch(mr, "my-custom-branch")
+	if err != nil {
+		t.Fatalf("FindArchivedBranch: %v", err)
+	}
+	if branch != "my-custom-branch" {
+		t.Errorf("branch = %q, want %q", branch, "my-custom-branch")
+	}
+}
+
+func TestFindArchivedBranchByTaskExtraction(t *testing.T) {
+	mr := &mockRunner{
+		run: func(args ...string) (string, error) {
+			switch {
+			case args[0] == cmdBranch:
+				return "main\nbugfix/some-task", nil
+			case args[0] == cmdWorktreeTest && args[1] == cmdList:
+				return "worktree /repo\nHEAD abc\nbranch refs/heads/main\n", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	branch, err := FindArchivedBranch(mr, "some-task")
+	if err != nil {
+		t.Fatalf("FindArchivedBranch: %v", err)
+	}
+	if branch != "bugfix/some-task" {
+		t.Errorf("branch = %q, want %q", branch, "bugfix/some-task")
+	}
+}
+
+func TestFindArchivedBranchError(t *testing.T) {
+	mr := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == cmdBranch {
+				return "", errGitFailed
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	_, err := FindArchivedBranch(mr, "any")
+	if err == nil {
+		t.Fatal("expected error from LocalBranches failure")
+	}
+}
+
+func TestFindArchivedBranchWorktreeError(t *testing.T) {
+	mr := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == cmdBranch {
+				return "main\nfeature/task", nil
+			}
+			if args[0] == cmdWorktreeTest {
+				return "", errGitFailed
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	_, err := FindArchivedBranch(mr, "task")
+	if err == nil {
+		t.Fatal("expected error from ListWorktrees failure")
+	}
+}
+
+func TestListArchivedBranches(t *testing.T) {
+	mr := &mockRunner{
+		run: func(args ...string) (string, error) {
+			switch {
+			case args[0] == cmdBranch:
+				return "main\nfeature/archived\nfeature/active", nil
+			case args[0] == cmdWorktreeTest && args[1] == cmdList:
+				return "worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\n" +
+					"worktree /wt/feature-active\nHEAD def456\nbranch refs/heads/feature/active\n", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	archived, err := ListArchivedBranches(mr, branchMain)
+	if err != nil {
+		t.Fatalf("ListArchivedBranches: %v", err)
+	}
+	if len(archived) != 1 {
+		t.Fatalf("got %d branches, want 1", len(archived))
+	}
+	if archived[0] != "feature/archived" {
+		t.Errorf("branch = %q, want %q", archived[0], "feature/archived")
+	}
+}
+
+func TestListArchivedBranchesError(t *testing.T) {
+	mr := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == cmdBranch {
+				return "", errGitFailed
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	_, err := ListArchivedBranches(mr, branchMain)
+	if err == nil {
+		t.Fatal("expected error from LocalBranches failure")
+	}
+}
+
+func TestListArchivedBranchesWorktreeError(t *testing.T) {
+	mr := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == cmdBranch {
+				return "main\nfeature/task", nil
+			}
+			if args[0] == cmdWorktreeTest {
+				return "", errGitFailed
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	_, err := ListArchivedBranches(mr, branchMain)
+	if err == nil {
+		t.Fatal("expected error from ListWorktrees failure")
+	}
+}
