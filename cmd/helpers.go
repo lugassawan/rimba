@@ -32,7 +32,7 @@ func spinnerOpts(cmd *cobra.Command) spinner.Options {
 
 // resolveMainBranch tries to get the main branch from config, falling back to DefaultBranch.
 func resolveMainBranch(r git.Runner) (string, error) {
-	repoRoot, err := git.RepoRoot(r)
+	repoRoot, err := git.MainRepoRoot(r)
 	if err != nil {
 		return "", err
 	}

@@ -149,6 +149,9 @@ func TestMergeTargetDirty(t *testing.T) {
 	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: defaultRelativeWtDir}
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdGitCommonDir {
+				return repoPath + "/.git", nil
+			}
 			if len(args) >= 2 && args[1] == cmdShowToplevel {
 				return repoPath, nil
 			}

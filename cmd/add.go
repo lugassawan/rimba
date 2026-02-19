@@ -43,7 +43,7 @@ var addCmd = &cobra.Command{
 
 		r := newRunner()
 
-		repoRoot, err := git.RepoRoot(r)
+		repoRoot, err := git.MainRepoRoot(r)
 		if err != nil {
 			return err
 		}
@@ -118,6 +118,9 @@ var addCmd = &cobra.Command{
 		fmt.Fprintf(out, "  Path:   %s\n", wtPath)
 		if len(copied) > 0 {
 			fmt.Fprintf(out, "  Copied: %v\n", copied)
+		}
+		if skipped := fileutil.SkippedEntries(cfg.CopyFiles, copied); len(skipped) > 0 {
+			fmt.Fprintf(out, "  Skipped (not found): %v\n", skipped)
 		}
 
 		printInstallResults(out, depsResults)

@@ -12,6 +12,8 @@ func TestRestoreSuccess(t *testing.T) {
 	restore := overrideNewRunner(&mockRunner{
 		run: func(args ...string) (string, error) {
 			switch {
+			case args[0] == cmdRevParse && args[1] == cmdGitCommonDir:
+				return repoPath + "/.git", nil
 			case args[0] == cmdRevParse && args[1] == cmdShowToplevel:
 				return repoPath, nil
 			case args[0] == cmdBranch:

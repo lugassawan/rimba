@@ -35,15 +35,35 @@ func RepoName(r Runner) (string, error) {
 	return filepath.Base(root), nil
 }
 
+// MainRepoRoot returns the absolute path to the main repository root.
+// Unlike RepoRoot, this always returns the main repo root even when called
+// from within a worktree. Uses --git-common-dir whose parent is the main root.
+func MainRepoRoot(r Runner) (string, error) {
+	commonDir, err := resolveCommonDir(r)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Clean(filepath.Dir(commonDir)), nil
+}
+
 // HooksDir returns the absolute path to the repository's hooks directory.
 // Uses git rev-parse --git-common-dir for worktree compatibility.
 func HooksDir(r Runner) (string, error) {
+	commonDir, err := resolveCommonDir(r)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(commonDir, "hooks"), nil
+}
+
+// resolveCommonDir returns the absolute path to the git common directory.
+// --git-common-dir may return a relative path; this resolves it against the repo root.
+func resolveCommonDir(r Runner) (string, error) {
 	commonDir, err := r.Run(cmdRevParse, "--git-common-dir")
 	if err != nil {
 		return "", fmt.Errorf("not a git repository: %w", err)
 	}
 
-	// --git-common-dir may return a relative path; resolve against repo root
 	if !filepath.IsAbs(commonDir) {
 		root, err := RepoRoot(r)
 		if err != nil {
@@ -52,7 +72,7 @@ func HooksDir(r Runner) (string, error) {
 		commonDir = filepath.Join(root, commonDir)
 	}
 
-	return filepath.Join(commonDir, "hooks"), nil
+	return commonDir, nil
 }
 
 // DefaultBranch detects the default branch (main or master).
