@@ -14,7 +14,7 @@ set -e
 STAGED_GO_FILES=$(git diff --cached --name-only --diff-filter=ACM -- '*.go')
 
 if [ -n "$STAGED_GO_FILES" ]; then
-    echo "$STAGED_GO_FILES" | xargs gofmt -l -w
+    make fmt
     echo "$STAGED_GO_FILES" | xargs git add
 fi
 
