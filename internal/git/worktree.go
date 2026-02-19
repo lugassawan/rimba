@@ -29,6 +29,12 @@ func AddWorktree(r Runner, path, branch, source string) error {
 	return err
 }
 
+// AddWorktreeFromBranch creates a worktree from an existing branch (no -b flag).
+func AddWorktreeFromBranch(r Runner, path, branch string) error {
+	_, err := r.Run(cmdWorktree, "add", path, branch)
+	return err
+}
+
 // RemoveWorktree removes the worktree at the given path.
 func RemoveWorktree(r Runner, path string, force bool) error {
 	args := []string{cmdWorktree, "remove", path}

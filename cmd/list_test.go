@@ -333,6 +333,88 @@ func TestListDirtyFilterWithMatch(t *testing.T) {
 	}
 }
 
+func TestListArchivedBranches(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == cmdBranch {
+				return branchListArchived, nil
+			}
+			if args[0] == cmdWorktreeTest && args[1] == cmdList {
+				return strings.Join([]string{
+					wtRepo, headABC123, branchRefMain, "",
+					"worktree /wt/feature-active-task", "HEAD def456", "branch refs/heads/feature/active-task", "",
+				}, "\n"), nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	cmd, buf := newTestCmd()
+
+	err := listArchivedBranches(cmd, r, branchMain)
+	if err != nil {
+		t.Fatalf("listArchivedBranches: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Archived branches:") {
+		t.Errorf("output = %q, want 'Archived branches:'", out)
+	}
+	if !strings.Contains(out, "archived-task") {
+		t.Errorf("output = %q, want 'archived-task'", out)
+	}
+	if strings.Contains(out, "active-task") {
+		t.Errorf("output = %q, should not contain 'active-task'", out)
+	}
+	if !strings.Contains(out, "rimba restore") {
+		t.Errorf("output = %q, want restore hint", out)
+	}
+}
+
+func TestListArchivedBranchesEmpty(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == cmdBranch {
+				return "main", nil
+			}
+			if args[0] == cmdWorktreeTest && args[1] == cmdList {
+				return wtRepo + headMainBlock, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	cmd, buf := newTestCmd()
+
+	err := listArchivedBranches(cmd, r, branchMain)
+	if err != nil {
+		t.Fatalf("listArchivedBranches: %v", err)
+	}
+	if !strings.Contains(buf.String(), "No archived branches found") {
+		t.Errorf("output = %q, want 'No archived branches found'", buf.String())
+	}
+}
+
+func TestListArchivedBranchesError(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == cmdBranch {
+				return "", errGitFailed
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	cmd, _ := newTestCmd()
+
+	err := listArchivedBranches(cmd, r, branchMain)
+	if err == nil {
+		t.Fatal("expected error from findArchivedBranches failure")
+	}
+}
+
 func TestListBehindFilterWithMatch(t *testing.T) {
 	repoDir := t.TempDir()
 	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: "worktrees"}
