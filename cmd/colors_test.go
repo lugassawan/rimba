@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"testing"
-	"time"
 
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/termcolor"
@@ -28,31 +27,6 @@ func TestTypeColor(t *testing.T) {
 			got := typeColor(tt.input)
 			if got != tt.want {
 				t.Errorf("typeColor(%q) = %q, want %q", tt.input, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestAgeColor(t *testing.T) {
-	tests := []struct {
-		name string
-		age  time.Duration
-		want termcolor.Color
-	}{
-		{"recent", 1 * time.Hour, termcolor.Green},
-		{"two days", 2 * 24 * time.Hour, termcolor.Green},
-		{"three days", 3 * 24 * time.Hour, termcolor.Yellow},
-		{"one week", 7 * 24 * time.Hour, termcolor.Yellow},
-		{"two weeks", 14 * 24 * time.Hour, termcolor.Red},
-		{"one month", 30 * 24 * time.Hour, termcolor.Red},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			commitTime := time.Now().Add(-tt.age)
-			got := ageColor(commitTime)
-			if got != tt.want {
-				t.Errorf("ageColor(-%v) = %q, want %q", tt.age, got, tt.want)
 			}
 		})
 	}

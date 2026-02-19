@@ -219,7 +219,7 @@ func TestCleanMergedFetchSucceeds(t *testing.T) {
 
 func TestPrintMergedCandidates(t *testing.T) {
 	cmd, buf := newTestCmd()
-	candidates := []mergedCandidate{
+	candidates := []cleanCandidate{
 		{path: pathWtDone, branch: branchDone},
 		{path: "/wt/bugfix-old", branch: "bugfix/old"},
 	}
@@ -237,8 +237,8 @@ func TestPrintMergedCandidates(t *testing.T) {
 	}
 }
 
-func testMergedCandidate() []mergedCandidate {
-	return []mergedCandidate{{path: pathWtDone, branch: branchDone}}
+func testMergedCandidate() []cleanCandidate {
+	return []cleanCandidate{{path: pathWtDone, branch: branchDone}}
 }
 
 func TestRemoveMergedWorktreesAllSucceed(t *testing.T) {
@@ -248,7 +248,7 @@ func TestRemoveMergedWorktreesAllSucceed(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	removed := removeMergedWorktrees(cmd, r, testMergedCandidate())
+	removed := removeWorktrees(cmd, r, testMergedCandidate())
 	if removed != 1 {
 		t.Errorf("removed = %d, want 1", removed)
 	}
@@ -266,7 +266,7 @@ func TestRemoveMergedWorktreesRemoveFails(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	removed := removeMergedWorktrees(cmd, r, testMergedCandidate())
+	removed := removeWorktrees(cmd, r, testMergedCandidate())
 	if removed != 0 {
 		t.Errorf("removed = %d, want 0", removed)
 	}
@@ -287,7 +287,7 @@ func TestRemoveMergedWorktreesDeleteBranchFails(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	removed := removeMergedWorktrees(cmd, r, testMergedCandidate())
+	removed := removeWorktrees(cmd, r, testMergedCandidate())
 	if removed != 0 {
 		t.Errorf("removed = %d, want 0 (branch delete failed)", removed)
 	}
@@ -549,9 +549,9 @@ func TestFindStaleCandidates(t *testing.T) {
 				// Return old for feature/login, recent for feature/done
 				branch := args[len(args)-1]
 				if branch == branchFeature {
-					return oldTimestamp, nil
+					return oldTimestamp + "\tcommit", nil
 				}
-				return recentTimestamp, nil
+				return recentTimestamp + "\tcommit", nil
 			}
 			return "", nil
 		},
@@ -592,7 +592,7 @@ func TestCleanStaleDryRun(t *testing.T) {
 				}, "\n"), nil
 			}
 			if args[0] == cmdLog {
-				return oldTimestamp, nil
+				return oldTimestamp + "\tcommit", nil
 			}
 			return "", nil
 		},
@@ -632,7 +632,7 @@ func TestCleanStaleNoCandidates(t *testing.T) {
 				}, "\n"), nil
 			}
 			if args[0] == cmdLog {
-				return recentTimestamp, nil
+				return recentTimestamp + "\tcommit", nil
 			}
 			return "", nil
 		},
@@ -669,7 +669,7 @@ func TestCleanStaleAbort(t *testing.T) {
 				}, "\n"), nil
 			}
 			if args[0] == cmdLog {
-				return oldTimestamp, nil
+				return oldTimestamp + "\tcommit", nil
 			}
 			return "", nil
 		},
@@ -759,7 +759,7 @@ func TestCleanStaleForce(t *testing.T) {
 				}, "\n"), nil
 			}
 			if args[0] == cmdLog {
-				return oldTimestamp, nil
+				return oldTimestamp + "\tcommit", nil
 			}
 			return "", nil
 		},

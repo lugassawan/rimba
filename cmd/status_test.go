@@ -46,7 +46,7 @@ func TestStatusWithWorktrees(t *testing.T) {
 				return wtRepo + headMainBlock + "\n" +
 					wtFeatureLogin + "\n" + headDEF456 + "\n" + branchRefFeatureLogin + "\n", nil
 			case args[0] == cmdLog:
-				return "1700000000", nil
+				return "1700000000\tcommit msg", nil
 			}
 			return "", nil
 		},
