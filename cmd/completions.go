@@ -6,6 +6,7 @@ import (
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/spf13/cobra"
 )
@@ -55,29 +56,14 @@ func completeArchivedTasks(_ *cobra.Command, toComplete string) []string {
 
 	mainBranch, _ := resolveMainBranch(r)
 
-	branches, err := git.LocalBranches(r)
+	archived, err := operations.ListArchivedBranches(r, mainBranch)
 	if err != nil {
 		return nil
-	}
-
-	entries, err := git.ListWorktrees(r)
-	if err != nil {
-		return nil
-	}
-
-	active := make(map[string]bool, len(entries))
-	for _, e := range entries {
-		if e.Branch != "" {
-			active[e.Branch] = true
-		}
 	}
 
 	prefixes := resolver.AllPrefixes()
 	var tasks []string
-	for _, b := range branches {
-		if active[b] || b == mainBranch {
-			continue
-		}
+	for _, b := range archived {
 		task, _ := resolver.TaskFromBranch(b, prefixes)
 		if strings.HasPrefix(task, toComplete) {
 			tasks = append(tasks, task)

@@ -9,6 +9,7 @@ import (
 	"github.com/lugassawan/rimba/internal/fileutil"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
+	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
@@ -42,7 +43,7 @@ var restoreCmd = &cobra.Command{
 			return err
 		}
 
-		branch, err := findArchivedBranch(r, task)
+		branch, err := operations.FindArchivedBranch(r, task)
 		if err != nil {
 			return err
 		}
@@ -103,87 +104,4 @@ var restoreCmd = &cobra.Command{
 
 		return nil
 	},
-}
-
-// findArchivedBranch finds a branch for the given task that is not associated with any active worktree.
-func findArchivedBranch(r git.Runner, task string) (string, error) {
-	branches, err := git.LocalBranches(r)
-	if err != nil {
-		return "", fmt.Errorf("list branches: %w", err)
-	}
-
-	entries, err := git.ListWorktrees(r)
-	if err != nil {
-		return "", fmt.Errorf("list worktrees: %w", err)
-	}
-
-	// Build set of active worktree branches
-	active := make(map[string]bool, len(entries))
-	for _, e := range entries {
-		if e.Branch != "" {
-			active[e.Branch] = true
-		}
-	}
-
-	prefixes := resolver.AllPrefixes()
-
-	// Try prefix+task combinations first
-	for _, p := range prefixes {
-		candidate := resolver.BranchName(p, task)
-		for _, b := range branches {
-			if b == candidate && !active[b] {
-				return b, nil
-			}
-		}
-	}
-
-	// Fallback: exact match
-	for _, b := range branches {
-		if b == task && !active[b] {
-			return b, nil
-		}
-	}
-
-	// Fallback: match by task extraction
-	for _, b := range branches {
-		if active[b] {
-			continue
-		}
-		t, _ := resolver.TaskFromBranch(b, prefixes)
-		if t == task {
-			return b, nil
-		}
-	}
-
-	return "", fmt.Errorf("no archived branch found for task %q\nTo see archived branches: rimba list --archived", task)
-}
-
-// findArchivedBranches returns branches that are not associated with any active worktree
-// and not the main branch.
-func findArchivedBranches(r git.Runner, mainBranch string) ([]string, error) {
-	branches, err := git.LocalBranches(r)
-	if err != nil {
-		return nil, err
-	}
-
-	entries, err := git.ListWorktrees(r)
-	if err != nil {
-		return nil, err
-	}
-
-	active := make(map[string]bool, len(entries))
-	for _, e := range entries {
-		if e.Branch != "" {
-			active[e.Branch] = true
-		}
-	}
-
-	var archived []string
-	for _, b := range branches {
-		if b == mainBranch || active[b] {
-			continue
-		}
-		archived = append(archived, b)
-	}
-	return archived, nil
 }

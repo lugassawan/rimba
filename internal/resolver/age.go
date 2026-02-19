@@ -3,6 +3,8 @@ package resolver
 import (
 	"strconv"
 	"time"
+
+	"github.com/lugassawan/rimba/internal/termcolor"
 )
 
 // FormatAge returns a human-readable age string relative to now.
@@ -31,4 +33,18 @@ func FormatAgeSince(t, now time.Time) string {
 
 func formatUnit(n int, unit string) string {
 	return strconv.Itoa(n) + unit + " ago"
+}
+
+// AgeColor returns a color based on the age of a commit time.
+// Green for <3 days, Yellow for 3-14 days, Red for >14 days.
+func AgeColor(commitTime time.Time) termcolor.Color {
+	age := time.Since(commitTime)
+	switch {
+	case age < 3*24*time.Hour:
+		return termcolor.Green
+	case age < 14*24*time.Hour:
+		return termcolor.Yellow
+	default:
+		return termcolor.Red
+	}
 }

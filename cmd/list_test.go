@@ -411,7 +411,7 @@ func TestListArchivedBranchesError(t *testing.T) {
 
 	err := listArchivedBranches(cmd, r, branchMain)
 	if err == nil {
-		t.Fatal("expected error from findArchivedBranches failure")
+		t.Fatal("expected error from ListArchivedBranches failure")
 	}
 }
 

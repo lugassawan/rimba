@@ -2,8 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -53,13 +53,7 @@ var logCmd = &cobra.Command{
 			return err
 		}
 
-		var candidates []git.WorktreeEntry
-		for _, e := range entries {
-			if e.Bare || e.Branch == "" || e.Branch == mainBranch {
-				continue
-			}
-			candidates = append(candidates, e)
-		}
+		candidates := git.FilterEntries(entries, mainBranch)
 
 		if len(candidates) == 0 {
 			fmt.Fprintln(cmd.OutOrStdout(), "No worktrees found.")
@@ -70,56 +64,13 @@ var logCmd = &cobra.Command{
 		defer s.Stop()
 		s.Start("Collecting commit info...")
 
-		results := make([]logEntry, len(candidates))
-		prefixes := resolver.AllPrefixes()
-		var wg sync.WaitGroup
-		sem := make(chan struct{}, 8)
-
-		for i, c := range candidates {
-			s.Update(fmt.Sprintf("Collecting commit info... (%d/%d)", i+1, len(candidates)))
-			wg.Add(1)
-			go func(idx int, e git.WorktreeEntry) {
-				defer wg.Done()
-				sem <- struct{}{}
-				defer func() { <-sem }()
-
-				task, matchedPrefix := resolver.TaskFromBranch(e.Branch, prefixes)
-				typeName := strings.TrimSuffix(matchedPrefix, "/")
-
-				ct, subject, err := git.LastCommitInfo(r, e.Branch)
-				if err != nil {
-					results[idx] = logEntry{branch: e.Branch, task: task, typeName: typeName}
-					return
-				}
-				results[idx] = logEntry{
-					branch:     e.Branch,
-					task:       task,
-					typeName:   typeName,
-					commitTime: ct,
-					subject:    subject,
-					valid:      true,
-				}
-			}(i, c)
-		}
-		wg.Wait()
+		valid := collectLogEntries(r, candidates, s)
 		s.Stop()
-
-		// Collect valid entries and sort by commit time descending
-		var valid []logEntry
-		for _, r := range results {
-			if r.valid {
-				valid = append(valid, r)
-			}
-		}
-
-		sort.Slice(valid, func(i, j int) bool {
-			return valid[i].commitTime.After(valid[j].commitTime)
-		})
 
 		// Apply --since filter
 		sinceStr, _ := cmd.Flags().GetString(flagSince)
 		if sinceStr != "" {
-			d, err := parseDuration(sinceStr)
+			d, err := resolver.ParseDuration(sinceStr)
 			if err != nil {
 				return fmt.Errorf("invalid --since value %q: %w", sinceStr, err)
 			}
@@ -146,60 +97,85 @@ var logCmd = &cobra.Command{
 
 		noColor, _ := cmd.Flags().GetBool(flagNoColor)
 		p := termcolor.NewPainter(noColor)
-		out := cmd.OutOrStdout()
 
-		fmt.Fprintf(out, "Recent commits across %d worktree(s):\n\n", len(valid))
-
-		tbl := termcolor.NewTable(2)
-		tbl.AddRow(
-			p.Paint("TASK", termcolor.Bold),
-			p.Paint("TYPE", termcolor.Bold),
-			p.Paint("AGE", termcolor.Bold),
-			p.Paint("COMMIT", termcolor.Bold),
-		)
-
-		for _, e := range valid {
-			typeCell := e.typeName
-			if c := typeColor(e.typeName); c != "" {
-				typeCell = p.Paint(typeCell, c)
-			}
-
-			ageStr := resolver.FormatAge(e.commitTime)
-			ageCell := p.Paint(ageStr, ageColor(e.commitTime))
-
-			tbl.AddRow("  "+e.task, typeCell, ageCell, e.subject)
-		}
-
-		tbl.Render(out)
+		renderLogTable(cmd.OutOrStdout(), p, valid)
 		return nil
 	},
 }
 
-// parseDuration parses human-friendly duration strings like "7d", "2w", "3h".
-func parseDuration(s string) (time.Duration, error) {
-	if len(s) < 2 {
-		return 0, fmt.Errorf("duration too short: %q", s)
+// collectLogEntries gathers commit info for each candidate in parallel,
+// returning only valid entries sorted by commit time descending.
+func collectLogEntries(r git.Runner, candidates []git.WorktreeEntry, s *spinner.Spinner) []logEntry {
+	results := make([]logEntry, len(candidates))
+	prefixes := resolver.AllPrefixes()
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 8)
+
+	for i, c := range candidates {
+		s.Update(fmt.Sprintf("Collecting commit info... (%d/%d)", i+1, len(candidates)))
+		wg.Add(1)
+		go func(idx int, e git.WorktreeEntry) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			task, matchedPrefix := resolver.TaskFromBranch(e.Branch, prefixes)
+			typeName := strings.TrimSuffix(matchedPrefix, "/")
+
+			ct, subject, err := git.LastCommitInfo(r, e.Branch)
+			if err != nil {
+				results[idx] = logEntry{branch: e.Branch, task: task, typeName: typeName}
+				return
+			}
+			results[idx] = logEntry{
+				branch:     e.Branch,
+				task:       task,
+				typeName:   typeName,
+				commitTime: ct,
+				subject:    subject,
+				valid:      true,
+			}
+		}(i, c)
+	}
+	wg.Wait()
+
+	var valid []logEntry
+	for _, r := range results {
+		if r.valid {
+			valid = append(valid, r)
+		}
 	}
 
-	numStr := s[:len(s)-1]
-	unit := s[len(s)-1]
+	sort.Slice(valid, func(i, j int) bool {
+		return valid[i].commitTime.After(valid[j].commitTime)
+	})
 
-	n, err := strconv.Atoi(numStr)
-	if err != nil {
-		return 0, fmt.Errorf("invalid number in duration %q: %w", s, err)
-	}
-	if n <= 0 {
-		return 0, fmt.Errorf("duration must be positive: %q", s)
+	return valid
+}
+
+// renderLogTable prints the log entries as a formatted table.
+func renderLogTable(out io.Writer, p *termcolor.Painter, entries []logEntry) {
+	fmt.Fprintf(out, "Recent commits across %d worktree(s):\n\n", len(entries))
+
+	tbl := termcolor.NewTable(2)
+	tbl.AddRow(
+		p.Paint("TASK", termcolor.Bold),
+		p.Paint("TYPE", termcolor.Bold),
+		p.Paint("AGE", termcolor.Bold),
+		p.Paint("COMMIT", termcolor.Bold),
+	)
+
+	for _, e := range entries {
+		typeCell := e.typeName
+		if c := typeColor(e.typeName); c != "" {
+			typeCell = p.Paint(typeCell, c)
+		}
+
+		ageStr := resolver.FormatAge(e.commitTime)
+		ageCell := p.Paint(ageStr, resolver.AgeColor(e.commitTime))
+
+		tbl.AddRow("  "+e.task, typeCell, ageCell, e.subject)
 	}
 
-	switch unit {
-	case 'h':
-		return time.Duration(n) * time.Hour, nil
-	case 'd':
-		return time.Duration(n) * 24 * time.Hour, nil
-	case 'w':
-		return time.Duration(n) * 7 * 24 * time.Hour, nil
-	default:
-		return 0, fmt.Errorf("unknown duration unit %q in %q (use h, d, or w)", string(unit), s)
-	}
+	tbl.Render(out)
 }
