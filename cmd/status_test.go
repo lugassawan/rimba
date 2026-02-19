@@ -45,7 +45,7 @@ func TestStatusWithWorktrees(t *testing.T) {
 			case args[0] == cmdWorktreeTest && args[1] == cmdList:
 				return wtRepo + headMainBlock + "\n" +
 					wtFeatureLogin + "\n" + headDEF456 + "\n" + branchRefFeatureLogin + "\n", nil
-			case args[0] == "log":
+			case args[0] == cmdLog:
 				return "1700000000", nil
 			}
 			return "", nil

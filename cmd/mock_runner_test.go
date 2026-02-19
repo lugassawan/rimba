@@ -10,6 +10,7 @@ import (
 
 const (
 	cmdBranch       = "branch"
+	cmdLog          = "log"
 	cmdWorktreeTest = "worktree"
 	branchMain      = "main"
 	branchFeature   = "feature/login"

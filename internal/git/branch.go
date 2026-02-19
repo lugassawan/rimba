@@ -96,6 +96,29 @@ func LastCommitTime(r Runner, branch string) (time.Time, error) {
 	return time.Unix(ts, 0), nil
 }
 
+// LastCommitInfo returns the time and subject of the last commit on the given branch.
+func LastCommitInfo(r Runner, branch string) (time.Time, string, error) {
+	out, err := r.Run("log", "-1", "--format=%ct\t%s", branch)
+	if err != nil {
+		return time.Time{}, "", fmt.Errorf("last commit info for %s: %w", branch, err)
+	}
+	out = strings.TrimSpace(out)
+	if out == "" {
+		return time.Time{}, "", fmt.Errorf("no commits on branch %s", branch)
+	}
+
+	tsStr, subject, found := strings.Cut(out, "\t")
+	if !found {
+		return time.Time{}, "", fmt.Errorf("malformed commit info %q", out)
+	}
+
+	ts, err := strconv.ParseInt(tsStr, 10, 64)
+	if err != nil {
+		return time.Time{}, "", fmt.Errorf("parse commit timestamp %q: %w", tsStr, err)
+	}
+	return time.Unix(ts, 0), subject, nil
+}
+
 // LocalBranches returns the list of local branch names.
 func LocalBranches(r Runner) ([]string, error) {
 	out, err := r.Run("branch", "--format=%(refname:short)")

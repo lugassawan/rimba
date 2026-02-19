@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"errors"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/spf13/cobra"
@@ -310,7 +312,7 @@ func TestConfirmRemoval(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cmd, _ := newTestCmd()
 			cmd.SetIn(strings.NewReader(tt.input))
-			got := confirmRemoval(cmd, 2)
+			got := confirmRemoval(cmd, 2, "merged")
 			if got != tt.want {
 				t.Errorf("confirmRemoval(%q) = %v, want %v", tt.input, got, tt.want)
 			}
@@ -518,5 +520,132 @@ func TestCleanMergedResolveError(t *testing.T) {
 	err := cleanMerged(cmd, r)
 	if err == nil {
 		t.Fatal("expected error from resolveMainBranch failure")
+	}
+}
+
+func newCleanStaleCmd() (*cobra.Command, *bytes.Buffer) {
+	cmd, buf := newTestCmd()
+	cmd.Flags().Bool(flagDryRun, false, "")
+	cmd.Flags().Bool(flagForce, false, "")
+	cmd.Flags().Bool(flagStale, false, "")
+	cmd.Flags().Int(flagStaleDays, defaultStaleDays, "")
+	return cmd, buf
+}
+
+func TestFindStaleCandidates(t *testing.T) {
+	oldTimestamp := strconv.FormatInt(time.Now().Add(-30*24*time.Hour).Unix(), 10)
+	recentTimestamp := strconv.FormatInt(time.Now().Add(-1*time.Hour).Unix(), 10)
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == cmdWorktreeTest && args[1] == cmdList {
+				return strings.Join([]string{
+					wtRepo, headABC123, branchRefMain, "",
+					wtFeatureLogin, headDEF456, branchRefFeatureLogin, "",
+					wtDone, "HEAD ghi789", branchRefPrefix + branchDone, "",
+				}, "\n"), nil
+			}
+			if args[0] == cmdLog {
+				// Return old for feature/login, recent for feature/done
+				branch := args[len(args)-1]
+				if branch == branchFeature {
+					return oldTimestamp, nil
+				}
+				return recentTimestamp, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	candidates, err := findStaleCandidates(r, branchMain, 14)
+	if err != nil {
+		t.Fatalf("findStaleCandidates: %v", err)
+	}
+
+	if len(candidates) != 1 {
+		t.Fatalf("got %d candidates, want 1", len(candidates))
+	}
+	if candidates[0].branch != branchFeature {
+		t.Errorf("branch = %q, want %q", candidates[0].branch, branchFeature)
+	}
+}
+
+func TestCleanStaleDryRun(t *testing.T) {
+	oldTimestamp := strconv.FormatInt(time.Now().Add(-30*24*time.Hour).Unix(), 10)
+	cmd, buf := newCleanStaleCmd()
+	_ = cmd.Flags().Set(flagDryRun, "true")
+
+	dir := t.TempDir()
+	cfg := &config.Config{DefaultSource: branchMain}
+	_ = config.Save(filepath.Join(dir, config.FileName), cfg)
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return dir, nil
+			}
+			if args[0] == cmdWorktreeTest && args[1] == cmdList {
+				return strings.Join([]string{
+					wtRepo, headABC123, branchRefMain, "",
+					wtFeatureLogin, headDEF456, branchRefFeatureLogin, "",
+				}, "\n"), nil
+			}
+			if args[0] == cmdLog {
+				return oldTimestamp, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	err := cleanStale(cmd, r)
+	if err != nil {
+		t.Fatalf("cleanStale: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Stale worktrees:") {
+		t.Errorf("output = %q, want 'Stale worktrees:'", out)
+	}
+	if strings.Contains(out, "Cleaned") {
+		t.Errorf("dry-run should not show 'Cleaned'")
+	}
+}
+
+func TestCleanStaleForce(t *testing.T) {
+	oldTimestamp := strconv.FormatInt(time.Now().Add(-30*24*time.Hour).Unix(), 10)
+	cmd, buf := newCleanStaleCmd()
+	_ = cmd.Flags().Set(flagForce, "true")
+
+	dir := t.TempDir()
+	cfg := &config.Config{DefaultSource: branchMain}
+	_ = config.Save(filepath.Join(dir, config.FileName), cfg)
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return dir, nil
+			}
+			if args[0] == cmdWorktreeTest && args[1] == cmdList {
+				return strings.Join([]string{
+					wtRepo, headABC123, branchRefMain, "",
+					wtFeatureLogin, headDEF456, branchRefFeatureLogin, "",
+				}, "\n"), nil
+			}
+			if args[0] == cmdLog {
+				return oldTimestamp, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	err := cleanStale(cmd, r)
+	if err != nil {
+		t.Fatalf("cleanStale: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Cleaned") {
+		t.Errorf("output = %q, want 'Cleaned'", out)
 	}
 }

@@ -75,6 +75,41 @@ func TestLastCommitTime(t *testing.T) {
 	}
 }
 
+func TestLastCommitInfo(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	ct, subject, err := git.LastCommitInfo(r, "main")
+	if err != nil {
+		t.Fatalf("LastCommitInfo: %v", err)
+	}
+
+	if time.Since(ct) > time.Minute {
+		t.Errorf("commit time %v is too old", ct)
+	}
+	if subject == "" {
+		t.Error("expected non-empty commit subject")
+	}
+}
+
+func TestLastCommitInfoError(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	_, _, err := git.LastCommitInfo(r, "nonexistent")
+	if err == nil {
+		t.Error("expected error for nonexistent branch")
+	}
+}
+
 func TestLastCommitTimeError(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipIntegration)
