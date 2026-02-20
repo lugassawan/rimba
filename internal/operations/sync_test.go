@@ -8,7 +8,10 @@ import (
 	"github.com/lugassawan/rimba/internal/resolver"
 )
 
-const cmdRebase = "rebase"
+const (
+	cmdRebase       = "rebase"
+	fakeUpstreamRef = "origin/feature/login"
+)
 
 func TestCollectTasks(t *testing.T) {
 	prefixes := resolver.AllPrefixes()
@@ -172,7 +175,7 @@ func TestSyncWorktreeClean(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	res := SyncWorktree(r, branchMain, wt, false)
+	res := SyncWorktree(r, branchMain, wt, false, false)
 
 	if !res.Synced {
 		t.Error("expected Synced=true")
@@ -196,7 +199,7 @@ func TestSyncWorktreeDirty(t *testing.T) {
 		},
 	}
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	res := SyncWorktree(r, branchMain, wt, false)
+	res := SyncWorktree(r, branchMain, wt, false, false)
 
 	if !res.Skipped {
 		t.Error("expected Skipped=true for dirty worktree")
@@ -214,7 +217,7 @@ func TestSyncWorktreeIsDirtyError(t *testing.T) {
 		},
 	}
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	res := SyncWorktree(r, branchMain, wt, false)
+	res := SyncWorktree(r, branchMain, wt, false, false)
 
 	if !res.Skipped {
 		t.Error("expected Skipped=true for IsDirty error")
@@ -235,7 +238,7 @@ func TestSyncWorktreeSyncFailure(t *testing.T) {
 		},
 	}
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	res := SyncWorktree(r, branchMain, wt, false)
+	res := SyncWorktree(r, branchMain, wt, false, false)
 
 	if !res.Failed {
 		t.Error("expected Failed=true")
@@ -256,12 +259,177 @@ func TestSyncWorktreeMergeFailure(t *testing.T) {
 		},
 	}
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	res := SyncWorktree(r, branchMain, wt, true)
+	res := SyncWorktree(r, branchMain, wt, true, false)
 
 	if !res.Failed {
 		t.Error("expected Failed=true")
 	}
 	if !strings.Contains(res.FailureHint, "merge") {
 		t.Errorf("FailureHint = %q, want 'merge'", res.FailureHint)
+	}
+}
+
+func TestPushBranchRebase(t *testing.T) {
+	var capturedArgs []string
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) { return "", nil },
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return fakeUpstreamRef, nil // has upstream
+			}
+			capturedArgs = args
+			return "", nil
+		},
+	}
+
+	pushed, skipped, err := PushBranch(r, pathWtFeatureLogin, false)
+	if err != nil {
+		t.Fatalf("PushBranch: %v", err)
+	}
+	if !pushed || skipped {
+		t.Errorf("pushed=%v skipped=%v, want pushed=true skipped=false", pushed, skipped)
+	}
+	if len(capturedArgs) < 2 || capturedArgs[1] != "--force-with-lease" {
+		t.Errorf("expected push --force-with-lease, got %v", capturedArgs)
+	}
+}
+
+func TestPushBranchMerge(t *testing.T) {
+	var capturedArgs []string
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) { return "", nil },
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return fakeUpstreamRef, nil
+			}
+			capturedArgs = args
+			return "", nil
+		},
+	}
+
+	pushed, skipped, err := PushBranch(r, pathWtFeatureLogin, true)
+	if err != nil {
+		t.Fatalf("PushBranch: %v", err)
+	}
+	if !pushed || skipped {
+		t.Errorf("pushed=%v skipped=%v, want pushed=true skipped=false", pushed, skipped)
+	}
+	if len(capturedArgs) != 1 || capturedArgs[0] != "push" {
+		t.Errorf("expected [push], got %v", capturedArgs)
+	}
+}
+
+func TestPushBranchNoUpstream(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) { return "", nil },
+		runInDir: func(_ string, _ ...string) (string, error) {
+			return "", errors.New("no upstream")
+		},
+	}
+
+	pushed, skipped, err := PushBranch(r, pathWtFeatureLogin, false)
+	if err != nil {
+		t.Fatalf("PushBranch: %v", err)
+	}
+	if pushed || !skipped {
+		t.Errorf("pushed=%v skipped=%v, want pushed=false skipped=true", pushed, skipped)
+	}
+}
+
+func TestPushBranchError(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) { return "", nil },
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return fakeUpstreamRef, nil
+			}
+			return "", errors.New("push rejected")
+		},
+	}
+
+	pushed, _, err := PushBranch(r, pathWtFeatureLogin, false)
+	if err == nil {
+		t.Fatal("expected error from PushBranch")
+	}
+	if pushed {
+		t.Error("expected pushed=false on error")
+	}
+	if !strings.Contains(err.Error(), "push rejected") {
+		t.Errorf("error = %q, want 'push rejected'", err.Error())
+	}
+}
+
+func TestSyncWorktreePushSuccess(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) { return "", nil },
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return fakeUpstreamRef, nil
+			}
+			return "", nil
+		},
+	}
+	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
+	res := SyncWorktree(r, branchMain, wt, false, true)
+
+	if !res.Synced {
+		t.Error("expected Synced=true")
+	}
+	if !res.Pushed {
+		t.Error("expected Pushed=true")
+	}
+	if res.PushSkipped || res.PushFailed {
+		t.Errorf("PushSkipped=%v PushFailed=%v, want both false", res.PushSkipped, res.PushFailed)
+	}
+}
+
+func TestSyncWorktreePushSkipped(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) { return "", nil },
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return "", errors.New("no upstream")
+			}
+			return "", nil
+		},
+	}
+	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
+	res := SyncWorktree(r, branchMain, wt, false, true)
+
+	if !res.Synced {
+		t.Error("expected Synced=true")
+	}
+	if !res.PushSkipped {
+		t.Error("expected PushSkipped=true")
+	}
+	if res.Pushed || res.PushFailed {
+		t.Errorf("Pushed=%v PushFailed=%v, want both false", res.Pushed, res.PushFailed)
+	}
+}
+
+func TestSyncWorktreePushFailed(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) { return "", nil },
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return fakeUpstreamRef, nil
+			}
+			if len(args) >= 1 && args[0] == "push" {
+				return "", errors.New("push rejected")
+			}
+			return "", nil
+		},
+	}
+	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
+	res := SyncWorktree(r, branchMain, wt, false, true)
+
+	if !res.Synced {
+		t.Error("expected Synced=true")
+	}
+	if !res.PushFailed {
+		t.Error("expected PushFailed=true")
+	}
+	if res.PushError == "" {
+		t.Error("expected PushError to be set")
 	}
 }

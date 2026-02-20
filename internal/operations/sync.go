@@ -15,6 +15,11 @@ type SyncWorktreeResult struct {
 	SkipReason  string // "dirty" or "could not check status: <err>"
 	Failed      bool
 	FailureHint string // e.g. "cd /path && git rebase main"
+	// Push status (only meaningful when Synced=true)
+	Pushed      bool
+	PushSkipped bool // no upstream tracking branch
+	PushFailed  bool
+	PushError   string // error message for display
 }
 
 // SyncBranch synchronises a worktree with the main branch using rebase or merge.
@@ -28,6 +33,22 @@ func SyncBranch(r git.Runner, dir, mainBranch string, useMerge bool) error {
 		return err
 	}
 	return nil
+}
+
+// PushBranch pushes the current branch after a successful sync.
+// Uses force-with-lease after rebase, regular push after merge.
+// Returns (pushed, skipped, error). pushed is true only on success.
+func PushBranch(r git.Runner, dir string, useMerge bool) (bool, bool, error) {
+	if !git.HasUpstream(r, dir) {
+		return false, true, nil
+	}
+	var err error
+	if useMerge {
+		err = git.Push(r, dir)
+	} else {
+		err = git.PushForceWithLease(r, dir)
+	}
+	return err == nil, false, err
 }
 
 // CollectTasks extracts the task name from each worktree branch using the given prefixes.
@@ -59,7 +80,7 @@ func FilterEligible(worktrees []resolver.WorktreeInfo, prefixes []string, mainBr
 
 // SyncWorktree checks a worktree's status and syncs it with the main branch.
 // It returns a result describing what happened rather than writing to stdout.
-func SyncWorktree(r git.Runner, mainBranch string, wt resolver.WorktreeInfo, useMerge bool) SyncWorktreeResult {
+func SyncWorktree(r git.Runner, mainBranch string, wt resolver.WorktreeInfo, useMerge, push bool) SyncWorktreeResult {
 	res := SyncWorktreeResult{Branch: wt.Branch}
 
 	dirty, err := git.IsDirty(r, wt.Path)
@@ -85,6 +106,17 @@ func SyncWorktree(r git.Runner, mainBranch string, wt resolver.WorktreeInfo, use
 	}
 
 	res.Synced = true
+
+	if push {
+		pushed, skipped, pushErr := PushBranch(r, wt.Path, useMerge)
+		res.Pushed = pushed
+		res.PushSkipped = skipped
+		if pushErr != nil {
+			res.PushFailed = true
+			res.PushError = pushErr.Error()
+		}
+	}
+
 	return res
 }
 

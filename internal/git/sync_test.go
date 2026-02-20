@@ -7,13 +7,15 @@ import (
 )
 
 const (
-	remoteOrigin    = "origin"
-	branchMain      = "main"
-	branchFeature   = "feature/test"
-	fakeSHA         = "abc123"
-	errRebaseFail   = "rebase failed"
-	errFetchFail    = "fetch failed"
-	flagRebaseAbort = "--abort"
+	remoteOrigin       = "origin"
+	branchMain         = "main"
+	branchFeature      = "feature/test"
+	fakeSHA            = "abc123"
+	errRebaseFail      = "rebase failed"
+	errFetchFail       = "fetch failed"
+	errPushFail        = "push failed"
+	flagRebaseAbort    = "--abort"
+	flagForceWithLease = "--force-with-lease"
 )
 
 func TestFetch(t *testing.T) {
@@ -165,4 +167,105 @@ func TestIsMergeBaseAncestorFalse(t *testing.T) {
 	if IsMergeBaseAncestor(r, branchMain, branchFeature) {
 		t.Error("expected false for non-ancestor")
 	}
+}
+
+func TestHasUpstream(t *testing.T) {
+	r := &mockRunner{
+		runInDir: func(_ string, args ...string) (string, error) {
+			if slices.Contains(args, "@{upstream}") {
+				return "origin/feature/test", nil
+			}
+			return "", errors.New("unexpected")
+		},
+	}
+
+	if !HasUpstream(r, fakeDir) {
+		t.Error("expected true when upstream exists")
+	}
+}
+
+func TestHasUpstreamFalse(t *testing.T) {
+	r := &mockRunner{
+		runInDir: func(_ string, _ ...string) (string, error) {
+			return "", errors.New("no upstream configured")
+		},
+	}
+
+	if HasUpstream(r, fakeDir) {
+		t.Error("expected false when no upstream")
+	}
+}
+
+func TestPush(t *testing.T) {
+	var capturedDir string
+	var capturedArgs []string
+	r := &mockRunner{
+		runInDir: func(dir string, args ...string) (string, error) {
+			capturedDir = dir
+			capturedArgs = args
+			return "", nil
+		},
+	}
+
+	if err := Push(r, fakeDir); err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+
+	if capturedDir != fakeDir {
+		t.Errorf("dir = %q, want %q", capturedDir, fakeDir)
+	}
+	if len(capturedArgs) != 1 || capturedArgs[0] != "push" {
+		t.Errorf("expected [push], got %v", capturedArgs)
+	}
+}
+
+func TestPushError(t *testing.T) {
+	r := &mockRunner{
+		runInDir: func(_ string, _ ...string) (string, error) {
+			return "", errors.New(errPushFail)
+		},
+	}
+
+	err := Push(r, fakeDir)
+	if err == nil {
+		t.Fatal("expected error from Push")
+	}
+	assertContains(t, err, errPushFail)
+}
+
+func TestPushForceWithLease(t *testing.T) {
+	var capturedDir string
+	var capturedArgs []string
+	r := &mockRunner{
+		runInDir: func(dir string, args ...string) (string, error) {
+			capturedDir = dir
+			capturedArgs = args
+			return "", nil
+		},
+	}
+
+	if err := PushForceWithLease(r, fakeDir); err != nil {
+		t.Fatalf("PushForceWithLease: %v", err)
+	}
+
+	if capturedDir != fakeDir {
+		t.Errorf("dir = %q, want %q", capturedDir, fakeDir)
+	}
+	if !slices.Contains(capturedArgs, flagForceWithLease) {
+		t.Errorf(errExpectedInFmt, flagForceWithLease, capturedArgs)
+	}
+}
+
+func TestPushForceWithLeaseError(t *testing.T) {
+	r := &mockRunner{
+		runInDir: func(_ string, _ ...string) (string, error) {
+			return "", errors.New(errPushFail)
+		},
+	}
+
+	err := PushForceWithLease(r, fakeDir)
+	if err == nil {
+		t.Fatal("expected error from PushForceWithLease")
+	}
+	assertContains(t, err, errPushFail)
 }

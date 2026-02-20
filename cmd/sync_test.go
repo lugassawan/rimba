@@ -12,7 +12,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const cmdRebase = "rebase"
+const (
+	cmdRebase       = "rebase"
+	fakeUpstreamRef = "origin/feature/login"
+)
 
 func testSyncConfig() *config.Config {
 	return &config.Config{DefaultSource: branchMain}
@@ -45,7 +48,7 @@ func TestSyncOneSuccess(t *testing.T) {
 		}
 		sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
-		err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false)
+		err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false, false)
 		if err != nil {
 			t.Fatalf("syncOne: %v", err)
 		}
@@ -62,7 +65,7 @@ func TestSyncOneSuccess(t *testing.T) {
 		}
 		sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
-		err := syncOne(sc, "login", worktrees, testSyncPrefixes(), true)
+		err := syncOne(sc, "login", worktrees, testSyncPrefixes(), true, false)
 		if err != nil {
 			t.Fatalf("syncOne: %v", err)
 		}
@@ -81,7 +84,7 @@ func TestSyncOneNotFound(t *testing.T) {
 	}
 	sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
-	err := syncOne(sc, "nonexistent", worktrees, testSyncPrefixes(), false)
+	err := syncOne(sc, "nonexistent", worktrees, testSyncPrefixes(), false, false)
 	if err == nil {
 		t.Fatal("expected error for unknown task")
 	}
@@ -101,7 +104,7 @@ func TestSyncOneDirty(t *testing.T) {
 	}
 	sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
-	err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false)
+	err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false, false)
 	if err == nil {
 		t.Fatal("expected error for dirty worktree")
 	}
@@ -123,7 +126,7 @@ func TestSyncOneErrorPaths(t *testing.T) {
 		}
 		sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
-		err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false)
+		err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false, false)
 		if err == nil {
 			t.Fatal("expected error from IsDirty failure")
 		}
@@ -142,11 +145,88 @@ func TestSyncOneErrorPaths(t *testing.T) {
 		}
 		sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
-		err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false)
+		err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false, false)
 		if err == nil {
 			t.Fatal("expected error from doSync failure")
 		}
 	})
+}
+
+func TestSyncOnePushSuccess(t *testing.T) {
+	worktrees := testSyncWorktrees()
+	cmd, buf := newTestCmd()
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) { return "", nil },
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return fakeUpstreamRef, nil
+			}
+			return "", nil
+		},
+	}
+	sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
+
+	err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false, true)
+	if err != nil {
+		t.Fatalf("syncOne: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Pushed") {
+		t.Errorf("output = %q, want 'Pushed'", out)
+	}
+}
+
+func TestSyncOnePushSkippedNoUpstream(t *testing.T) {
+	worktrees := testSyncWorktrees()
+	cmd, buf := newTestCmd()
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) { return "", nil },
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return "", errors.New("no upstream")
+			}
+			return "", nil
+		},
+	}
+	sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
+
+	err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false, true)
+	if err != nil {
+		t.Fatalf("syncOne: %v", err)
+	}
+	out := buf.String()
+	if strings.Contains(out, "Pushed") {
+		t.Errorf("output = %q, should not contain 'Pushed' when no upstream", out)
+	}
+}
+
+func TestSyncOnePushFailure(t *testing.T) {
+	worktrees := testSyncWorktrees()
+	cmd, _ := newTestCmd()
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) { return "", nil },
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return fakeUpstreamRef, nil
+			}
+			if len(args) >= 1 && args[0] == "push" {
+				return "", errors.New("rejected")
+			}
+			return "", nil
+		},
+	}
+	sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
+
+	err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false, true)
+	if err == nil {
+		t.Fatal("expected error from push failure")
+	}
+	if !strings.Contains(err.Error(), "push failed") {
+		t.Errorf("error = %q, want 'push failed'", err.Error())
+	}
+	if !strings.Contains(err.Error(), "force-with-lease") {
+		t.Errorf("error = %q, want recovery hint with force-with-lease", err.Error())
+	}
 }
 
 func TestSyncAllClean(t *testing.T) {
@@ -158,7 +238,7 @@ func TestSyncAllClean(t *testing.T) {
 	}
 	sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
-	err := syncAll(sc, worktrees, testSyncPrefixes(), false, false)
+	err := syncAll(sc, worktrees, testSyncPrefixes(), false, false, false)
 	if err != nil {
 		t.Fatalf(fatalSyncAll, err)
 	}
@@ -183,7 +263,7 @@ func TestSyncAllDirtySkip(t *testing.T) {
 	}
 	sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
-	err := syncAll(sc, worktrees, testSyncPrefixes(), false, false)
+	err := syncAll(sc, worktrees, testSyncPrefixes(), false, false, false)
 	if err != nil {
 		t.Fatalf(fatalSyncAll, err)
 	}
@@ -202,9 +282,60 @@ func TestSyncAllInherited(t *testing.T) {
 	}
 	sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
-	err := syncAll(sc, worktrees, testSyncPrefixes(), false, true)
+	err := syncAll(sc, worktrees, testSyncPrefixes(), false, true, false)
 	if err != nil {
 		t.Fatalf(fatalSyncAll, err)
+	}
+}
+
+func TestSyncAllPushDefault(t *testing.T) {
+	worktrees := testSyncWorktrees()
+	cmd, buf := newTestCmd()
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) { return "", nil },
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return fakeUpstreamRef, nil
+			}
+			return "", nil
+		},
+	}
+	sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
+
+	err := syncAll(sc, worktrees, testSyncPrefixes(), false, false, true)
+	if err != nil {
+		t.Fatalf(fatalSyncAll, err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "2 pushed") {
+		t.Errorf("output = %q, want '2 pushed'", out)
+	}
+}
+
+func TestSyncAllPushFailure(t *testing.T) {
+	worktrees := testSyncWorktrees()
+	cmd, buf := newTestCmd()
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) { return "", nil },
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return fakeUpstreamRef, nil
+			}
+			if len(args) >= 1 && args[0] == "push" {
+				return "", errors.New("rejected")
+			}
+			return "", nil
+		},
+	}
+	sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
+
+	err := syncAll(sc, worktrees, testSyncPrefixes(), false, false, true)
+	if err != nil {
+		t.Fatalf(fatalSyncAll, err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "push failed") {
+		t.Errorf("output = %q, want 'push failed'", out)
 	}
 }
 
@@ -218,7 +349,7 @@ func TestSyncWorktreeClean(t *testing.T) {
 	var res syncResult
 	var mu sync.Mutex
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	syncWorktree(cmd, r, branchMain, wt, false, &res, &mu)
+	syncWorktree(cmd, r, branchMain, wt, false, false, &res, &mu)
 
 	if res.synced != 1 {
 		t.Errorf("synced = %d, want 1", res.synced)
@@ -241,7 +372,7 @@ func TestSyncWorktreeDirtyAndError(t *testing.T) {
 		var res syncResult
 		var mu sync.Mutex
 		wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-		syncWorktree(cmd, r, branchMain, wt, false, &res, &mu)
+		syncWorktree(cmd, r, branchMain, wt, false, false, &res, &mu)
 
 		if res.skippedDirty != 1 {
 			t.Errorf("skippedDirty = %d, want 1", res.skippedDirty)
@@ -263,7 +394,7 @@ func TestSyncWorktreeDirtyAndError(t *testing.T) {
 		var res syncResult
 		var mu sync.Mutex
 		wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-		syncWorktree(cmd, r, branchMain, wt, false, &res, &mu)
+		syncWorktree(cmd, r, branchMain, wt, false, false, &res, &mu)
 
 		if res.skippedDirty != 1 {
 			t.Errorf("skippedDirty = %d, want 1", res.skippedDirty)
@@ -289,7 +420,7 @@ func TestSyncWorktreeDoSyncFailure(t *testing.T) {
 	var res syncResult
 	var mu sync.Mutex
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	syncWorktree(cmd, r, branchMain, wt, false, &res, &mu)
+	syncWorktree(cmd, r, branchMain, wt, false, false, &res, &mu)
 
 	if res.failed != 1 {
 		t.Errorf("failed = %d, want 1", res.failed)
@@ -314,7 +445,7 @@ func TestSyncWorktreeMergeFailure(t *testing.T) {
 	var res syncResult
 	var mu sync.Mutex
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	syncWorktree(cmd, r, branchMain, wt, true, &res, &mu)
+	syncWorktree(cmd, r, branchMain, wt, true, false, &res, &mu)
 
 	if res.failed != 1 {
 		t.Errorf("failed = %d, want 1", res.failed)
@@ -362,6 +493,29 @@ func TestPrintSyncSummary(t *testing.T) {
 		printSyncSummary(cmd, branchMain, true, res)
 		if !strings.Contains(buf.String(), "Merged") {
 			t.Errorf("output = %q, want 'Merged'", buf.String())
+		}
+	})
+
+	t.Run("with pushed count", func(t *testing.T) {
+		cmd, buf := newTestCmd()
+		res := &syncResult{synced: 3, pushed: 2}
+		printSyncSummary(cmd, branchMain, false, res)
+		out := buf.String()
+		if !strings.Contains(out, "2 pushed") {
+			t.Errorf("output = %q, want '2 pushed'", out)
+		}
+	})
+
+	t.Run("with push failures", func(t *testing.T) {
+		cmd, buf := newTestCmd()
+		res := &syncResult{synced: 2, pushed: 1, pushFailed: 1, failures: []string{"  feature/x: push failed: rejected"}}
+		printSyncSummary(cmd, branchMain, false, res)
+		out := buf.String()
+		if !strings.Contains(out, "1 push failed") {
+			t.Errorf("output = %q, want '1 push failed'", out)
+		}
+		if !strings.Contains(out, "1 pushed") {
+			t.Errorf("output = %q, want '1 pushed'", out)
 		}
 	})
 }
