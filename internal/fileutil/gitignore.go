@@ -50,3 +50,35 @@ func EnsureGitignore(repoRoot string, entry string) (added bool, retErr error) {
 
 	return true, nil
 }
+
+// RemoveGitignoreEntry removes entry from the .gitignore file at repoRoot.
+// Returns true if the entry was removed, false if the file doesn't exist or
+// the entry was not present.
+func RemoveGitignoreEntry(repoRoot string, entry string) (bool, error) {
+	path := filepath.Join(repoRoot, ".gitignore")
+
+	data, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	lines := strings.Split(string(data), "\n")
+	var filtered []string
+	found := false
+	for _, line := range lines {
+		if strings.TrimSpace(line) == entry {
+			found = true
+			continue
+		}
+		filtered = append(filtered, line)
+	}
+
+	if !found {
+		return false, nil
+	}
+
+	return true, os.WriteFile(path, []byte(strings.Join(filtered, "\n")), 0644) //nolint:gosec // .gitignore must be world-readable for git
+}

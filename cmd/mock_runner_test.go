@@ -60,6 +60,7 @@ const (
 	aheadBehindZero       = "0\t0"
 	repoPath              = "/repo"
 
+	branchDevelop    = "develop"
 	taskLogin        = "login"
 	taskWantFmt      = "task = %q, want %q"
 	directiveWantFmt = "directive = %v, want ShellCompDirectiveNoFileComp"

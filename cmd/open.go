@@ -44,7 +44,7 @@ Examples:
   rimba open my-task -w test      # Run a named shortcut
   rimba open my-task npm start    # Run an inline command
 
-Shortcuts are configured in .rimba.toml:
+Shortcuts are configured in .rimba/settings.toml:
   [open]
   ide = "code ."
   agent = "claude"
@@ -130,7 +130,7 @@ func resolveOpenCommand(cmd *cobra.Command, inlineArgs []string) ([]string, erro
 func resolveShortcut(cmd *cobra.Command, name string) ([]string, error) {
 	cfg := config.FromContext(cmd.Context())
 	if cfg == nil || cfg.Open == nil {
-		return nil, fmt.Errorf("no [open] section in config; add shortcuts to .rimba.toml:\n  [open]\n  %s = \"your-command\"", name)
+		return nil, fmt.Errorf("no [open] section in config; add shortcuts to .rimba/settings.toml:\n  [open]\n  %s = \"your-command\"", name)
 	}
 
 	value, ok := cfg.Open[name]

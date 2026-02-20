@@ -11,7 +11,7 @@ func agentsBlock() string {
 # rimba — Git Worktree Manager
 
 rimba manages parallel git worktrees so you can work on multiple tasks simultaneously.
-It is optional and detected via ` + "`" + `.rimba.toml` + "`" + ` in the repo root.
+It is optional and detected via ` + "`" + `.rimba/settings.toml` + "`" + ` in the repo root.
 
 ## Prerequisites
 
@@ -64,7 +64,7 @@ Error: ` + "`" + `{"version": "...", "command": "...", "error": "...", "code": "
 
 - Prefer ` + "`" + `rimba archive` + "`" + ` over ` + "`" + `rimba remove` + "`" + ` to preserve branches for later reference
 - Use ` + "`" + `--force` + "`" + ` only when you understand the implications (skips dirty checks)
-- Never modify ` + "`" + `.rimba.toml` + "`" + ` programmatically without asking the user
+- Never modify ` + "`" + `.rimba/settings.toml` + "`" + ` programmatically without asking the user
 
 <!-- END RIMBA -->`
 }
@@ -86,7 +86,7 @@ See AGENTS.md at the repo root for full rimba documentation.
 - ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
 - ` + "`" + `rimba exec <cmd>` + "`" + ` — run command across all worktrees
 
-### Config Shape (` + "`" + `.rimba.toml` + "`" + `)
+### Config Shape (` + "`" + `.rimba/settings.toml` + "`" + `)
 
 ` + "```" + `toml
 worktree_dir = "../<repo>-worktrees"
@@ -110,7 +110,7 @@ func cursorContent() string {
 description: rimba git worktree manager commands and workflows
 globs:
   - "*.go"
-  - ".rimba.toml"
+  - ".rimba/settings.toml"
 alwaysApply: false
 ---
 
@@ -146,7 +146,7 @@ Envelope: ` + "`" + `{"version", "command", "data"}` + "`" + ` or ` + "`" + `{"v
 
 - Prefer ` + "`" + `archive` + "`" + ` over ` + "`" + `remove` + "`" + ` to keep branches for reference.
 - Use ` + "`" + `--force` + "`" + ` only when you understand the implications.
-- Never modify ` + "`" + `.rimba.toml` + "`" + ` without asking the user.
+- Never modify ` + "`" + `.rimba/settings.toml` + "`" + ` without asking the user.
 `
 }
 
@@ -204,8 +204,8 @@ Commands supporting ` + "`" + `--json` + "`" + `: ` + "`" + `list` + "`" + `, ` 
 | Error | Cause | Fix |
 |-------|-------|-----|
 | "not a git repository" | Not inside a git repo | ` + "`" + `cd` + "`" + ` into a git repo |
-| ".rimba.toml not found" | rimba not initialized | Run ` + "`" + `rimba init` + "`" + ` |
-| "worktree_dir must not be empty" | Bad config | Check ` + "`" + `.rimba.toml` + "`" + ` |
+| "config not found" | rimba not initialized | Run` + "`" + `rimba init` + "`" + ` |
+| "worktree_dir must not be empty" | Bad config | Check ` + "`" + `.rimba/settings.toml` + "`" + ` |
 | "branch already exists" | Task name in use | Pick a different task name |
 | "worktree has uncommitted changes" | Dirty worktree | Commit or stash changes, or use ` + "`" + `--force` + "`" + ` |
 
@@ -213,7 +213,7 @@ Commands supporting ` + "`" + `--json` + "`" + `: ` + "`" + `list` + "`" + `, ` 
 
 - Prefer ` + "`" + `rimba archive` + "`" + ` over ` + "`" + `rimba remove` + "`" + ` to preserve branches
 - Use ` + "`" + `--force` + "`" + ` only when you understand the implications
-- Never modify ` + "`" + `.rimba.toml` + "`" + ` without asking the user
+- Never modify ` + "`" + `.rimba/settings.toml` + "`" + ` without asking the user
 - Always check ` + "`" + `rimba status` + "`" + ` before bulk operations
 `
 }

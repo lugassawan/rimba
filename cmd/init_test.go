@@ -40,10 +40,16 @@ func TestInitSuccess(t *testing.T) {
 		t.Errorf("output = %q, want 'Initialized rimba'", out)
 	}
 
-	// Verify .rimba.toml was created
-	configPath := filepath.Join(repoDir, config.FileName)
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		t.Errorf(".rimba.toml not created at %s", configPath)
+	// Verify .rimba/settings.toml was created
+	teamPath := filepath.Join(repoDir, config.DirName, config.TeamFile)
+	if _, err := os.Stat(teamPath); os.IsNotExist(err) {
+		t.Errorf("settings.toml not created at %s", teamPath)
+	}
+
+	// Verify .rimba/settings.local.toml was created
+	localPath := filepath.Join(repoDir, config.DirName, config.LocalFile)
+	if _, err := os.Stat(localPath); os.IsNotExist(err) {
+		t.Errorf("settings.local.toml not created at %s", localPath)
 	}
 
 	// Verify worktree dir was created
@@ -51,6 +57,111 @@ func TestInitSuccess(t *testing.T) {
 	wtDir := filepath.Join(repoDir, "../"+repoName+"-worktrees")
 	if _, err := os.Stat(wtDir); os.IsNotExist(err) {
 		t.Errorf("worktree dir not created at %s", wtDir)
+	}
+}
+
+func TestInitMigrationFromLegacy(t *testing.T) {
+	repoDir := t.TempDir()
+
+	// Pre-create legacy .rimba.toml
+	legacyCfg := &config.Config{WorktreeDir: "../wt", DefaultSource: "main"}
+	if err := config.Save(filepath.Join(repoDir, config.FileName), legacyCfg); err != nil {
+		t.Fatalf("save legacy config: %v", err)
+	}
+
+	// Pre-create .gitignore with legacy entry
+	if err := os.WriteFile(filepath.Join(repoDir, ".gitignore"), []byte(config.FileName+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+
+	if err := initCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("initCmd.RunE: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "Migrated rimba config") {
+		t.Errorf("output should contain 'Migrated rimba config', got:\n%s", out)
+	}
+
+	// Verify legacy file is gone
+	if _, err := os.Stat(filepath.Join(repoDir, config.FileName)); !os.IsNotExist(err) {
+		t.Error("legacy .rimba.toml should have been removed")
+	}
+
+	// Verify .rimba/settings.toml exists and is loadable
+	cfg, err := config.LoadDir(filepath.Join(repoDir, config.DirName))
+	if err != nil {
+		t.Fatalf("LoadDir after migration: %v", err)
+	}
+	if cfg.WorktreeDir != "../wt" {
+		t.Errorf("WorktreeDir = %q, want %q", cfg.WorktreeDir, "../wt")
+	}
+
+	// Verify .rimba/settings.local.toml exists
+	localPath := filepath.Join(repoDir, config.DirName, config.LocalFile)
+	if _, err := os.Stat(localPath); os.IsNotExist(err) {
+		t.Error("settings.local.toml should have been created")
+	}
+
+	// Verify .gitignore updated
+	data, err := os.ReadFile(filepath.Join(repoDir, ".gitignore"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(data)
+	if strings.Contains(content, config.FileName) {
+		t.Error(".gitignore should not contain legacy entry after migration")
+	}
+	localEntry := filepath.Join(config.DirName, config.LocalFile)
+	if !strings.Contains(content, localEntry) {
+		t.Errorf(".gitignore should contain %q, got:\n%s", localEntry, content)
+	}
+}
+
+func TestInitExistingDirConfig(t *testing.T) {
+	repoDir := t.TempDir()
+
+	// Create .rimba/ directory
+	rimbaDir := filepath.Join(repoDir, config.DirName)
+	if err := os.MkdirAll(rimbaDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+
+	if err := initCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("initCmd.RunE: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "already exists") {
+		t.Errorf("output should contain 'already exists', got:\n%s", out)
 	}
 }
 
@@ -103,10 +214,10 @@ func TestInitCreatesAgentFiles(t *testing.T) {
 func TestInitExistingConfigInstallsAgentFiles(t *testing.T) {
 	repoDir := t.TempDir()
 
-	// Create an existing .rimba.toml
-	configPath := filepath.Join(repoDir, config.FileName)
-	if err := os.WriteFile(configPath, []byte(""), 0600); err != nil {
-		t.Fatalf("failed to create test config: %v", err)
+	// Create .rimba/ directory to simulate existing config
+	rimbaDir := filepath.Join(repoDir, config.DirName)
+	if err := os.MkdirAll(rimbaDir, 0755); err != nil {
+		t.Fatal(err)
 	}
 
 	r := &mockRunner{
@@ -127,7 +238,7 @@ func TestInitExistingConfigInstallsAgentFiles(t *testing.T) {
 	cmd, buf := newTestCmd()
 	cmd.Flags().Bool(flagAgentFiles, true, "")
 
-	// Should succeed (not error) when .rimba.toml already exists
+	// Should succeed (not error) when .rimba/ already exists
 	err := initCmd.RunE(cmd, nil)
 	if err != nil {
 		t.Fatalf("initCmd.RunE should succeed with existing config, got: %v", err)

@@ -142,6 +142,82 @@ func TestEnsureGitignoreOpenError(t *testing.T) {
 	}
 }
 
+func TestRemoveGitignoreEntryPresent(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, gitignoreFile), otherEntryLine+testEntry+"\n")
+
+	removed, err := RemoveGitignoreEntry(dir, testEntry)
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+	if !removed {
+		t.Fatal("expected removed=true when entry is present")
+	}
+
+	got := readFile(t, filepath.Join(dir, gitignoreFile))
+	if strings.Contains(got, testEntry) {
+		t.Errorf("expected entry to be removed, got %q", got)
+	}
+	if !strings.Contains(got, otherEntry) {
+		t.Errorf("expected other entries to be preserved, got %q", got)
+	}
+}
+
+func TestRemoveGitignoreEntryNotPresent(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, gitignoreFile), otherEntryLine)
+
+	removed, err := RemoveGitignoreEntry(dir, testEntry)
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+	if removed {
+		t.Fatal("expected removed=false when entry not present")
+	}
+}
+
+func TestRemoveGitignoreEntryNoFile(t *testing.T) {
+	dir := t.TempDir()
+
+	removed, err := RemoveGitignoreEntry(dir, testEntry)
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+	if removed {
+		t.Fatal("expected removed=false when .gitignore does not exist")
+	}
+}
+
+func TestRemoveGitignoreEntryReadError(t *testing.T) {
+	dir := t.TempDir()
+	// Create .gitignore as a directory so ReadFile returns non-IsNotExist error
+	if err := os.Mkdir(filepath.Join(dir, gitignoreFile), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := RemoveGitignoreEntry(dir, testEntry)
+	if err == nil {
+		t.Fatal("expected error when .gitignore is a directory")
+	}
+}
+
+func TestRemoveGitignoreEntryWriteError(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, gitignoreFile)
+	writeFile(t, path, testEntry+"\n")
+
+	// Make the file itself read-only so WriteFile fails
+	if err := os.Chmod(path, 0444); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0644) })
+
+	_, err := RemoveGitignoreEntry(dir, testEntry)
+	if err == nil {
+		t.Fatal("expected error when .gitignore is read-only")
+	}
+}
+
 func readFile(t *testing.T, path string) string {
 	t.Helper()
 	data, err := os.ReadFile(path)

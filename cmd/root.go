@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -54,7 +53,7 @@ var rootCmd = &cobra.Command{
 			return err
 		}
 
-		cfg, err := config.Load(filepath.Join(repoRoot, config.FileName))
+		cfg, err := config.Resolve(repoRoot)
 		if err != nil {
 			return err
 		}

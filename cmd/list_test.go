@@ -377,7 +377,7 @@ func TestListArchivedBranchesEmpty(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			if args[0] == cmdBranch {
-				return "main", nil
+				return branchMain, nil
 			}
 			if args[0] == cmdWorktreeTest && args[1] == cmdList {
 				return wtRepo + headMainBlock, nil

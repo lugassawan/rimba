@@ -46,6 +46,27 @@ func TestResolveMainBranchFromConfig(t *testing.T) {
 	}
 }
 
+func TestResolveMainBranchFromDirConfig(t *testing.T) {
+	dir := t.TempDir()
+	rimbaDir := filepath.Join(dir, config.DirName)
+	if err := os.MkdirAll(rimbaDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{WorktreeDir: "../worktrees", DefaultSource: "develop"}
+	if err := config.Save(filepath.Join(rimbaDir, config.TeamFile), cfg); err != nil {
+		t.Fatalf("Save config: %v", err)
+	}
+
+	r := repoRootRunner(dir, nil)
+	branch, err := resolveMainBranch(r)
+	if err != nil {
+		t.Fatalf("resolveMainBranch: %v", err)
+	}
+	if branch != "develop" {
+		t.Errorf("branch = %q, want %q", branch, "develop")
+	}
+}
+
 func TestResolveMainBranchFallback(t *testing.T) {
 	dir := t.TempDir()
 

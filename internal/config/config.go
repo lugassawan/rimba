@@ -5,12 +5,20 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	toml "github.com/pelletier/go-toml/v2"
 )
 
-// FileName is the config file name used by rimba.
+// FileName is the legacy config file name used by rimba.
 const FileName = ".rimba.toml"
+
+// Directory-based config layout constants.
+const (
+	DirName   = ".rimba"
+	TeamFile  = "settings.toml"
+	LocalFile = "settings.local.toml"
+)
 
 type Config struct {
 	WorktreeDir   string   `toml:"worktree_dir"`
@@ -98,6 +106,89 @@ func Save(path string, cfg *Config) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 	return os.WriteFile(path, data, 0600)
+}
+
+// loadRaw reads a TOML config file without validation.
+// Returns (nil, nil) if the file does not exist.
+func loadRaw(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil //nolint:nilnil // nil,nil means "file absent, no error" — callers check for nil Config
+		}
+		return nil, err
+	}
+
+	var cfg Config
+	if err := toml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("invalid config %s: %w", filepath.Base(path), err)
+	}
+	return &cfg, nil
+}
+
+// Merge combines a team config with a local override config.
+// Scalars: local wins if non-zero. Slices/maps: local replaces team if non-nil.
+func Merge(team, local *Config) *Config {
+	if local == nil {
+		return team
+	}
+
+	merged := *team // shallow copy
+
+	if local.WorktreeDir != "" {
+		merged.WorktreeDir = local.WorktreeDir
+	}
+	if local.DefaultSource != "" {
+		merged.DefaultSource = local.DefaultSource
+	}
+	if local.CopyFiles != nil {
+		merged.CopyFiles = local.CopyFiles
+	}
+	if local.PostCreate != nil {
+		merged.PostCreate = local.PostCreate
+	}
+	if local.Deps != nil {
+		merged.Deps = local.Deps
+	}
+	if local.Open != nil {
+		merged.Open = local.Open
+	}
+
+	return &merged
+}
+
+// LoadDir loads the team config (required) and optional local override from
+// a .rimba/ directory, merges them, and validates the result.
+func LoadDir(dirPath string) (*Config, error) {
+	team, err := loadRaw(filepath.Join(dirPath, TeamFile))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read team config: %w", err)
+	}
+	if team == nil {
+		return nil, fmt.Errorf("config not found: %s does not exist (run 'rimba init' first)", filepath.Join(dirPath, TeamFile))
+	}
+
+	local, err := loadRaw(filepath.Join(dirPath, LocalFile))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read local config: %w", err)
+	}
+
+	cfg := Merge(team, local)
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+// Resolve loads config by checking for the .rimba/ directory first,
+// then falling back to the legacy .rimba.toml file.
+func Resolve(repoRoot string) (*Config, error) {
+	dirPath := filepath.Join(repoRoot, DirName)
+	if info, err := os.Stat(dirPath); err == nil && info.IsDir() {
+		return LoadDir(dirPath)
+	}
+
+	return Load(filepath.Join(repoRoot, FileName))
 }
 
 func WithConfig(ctx context.Context, cfg *Config) context.Context {
