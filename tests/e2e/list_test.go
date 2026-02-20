@@ -1,7 +1,6 @@
 package e2e_test
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -138,19 +137,8 @@ func TestListCurrentWorktreeIndicator(t *testing.T) {
 	branch := resolver.BranchName(defaultPrefix, "current-wt")
 	wtPath := resolver.WorktreePath(wtDir, branch)
 
-	// Copy .rimba.toml into the worktree so config lookup succeeds
-	// when running from inside the worktree (git rev-parse --show-toplevel
-	// returns the worktree path, not the main repo root).
-	cfgSrc := filepath.Join(repo, configFile)
-	cfgData, err := os.ReadFile(cfgSrc)
-	if err != nil {
-		t.Fatalf("read config: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(wtPath, configFile), cfgData, 0644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-
 	// Run list from inside the worktree directory
+	// (the binary uses git.MainRepoRoot to resolve config from main repo)
 	r := rimbaSuccess(t, wtPath, "list")
 	assertContains(t, r.Stdout, "* current-wt")
 }

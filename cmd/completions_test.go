@@ -310,8 +310,8 @@ func TestAddSourceFlagCompletion(t *testing.T) {
 		if len(branches) != 1 {
 			t.Fatalf("expected 1 branch, got %d: %v", len(branches), branches)
 		}
-		if branches[0] != "develop" {
-			t.Errorf("branch = %q, want %q", branches[0], "develop")
+		if branches[0] != branchDevelop {
+			t.Errorf("branch = %q, want %q", branches[0], branchDevelop)
 		}
 	})
 }

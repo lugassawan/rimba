@@ -4,8 +4,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/lugassawan/rimba/internal/config"
 )
 
 const (
@@ -91,9 +89,7 @@ func setupOpenShortcuts(t *testing.T, repo string, shortcuts map[string]string) 
 	t.Helper()
 	cfg := loadConfig(t, repo)
 	cfg.Open = shortcuts
-	if err := config.Save(filepath.Join(repo, configFile), cfg); err != nil {
-		t.Fatalf(msgSaveConfig, err)
-	}
+	saveConfig(t, repo, cfg)
 }
 
 // assertPwdInWorktreeDir verifies that pwd output (from stdout) resolves

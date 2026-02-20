@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/testutil"
 )
@@ -155,9 +154,7 @@ func TestDuplicateCopiesDirectory(t *testing.T) {
 	// Override copy_files to include the directory
 	cfg := loadConfig(t, repo)
 	cfg.CopyFiles = []string{dotVscode}
-	if err := config.Save(filepath.Join(repo, configFile), cfg); err != nil {
-		t.Fatalf(msgSaveConfig, err)
-	}
+	saveConfig(t, repo, cfg)
 
 	rimbaSuccess(t, repo, "add", "dir-src")
 

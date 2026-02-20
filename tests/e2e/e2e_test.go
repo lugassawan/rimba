@@ -17,7 +17,10 @@ const (
 	skipE2E       = "skipping e2e test"
 	defaultPrefix = "feature/"
 	bugfixPrefix  = "bugfix/"
-	configFile    = ".rimba.toml"
+	configFile    = ".rimba.toml" // legacy — kept for migration tests
+	configDir     = ".rimba"
+	teamFile      = "settings.toml"
+	localFile     = "settings.local.toml"
 	gitignoreFile = ".gitignore"
 
 	// Output messages asserted in tests.
@@ -69,9 +72,6 @@ const (
 	dotVscode    = ".vscode"
 	dotConfig    = ".config"
 	settingsJSON = "settings.json"
-
-	// Shared error format strings.
-	msgSaveConfig = "save config: %v"
 
 	// Shared flags.
 	flagMergedE2E = "--merged"

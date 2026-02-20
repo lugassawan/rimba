@@ -173,9 +173,7 @@ func TestAddPartialFailCopyHint(t *testing.T) {
 	// Override copy_files to include the unreadable file
 	cfg := loadConfig(t, repo)
 	cfg.CopyFiles = []string{".env"}
-	if err := config.Save(filepath.Join(repo, configFile), cfg); err != nil {
-		t.Fatalf(msgSaveConfig, err)
-	}
+	saveConfig(t, repo, cfg)
 
 	r := rimbaFail(t, repo, "add", "copy-fail-task")
 	assertContains(t, r.Stderr, "worktree created but failed to copy files")
@@ -211,9 +209,7 @@ func TestAddCopiesDirectory(t *testing.T) {
 	// Override copy_files to include the directory
 	cfg := loadConfig(t, repo)
 	cfg.CopyFiles = []string{dotVscode}
-	if err := config.Save(filepath.Join(repo, configFile), cfg); err != nil {
-		t.Fatalf(msgSaveConfig, err)
-	}
+	saveConfig(t, repo, cfg)
 
 	r := rimbaSuccess(t, repo, "add", "with-dir")
 	assertContains(t, r.Stdout, dotVscode)
@@ -251,9 +247,7 @@ func TestAddCopiesNestedDirectory(t *testing.T) {
 
 	cfg := loadConfig(t, repo)
 	cfg.CopyFiles = []string{dotConfig}
-	if err := config.Save(filepath.Join(repo, configFile), cfg); err != nil {
-		t.Fatalf(msgSaveConfig, err)
-	}
+	saveConfig(t, repo, cfg)
 
 	rimbaSuccess(t, repo, "add", "with-nested")
 
@@ -274,9 +268,7 @@ func TestAddSkipsMissingDirectory(t *testing.T) {
 	// Override copy_files to include a non-existent directory
 	cfg := loadConfig(t, repo)
 	cfg.CopyFiles = []string{".nonexistent-dir"}
-	if err := config.Save(filepath.Join(repo, configFile), cfg); err != nil {
-		t.Fatalf(msgSaveConfig, err)
-	}
+	saveConfig(t, repo, cfg)
 
 	// Should succeed — missing entries are silently skipped
 	rimbaSuccess(t, repo, "add", "skip-missing-dir")
@@ -339,9 +331,7 @@ func TestAddCopiesFromMainRepoRoot(t *testing.T) {
 	// Override copy_files to include .claude
 	cfg := loadConfig(t, repo)
 	cfg.CopyFiles = []string{".claude"}
-	if err := config.Save(filepath.Join(repo, configFile), cfg); err != nil {
-		t.Fatalf(msgSaveConfig, err)
-	}
+	saveConfig(t, repo, cfg)
 
 	// Create a first worktree
 	rimbaSuccess(t, repo, "add", "first-wt")
@@ -388,9 +378,7 @@ func TestAddCopiesNestedFile(t *testing.T) {
 	// Override copy_files to include the nested file path (not directory)
 	cfg := loadConfig(t, repo)
 	cfg.CopyFiles = []string{dotVscode + "/settings.local.json"}
-	if err := config.Save(filepath.Join(repo, configFile), cfg); err != nil {
-		t.Fatalf(msgSaveConfig, err)
-	}
+	saveConfig(t, repo, cfg)
 
 	rimbaSuccess(t, repo, "add", "nested-file-task")
 
@@ -424,9 +412,7 @@ func TestAddShowsSkippedFiles(t *testing.T) {
 	// Override copy_files to include both existing and non-existing entries
 	cfg := loadConfig(t, repo)
 	cfg.CopyFiles = []string{".env", ".nonexistent", ".also-missing"}
-	if err := config.Save(filepath.Join(repo, configFile), cfg); err != nil {
-		t.Fatalf(msgSaveConfig, err)
-	}
+	saveConfig(t, repo, cfg)
 
 	r := rimbaSuccess(t, repo, "add", "skipped-test")
 	assertContains(t, r.Stdout, "Copied: [.env]")
@@ -436,9 +422,21 @@ func TestAddShowsSkippedFiles(t *testing.T) {
 // loadConfig is a test helper that loads the rimba config from a repo.
 func loadConfig(t *testing.T, repo string) *config.Config {
 	t.Helper()
-	cfg, err := config.Load(filepath.Join(repo, configFile))
+	cfg, err := config.Resolve(repo)
 	if err != nil {
 		t.Fatalf("failed to load config: %v", err)
 	}
 	return cfg
+}
+
+// saveConfig is a test helper that saves config to the .rimba/ directory.
+func saveConfig(t *testing.T, repo string, cfg *config.Config) {
+	t.Helper()
+	dir := filepath.Join(repo, configDir)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("mkdir .rimba: %v", err)
+	}
+	if err := config.Save(filepath.Join(dir, teamFile), cfg); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
 }

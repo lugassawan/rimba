@@ -241,9 +241,7 @@ func TestPostCreateHooks(t *testing.T) {
 
 	cfg := loadConfig(t, repo)
 	cfg.PostCreate = []string{"touch hook-marker.txt"}
-	if err := config.Save(filepath.Join(repo, configFile), cfg); err != nil {
-		t.Fatal(err)
-	}
+	saveConfig(t, repo, cfg)
 
 	r := rimbaSuccess(t, repo, "add", "hook-task")
 
@@ -265,9 +263,7 @@ func TestPostCreateHooksSkipFlag(t *testing.T) {
 
 	cfg := loadConfig(t, repo)
 	cfg.PostCreate = []string{"touch should-not-exist.txt"}
-	if err := config.Save(filepath.Join(repo, configFile), cfg); err != nil {
-		t.Fatal(err)
-	}
+	saveConfig(t, repo, cfg)
 
 	r := rimbaSuccess(t, repo, "add", flagSkipHooksE2E, "skip-hook-task")
 
@@ -344,9 +340,7 @@ func TestAddWithDepsAutoDetectDisabled(t *testing.T) {
 	cfg := loadConfig(t, repo)
 	f := false
 	cfg.Deps = &config.DepsConfig{AutoDetect: &f}
-	if err := config.Save(filepath.Join(repo, configFile), cfg); err != nil {
-		t.Fatal(err)
-	}
+	saveConfig(t, repo, cfg)
 
 	rimbaSuccess(t, repo, "add", "noauto-1")
 
