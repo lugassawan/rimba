@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"io"
-	"path/filepath"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
@@ -49,7 +48,7 @@ func resolveMainBranch(r git.Runner) (string, error) {
 		return "", err
 	}
 
-	cfg, err := config.Load(filepath.Join(repoRoot, config.FileName))
+	cfg, err := config.Resolve(repoRoot)
 	if err == nil && cfg.DefaultSource != "" {
 		return cfg.DefaultSource, nil
 	}

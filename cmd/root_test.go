@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -93,6 +94,39 @@ func TestPersistentPreRunESuccess(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &config.Config{WorktreeDir: "../worktrees", DefaultSource: "main"}
 	if err := config.Save(filepath.Join(dir, config.FileName), cfg); err != nil {
+		t.Fatalf("Save config: %v", err)
+	}
+
+	r := repoRootRunner(dir, nil)
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	preRunE := rootCmd.PersistentPreRunE
+	cmd := &cobra.Command{Use: useTestCmd}
+	cmd.SetContext(context.Background())
+
+	if err := preRunE(cmd, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	loaded := config.FromContext(cmd.Context())
+	if loaded == nil {
+		t.Fatal("expected config in context after successful PreRunE")
+		return
+	}
+	if loaded.DefaultSource != "main" {
+		t.Errorf("DefaultSource = %q, want %q", loaded.DefaultSource, "main")
+	}
+}
+
+func TestPersistentPreRunESuccessWithDirConfig(t *testing.T) {
+	dir := t.TempDir()
+	rimbaDir := filepath.Join(dir, config.DirName)
+	if err := os.MkdirAll(rimbaDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{WorktreeDir: "../worktrees", DefaultSource: "main"}
+	if err := config.Save(filepath.Join(rimbaDir, config.TeamFile), cfg); err != nil {
 		t.Fatalf("Save config: %v", err)
 	}
 
