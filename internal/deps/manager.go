@@ -1,14 +1,20 @@
 package deps
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
 )
+
+// ProgressFunc is called before each item is processed to report progress.
+// current is 1-based, total is the count of items, name identifies the item.
+type ProgressFunc func(current, total int, name string)
 
 // Manager orchestrates dependency installation for worktrees.
 type Manager struct {
@@ -24,7 +30,7 @@ type InstallResult struct {
 }
 
 // Install detects matching worktrees and clones or installs dependencies.
-func (m *Manager) Install(worktreePath string, modules []Module) []InstallResult {
+func (m *Manager) Install(worktreePath string, modules []Module, onProgress ProgressFunc) []InstallResult {
 	results := make([]InstallResult, 0, len(modules))
 
 	hashed, err := HashModules(worktreePath, modules)
@@ -50,7 +56,10 @@ func (m *Manager) Install(worktreePath string, modules []Module) []InstallResult
 		}
 	}
 
-	for _, mh := range hashed {
+	for i, mh := range hashed {
+		if onProgress != nil {
+			onProgress(i+1, len(hashed), mh.Module.Dir)
+		}
 		result := m.installModule(worktreePath, mh, existingPaths)
 		results = append(results, result)
 	}
@@ -60,7 +69,7 @@ func (m *Manager) Install(worktreePath string, modules []Module) []InstallResult
 
 // InstallPreferSource is like Install but tries the given source worktree first.
 // Used by `duplicate` to prefer cloning from the worktree being duplicated.
-func (m *Manager) InstallPreferSource(worktreePath, sourceWT string, modules []Module) []InstallResult {
+func (m *Manager) InstallPreferSource(worktreePath, sourceWT string, modules []Module, onProgress ProgressFunc) []InstallResult {
 	results := make([]InstallResult, 0, len(modules))
 
 	hashed, err := HashModules(worktreePath, modules)
@@ -87,7 +96,10 @@ func (m *Manager) InstallPreferSource(worktreePath, sourceWT string, modules []M
 		}
 	}
 
-	for _, mh := range hashed {
+	for i, mh := range hashed {
+		if onProgress != nil {
+			onProgress(i+1, len(hashed), mh.Module.Dir)
+		}
 		result := m.installModule(worktreePath, mh, existingPaths)
 		results = append(results, result)
 	}
@@ -169,12 +181,14 @@ func runInstall(worktreePath string, mod Module) error {
 
 	cmd := exec.Command("sh", "-c", mod.InstallCmd) //nolint:gosec // install commands come from user config
 	cmd.Dir = dir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
 
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("install %q in %s: %w\nTo fix: cd %s && %s",
-			mod.Dir, dir, err, dir, mod.InstallCmd)
+		return fmt.Errorf("install %q in %s: %w\n%s\nTo fix: cd %s && %s",
+			mod.Dir, dir, err, strings.TrimSpace(buf.String()), dir, mod.InstallCmd)
 	}
 	return nil
 }
