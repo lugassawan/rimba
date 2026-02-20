@@ -73,6 +73,7 @@ func TestInitCreatesAgentFiles(t *testing.T) {
 	defer restore()
 
 	cmd, buf := newTestCmd()
+	cmd.Flags().Bool(flagAgentFiles, true, "")
 
 	if err := initCmd.RunE(cmd, nil); err != nil {
 		t.Fatalf("initCmd.RunE: %v", err)
@@ -124,6 +125,7 @@ func TestInitExistingConfigInstallsAgentFiles(t *testing.T) {
 	defer restore()
 
 	cmd, buf := newTestCmd()
+	cmd.Flags().Bool(flagAgentFiles, true, "")
 
 	// Should succeed (not error) when .rimba.toml already exists
 	err := initCmd.RunE(cmd, nil)
@@ -162,12 +164,14 @@ func TestInitAgentFilesIdempotent(t *testing.T) {
 
 	// First init
 	cmd1, _ := newTestCmd()
+	cmd1.Flags().Bool(flagAgentFiles, true, "")
 	if err := initCmd.RunE(cmd1, nil); err != nil {
 		t.Fatalf("first initCmd.RunE: %v", err)
 	}
 
 	// Second init (config exists now)
 	cmd2, buf2 := newTestCmd()
+	cmd2.Flags().Bool(flagAgentFiles, true, "")
 	if err := initCmd.RunE(cmd2, nil); err != nil {
 		t.Fatalf("second initCmd.RunE: %v", err)
 	}
@@ -184,6 +188,40 @@ func TestInitAgentFilesIdempotent(t *testing.T) {
 	}
 	if strings.Count(string(content), "<!-- BEGIN RIMBA -->") != 1 {
 		t.Error("AGENTS.md should have exactly one BEGIN RIMBA marker after re-init")
+	}
+}
+
+func TestInitWithoutFlagSkipsAgentFiles(t *testing.T) {
+	repoDir := t.TempDir()
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			if len(args) >= 1 && args[0] == cmdSymbolicRef {
+				return refsRemotesOriginMain, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+
+	if err := initCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("initCmd.RunE: %v", err)
+	}
+
+	out := buf.String()
+	if strings.Contains(out, "Agent:") {
+		t.Errorf("output should not mention agent files without --agent-files flag, got:\n%s", out)
+	}
+
+	if _, err := os.Stat(filepath.Join(repoDir, "AGENTS.md")); err == nil {
+		t.Error("AGENTS.md should not be created without --agent-files flag")
 	}
 }
 
