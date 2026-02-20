@@ -151,7 +151,7 @@ func TestInstallDeps(t *testing.T) {
 		{Path: newWT, Branch: "feature/test"},
 	}
 
-	results := installDeps(r, cfg, newWT, entries)
+	results := installDeps(r, cfg, newWT, entries, nil)
 	if len(results) == 0 {
 		t.Fatal("expected at least 1 result from installDeps")
 	}
@@ -179,7 +179,7 @@ func TestInstallDepsNoLockfiles(t *testing.T) {
 		Deps: &config.DepsConfig{AutoDetect: boolPtr(true)},
 	}
 
-	results := installDeps(r, cfg, newWT, nil)
+	results := installDeps(r, cfg, newWT, nil, nil)
 	if results != nil {
 		t.Errorf("expected nil results for no lockfiles, got %v", results)
 	}
@@ -219,7 +219,7 @@ func TestInstallDepsPreferSource(t *testing.T) {
 		{Path: newWT, Branch: "feature/copy"},
 	}
 
-	results := installDepsPreferSource(r, cfg, newWT, sourceWT, entries)
+	results := installDepsPreferSource(r, cfg, newWT, sourceWT, entries, nil)
 	if len(results) == 0 {
 		t.Fatal("expected at least 1 result")
 	}
@@ -244,7 +244,7 @@ func TestInstallDepsPreferSourceNoLockfiles(t *testing.T) {
 		Deps: &config.DepsConfig{AutoDetect: boolPtr(true)},
 	}
 
-	results := installDepsPreferSource(r, cfg, newWT, sourceWT, nil)
+	results := installDepsPreferSource(r, cfg, newWT, sourceWT, nil, nil)
 	if results != nil {
 		t.Errorf("expected nil results for no lockfiles, got %v", results)
 	}
@@ -260,7 +260,7 @@ func TestInstallDepsNilDepsConfig(t *testing.T) {
 
 	cfg := &config.Config{} // Deps is nil
 
-	results := installDeps(r, cfg, newWT, nil)
+	results := installDeps(r, cfg, newWT, nil, nil)
 	if results != nil {
 		t.Errorf("expected nil results for nil Deps config, got %v", results)
 	}
@@ -277,7 +277,7 @@ func TestInstallDepsPreferSourceNilDepsConfig(t *testing.T) {
 
 	cfg := &config.Config{} // Deps is nil
 
-	results := installDepsPreferSource(r, cfg, newWT, sourceWT, nil)
+	results := installDepsPreferSource(r, cfg, newWT, sourceWT, nil, nil)
 	if results != nil {
 		t.Errorf("expected nil results for nil Deps config, got %v", results)
 	}
@@ -286,7 +286,7 @@ func TestInstallDepsPreferSourceNilDepsConfig(t *testing.T) {
 func TestRunHooks(t *testing.T) {
 	dir := t.TempDir()
 
-	results := runHooks(dir, []string{"touch marker.txt"})
+	results := runHooks(dir, []string{"touch marker.txt"}, nil)
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -302,7 +302,7 @@ func TestRunHooks(t *testing.T) {
 func TestRunHooksFailure(t *testing.T) {
 	dir := t.TempDir()
 
-	results := runHooks(dir, []string{"false"})
+	results := runHooks(dir, []string{"false"}, nil)
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}

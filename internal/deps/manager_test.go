@@ -19,6 +19,13 @@ const (
 	testDirCustomDeps    = "custom/deps"
 )
 
+// progressCall records a single invocation of a ProgressFunc callback.
+type progressCall struct {
+	current int
+	total   int
+	name    string
+}
+
 // mockRunner implements git.Runner for testing.
 type mockRunner struct {
 	worktreeOutput string
@@ -71,7 +78,7 @@ func TestManagerInstallClone(t *testing.T) {
 		},
 	}
 
-	results := mgr.Install(newWT, modules)
+	results := mgr.Install(newWT, modules, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedResults, len(results))
 	}
@@ -106,7 +113,7 @@ func TestManagerInstallNoMatchCloneOnly(t *testing.T) {
 		},
 	}
 
-	results := mgr.Install(newWT, modules)
+	results := mgr.Install(newWT, modules, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedResults, len(results))
 	}
@@ -133,7 +140,7 @@ func TestManagerInstallNoLockfile(t *testing.T) {
 		},
 	}
 
-	results := mgr.Install(newWT, modules)
+	results := mgr.Install(newWT, modules, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedResults, len(results))
 	}
@@ -169,7 +176,7 @@ func TestManagerInstallHashMismatch(t *testing.T) {
 		},
 	}
 
-	results := mgr.Install(newWT, modules)
+	results := mgr.Install(newWT, modules, nil)
 
 	r := results[0]
 	if r.Cloned {
@@ -201,7 +208,7 @@ func TestManagerInstallPreferSource(t *testing.T) {
 		{Dir: DirNodeModules, Lockfile: LockfilePnpm},
 	}
 
-	results := mgr.InstallPreferSource(newWT, sourceWT, modules)
+	results := mgr.InstallPreferSource(newWT, sourceWT, modules, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedResults, len(results))
 	}
@@ -319,7 +326,7 @@ func TestManagerInstallHashError(t *testing.T) {
 		{Dir: DirNodeModules, Lockfile: LockfilePnpm},
 	}
 
-	results := mgr.Install(newWT, modules)
+	results := mgr.Install(newWT, modules, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedOneResult, len(results))
 	}
@@ -338,7 +345,7 @@ func TestManagerInstallModuleNoHash(t *testing.T) {
 		{Dir: DirNodeModules, Lockfile: LockfilePnpm},
 	}
 
-	results := mgr.Install(newWT, modules)
+	results := mgr.Install(newWT, modules, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedOneResult, len(results))
 	}
@@ -370,7 +377,7 @@ func TestManagerInstallPreferSourceHashError(t *testing.T) {
 		{Dir: DirNodeModules, Lockfile: LockfilePnpm},
 	}
 
-	results := mgr.InstallPreferSource(newWT, sourceWT, modules)
+	results := mgr.InstallPreferSource(newWT, sourceWT, modules, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedOneResult, len(results))
 	}
@@ -402,7 +409,7 @@ func TestManagerInstallFallbackToInstallCmd(t *testing.T) {
 		},
 	}
 
-	results := mgr.Install(newWT, modules)
+	results := mgr.Install(newWT, modules, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedOneResult, len(results))
 	}
@@ -431,7 +438,7 @@ func TestManagerInstallSingleWorktree(t *testing.T) {
 		},
 	}
 
-	results := mgr.Install(newWT, modules)
+	results := mgr.Install(newWT, modules, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedResults, len(results))
 	}
@@ -468,7 +475,7 @@ func TestManagerInstallCloneOnlyNoModDir(t *testing.T) {
 		},
 	}
 
-	results := mgr.Install(newWT, modules)
+	results := mgr.Install(newWT, modules, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedResults, len(results))
 	}
@@ -493,7 +500,7 @@ func TestManagerInstallPreferSourceNoLockfile(t *testing.T) {
 		{Dir: DirNodeModules, Lockfile: LockfilePnpm},
 	}
 
-	results := mgr.InstallPreferSource(newWT, sourceWT, modules)
+	results := mgr.InstallPreferSource(newWT, sourceWT, modules, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedResults, len(results))
 	}
@@ -528,7 +535,7 @@ func TestManagerInstallWithInstallCmd(t *testing.T) {
 		},
 	}
 
-	results := mgr.Install(newWT, modules)
+	results := mgr.Install(newWT, modules, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedResults, len(results))
 	}
@@ -562,7 +569,7 @@ func TestInstallListWorktreesError(t *testing.T) {
 		{Dir: DirNodeModules, Lockfile: LockfilePnpm},
 	}
 
-	results := mgr.Install(newWT, modules)
+	results := mgr.Install(newWT, modules, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedOneResult, len(results))
 	}
@@ -584,7 +591,7 @@ func TestInstallPreferSourceListWorktreesError(t *testing.T) {
 		{Dir: DirNodeModules, Lockfile: LockfilePnpm},
 	}
 
-	results := mgr.InstallPreferSource(newWT, sourceWT, modules)
+	results := mgr.InstallPreferSource(newWT, sourceWT, modules, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedOneResult, len(results))
 	}
@@ -630,7 +637,7 @@ func TestManagerInstallCloneFailFallback(t *testing.T) {
 		modules := []Module{
 			{Dir: DirNodeModules, Lockfile: LockfilePnpm, CloneOnly: true},
 		}
-		results := mgr.Install(newWT, modules)
+		results := mgr.Install(newWT, modules, nil)
 		if len(results) != 1 {
 			t.Fatalf(fmtExpectedOneResult, len(results))
 		}
@@ -644,7 +651,7 @@ func TestManagerInstallCloneFailFallback(t *testing.T) {
 		modules := []Module{
 			{Dir: DirNodeModules, Lockfile: LockfilePnpm, InstallCmd: "echo fallback"},
 		}
-		results := mgr.Install(newWT, modules)
+		results := mgr.Install(newWT, modules, nil)
 		if len(results) != 1 {
 			t.Fatalf(fmtExpectedOneResult, len(results))
 		}
@@ -681,7 +688,7 @@ func TestManagerInstallWithWorkDir(t *testing.T) {
 		},
 	}
 
-	results := mgr.Install(newWT, modules)
+	results := mgr.Install(newWT, modules, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedOneResult, len(results))
 	}
@@ -708,7 +715,7 @@ func TestManagerInstallNoInstallCmd(t *testing.T) {
 		{Dir: DirNodeModules, Lockfile: LockfilePnpm}, // no InstallCmd
 	}
 
-	results := mgr.Install(newWT, modules)
+	results := mgr.Install(newWT, modules, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedOneResult, len(results))
 	}
@@ -734,6 +741,51 @@ func TestRunInstallError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "install") {
 		t.Errorf("error = %q, want to contain 'install'", err.Error())
+	}
+}
+
+func TestInstallProgressCallback(t *testing.T) {
+	newWT := t.TempDir()
+	writeFile(t, newWT, LockfilePnpm, "lock-content")
+
+	runner := &mockRunner{worktreeOutput: mockWorktreeList(newWT)}
+	mgr := &Manager{Runner: runner}
+	modules := []Module{
+		{Dir: DirNodeModules, Lockfile: LockfilePnpm, InstallCmd: "echo ok"},
+		{Dir: DirVendor, Lockfile: LockfileGo},
+	}
+
+	var calls []progressCall
+	onProgress := func(current, total int, name string) {
+		calls = append(calls, progressCall{current, total, name})
+	}
+
+	mgr.Install(newWT, modules, onProgress)
+
+	if len(calls) != 2 {
+		t.Fatalf("expected 2 progress calls, got %d", len(calls))
+	}
+	if calls[0].current != 1 || calls[0].total != 2 || calls[0].name != DirNodeModules {
+		t.Errorf("calls[0] = %+v, want {1 2 %s}", calls[0], DirNodeModules)
+	}
+	if calls[1].current != 2 || calls[1].total != 2 || calls[1].name != DirVendor {
+		t.Errorf("calls[1] = %+v, want {2 2 %s}", calls[1], DirVendor)
+	}
+}
+
+func TestInstallOutputCapture(t *testing.T) {
+	dir := t.TempDir()
+	mod := Module{
+		Dir:        DirNodeModules,
+		InstallCmd: "echo captured-output && exit 1",
+	}
+
+	err := runInstall(dir, mod)
+	if err == nil {
+		t.Fatal("expected error from runInstall")
+	}
+	if !strings.Contains(err.Error(), "captured-output") {
+		t.Errorf("error should contain captured output, got %q", err.Error())
 	}
 }
 
