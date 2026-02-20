@@ -15,7 +15,7 @@ See AGENTS.md at the repo root for full documentation.
 1. `rimba add <task>` — create worktree + branch
 2. `rimba list` — list all worktrees
 3. `rimba status` — health overview (dirty, stale, behind)
-4. `rimba cd <task>` — print path for cd
+4. `rimba open <task>` — print path or run shortcut (--ide, --agent)
 5. `rimba sync [task]` — rebase worktree(s) onto source
 6. `rimba merge <task>` — fast-forward merge into source
 7. `rimba remove <task>` — delete worktree + branch

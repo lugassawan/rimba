@@ -12,14 +12,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const flagAgentFiles = "agent-files"
+
 func init() {
 	rootCmd.AddCommand(initCmd)
+	initCmd.Flags().Bool(flagAgentFiles, false, "Install AI agent instruction files (AGENTS.md, copilot, cursor, claude)")
 }
 
 var initCmd = &cobra.Command{
 	Use:         "init",
 	Short:       "Initialize rimba in the current repository",
-	Long:        "Detects the repository root, creates a .rimba.toml config file, sets up the worktree directory, and installs agent instruction files.",
+	Long:        "Detects the repository root, creates a .rimba.toml config file, and sets up the worktree directory. Use --agent-files to also install AI agent instruction files.",
 	Annotations: map[string]string{"skipConfig": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		r := newRunner()
@@ -76,13 +79,16 @@ var initCmd = &cobra.Command{
 			fmt.Fprintf(cmd.OutOrStdout(), "Config %s already exists, skipping config creation\n", configPath)
 		}
 
-		// Install agent instruction files
-		results, err := agentfile.Install(repoRoot)
-		if err != nil {
-			return fmt.Errorf("install agent files: %w", err)
-		}
-		for _, res := range results {
-			fmt.Fprintf(cmd.OutOrStdout(), "  Agent:        %s (%s)\n", res.RelPath, res.Action)
+		// Install agent instruction files if requested
+		installAgentFiles, _ := cmd.Flags().GetBool(flagAgentFiles)
+		if installAgentFiles {
+			results, err := agentfile.Install(repoRoot)
+			if err != nil {
+				return fmt.Errorf("install agent files: %w", err)
+			}
+			for _, res := range results {
+				fmt.Fprintf(cmd.OutOrStdout(), "  Agent:        %s (%s)\n", res.RelPath, res.Action)
+			}
 		}
 
 		return nil

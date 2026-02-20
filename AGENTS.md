@@ -20,7 +20,7 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 
 | Concern | Commands |
 |---------|----------|
-| Create & navigate | `rimba add <task>`, `rimba open <task>`, `rimba cd <task>` |
+| Create & navigate | `rimba add <task>`, `rimba open <task>` |
 | Inspect | `rimba list`, `rimba status`, `rimba log [task]` |
 | Sync & merge | `rimba sync [task]`, `rimba merge <task>` |
 | Clean up | `rimba clean --merged`, `rimba archive <task>`, `rimba remove <task>` |
@@ -31,7 +31,7 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 **Create a worktree and start working:**
 ```sh
 rimba add my-feature        # creates worktree + branch
-rimba cd my-feature         # prints cd command (use: cd $(rimba cd my-feature))
+rimba open my-feature       # prints worktree path (use: cd $(rimba open my-feature))
 ```
 
 **Check health and clean up stale worktrees:**

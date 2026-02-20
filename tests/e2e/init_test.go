@@ -60,10 +60,10 @@ func TestInitExistingConfigInstallsAgentFiles(t *testing.T) {
 	}
 
 	repo := setupRepo(t)
-	rimbaSuccess(t, repo, "init")
+	rimbaSuccess(t, repo, "init", "--agent-files")
 
 	// Re-running init should succeed and update agent files
-	r := rimbaSuccess(t, repo, "init")
+	r := rimbaSuccess(t, repo, "init", "--agent-files")
 	assertContains(t, r.Stdout, "already exists")
 	assertContains(t, r.Stdout, "Agent:")
 }
@@ -124,6 +124,33 @@ func TestInitFailsOutsideGitRepo(t *testing.T) {
 
 	dir := t.TempDir() // not a git repo
 	rimbaFail(t, dir, "init")
+}
+
+func TestInitWithAgentFilesFlag(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupRepo(t)
+	r := rimbaSuccess(t, repo, "init", "--agent-files")
+
+	assertContains(t, r.Stdout, "Agent:")
+	assertFileExists(t, filepath.Join(repo, "AGENTS.md"))
+	assertFileExists(t, filepath.Join(repo, ".github", "copilot-instructions.md"))
+	assertFileExists(t, filepath.Join(repo, ".cursor", "rules", "rimba.mdc"))
+	assertFileExists(t, filepath.Join(repo, ".claude", "skills", "rimba", "SKILL.md"))
+}
+
+func TestInitSkipsAgentFilesWithoutFlag(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupRepo(t)
+	r := rimbaSuccess(t, repo, "init")
+
+	assertNotContains(t, r.Stdout, "Agent:")
+	assertFileNotExists(t, filepath.Join(repo, "AGENTS.md"))
 }
 
 // assertGitignoreContains verifies that .gitignore in the repo contains the given entry.
