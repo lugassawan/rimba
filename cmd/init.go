@@ -12,11 +12,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const flagAgentFiles = "agent-files"
+const (
+	flagAgentFiles = "agent-files"
+	flagPersonal   = "personal"
+)
 
 func init() {
 	rootCmd.AddCommand(initCmd)
 	initCmd.Flags().Bool(flagAgentFiles, false, "Install AI agent instruction files (AGENTS.md, copilot, cursor, claude)")
+	initCmd.Flags().Bool(flagPersonal, false, "Gitignore the .rimba/ directory (for solo developers)")
 }
 
 var initCmd = &cobra.Command{
@@ -26,7 +30,10 @@ var initCmd = &cobra.Command{
 settings.toml (team-shared) and settings.local.toml (personal overrides).
 
 If a legacy .rimba.toml file exists, it is migrated into the new directory layout.
-Use --agent-files to also install AI agent instruction files.`,
+Use --agent-files to also install AI agent instruction files.
+Use --personal to gitignore the entire .rimba/ directory instead of just the local
+config file. In personal mode, settings.local.toml is not created since the whole
+directory is already personal.`,
 	Annotations: map[string]string{"skipConfig": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		r := newRunner()
@@ -36,9 +43,17 @@ Use --agent-files to also install AI agent instruction files.`,
 			return err
 		}
 
+		personal, _ := cmd.Flags().GetBool(flagPersonal)
+
 		dirPath := filepath.Join(repoRoot, config.DirName)
 		legacyPath := filepath.Join(repoRoot, config.FileName)
 		localEntry := filepath.Join(config.DirName, config.LocalFile)
+		dirEntry := config.DirName + "/"
+
+		gitignoreEntry := localEntry
+		if personal {
+			gitignoreEntry = dirEntry
+		}
 
 		switch {
 		case dirExists(dirPath):
@@ -55,20 +70,24 @@ Use --agent-files to also install AI agent instruction files.`,
 				return fmt.Errorf("failed to move legacy config: %w", err)
 			}
 
-			if err := os.WriteFile(filepath.Join(dirPath, config.LocalFile), nil, 0600); err != nil {
-				return fmt.Errorf("failed to create local config: %w", err)
+			if !personal {
+				if err := os.WriteFile(filepath.Join(dirPath, config.LocalFile), nil, 0600); err != nil {
+					return fmt.Errorf("failed to create local config: %w", err)
+				}
 			}
 
 			_, _ = fileutil.RemoveGitignoreEntry(repoRoot, config.FileName)
 
-			if _, err := fileutil.EnsureGitignore(repoRoot, localEntry); err != nil {
+			if _, err := fileutil.EnsureGitignore(repoRoot, gitignoreEntry); err != nil {
 				return fmt.Errorf("failed to update .gitignore: %w", err)
 			}
 
 			fmt.Fprintf(cmd.OutOrStdout(), "Migrated rimba config in %s\n", repoRoot)
 			fmt.Fprintf(cmd.OutOrStdout(), "  Moved:     %s → %s\n", config.FileName, filepath.Join(config.DirName, config.TeamFile))
-			fmt.Fprintf(cmd.OutOrStdout(), "  Created:   %s\n", filepath.Join(config.DirName, config.LocalFile))
-			fmt.Fprintf(cmd.OutOrStdout(), "  Gitignore: updated (%s → %s)\n", config.FileName, localEntry)
+			if !personal {
+				fmt.Fprintf(cmd.OutOrStdout(), "  Created:   %s\n", filepath.Join(config.DirName, config.LocalFile))
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "  Gitignore: updated (%s → %s)\n", config.FileName, gitignoreEntry)
 
 		default:
 			// Fresh init
@@ -92,8 +111,10 @@ Use --agent-files to also install AI agent instruction files.`,
 				return err
 			}
 
-			if err := os.WriteFile(filepath.Join(dirPath, config.LocalFile), nil, 0600); err != nil {
-				return fmt.Errorf("failed to create local config: %w", err)
+			if !personal {
+				if err := os.WriteFile(filepath.Join(dirPath, config.LocalFile), nil, 0600); err != nil {
+					return fmt.Errorf("failed to create local config: %w", err)
+				}
 			}
 
 			// Create the worktree directory
@@ -102,7 +123,7 @@ Use --agent-files to also install AI agent instruction files.`,
 				return fmt.Errorf("failed to create worktree directory: %w", err)
 			}
 
-			added, err := fileutil.EnsureGitignore(repoRoot, localEntry)
+			added, err := fileutil.EnsureGitignore(repoRoot, gitignoreEntry)
 			if err != nil {
 				return fmt.Errorf("failed to update .gitignore: %w", err)
 			}
@@ -112,9 +133,9 @@ Use --agent-files to also install AI agent instruction files.`,
 			fmt.Fprintf(cmd.OutOrStdout(), "  Worktree dir: %s\n", wtDir)
 			fmt.Fprintf(cmd.OutOrStdout(), "  Source:       %s\n", defaultBranch)
 			if added {
-				fmt.Fprintf(cmd.OutOrStdout(), "  Gitignore:    %s added to .gitignore\n", localEntry)
+				fmt.Fprintf(cmd.OutOrStdout(), "  Gitignore:    %s added to .gitignore\n", gitignoreEntry)
 			} else {
-				fmt.Fprintf(cmd.OutOrStdout(), "  Gitignore:    %s (already in .gitignore)\n", localEntry)
+				fmt.Fprintf(cmd.OutOrStdout(), "  Gitignore:    %s (already in .gitignore)\n", gitignoreEntry)
 			}
 		}
 
