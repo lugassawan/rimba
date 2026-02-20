@@ -154,51 +154,6 @@ func (u *Updater) Download(url string) (string, error) {
 	return dst, nil
 }
 
-// extractBinary decompresses a tar.gz stream and extracts the rimba binary to dstDir.
-func extractBinary(r io.Reader, dstDir string) (string, error) {
-	gz, err := gzip.NewReader(r)
-	if err != nil {
-		return "", fmt.Errorf("decompressing archive: %w", err)
-	}
-	defer func() { _ = gz.Close() }()
-
-	tr := tar.NewReader(gz)
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return "", fmt.Errorf("reading archive: %w", err)
-		}
-
-		if hdr.Name == binaryName {
-			return writeBinary(filepath.Join(dstDir, binaryName), tr)
-		}
-	}
-
-	return "", fmt.Errorf("binary %q not found in archive", binaryName)
-}
-
-// writeBinary writes the tar entry contents to dst with executable permissions.
-func writeBinary(dst string, r io.Reader) (_ string, retErr error) {
-	f, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY, 0755) //nolint:gosec // executable binary requires 0755
-	if err != nil {
-		return "", fmt.Errorf("creating binary file: %w", err)
-	}
-	defer func() {
-		if cerr := f.Close(); retErr == nil {
-			retErr = cerr
-		}
-	}()
-
-	if _, err := io.Copy(f, r); err != nil {
-		return "", fmt.Errorf("extracting binary: %w", err)
-	}
-
-	return dst, nil
-}
-
 // Replace atomically swaps the current binary with a new one via
 // temp-file-then-rename in the destination directory.
 func Replace(currentBinary, newBinary string) error {
@@ -327,4 +282,49 @@ func EnsurePath(dir string) error {
 	}
 
 	return nil
+}
+
+// extractBinary decompresses a tar.gz stream and extracts the rimba binary to dstDir.
+func extractBinary(r io.Reader, dstDir string) (string, error) {
+	gz, err := gzip.NewReader(r)
+	if err != nil {
+		return "", fmt.Errorf("decompressing archive: %w", err)
+	}
+	defer func() { _ = gz.Close() }()
+
+	tr := tar.NewReader(gz)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", fmt.Errorf("reading archive: %w", err)
+		}
+
+		if hdr.Name == binaryName {
+			return writeBinary(filepath.Join(dstDir, binaryName), tr)
+		}
+	}
+
+	return "", fmt.Errorf("binary %q not found in archive", binaryName)
+}
+
+// writeBinary writes the tar entry contents to dst with executable permissions.
+func writeBinary(dst string, r io.Reader) (_ string, retErr error) {
+	f, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY, 0755) //nolint:gosec // executable binary requires 0755
+	if err != nil {
+		return "", fmt.Errorf("creating binary file: %w", err)
+	}
+	defer func() {
+		if cerr := f.Close(); retErr == nil {
+			retErr = cerr
+		}
+	}()
+
+	if _, err := io.Copy(f, r); err != nil {
+		return "", fmt.Errorf("extracting binary: %w", err)
+	}
+
+	return dst, nil
 }

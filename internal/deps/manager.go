@@ -136,24 +136,6 @@ func (m *Manager) installModule(worktreePath string, mh ModuleWithHash, existing
 	return InstallResult{Module: mod}
 }
 
-func runInstall(worktreePath string, mod Module) error {
-	dir := worktreePath
-	if mod.WorkDir != "" {
-		dir = filepath.Join(worktreePath, mod.WorkDir)
-	}
-
-	cmd := exec.Command("sh", "-c", mod.InstallCmd) //nolint:gosec // install commands come from user config
-	cmd.Dir = dir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("install %q in %s: %w\nTo fix: cd %s && %s",
-			mod.Dir, dir, err, dir, mod.InstallCmd)
-	}
-	return nil
-}
-
 // ResolveModules detects and merges modules, filtering clone-only ones.
 func ResolveModules(worktreePath string, autoDetect bool, configModules []config.ModuleConfig, existingWTPaths []string) ([]Module, error) {
 	var modules []Module
@@ -177,4 +159,22 @@ func ResolveModules(worktreePath string, autoDetect bool, configModules []config
 	modules = FilterCloneOnly(modules, existingWTPaths)
 
 	return modules, nil
+}
+
+func runInstall(worktreePath string, mod Module) error {
+	dir := worktreePath
+	if mod.WorkDir != "" {
+		dir = filepath.Join(worktreePath, mod.WorkDir)
+	}
+
+	cmd := exec.Command("sh", "-c", mod.InstallCmd) //nolint:gosec // install commands come from user config
+	cmd.Dir = dir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("install %q in %s: %w\nTo fix: cd %s && %s",
+			mod.Dir, dir, err, dir, mod.InstallCmd)
+	}
+	return nil
 }

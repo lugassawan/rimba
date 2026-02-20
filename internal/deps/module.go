@@ -84,6 +84,57 @@ func DetectModules(worktreePath string) ([]Module, error) {
 	return modules, nil
 }
 
+// FilterCloneOnly removes CloneOnly modules whose dep dir doesn't exist in any worktree.
+func FilterCloneOnly(modules []Module, worktreePaths []string) []Module {
+	var result []Module
+	for _, m := range modules {
+		if !m.CloneOnly {
+			result = append(result, m)
+			continue
+		}
+
+		for _, wtPath := range worktreePaths {
+			if info, err := os.Stat(filepath.Join(wtPath, m.Dir)); err == nil && info.IsDir() {
+				result = append(result, m)
+				break
+			}
+		}
+	}
+	return result
+}
+
+// MergeWithConfig merges auto-detected modules with user-configured modules.
+// Config modules override auto-detected ones for the same Dir.
+func MergeWithConfig(detected []Module, configModules []config.ModuleConfig) []Module {
+	if len(configModules) == 0 {
+		return detected
+	}
+
+	configDirs := make(map[string]config.ModuleConfig)
+	for _, cm := range configModules {
+		configDirs[cm.Dir] = cm
+	}
+
+	var result []Module
+	seenDirs := make(map[string]bool)
+	for _, m := range detected {
+		if cm, ok := configDirs[m.Dir]; ok {
+			result = append(result, moduleFromConfig(cm))
+		} else {
+			result = append(result, m)
+		}
+		seenDirs[m.Dir] = true
+	}
+
+	for _, cm := range configModules {
+		if !seenDirs[cm.Dir] {
+			result = append(result, moduleFromConfig(cm))
+		}
+	}
+
+	return result
+}
+
 func detectRootModules(worktreePath string, modules []Module, seenDirs map[string]bool) []Module {
 	for _, p := range presets {
 		if seenDirs[p.Dir] {
@@ -149,57 +200,6 @@ func moduleFromPreset(p preset, subdir, depDir string) Module {
 		ExtraDirs:  prefixDirs(subdir, p.ExtraDirs),
 		CloneOnly:  p.CloneOnly,
 	}
-}
-
-// FilterCloneOnly removes CloneOnly modules whose dep dir doesn't exist in any worktree.
-func FilterCloneOnly(modules []Module, worktreePaths []string) []Module {
-	var result []Module
-	for _, m := range modules {
-		if !m.CloneOnly {
-			result = append(result, m)
-			continue
-		}
-
-		for _, wtPath := range worktreePaths {
-			if info, err := os.Stat(filepath.Join(wtPath, m.Dir)); err == nil && info.IsDir() {
-				result = append(result, m)
-				break
-			}
-		}
-	}
-	return result
-}
-
-// MergeWithConfig merges auto-detected modules with user-configured modules.
-// Config modules override auto-detected ones for the same Dir.
-func MergeWithConfig(detected []Module, configModules []config.ModuleConfig) []Module {
-	if len(configModules) == 0 {
-		return detected
-	}
-
-	configDirs := make(map[string]config.ModuleConfig)
-	for _, cm := range configModules {
-		configDirs[cm.Dir] = cm
-	}
-
-	var result []Module
-	seenDirs := make(map[string]bool)
-	for _, m := range detected {
-		if cm, ok := configDirs[m.Dir]; ok {
-			result = append(result, moduleFromConfig(cm))
-		} else {
-			result = append(result, m)
-		}
-		seenDirs[m.Dir] = true
-	}
-
-	for _, cm := range configModules {
-		if !seenDirs[cm.Dir] {
-			result = append(result, moduleFromConfig(cm))
-		}
-	}
-
-	return result
 }
 
 func moduleFromConfig(cm config.ModuleConfig) Module {

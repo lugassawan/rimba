@@ -108,24 +108,6 @@ func Save(path string, cfg *Config) error {
 	return os.WriteFile(path, data, 0600)
 }
 
-// loadRaw reads a TOML config file without validation.
-// Returns (nil, nil) if the file does not exist.
-func loadRaw(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil //nolint:nilnil // nil,nil means "file absent, no error" — callers check for nil Config
-		}
-		return nil, err
-	}
-
-	var cfg Config
-	if err := toml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("invalid config %s: %w", filepath.Base(path), err)
-	}
-	return &cfg, nil
-}
-
 // Merge combines a team config with a local override config.
 // Scalars: local wins if non-zero. Slices/maps: local replaces team if non-nil.
 func Merge(team, local *Config) *Config {
@@ -198,4 +180,22 @@ func WithConfig(ctx context.Context, cfg *Config) context.Context {
 func FromContext(ctx context.Context) *Config {
 	cfg, _ := ctx.Value(ctxKey{}).(*Config)
 	return cfg
+}
+
+// loadRaw reads a TOML config file without validation.
+// Returns (nil, nil) if the file does not exist.
+func loadRaw(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil //nolint:nilnil // nil,nil means "file absent, no error" — callers check for nil Config
+		}
+		return nil, err
+	}
+
+	var cfg Config
+	if err := toml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("invalid config %s: %w", filepath.Base(path), err)
+	}
+	return &cfg, nil
 }
