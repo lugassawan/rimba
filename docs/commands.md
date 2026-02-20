@@ -19,9 +19,9 @@ These flags are available on every command via the root `rimba` command:
 
 ### rimba init
 
-Initialize rimba in the current repository. Detects the repo root, creates `.rimba.toml`, and sets up the worktree directory. Use `--agent-files` to also install AI agent instruction files (`AGENTS.md`, `.github/copilot-instructions.md`, `.cursor/rules/rimba.mdc`, `.claude/skills/rimba/SKILL.md`).
+Initialize rimba in the current repository. Detects the repo root, creates the `.rimba/` config directory with `settings.toml` (team-shared) and `settings.local.toml` (personal overrides), and sets up the worktree directory. Use `--agent-files` to also install AI agent instruction files (`AGENTS.md`, `.github/copilot-instructions.md`, `.cursor/rules/rimba.mdc`, `.claude/skills/rimba/SKILL.md`).
 
-If `.rimba.toml` already exists, config creation is skipped but agent files are still installed or updated when `--agent-files` is passed.
+If `.rimba/` already exists, config creation is skipped but agent files are still installed or updated when `--agent-files` is passed. If a legacy `.rimba.toml` exists, it is migrated into the new directory layout.
 
 ```sh
 rimba init                  # Initialize config and worktree directory
@@ -234,7 +234,7 @@ rimba open my-task npm start    # Run an inline command
 | `--agent` | Run the `agent` shortcut from `[open]` config |
 | `-w`, `--with` | Run any named shortcut from `[open]` config |
 
-> **Note:** `--ide`, `--agent`, and `--with` are mutually exclusive with each other and with inline command arguments. Shortcuts are configured in the `[open]` section of `.rimba.toml` (see [Configuration](configuration.md)).
+> **Note:** `--ide`, `--agent`, and `--with` are mutually exclusive with each other and with inline command arguments. Shortcuts are configured in the `[open]` section of `.rimba/settings.toml` (see [Configuration](configuration.md)).
 
 ---
 

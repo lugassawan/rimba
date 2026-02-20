@@ -120,7 +120,7 @@ rimba remove my-feature
 
 ## Configuration
 
-`rimba init` creates a `.rimba.toml` file in the repo root:
+`rimba init` creates a `.rimba/` directory with team-shared and personal config files:
 
 ```toml
 worktree_dir = '../myrepo-worktrees'

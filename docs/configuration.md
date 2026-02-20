@@ -6,7 +6,14 @@
 
 ## Overview
 
-`rimba init` creates a `.rimba.toml` file in the repo root. All fields are optional — sensible defaults are applied automatically.
+`rimba init` creates a `.rimba/` directory in the repo root with two config files:
+
+- **`settings.toml`** — team-shared configuration (commit this to git)
+- **`settings.local.toml`** — personal overrides (gitignored, per-developer)
+
+Local settings override team settings. Fields omitted from the local file inherit from the team file. All fields are optional — sensible defaults are applied automatically.
+
+### Team config (`.rimba/settings.toml`)
 
 ```toml
 worktree_dir = '../myrepo-worktrees'
@@ -37,6 +44,30 @@ dir = 'api/vendor'
 lockfile = 'api/go.sum'
 install = 'go mod vendor'
 work_dir = 'api'
+```
+
+### Local overrides (`.rimba/settings.local.toml`)
+
+```toml
+# Override the IDE shortcut for your editor
+[open]
+ide = 'vim'
+agent = 'cursor'
+
+# Override copy_files for your local setup
+copy_files = ['.env', '.env.local']
+```
+
+## Migration from `.rimba.toml`
+
+If you have an existing `.rimba.toml` file, run `rimba init` to migrate:
+
+```sh
+rimba init
+# Migrated rimba config in /path/to/repo
+#   Moved:     .rimba.toml → .rimba/settings.toml
+#   Created:   .rimba/settings.local.toml
+#   Gitignore: updated (.rimba.toml → .rimba/settings.local.toml)
 ```
 
 ## Field Reference
