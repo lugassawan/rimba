@@ -73,25 +73,6 @@ func HooksDir(r Runner) (string, error) {
 	return filepath.Join(commonDir, "hooks"), nil
 }
 
-// resolveCommonDir returns the absolute path to the git common directory.
-// --git-common-dir may return a relative path; this resolves it against the repo root.
-func resolveCommonDir(r Runner) (string, error) {
-	commonDir, err := r.Run(cmdRevParse, "--git-common-dir")
-	if err != nil {
-		return "", fmt.Errorf("not a git repository: %w", err)
-	}
-
-	if !filepath.IsAbs(commonDir) {
-		root, err := RepoRoot(r)
-		if err != nil {
-			return "", err
-		}
-		commonDir = filepath.Join(root, commonDir)
-	}
-
-	return commonDir, nil
-}
-
 // DefaultBranch detects the default branch (main or master).
 func DefaultBranch(r Runner) (string, error) {
 	// Try symbolic-ref for origin/HEAD first
@@ -113,4 +94,23 @@ func DefaultBranch(r Runner) (string, error) {
 	}
 
 	return "", errors.New("could not detect default branch (no main or master found)")
+}
+
+// resolveCommonDir returns the absolute path to the git common directory.
+// --git-common-dir may return a relative path; this resolves it against the repo root.
+func resolveCommonDir(r Runner) (string, error) {
+	commonDir, err := r.Run(cmdRevParse, "--git-common-dir")
+	if err != nil {
+		return "", fmt.Errorf("not a git repository: %w", err)
+	}
+
+	if !filepath.IsAbs(commonDir) {
+		root, err := RepoRoot(r)
+		if err != nil {
+			return "", err
+		}
+		commonDir = filepath.Join(root, commonDir)
+	}
+
+	return commonDir, nil
 }

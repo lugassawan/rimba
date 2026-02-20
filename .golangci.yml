@@ -5,12 +5,14 @@ linters:
   enable:
     - bodyclose
     - copyloopvar
+    - decorder
     - dupl
     - dupword
     - errname
     - errorlint
     - fatcontext
     - forcetypeassert
+    - funcorder
     - goconst
     - gocritic
     - gocyclo
@@ -36,7 +38,18 @@ linters:
     custom:
       rimbalint:
         type: "module"
-        description: "Rimba custom lint rules (nolocalstruct, nolateconst)"
+        description: "Rimba custom lint rules (nolocalstruct, nolateexport)"
+    decorder:
+      dec-order:
+        - type
+        - const
+        - var
+        - func
+      disable-dec-num-check: true
+    funcorder:
+      constructor: true
+      struct-method: true
+      alphabetical: false
     gocyclo:
       min-complexity: 15
     goconst:
@@ -66,5 +79,8 @@ linters:
     rules:
       - path: (_test\.go|testutil/)
         linters: [gosec]
+      - path: _test\.go
+        linters: [rimbalint]
+        text: "nolateexport:"
       - path: internal/agentfile/content\.go
         linters: [dupl]

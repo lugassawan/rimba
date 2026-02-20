@@ -42,6 +42,21 @@ func CopyEntries(src, dst string, entries []string) ([]string, error) {
 	return copied, nil
 }
 
+// SkippedEntries returns the entries from requested that are not in copied.
+func SkippedEntries(requested, copied []string) []string {
+	set := make(map[string]struct{}, len(copied))
+	for _, c := range copied {
+		set[c] = struct{}{}
+	}
+	var skipped []string
+	for _, r := range requested {
+		if _, ok := set[r]; !ok {
+			skipped = append(skipped, r)
+		}
+	}
+	return skipped
+}
+
 func copyDir(src, dst string) error {
 	srcInfo, err := os.Stat(src)
 	if err != nil {
@@ -71,21 +86,6 @@ func copyDir(src, dst string) error {
 		}
 	}
 	return nil
-}
-
-// SkippedEntries returns the entries from requested that are not in copied.
-func SkippedEntries(requested, copied []string) []string {
-	set := make(map[string]struct{}, len(copied))
-	for _, c := range copied {
-		set[c] = struct{}{}
-	}
-	var skipped []string
-	for _, r := range requested {
-		if _, ok := set[r]; !ok {
-			skipped = append(skipped, r)
-		}
-	}
-	return skipped
 }
 
 func copyFile(src, dst string) (retErr error) {

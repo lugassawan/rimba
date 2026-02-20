@@ -31,10 +31,6 @@ func FormatAgeSince(t, now time.Time) string {
 	}
 }
 
-func formatUnit(n int, unit string) string {
-	return strconv.Itoa(n) + unit + " ago"
-}
-
 // AgeColor returns a color based on the age of a commit time.
 // Green for <3 days, Yellow for 3-14 days, Red for >14 days.
 func AgeColor(commitTime time.Time) termcolor.Color {
@@ -47,4 +43,8 @@ func AgeColor(commitTime time.Time) termcolor.Color {
 	default:
 		return termcolor.Red
 	}
+}
+
+func formatUnit(n int, unit string) string {
+	return strconv.Itoa(n) + unit + " ago"
 }
