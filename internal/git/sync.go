@@ -29,3 +29,21 @@ func IsMergeBaseAncestor(r Runner, ancestor, descendant string) bool {
 	_, err := r.Run("merge-base", "--is-ancestor", ancestor, descendant)
 	return err == nil
 }
+
+// HasUpstream checks whether the current branch in dir has a remote tracking branch.
+func HasUpstream(r Runner, dir string) bool {
+	_, err := r.RunInDir(dir, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+	return err == nil
+}
+
+// Push runs `git push` inside the given directory.
+func Push(r Runner, dir string) error {
+	_, err := r.RunInDir(dir, "push")
+	return err
+}
+
+// PushForceWithLease runs `git push --force-with-lease` inside the given directory.
+func PushForceWithLease(r Runner, dir string) error {
+	_, err := r.RunInDir(dir, "push", "--force-with-lease")
+	return err
+}
