@@ -14,6 +14,12 @@ const (
 	gitSymbolicRef = "symbolic-ref"
 	refsOriginMain = "refs/remotes/origin/main"
 	gitWorktree    = "worktree"
+	gitRevParse    = "rev-parse"
+	gitRevList     = "rev-list"
+	gitStatus      = "status"
+	gitList        = "list"
+	revListEven    = "0\t0"
+	dirtyOutput    = " M dirty.go\n"
 )
 
 // mockRunner implements git.Runner for unit tests.
