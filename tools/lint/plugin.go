@@ -5,7 +5,7 @@ import (
 	"github.com/golangci/plugin-module-register/register"
 	"golang.org/x/tools/go/analysis"
 
-	"github.com/lugassawan/rimba/tools/lint/nolateconst"
+	"github.com/lugassawan/rimba/tools/lint/nolateexport"
 	"github.com/lugassawan/rimba/tools/lint/nolocalstruct"
 )
 
@@ -22,7 +22,7 @@ type plugin struct{}
 func (p *plugin) BuildAnalyzers() ([]*analysis.Analyzer, error) {
 	return []*analysis.Analyzer{
 		nolocalstruct.Analyzer,
-		nolateconst.Analyzer,
+		nolateexport.Analyzer,
 	}, nil
 }
 
