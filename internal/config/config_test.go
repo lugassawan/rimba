@@ -226,11 +226,11 @@ func TestLoadWithoutOpenSection(t *testing.T) {
 
 func TestMergeScalarOverrides(t *testing.T) {
 	team := &config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch}
-	local := &config.Config{DefaultSource: "develop"}
+	local := &config.Config{WorktreeDir: "../local-wt", DefaultSource: "develop"}
 
 	merged := config.Merge(team, local)
-	if merged.WorktreeDir != "../wt" {
-		t.Errorf("WorktreeDir = %q, want %q", merged.WorktreeDir, "../wt")
+	if merged.WorktreeDir != "../local-wt" {
+		t.Errorf("WorktreeDir = %q, want %q", merged.WorktreeDir, "../local-wt")
 	}
 	if merged.DefaultSource != "develop" {
 		t.Errorf("DefaultSource = %q, want %q", merged.DefaultSource, "develop")
@@ -245,16 +245,16 @@ func TestMergeSliceReplaces(t *testing.T) {
 		PostCreate:    []string{"make build"},
 	}
 	local := &config.Config{
-		CopyFiles: []string{".env.local"},
+		CopyFiles:  []string{".env.local"},
+		PostCreate: []string{"npm install", "npm run build"},
 	}
 
 	merged := config.Merge(team, local)
 	if !reflect.DeepEqual(merged.CopyFiles, []string{".env.local"}) {
 		t.Errorf("CopyFiles = %v, want [.env.local]", merged.CopyFiles)
 	}
-	// PostCreate should be preserved from team (local is nil)
-	if !reflect.DeepEqual(merged.PostCreate, []string{"make build"}) {
-		t.Errorf("PostCreate = %v, want [make build]", merged.PostCreate)
+	if !reflect.DeepEqual(merged.PostCreate, []string{"npm install", "npm run build"}) {
+		t.Errorf("PostCreate = %v, want [npm install, npm run build]", merged.PostCreate)
 	}
 }
 
@@ -384,6 +384,32 @@ func TestLoadDirTeamAndLocal(t *testing.T) {
 	}
 	if cfg.WorktreeDir != team.WorktreeDir {
 		t.Errorf("WorktreeDir = %q, want %q", cfg.WorktreeDir, team.WorktreeDir)
+	}
+}
+
+func TestLoadDirTeamReadError(t *testing.T) {
+	dir := t.TempDir()
+	rimbaDir := filepath.Join(dir, config.DirName)
+	if err := os.MkdirAll(rimbaDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create team file but make it unreadable
+	teamPath := filepath.Join(rimbaDir, config.TeamFile)
+	if err := os.WriteFile(teamPath, []byte("worktree_dir = \"../wt\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(teamPath, 0000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(teamPath, 0644) })
+
+	_, err := config.LoadDir(rimbaDir)
+	if err == nil {
+		t.Fatal("expected error when team config is unreadable")
+	}
+	if !strings.Contains(err.Error(), "failed to read team config") {
+		t.Errorf("error = %q, want substring 'failed to read team config'", err.Error())
 	}
 }
 
