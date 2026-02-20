@@ -78,7 +78,9 @@ var restoreCmd = &cobra.Command{
 		var depsResults []deps.InstallResult
 		if !skipDeps {
 			s.Update("Installing dependencies...")
-			depsResults = installDeps(r, cfg, wtPath, wtEntries)
+			depsResults = installDeps(r, cfg, wtPath, wtEntries, func(cur, total int, name string) {
+				s.Update(fmt.Sprintf("Installing dependencies... (%s) [%d/%d]", name, cur, total))
+			})
 		}
 
 		// Post-create hooks
@@ -86,7 +88,9 @@ var restoreCmd = &cobra.Command{
 		var hookResults []deps.HookResult
 		if !skipHooks && len(cfg.PostCreate) > 0 {
 			s.Update("Running hooks...")
-			hookResults = runHooks(wtPath, cfg.PostCreate)
+			hookResults = runHooks(wtPath, cfg.PostCreate, func(cur, total int, name string) {
+				s.Update(fmt.Sprintf("Running hooks... (%s) [%d/%d]", name, cur, total))
+			})
 		}
 
 		s.Stop()

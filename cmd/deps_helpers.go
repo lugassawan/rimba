@@ -12,7 +12,7 @@ import (
 
 // installDeps detects modules and installs dependencies, returning the results.
 // existingEntries should contain the current worktree list to avoid a redundant git call.
-func installDeps(r git.Runner, cfg *config.Config, wtPath string, existingEntries []git.WorktreeEntry) []deps.InstallResult {
+func installDeps(r git.Runner, cfg *config.Config, wtPath string, existingEntries []git.WorktreeEntry, onProgress deps.ProgressFunc) []deps.InstallResult {
 	var configModules []config.ModuleConfig
 	if cfg.Deps != nil {
 		configModules = cfg.Deps.Modules
@@ -26,12 +26,12 @@ func installDeps(r git.Runner, cfg *config.Config, wtPath string, existingEntrie
 	}
 
 	mgr := &deps.Manager{Runner: r}
-	return mgr.Install(wtPath, modules)
+	return mgr.Install(wtPath, modules, onProgress)
 }
 
 // installDepsPreferSource is like installDeps but prefers cloning from sourceWT.
 // existingEntries should contain the current worktree list to avoid a redundant git call.
-func installDepsPreferSource(r git.Runner, cfg *config.Config, wtPath, sourceWT string, existingEntries []git.WorktreeEntry) []deps.InstallResult {
+func installDepsPreferSource(r git.Runner, cfg *config.Config, wtPath, sourceWT string, existingEntries []git.WorktreeEntry, onProgress deps.ProgressFunc) []deps.InstallResult {
 	var configModules []config.ModuleConfig
 	if cfg.Deps != nil {
 		configModules = cfg.Deps.Modules
@@ -45,7 +45,7 @@ func installDepsPreferSource(r git.Runner, cfg *config.Config, wtPath, sourceWT 
 	}
 
 	mgr := &deps.Manager{Runner: r}
-	return mgr.InstallPreferSource(wtPath, sourceWT, modules)
+	return mgr.InstallPreferSource(wtPath, sourceWT, modules, onProgress)
 }
 
 // worktreePathsExcluding returns paths from entries, excluding the given path.
@@ -78,8 +78,8 @@ func printInstallResults(out io.Writer, results []deps.InstallResult) {
 }
 
 // runHooks executes post-create hooks and returns the results.
-func runHooks(wtPath string, hooks []string) []deps.HookResult {
-	return deps.RunPostCreateHooks(wtPath, hooks)
+func runHooks(wtPath string, hooks []string, onProgress deps.ProgressFunc) []deps.HookResult {
+	return deps.RunPostCreateHooks(wtPath, hooks, onProgress)
 }
 
 // printHookResultsList prints pre-computed hook results.
