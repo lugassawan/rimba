@@ -48,8 +48,8 @@ func TestInitConfigDefaults(t *testing.T) {
 		t.Fatalf("failed to load config: %v", err)
 	}
 
-	if cfg.DefaultSource != "main" {
-		t.Errorf("expected default_source %q, got %q", "main", cfg.DefaultSource)
+	if cfg.DefaultSource != branchMain {
+		t.Errorf("expected default_source %q, got %q", branchMain, cfg.DefaultSource)
 	}
 	if len(cfg.CopyFiles) == 0 {
 		t.Errorf("expected copy_files to be non-empty")
@@ -129,7 +129,7 @@ func TestInitMigratesLegacyConfig(t *testing.T) {
 	repo := setupRepo(t)
 
 	// Create legacy .rimba.toml
-	legacyCfg := config.DefaultConfig(filepath.Base(repo), "main")
+	legacyCfg := config.DefaultConfig(filepath.Base(repo), branchMain)
 	if err := config.Save(filepath.Join(repo, configFile), legacyCfg); err != nil {
 		t.Fatalf("save legacy config: %v", err)
 	}
@@ -154,8 +154,8 @@ func TestInitMigratesLegacyConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Resolve after migration: %v", err)
 	}
-	if cfg.DefaultSource != "main" {
-		t.Errorf("DefaultSource = %q, want %q", cfg.DefaultSource, "main")
+	if cfg.DefaultSource != branchMain {
+		t.Errorf("DefaultSource = %q, want %q", cfg.DefaultSource, branchMain)
 	}
 
 	// Verify .gitignore updated
@@ -207,6 +207,76 @@ func TestInitSkipsAgentFilesWithoutFlag(t *testing.T) {
 	assertFileNotExists(t, filepath.Join(repo, "AGENTS.md"))
 }
 
+func TestInitPersonalFreshInit(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupRepo(t)
+	r := rimbaSuccess(t, repo, "init", "--personal")
+
+	assertContains(t, r.Stdout, "Initialized rimba")
+	assertFileExists(t, filepath.Join(repo, configDir, teamFile))
+	assertFileNotExists(t, filepath.Join(repo, configDir, localFile))
+
+	// .gitignore has .rimba/ not .rimba/settings.local.toml
+	dirEntry := configDir + "/"
+	assertGitignoreContains(t, repo, dirEntry)
+	localEntry := filepath.Join(configDir, localFile)
+	assertGitignoreNotContains(t, repo, localEntry)
+}
+
+func TestInitPersonalMigration(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupRepo(t)
+
+	// Create legacy .rimba.toml
+	legacyCfg := config.DefaultConfig(filepath.Base(repo), branchMain)
+	if err := config.Save(filepath.Join(repo, configFile), legacyCfg); err != nil {
+		t.Fatalf("save legacy config: %v", err)
+	}
+
+	// Create .gitignore with legacy entry
+	if err := os.WriteFile(filepath.Join(repo, gitignoreFile), []byte(configFile+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	r := rimbaSuccess(t, repo, "init", "--personal")
+	assertContains(t, r.Stdout, "Migrated rimba config")
+
+	// Verify legacy file is gone
+	assertFileNotExists(t, filepath.Join(repo, configFile))
+
+	// Verify new config exists and is loadable
+	assertFileExists(t, filepath.Join(repo, configDir, teamFile))
+	assertFileNotExists(t, filepath.Join(repo, configDir, localFile))
+
+	cfg, err := config.Resolve(repo)
+	if err != nil {
+		t.Fatalf("Resolve after migration: %v", err)
+	}
+	if cfg.DefaultSource != branchMain {
+		t.Errorf("DefaultSource = %q, want %q", cfg.DefaultSource, branchMain)
+	}
+
+	// Verify .gitignore updated with .rimba/ not legacy entry
+	data, err := os.ReadFile(filepath.Join(repo, gitignoreFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(data)
+	if strings.Contains(content, configFile) {
+		t.Error(".gitignore should not contain legacy entry after migration")
+	}
+	dirEntry := configDir + "/"
+	assertGitignoreContains(t, repo, dirEntry)
+	localEntry := filepath.Join(configDir, localFile)
+	assertGitignoreNotContains(t, repo, localEntry)
+}
+
 // assertGitignoreContains verifies that .gitignore in the repo contains the given entry.
 func assertGitignoreContains(t *testing.T, repo, entry string) {
 	t.Helper()
@@ -220,4 +290,19 @@ func assertGitignoreContains(t *testing.T, repo, entry string) {
 		}
 	}
 	t.Errorf("expected .gitignore to contain %q, got:\n%s", entry, string(data))
+}
+
+// assertGitignoreNotContains verifies that .gitignore in the repo does NOT contain the given entry.
+func assertGitignoreNotContains(t *testing.T, repo, entry string) {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(repo, gitignoreFile))
+	if err != nil {
+		t.Fatalf("failed to read .gitignore: %v", err)
+	}
+	for line := range strings.SplitSeq(string(data), "\n") {
+		if strings.TrimSpace(line) == entry {
+			t.Errorf("expected .gitignore NOT to contain %q, got:\n%s", entry, string(data))
+			return
+		}
+	}
 }

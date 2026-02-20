@@ -15,6 +15,7 @@ import (
 
 const (
 	skipE2E       = "skipping e2e test"
+	branchMain    = "main"
 	defaultPrefix = "feature/"
 	bugfixPrefix  = "bugfix/"
 	configFile    = ".rimba.toml" // legacy — kept for migration tests
