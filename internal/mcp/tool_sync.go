@@ -2,10 +2,10 @@ package mcp
 
 import (
 	"context"
-	"sync"
 
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
+	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -54,7 +54,10 @@ func handleSync(hctx *HandlerContext) server.ToolHandlerFunc {
 		r := hctx.Runner
 
 		// Fetch (non-fatal)
-		_ = git.Fetch(r, "origin")
+		var fetchWarning string
+		if err := git.Fetch(r, "origin"); err != nil {
+			fetchWarning = "fetch failed (no remote?): continuing with local state"
+		}
 
 		worktrees, err := operations.ListWorktreeInfos(r)
 		if err != nil {
@@ -64,13 +67,13 @@ func handleSync(hctx *HandlerContext) server.ToolHandlerFunc {
 		prefixes := resolver.AllPrefixes()
 
 		if !all {
-			return syncSingle(r, task, worktrees, prefixes, cfg.DefaultSource, useMerge, push)
+			return syncSingle(r, task, worktrees, prefixes, cfg.DefaultSource, useMerge, push, fetchWarning)
 		}
-		return syncMultiple(r, worktrees, prefixes, cfg.DefaultSource, useMerge, includeInherited, push)
+		return syncMultiple(r, worktrees, prefixes, cfg.DefaultSource, useMerge, includeInherited, push, fetchWarning)
 	}
 }
 
-func syncSingle(r git.Runner, task string, worktrees []resolver.WorktreeInfo, prefixes []string, mainBranch string, useMerge, push bool) (*mcp.CallToolResult, error) {
+func syncSingle(r git.Runner, task string, worktrees []resolver.WorktreeInfo, prefixes []string, mainBranch string, useMerge, push bool, fetchWarning string) (*mcp.CallToolResult, error) {
 	wt, found := resolver.FindBranchForTask(task, worktrees, prefixes)
 	if !found {
 		return mcp.NewToolResultError("worktree not found for task \"" + task + "\""), nil
@@ -80,31 +83,18 @@ func syncSingle(r git.Runner, task string, worktrees []resolver.WorktreeInfo, pr
 
 	results := []syncWorktreeResult{convertSyncResult(sr)}
 
-	return marshalResult(syncResult{Results: results})
+	return marshalResult(syncResult{FetchWarning: fetchWarning, Results: results})
 }
 
-func syncMultiple(r git.Runner, worktrees []resolver.WorktreeInfo, prefixes []string, mainBranch string, useMerge, includeInherited, push bool) (*mcp.CallToolResult, error) {
+func syncMultiple(r git.Runner, worktrees []resolver.WorktreeInfo, prefixes []string, mainBranch string, useMerge, includeInherited, push bool, fetchWarning string) (*mcp.CallToolResult, error) {
 	allTasks := operations.CollectTasks(worktrees, prefixes)
 	eligible := operations.FilterEligible(worktrees, prefixes, mainBranch, allTasks, includeInherited)
 
-	results := make([]syncWorktreeResult, len(eligible))
-	var wg sync.WaitGroup
-	sem := make(chan struct{}, 4)
+	results := parallel.Collect(len(eligible), 4, func(i int) syncWorktreeResult {
+		return convertSyncResult(operations.SyncWorktree(r, mainBranch, eligible[i], useMerge, push))
+	})
 
-	for i, wt := range eligible {
-		wg.Add(1)
-		go func(idx int, wt resolver.WorktreeInfo) {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
-			sr := operations.SyncWorktree(r, mainBranch, wt, useMerge, push)
-			results[idx] = convertSyncResult(sr)
-		}(i, wt)
-	}
-	wg.Wait()
-
-	return marshalResult(syncResult{Results: results})
+	return marshalResult(syncResult{FetchWarning: fetchWarning, Results: results})
 }
 
 func convertSyncResult(sr operations.SyncWorktreeResult) syncWorktreeResult {
