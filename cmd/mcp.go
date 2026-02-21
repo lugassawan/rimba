@@ -19,11 +19,8 @@ var mcpCmd = &cobra.Command{
 	Short: "Start MCP server for AI tool integration",
 	Long: `Starts a Model Context Protocol (MCP) server over stdio.
 
-AI tools like Claude Code and Cursor can connect to this server to discover
-and invoke rimba commands with structured parameters and typed responses.
-
-To configure in Claude Code, add to .claude/settings.json:
-  {"mcpServers": {"rimba": {"command": "rimba", "args": ["mcp"]}}}`,
+Any MCP-compatible client can connect to this server to discover and invoke
+rimba commands with structured parameters and typed responses.`,
 	Annotations: map[string]string{"skipConfig": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		r := newRunner()

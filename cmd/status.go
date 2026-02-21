@@ -5,43 +5,17 @@ import (
 	"io"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/output"
+	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/lugassawan/rimba/internal/termcolor"
 	"github.com/spf13/cobra"
 )
-
-type statusJSONData struct {
-	Summary   statusJSONSummary `json:"summary"`
-	Worktrees []statusJSONItem  `json:"worktrees"`
-	StaleDays int               `json:"stale_days"`
-}
-
-type statusJSONSummary struct {
-	Total  int `json:"total"`
-	Dirty  int `json:"dirty"`
-	Stale  int `json:"stale"`
-	Behind int `json:"behind"`
-}
-
-type statusJSONItem struct {
-	Task   string                  `json:"task"`
-	Type   string                  `json:"type"`
-	Branch string                  `json:"branch"`
-	Status resolver.WorktreeStatus `json:"status"`
-	Age    *statusJSONAge          `json:"age"`
-}
-
-type statusJSONAge struct {
-	LastCommit string `json:"last_commit"`
-	Stale      bool   `json:"stale"`
-}
 
 type statusEntry struct {
 	entry      git.WorktreeEntry
@@ -79,9 +53,9 @@ var statusCmd = &cobra.Command{
 
 		if len(candidates) == 0 {
 			if isJSON(cmd) {
-				return output.WriteJSON(cmd.OutOrStdout(), version, "status", statusJSONData{
-					Summary:   statusJSONSummary{},
-					Worktrees: make([]statusJSONItem, 0),
+				return output.WriteJSON(cmd.OutOrStdout(), version, "status", output.StatusData{
+					Summary:   output.StatusSummary{},
+					Worktrees: make([]output.StatusItem, 0),
 					StaleDays: staleDays,
 				})
 			}
@@ -110,30 +84,18 @@ var statusCmd = &cobra.Command{
 
 // collectStatuses gathers dirty/ahead/behind state and last commit time for each candidate.
 func collectStatuses(r git.Runner, candidates []git.WorktreeEntry, s *spinner.Spinner) []statusEntry {
-	results := make([]statusEntry, len(candidates))
-	var wg sync.WaitGroup
-	sem := make(chan struct{}, 8)
-
-	for i, c := range candidates {
-		s.Update(fmt.Sprintf("Collecting status... (%d/%d)", i+1, len(candidates)))
-		wg.Add(1)
-		go func(idx int, e git.WorktreeEntry) {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
-			st := operations.CollectWorktreeStatus(r, e.Path)
-			var ct time.Time
-			var hasTime bool
-			if t, err := git.LastCommitTime(r, e.Branch); err == nil {
-				ct = t
-				hasTime = true
-			}
-			results[idx] = statusEntry{entry: e, status: st, commitTime: ct, hasTime: hasTime}
-		}(i, c)
-	}
-	wg.Wait()
-	return results
+	s.Update("Collecting status...")
+	return parallel.Collect(len(candidates), 8, func(i int) statusEntry {
+		e := candidates[i]
+		st := operations.CollectWorktreeStatus(r, e.Path)
+		var ct time.Time
+		var hasTime bool
+		if t, err := git.LastCommitTime(r, e.Branch); err == nil {
+			ct = t
+			hasTime = true
+		}
+		return statusEntry{entry: e, status: st, commitTime: ct, hasTime: hasTime}
+	})
 }
 
 // renderStatusDashboard prints the summary header and per-worktree table.
@@ -217,10 +179,10 @@ func writeStatusJSON(cmd *cobra.Command, results []statusEntry, staleDays int) e
 	staleThreshold := time.Now().Add(-time.Duration(staleDays) * 24 * time.Hour)
 	prefixes := resolver.AllPrefixes()
 
-	var summary statusJSONSummary
+	var summary output.StatusSummary
 	summary.Total = len(results)
 
-	items := make([]statusJSONItem, 0, len(results))
+	items := make([]output.StatusItem, 0, len(results))
 	for _, r := range results {
 		if r.status.Dirty {
 			summary.Dirty++
@@ -232,7 +194,7 @@ func writeStatusJSON(cmd *cobra.Command, results []statusEntry, staleDays int) e
 		task, matchedPrefix := resolver.TaskFromBranch(r.entry.Branch, prefixes)
 		typeName := strings.TrimSuffix(matchedPrefix, "/")
 
-		item := statusJSONItem{
+		item := output.StatusItem{
 			Task:   task,
 			Type:   typeName,
 			Branch: r.entry.Branch,
@@ -244,7 +206,7 @@ func writeStatusJSON(cmd *cobra.Command, results []statusEntry, staleDays int) e
 			if stale {
 				summary.Stale++
 			}
-			item.Age = &statusJSONAge{
+			item.Age = &output.StatusAge{
 				LastCommit: r.commitTime.UTC().Format(time.RFC3339),
 				Stale:      stale,
 			}
@@ -253,7 +215,7 @@ func writeStatusJSON(cmd *cobra.Command, results []statusEntry, staleDays int) e
 		items = append(items, item)
 	}
 
-	data := statusJSONData{
+	data := output.StatusData{
 		Summary:   summary,
 		Worktrees: items,
 		StaleDays: staleDays,

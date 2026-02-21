@@ -153,7 +153,7 @@ func LocalBranches(r Runner) ([]string, error) {
 	return branches, nil
 }
 
-func parseCount(s string, v *int) int {
+func parseCount(s string, v *int) {
 	n := 0
 	for _, c := range s {
 		if c < '0' || c > '9' {
@@ -162,5 +162,4 @@ func parseCount(s string, v *int) int {
 		n = n*10 + int(c-'0')
 	}
 	*v = n
-	return n
 }

@@ -3,11 +3,11 @@ package mcp
 import (
 	"context"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
+	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -56,28 +56,17 @@ func handleStatus(hctx *HandlerContext) server.ToolHandlerFunc {
 			})
 		}
 
-		results := make([]statusCollectedEntry, len(candidates))
-		var wg sync.WaitGroup
-		sem := make(chan struct{}, 8)
-
-		for i, c := range candidates {
-			wg.Add(1)
-			go func(idx int, e git.WorktreeEntry) {
-				defer wg.Done()
-				sem <- struct{}{}
-				defer func() { <-sem }()
-
-				st := operations.CollectWorktreeStatus(r, e.Path)
-				var ct time.Time
-				var hasTime bool
-				if t, err := git.LastCommitTime(r, e.Branch); err == nil {
-					ct = t
-					hasTime = true
-				}
-				results[idx] = statusCollectedEntry{entry: e, status: st, commitTime: ct, hasTime: hasTime}
-			}(i, c)
-		}
-		wg.Wait()
+		results := parallel.Collect(len(candidates), 8, func(i int) statusCollectedEntry {
+			e := candidates[i]
+			st := operations.CollectWorktreeStatus(r, e.Path)
+			var ct time.Time
+			var hasTime bool
+			if t, err := git.LastCommitTime(r, e.Branch); err == nil {
+				ct = t
+				hasTime = true
+			}
+			return statusCollectedEntry{entry: e, status: st, commitTime: ct, hasTime: hasTime}
+		})
 
 		staleThreshold := time.Now().Add(-time.Duration(staleDays) * 24 * time.Hour)
 		prefixes := resolver.AllPrefixes()

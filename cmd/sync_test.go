@@ -3,7 +3,6 @@ package cmd
 import (
 	"errors"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/config"
@@ -46,7 +45,7 @@ func TestSyncOneSuccess(t *testing.T) {
 			run:      func(_ ...string) (string, error) { return "", nil },
 			runInDir: noopRunInDir,
 		}
-		sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
+		sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
 		err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false, false)
 		if err != nil {
@@ -63,7 +62,7 @@ func TestSyncOneSuccess(t *testing.T) {
 			run:      func(_ ...string) (string, error) { return "", nil },
 			runInDir: noopRunInDir,
 		}
-		sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
+		sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
 		err := syncOne(sc, "login", worktrees, testSyncPrefixes(), true, false)
 		if err != nil {
@@ -82,7 +81,7 @@ func TestSyncOneNotFound(t *testing.T) {
 		run:      func(_ ...string) (string, error) { return "", nil },
 		runInDir: noopRunInDir,
 	}
-	sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
+	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
 	err := syncOne(sc, "nonexistent", worktrees, testSyncPrefixes(), false, false)
 	if err == nil {
@@ -102,7 +101,7 @@ func TestSyncOneDirty(t *testing.T) {
 			return "", nil
 		},
 	}
-	sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
+	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
 	err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false, false)
 	if err == nil {
@@ -124,7 +123,7 @@ func TestSyncOneErrorPaths(t *testing.T) {
 				return "", errGitFailed
 			},
 		}
-		sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
+		sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
 		err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false, false)
 		if err == nil {
@@ -143,7 +142,7 @@ func TestSyncOneErrorPaths(t *testing.T) {
 				return "", nil
 			},
 		}
-		sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
+		sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
 		err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false, false)
 		if err == nil {
@@ -164,7 +163,7 @@ func TestSyncOnePushSuccess(t *testing.T) {
 			return "", nil
 		},
 	}
-	sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
+	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
 	err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false, true)
 	if err != nil {
@@ -188,7 +187,7 @@ func TestSyncOnePushSkippedNoUpstream(t *testing.T) {
 			return "", nil
 		},
 	}
-	sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
+	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
 	err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false, true)
 	if err != nil {
@@ -215,7 +214,7 @@ func TestSyncOnePushFailure(t *testing.T) {
 			return "", nil
 		},
 	}
-	sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
+	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
 	err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false, true)
 	if err == nil {
@@ -236,7 +235,7 @@ func TestSyncAllClean(t *testing.T) {
 		run:      func(_ ...string) (string, error) { return "", nil },
 		runInDir: noopRunInDir,
 	}
-	sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
+	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
 	err := syncAll(sc, worktrees, testSyncPrefixes(), false, false, false)
 	if err != nil {
@@ -261,7 +260,7 @@ func TestSyncAllDirtySkip(t *testing.T) {
 			return "", nil
 		},
 	}
-	sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
+	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
 	err := syncAll(sc, worktrees, testSyncPrefixes(), false, false, false)
 	if err != nil {
@@ -280,7 +279,7 @@ func TestSyncAllInherited(t *testing.T) {
 		run:      func(_ ...string) (string, error) { return "", nil },
 		runInDir: noopRunInDir,
 	}
-	sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
+	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
 	err := syncAll(sc, worktrees, testSyncPrefixes(), false, true, false)
 	if err != nil {
@@ -300,7 +299,7 @@ func TestSyncAllPushDefault(t *testing.T) {
 			return "", nil
 		},
 	}
-	sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
+	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
 	err := syncAll(sc, worktrees, testSyncPrefixes(), false, false, true)
 	if err != nil {
@@ -327,7 +326,7 @@ func TestSyncAllPushFailure(t *testing.T) {
 			return "", nil
 		},
 	}
-	sc := syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
+	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
 	err := syncAll(sc, worktrees, testSyncPrefixes(), false, false, true)
 	if err != nil {
@@ -346,13 +345,12 @@ func TestSyncWorktreeClean(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	var res syncResult
-	var mu sync.Mutex
+	sc := &syncContext{cmd: cmd, r: r, res: &syncResult{}}
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	syncWorktree(cmd, r, branchMain, wt, false, false, &res, &mu)
+	syncWorktree(sc, branchMain, wt, false, false)
 
-	if res.synced != 1 {
-		t.Errorf("synced = %d, want 1", res.synced)
+	if sc.res.synced != 1 {
+		t.Errorf("synced = %d, want 1", sc.res.synced)
 	}
 }
 
@@ -369,13 +367,12 @@ func TestSyncWorktreeDirtyAndError(t *testing.T) {
 			},
 		}
 
-		var res syncResult
-		var mu sync.Mutex
+		sc := &syncContext{cmd: cmd, r: r, res: &syncResult{}}
 		wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-		syncWorktree(cmd, r, branchMain, wt, false, false, &res, &mu)
+		syncWorktree(sc, branchMain, wt, false, false)
 
-		if res.skippedDirty != 1 {
-			t.Errorf("skippedDirty = %d, want 1", res.skippedDirty)
+		if sc.res.skippedDirty != 1 {
+			t.Errorf("skippedDirty = %d, want 1", sc.res.skippedDirty)
 		}
 		if !strings.Contains(buf.String(), "Skipping") {
 			t.Errorf("output = %q, want 'Skipping'", buf.String())
@@ -391,13 +388,12 @@ func TestSyncWorktreeDirtyAndError(t *testing.T) {
 			},
 		}
 
-		var res syncResult
-		var mu sync.Mutex
+		sc := &syncContext{cmd: cmd, r: r, res: &syncResult{}}
 		wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-		syncWorktree(cmd, r, branchMain, wt, false, false, &res, &mu)
+		syncWorktree(sc, branchMain, wt, false, false)
 
-		if res.skippedDirty != 1 {
-			t.Errorf("skippedDirty = %d, want 1", res.skippedDirty)
+		if sc.res.skippedDirty != 1 {
+			t.Errorf("skippedDirty = %d, want 1", sc.res.skippedDirty)
 		}
 		if !strings.Contains(buf.String(), "Warning") {
 			t.Errorf("output = %q, want warning", buf.String())
@@ -417,16 +413,15 @@ func TestSyncWorktreeDoSyncFailure(t *testing.T) {
 		},
 	}
 
-	var res syncResult
-	var mu sync.Mutex
+	sc := &syncContext{cmd: cmd, r: r, res: &syncResult{}}
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	syncWorktree(cmd, r, branchMain, wt, false, false, &res, &mu)
+	syncWorktree(sc, branchMain, wt, false, false)
 
-	if res.failed != 1 {
-		t.Errorf("failed = %d, want 1", res.failed)
+	if sc.res.failed != 1 {
+		t.Errorf("failed = %d, want 1", sc.res.failed)
 	}
-	if len(res.failures) != 1 {
-		t.Errorf("failures = %d, want 1", len(res.failures))
+	if len(sc.res.failures) != 1 {
+		t.Errorf("failures = %d, want 1", len(sc.res.failures))
 	}
 }
 
@@ -442,16 +437,15 @@ func TestSyncWorktreeMergeFailure(t *testing.T) {
 		},
 	}
 
-	var res syncResult
-	var mu sync.Mutex
+	sc := &syncContext{cmd: cmd, r: r, res: &syncResult{}}
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	syncWorktree(cmd, r, branchMain, wt, true, false, &res, &mu)
+	syncWorktree(sc, branchMain, wt, true, false)
 
-	if res.failed != 1 {
-		t.Errorf("failed = %d, want 1", res.failed)
+	if sc.res.failed != 1 {
+		t.Errorf("failed = %d, want 1", sc.res.failed)
 	}
-	if len(res.failures) > 0 && !strings.Contains(res.failures[0], "merge") {
-		t.Errorf("failure message = %q, want 'merge'", res.failures[0])
+	if len(sc.res.failures) > 0 && !strings.Contains(sc.res.failures[0], "merge") {
+		t.Errorf("failure message = %q, want 'merge'", sc.res.failures[0])
 	}
 }
 

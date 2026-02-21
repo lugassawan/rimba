@@ -68,10 +68,7 @@ func TestParseCount(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var v int
-			got := parseCount(tt.input, &v)
-			if got != tt.want {
-				t.Errorf("parseCount(%q) = %d, want %d", tt.input, got, tt.want)
-			}
+			parseCount(tt.input, &v)
 			if v != tt.want {
 				t.Errorf("parseCount(%q) set *v = %d, want %d", tt.input, v, tt.want)
 			}

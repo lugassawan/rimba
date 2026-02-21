@@ -1,55 +1,21 @@
 package mcp
 
 import (
-	"github.com/lugassawan/rimba/internal/resolver"
+	"github.com/lugassawan/rimba/internal/output"
 )
 
-// listItem mirrors the JSON shape from cmd/list.go.
-type listItem struct {
-	Task      string                  `json:"task"`
-	Type      string                  `json:"type"`
-	Branch    string                  `json:"branch"`
-	Path      string                  `json:"path"`
-	IsCurrent bool                    `json:"is_current"`
-	Status    resolver.WorktreeStatus `json:"status"`
-}
-
-// listArchivedItem mirrors the JSON shape for archived branches.
-type listArchivedItem struct {
-	Task   string `json:"task"`
-	Type   string `json:"type"`
-	Branch string `json:"branch"`
-}
-
-// statusData mirrors the JSON shape from cmd/status.go.
-type statusData struct {
-	Summary   statusSummary `json:"summary"`
-	Worktrees []statusItem  `json:"worktrees"`
-	StaleDays int           `json:"stale_days"`
-}
-
-// statusSummary holds aggregate counts.
-type statusSummary struct {
-	Total  int `json:"total"`
-	Dirty  int `json:"dirty"`
-	Stale  int `json:"stale"`
-	Behind int `json:"behind"`
-}
-
-// statusItem holds per-worktree status.
-type statusItem struct {
-	Task   string                  `json:"task"`
-	Type   string                  `json:"type"`
-	Branch string                  `json:"branch"`
-	Status resolver.WorktreeStatus `json:"status"`
-	Age    *statusAge              `json:"age"`
-}
-
-// statusAge holds last-commit age information.
-type statusAge struct {
-	LastCommit string `json:"last_commit"`
-	Stale      bool   `json:"stale"`
-}
+// Type aliases for shared JSON types from the output package.
+// These allow MCP handlers to use the same types as CLI commands.
+type (
+	listItem         = output.ListItem
+	listArchivedItem = output.ListArchivedItem
+	statusData       = output.StatusData
+	statusSummary    = output.StatusSummary
+	statusItem       = output.StatusItem
+	statusAge        = output.StatusAge
+	execData         = output.ExecData
+	execResult       = output.ExecResult
+)
 
 // conflictCheckData mirrors the JSON shape from cmd/conflict_check.go.
 type conflictCheckData struct {
@@ -72,25 +38,6 @@ type dryMergeItem struct {
 	Branch2       string   `json:"branch2"`
 	HasConflicts  bool     `json:"has_conflicts"`
 	ConflictFiles []string `json:"conflict_files,omitempty"`
-}
-
-// execData mirrors the JSON shape from cmd/exec.go.
-type execData struct {
-	Command string       `json:"command"`
-	Results []execResult `json:"results"`
-	Success bool         `json:"success"`
-}
-
-// execResult holds per-worktree execution results.
-type execResult struct {
-	Task      string `json:"task"`
-	Branch    string `json:"branch"`
-	Path      string `json:"path"`
-	ExitCode  int    `json:"exit_code"`
-	Stdout    string `json:"stdout"`
-	Stderr    string `json:"stderr"`
-	Error     string `json:"error,omitempty"`
-	Cancelled bool   `json:"cancelled,omitempty"`
 }
 
 // addResult holds the outcome of a worktree add.
@@ -118,7 +65,8 @@ type mergeResult struct {
 
 // syncResult holds the outcome of a sync operation.
 type syncResult struct {
-	Results []syncWorktreeResult `json:"results"`
+	FetchWarning string               `json:"fetch_warning,omitempty"`
+	Results      []syncWorktreeResult `json:"results"`
 }
 
 // syncWorktreeResult mirrors operations.SyncWorktreeResult as JSON.

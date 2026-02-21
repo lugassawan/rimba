@@ -32,6 +32,8 @@ type syncContext struct {
 	r   git.Runner
 	cfg *config.Config
 	s   *spinner.Spinner
+	res *syncResult // used by syncAll goroutines
+	mu  sync.Mutex  // guards res and output in syncAll
 }
 
 // syncResult tracks the outcome of syncing multiple worktrees.
@@ -98,7 +100,7 @@ var syncCmd = &cobra.Command{
 		}
 
 		prefixes := resolver.AllPrefixes()
-		sc := syncContext{cmd: cmd, r: r, cfg: cfg, s: s}
+		sc := &syncContext{cmd: cmd, r: r, cfg: cfg, s: s}
 
 		if all {
 			return syncAll(sc, worktrees, prefixes, useMerge, includeInherited, push)
@@ -107,10 +109,10 @@ var syncCmd = &cobra.Command{
 	},
 }
 
-func syncOne(sc syncContext, task string, worktrees []resolver.WorktreeInfo, prefixes []string, useMerge, push bool) error {
+func syncOne(sc *syncContext, task string, worktrees []resolver.WorktreeInfo, prefixes []string, useMerge, push bool) error {
 	wt, found := resolver.FindBranchForTask(task, worktrees, prefixes)
 	if !found {
-		return fmt.Errorf(errWorktreeNotFound, task)
+		return fmt.Errorf(operations.ErrWorktreeNotFoundFmt, task)
 	}
 
 	dirty, err := git.IsDirty(sc.r, wt.Path)
@@ -152,12 +154,11 @@ func syncOne(sc syncContext, task string, worktrees []resolver.WorktreeInfo, pre
 	return nil
 }
 
-func syncAll(sc syncContext, worktrees []resolver.WorktreeInfo, prefixes []string, useMerge, includeInherited, push bool) error { //nolint:unparam // error return matches RunE contract
+func syncAll(sc *syncContext, worktrees []resolver.WorktreeInfo, prefixes []string, useMerge, includeInherited, push bool) error { //nolint:unparam // error return matches RunE contract
 	allTasks := operations.CollectTasks(worktrees, prefixes)
 	eligible := operations.FilterEligible(worktrees, prefixes, sc.cfg.DefaultSource, allTasks, includeInherited)
 
-	var res syncResult
-	var mu sync.Mutex
+	sc.res = &syncResult{}
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 4) // bounded: git worktrees share object store
 
@@ -169,53 +170,53 @@ func syncAll(sc syncContext, worktrees []resolver.WorktreeInfo, prefixes []strin
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			syncWorktree(sc.cmd, sc.r, sc.cfg.DefaultSource, wt, useMerge, push, &res, &mu)
+			syncWorktree(sc, sc.cfg.DefaultSource, wt, useMerge, push)
 
-			mu.Lock()
+			sc.mu.Lock()
 			completed++
 			sc.s.Update(fmt.Sprintf("[%d/%d] Syncing worktrees...", completed, len(eligible)))
-			mu.Unlock()
+			sc.mu.Unlock()
 		}(wt)
 	}
 	wg.Wait()
 
 	sc.s.Stop()
-	printSyncSummary(sc.cmd, sc.cfg.DefaultSource, useMerge, &res)
+	printSyncSummary(sc.cmd, sc.cfg.DefaultSource, useMerge, sc.res)
 	return nil
 }
 
-func syncWorktree(cmd *cobra.Command, r git.Runner, mainBranch string, wt resolver.WorktreeInfo, useMerge, push bool, res *syncResult, mu *sync.Mutex) {
-	sr := operations.SyncWorktree(r, mainBranch, wt, useMerge, push)
+func syncWorktree(sc *syncContext, mainBranch string, wt resolver.WorktreeInfo, useMerge, push bool) {
+	sr := operations.SyncWorktree(sc.r, mainBranch, wt, useMerge, push)
 
-	mu.Lock()
-	defer mu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 
 	switch {
 	case sr.Skipped:
-		res.skippedDirty++
+		sc.res.skippedDirty++
 		if sr.SkipReason == "dirty" {
-			fmt.Fprintf(cmd.OutOrStdout(), "Skipping %s (dirty)\n", sr.Branch)
+			fmt.Fprintf(sc.cmd.OutOrStdout(), "Skipping %s (dirty)\n", sr.Branch)
 		} else {
-			fmt.Fprintf(cmd.OutOrStdout(), "Warning: %s: %s\n", sr.Branch, sr.SkipReason)
+			fmt.Fprintf(sc.cmd.OutOrStdout(), "Warning: %s: %s\n", sr.Branch, sr.SkipReason)
 		}
 	case sr.Failed:
-		res.failed++
-		res.failures = append(res.failures, fmt.Sprintf("  %s: To resolve: %s", sr.Branch, sr.FailureHint))
+		sc.res.failed++
+		sc.res.failures = append(sc.res.failures, fmt.Sprintf("  %s: To resolve: %s", sr.Branch, sr.FailureHint))
 	default:
-		res.synced++
+		sc.res.synced++
 		if sr.Pushed {
-			res.pushed++
+			sc.res.pushed++
 		}
 		if sr.PushSkipped {
-			res.pushSkipped++
+			sc.res.pushSkipped++
 		}
 		if sr.PushFailed {
-			res.pushFailed++
+			sc.res.pushFailed++
 			pushHint := fmt.Sprintf("cd %s && git push --force-with-lease", wt.Path)
 			if useMerge {
 				pushHint = fmt.Sprintf("cd %s && git push", wt.Path)
 			}
-			res.failures = append(res.failures, fmt.Sprintf("  %s: push failed: %s\n    To resolve: %s", sr.Branch, sr.PushError, pushHint))
+			sc.res.failures = append(sc.res.failures, fmt.Sprintf("  %s: push failed: %s\n    To resolve: %s", sr.Branch, sr.PushError, pushHint))
 		}
 	}
 }
