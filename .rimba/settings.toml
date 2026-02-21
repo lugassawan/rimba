@@ -1,0 +1,7 @@
+worktree_dir = '../rimba-worktrees'
+default_source = 'main'
+copy_files = ['.claude']
+
+[open]
+ide = 'code .'
+agent = 'claude'

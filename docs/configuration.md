@@ -16,8 +16,6 @@ Local settings override team settings. Fields omitted from the local file inheri
 ### Team config (`.rimba/settings.toml`)
 
 ```toml
-worktree_dir = '../myrepo-worktrees'
-default_source = 'main'
 copy_files = ['.env', '.env.local', '.envrc', '.tool-versions', '.vscode']
 
 # Post-create hooks (run in new worktree directory)
@@ -74,8 +72,6 @@ rimba init
 
 | Field | Description | Default |
 |-------|-------------|---------|
-| `worktree_dir` | Directory for worktrees (relative to repo root) | `../<repo-name>-worktrees` |
-| `default_source` | Branch to create worktrees from | Default branch (e.g. `main`) |
 | `copy_files` | Files or directories to copy from repo root into new worktrees | `.env`, `.env.local`, `.envrc`, `.tool-versions` |
 | `post_create` | Shell commands to run in new worktrees after creation | (none) |
 | `open.<name>` | Named shortcut command for `rimba open --with <name>` | (none) |

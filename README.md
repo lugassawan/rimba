@@ -115,6 +115,8 @@ rimba remove my-feature
 | `rimba clean` | Prune stale references or remove merged/stale worktrees |
 | `rimba update` | Check for updates and replace the binary in place |
 | `rimba version` | Print version, commit, and build date |
+| `rimba mcp` | Start MCP server for AI tool integration |
+| `rimba completion` | Generate shell completion scripts (bash, zsh, fish, powershell) |
 
 > See [docs/commands.md](docs/commands.md) for the full reference with all flags, examples, and notes.
 
@@ -123,8 +125,6 @@ rimba remove my-feature
 `rimba init` creates a `.rimba/` directory with team-shared and personal config files:
 
 ```toml
-worktree_dir = '../myrepo-worktrees'
-default_source = 'main'
 copy_files = ['.env', '.env.local', '.envrc', '.tool-versions', '.vscode']
 post_create = ['./gradlew build']
 
