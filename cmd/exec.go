@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 
@@ -229,6 +230,7 @@ func filterDirtyWorktrees(r git.Runner, s *spinner.Spinner, worktrees []resolver
 
 // printExecResults prints the formatted output for each execution result.
 func printExecResults(cmd *cobra.Command, p *termcolor.Painter, results []executor.Result, prefixes []string) {
+	out := cmd.OutOrStdout()
 	for _, r := range results {
 		_, matchedPrefix := resolver.TaskFromBranch(r.Target.Branch, prefixes)
 		typeName := strings.TrimSuffix(matchedPrefix, "/")
@@ -238,32 +240,38 @@ func printExecResults(cmd *cobra.Command, p *termcolor.Painter, results []execut
 			taskLabel = p.Paint(taskLabel, c)
 		}
 
-		var status string
-		switch {
-		case r.Cancelled:
-			status = p.Paint("cancelled", termcolor.Gray)
-		case r.Err != nil:
-			status = p.Paint("error", termcolor.Red)
-		case r.ExitCode != 0:
-			status = p.Paint(fmt.Sprintf("exit %d", r.ExitCode), termcolor.Red)
-		default:
-			status = p.Paint("ok", termcolor.Green)
+		fmt.Fprintf(out, "%s  %s\n", taskLabel, formatExecStatus(r, p))
+		printIndentedOutput(out, r)
+	}
+}
+
+// formatExecStatus returns the colored status string for an execution result.
+func formatExecStatus(r executor.Result, p *termcolor.Painter) string {
+	switch {
+	case r.Cancelled:
+		return p.Paint("cancelled", termcolor.Gray)
+	case r.Err != nil:
+		return p.Paint("error", termcolor.Red)
+	case r.ExitCode != 0:
+		return p.Paint(fmt.Sprintf("exit %d", r.ExitCode), termcolor.Red)
+	default:
+		return p.Paint("ok", termcolor.Green)
+	}
+}
+
+// printIndentedOutput prints stdout/stderr with indentation for a result.
+func printIndentedOutput(out io.Writer, r executor.Result) {
+	if s := strings.TrimRight(string(r.Stdout), "\n"); s != "" {
+		for line := range strings.SplitSeq(s, "\n") {
+			fmt.Fprintf(out, "  %s\n", line)
 		}
+	}
 
-		fmt.Fprintf(cmd.OutOrStdout(), "%s  %s\n", taskLabel, status)
-
-		if out := strings.TrimRight(string(r.Stdout), "\n"); out != "" {
-			for line := range strings.SplitSeq(out, "\n") {
-				fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", line)
-			}
-		}
-
-		if r.Err != nil {
-			fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", r.Err)
-		} else if errOut := strings.TrimRight(string(r.Stderr), "\n"); errOut != "" {
-			for line := range strings.SplitSeq(errOut, "\n") {
-				fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", line)
-			}
+	if r.Err != nil {
+		fmt.Fprintf(out, "  %s\n", r.Err)
+	} else if s := strings.TrimRight(string(r.Stderr), "\n"); s != "" {
+		for line := range strings.SplitSeq(s, "\n") {
+			fmt.Fprintf(out, "  %s\n", line)
 		}
 	}
 }

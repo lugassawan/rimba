@@ -138,29 +138,15 @@ func collectStatuses(r git.Runner, candidates []git.WorktreeEntry, s *spinner.Sp
 
 // renderStatusDashboard prints the summary header and per-worktree table.
 func renderStatusDashboard(out io.Writer, p *termcolor.Painter, results []statusEntry, staleDays int) {
-	var totalCount, dirtyCount, staleCount, behindCount int
-	totalCount = len(results)
 	staleThreshold := time.Now().Add(-time.Duration(staleDays) * 24 * time.Hour)
-
-	for _, r := range results {
-		if r.status.Dirty {
-			dirtyCount++
-		}
-		if r.status.Behind > 0 {
-			behindCount++
-		}
-		if r.hasTime && r.commitTime.Before(staleThreshold) {
-			staleCount++
-		}
-	}
-
+	summary := buildCLIStatusSummary(results, staleThreshold)
 	prefixes := resolver.AllPrefixes()
 
 	fmt.Fprintf(out, "Worktrees: %s  Dirty: %s  Stale: %s  Behind: %s\n\n",
-		p.Paint(strconv.Itoa(totalCount), termcolor.Bold),
-		colorCount(p, dirtyCount, termcolor.Yellow),
-		colorCount(p, staleCount, termcolor.Red),
-		colorCount(p, behindCount, termcolor.Red),
+		p.Paint(strconv.Itoa(summary.total), termcolor.Bold),
+		colorCount(p, summary.dirty, termcolor.Yellow),
+		colorCount(p, summary.stale, termcolor.Red),
+		colorCount(p, summary.behind, termcolor.Red),
 	)
 
 	tbl := termcolor.NewTable(2)
@@ -173,33 +159,57 @@ func renderStatusDashboard(out io.Writer, p *termcolor.Painter, results []status
 	)
 
 	for _, r := range results {
-		task, matchedPrefix := resolver.TaskFromBranch(r.entry.Branch, prefixes)
-		typeName := strings.TrimSuffix(matchedPrefix, "/")
-
-		taskCell := "  " + task
-		typeCell := typeName
-		if c := typeColor(typeName); c != "" {
-			typeCell = p.Paint(typeCell, c)
-		}
-
-		statusCell := colorStatus(p, r.status)
-
-		var ageCell string
-		if r.hasTime {
-			ageStr := resolver.FormatAge(r.commitTime)
-			if r.commitTime.Before(staleThreshold) {
-				ageCell = p.Paint(ageStr, termcolor.Red) + " " + p.Paint("⚠ stale", termcolor.Red)
-			} else {
-				ageCell = p.Paint(ageStr, resolver.AgeColor(r.commitTime))
-			}
-		} else {
-			ageCell = p.Paint("unknown", termcolor.Gray)
-		}
-
-		tbl.AddRow(taskCell, typeCell, r.entry.Branch, statusCell, ageCell)
+		tbl.AddRow(buildStatusRow(r, prefixes, staleThreshold, p)...)
 	}
 
 	tbl.Render(out)
+}
+
+type cliStatusSummary struct {
+	total, dirty, stale, behind int
+}
+
+// buildCLIStatusSummary counts summary stats from results.
+func buildCLIStatusSummary(results []statusEntry, staleThreshold time.Time) cliStatusSummary {
+	s := cliStatusSummary{total: len(results)}
+	for _, r := range results {
+		if r.status.Dirty {
+			s.dirty++
+		}
+		if r.status.Behind > 0 {
+			s.behind++
+		}
+		if r.hasTime && r.commitTime.Before(staleThreshold) {
+			s.stale++
+		}
+	}
+	return s
+}
+
+// buildStatusRow formats a single worktree row for the status table.
+func buildStatusRow(r statusEntry, prefixes []string, staleThreshold time.Time, p *termcolor.Painter) []string {
+	task, matchedPrefix := resolver.TaskFromBranch(r.entry.Branch, prefixes)
+	typeName := strings.TrimSuffix(matchedPrefix, "/")
+
+	taskCell := "  " + task
+	typeCell := typeName
+	if c := typeColor(typeName); c != "" {
+		typeCell = p.Paint(typeCell, c)
+	}
+
+	return []string{taskCell, typeCell, r.entry.Branch, colorStatus(p, r.status), formatAgeCell(r, staleThreshold, p)}
+}
+
+// formatAgeCell formats the age cell with color and stale indicator.
+func formatAgeCell(r statusEntry, staleThreshold time.Time, p *termcolor.Painter) string {
+	if !r.hasTime {
+		return p.Paint("unknown", termcolor.Gray)
+	}
+	ageStr := resolver.FormatAge(r.commitTime)
+	if r.commitTime.Before(staleThreshold) {
+		return p.Paint(ageStr, termcolor.Red) + " " + p.Paint("⚠ stale", termcolor.Red)
+	}
+	return p.Paint(ageStr, resolver.AgeColor(r.commitTime))
 }
 
 // writeStatusJSON builds the JSON output for the status command.

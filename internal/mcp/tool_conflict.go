@@ -53,17 +53,8 @@ func handleConflictCheck(hctx *HandlerContext) server.ToolHandlerFunc {
 
 		result := conflict.DetectOverlaps(diffs)
 
-		overlaps := make([]overlapItem, 0, len(result.Overlaps))
-		for _, o := range result.Overlaps {
-			overlaps = append(overlaps, overlapItem{
-				File:     o.File,
-				Branches: o.Branches,
-				Severity: string(o.Severity),
-			})
-		}
-
 		data := conflictCheckData{
-			Overlaps:      overlaps,
+			Overlaps:      processOverlaps(result),
 			TotalFiles:    result.TotalFiles,
 			TotalBranches: result.TotalBranches,
 		}
@@ -73,19 +64,36 @@ func handleConflictCheck(hctx *HandlerContext) server.ToolHandlerFunc {
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-
-			merges := make([]dryMergeItem, len(dryResults))
-			for i, dr := range dryResults {
-				merges[i] = dryMergeItem{
-					Branch1:       dr.Branch1,
-					Branch2:       dr.Branch2,
-					HasConflicts:  dr.HasConflicts,
-					ConflictFiles: dr.ConflictFiles,
-				}
-			}
-			data.DryMerges = merges
+			data.DryMerges = processDryMerges(dryResults)
 		}
 
 		return marshalResult(data)
 	}
+}
+
+// processOverlaps converts conflict detection results to overlap items.
+func processOverlaps(result *conflict.CheckResult) []overlapItem {
+	overlaps := make([]overlapItem, 0, len(result.Overlaps))
+	for _, o := range result.Overlaps {
+		overlaps = append(overlaps, overlapItem{
+			File:     o.File,
+			Branches: o.Branches,
+			Severity: string(o.Severity),
+		})
+	}
+	return overlaps
+}
+
+// processDryMerges converts dry merge results to dry merge items.
+func processDryMerges(dryResults []conflict.DryMergeResult) []dryMergeItem {
+	merges := make([]dryMergeItem, len(dryResults))
+	for i, dr := range dryResults {
+		merges[i] = dryMergeItem{
+			Branch1:       dr.Branch1,
+			Branch2:       dr.Branch2,
+			HasConflicts:  dr.HasConflicts,
+			ConflictFiles: dr.ConflictFiles,
+		}
+	}
+	return merges
 }
