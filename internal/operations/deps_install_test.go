@@ -86,3 +86,47 @@ func TestResolveMainBranch_GitError(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestInstallDeps_NoModules(t *testing.T) {
+	// ResolveModules on an empty dir finds nothing → returns nil
+	tmpDir := t.TempDir()
+	r := &mockRunner{
+		run:      func(args ...string) (string, error) { return "", nil },
+		runInDir: noopRunInDir,
+	}
+	result := InstallDeps(r, tmpDir, false, nil, nil, nil)
+	if result != nil {
+		t.Errorf("expected nil result for no modules, got %v", result)
+	}
+}
+
+func TestInstallDepsPreferSource_NoModules(t *testing.T) {
+	tmpDir := t.TempDir()
+	r := &mockRunner{
+		run:      func(args ...string) (string, error) { return "", nil },
+		runInDir: noopRunInDir,
+	}
+	result := InstallDepsPreferSource(r, tmpDir, "/other/wt", false, nil, nil, nil)
+	if result != nil {
+		t.Errorf("expected nil result for no modules, got %v", result)
+	}
+}
+
+func TestRunPostCreateHooks_Empty(t *testing.T) {
+	tmpDir := t.TempDir()
+	results := RunPostCreateHooks(tmpDir, nil, nil)
+	if len(results) != 0 {
+		t.Errorf("expected 0 results for empty hooks, got %d", len(results))
+	}
+}
+
+func TestRunPostCreateHooks_InvalidCommand(t *testing.T) {
+	tmpDir := t.TempDir()
+	results := RunPostCreateHooks(tmpDir, []string{"nonexistent-command-xyz"}, nil)
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].Error == nil {
+		t.Error("expected error for invalid command")
+	}
+}

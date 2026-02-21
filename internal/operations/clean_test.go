@@ -8,7 +8,9 @@ import (
 
 const (
 	gitCmdBranch   = "branch"
+	gitCmdLog      = "log"
 	gitCmdWorktree = "worktree"
+	gitSubcmdAdd   = "add"
 )
 
 // porcelainEntries builds porcelain-format output for git worktree list.
@@ -150,7 +152,7 @@ func TestFindStaleCandidates_Found(t *testing.T) {
 			if len(args) > 0 && args[0] == gitCmdWorktree {
 				return wt, nil
 			}
-			if len(args) > 0 && args[0] == "log" {
+			if len(args) > 0 && args[0] == gitCmdLog {
 				// Unix epoch for 2020-01-01 with a tab-separated subject
 				return "1577836800\told commit", nil
 			}
@@ -182,7 +184,7 @@ func TestFindStaleCandidates_NoneStale(t *testing.T) {
 			if len(args) > 0 && args[0] == gitCmdWorktree {
 				return wt, nil
 			}
-			if len(args) > 0 && args[0] == "log" {
+			if len(args) > 0 && args[0] == gitCmdLog {
 				// Unix epoch for 2099-01-01 with a tab-separated subject
 				return "4070908800\tfresh commit", nil
 			}
@@ -273,5 +275,69 @@ func TestRemoveCandidates_ProgressCallbacks(t *testing.T) {
 	RemoveCandidates(r, candidates, progress)
 	if len(messages) != 2 {
 		t.Fatalf("expected 2 progress messages, got %d", len(messages))
+	}
+}
+
+func TestFindMergedCandidates_SquashMergeError(t *testing.T) {
+	wt := porcelainEntries(
+		struct{ path, branch string }{"/repo", branchMain},
+		struct{ path, branch string }{"/wt/active", "feature/active"},
+	)
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			// MergedBranches: return empty (no regular merges)
+			if len(args) > 0 && args[0] == gitCmdBranch {
+				return "", nil
+			}
+			// ListWorktrees
+			if len(args) > 0 && args[0] == gitCmdWorktree {
+				return wt, nil
+			}
+			// IsSquashMerged requires merge-base — fail on it
+			if len(args) > 0 && args[0] == "merge-base" {
+				return "", errors.New("merge-base failed")
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	candidates, err := FindMergedCandidates(r, "origin/main", branchMain)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// The entry should be skipped (squash merge check errored), so no candidates
+	if len(candidates) != 0 {
+		t.Errorf("expected 0 candidates, got %d", len(candidates))
+	}
+}
+
+func TestFindStaleCandidates_LastCommitError(t *testing.T) {
+	wt := porcelainEntries(
+		struct{ path, branch string }{"/repo", branchMain},
+		struct{ path, branch string }{"/wt/broken", "feature/broken"},
+	)
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			// ListWorktrees
+			if len(args) > 0 && args[0] == gitCmdWorktree {
+				return wt, nil
+			}
+			// LastCommitTime: log -1 --format=%ct <branch>
+			if len(args) > 0 && args[0] == gitCmdLog {
+				return "", errors.New("no commits")
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	candidates, err := FindStaleCandidates(r, branchMain, 14)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Entry should be skipped due to error, so no candidates
+	if len(candidates) != 0 {
+		t.Errorf("expected 0 candidates, got %d", len(candidates))
 	}
 }

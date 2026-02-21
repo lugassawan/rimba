@@ -313,3 +313,65 @@ func TestMergeWorktree_ListWorktreesFails(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestMergeWorktree_SourceDirtyCheckError(t *testing.T) {
+	wt := mergeWorktreeList()
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == gitCmdWorktree {
+				return wt, nil
+			}
+			return "", nil
+		},
+		runInDir: func(dir string, args ...string) (string, error) {
+			// Source worktree IsDirty check fails
+			if dir == "/wt/feature-login" {
+				return "", errors.New("git status failed")
+			}
+			return "", nil
+		},
+	}
+
+	_, err := MergeWorktree(r, MergeParams{
+		SourceTask: "login",
+		RepoRoot:   "/repo",
+		MainBranch: branchMain,
+	}, nil)
+	if err == nil {
+		t.Fatal("expected error from source dirty check")
+	}
+	if !strings.Contains(err.Error(), "git status failed") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestMergeWorktree_TargetDirtyCheckError(t *testing.T) {
+	wt := mergeWorktreeList()
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == gitCmdWorktree {
+				return wt, nil
+			}
+			return "", nil
+		},
+		runInDir: func(dir string, args ...string) (string, error) {
+			// Target (repo root) IsDirty check fails
+			if dir == "/repo" {
+				return "", errors.New("target status failed")
+			}
+			return "", nil
+		},
+	}
+
+	_, err := MergeWorktree(r, MergeParams{
+		SourceTask: "login",
+		RepoRoot:   "/repo",
+		MainBranch: branchMain,
+	}, nil)
+	if err == nil {
+		t.Fatal("expected error from target dirty check")
+	}
+	if !strings.Contains(err.Error(), "target status failed") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}

@@ -19,7 +19,7 @@ func TestAddWorktree_Success(t *testing.T) {
 				return "", errors.New("not found")
 			}
 			// AddWorktree: create the directory
-			if len(args) > 0 && args[0] == gitCmdWorktree && len(args) > 1 && args[1] == "add" {
+			if len(args) > 0 && args[0] == gitCmdWorktree && len(args) > 1 && args[1] == gitSubcmdAdd {
 				_ = os.MkdirAll(args[2], 0o755)
 				return "", nil
 			}
@@ -154,7 +154,7 @@ func TestAddWorktree_ProgressCallbacks(t *testing.T) {
 			if len(args) > 0 && args[0] == cmdRevParse {
 				return "", errors.New("not found")
 			}
-			if len(args) > 0 && args[0] == gitCmdWorktree && len(args) > 1 && args[1] == "add" {
+			if len(args) > 0 && args[0] == gitCmdWorktree && len(args) > 1 && args[1] == gitSubcmdAdd {
 				_ = os.MkdirAll(args[2], 0o755)
 				return "", nil
 			}
@@ -180,5 +180,82 @@ func TestAddWorktree_ProgressCallbacks(t *testing.T) {
 	}
 	if len(messages) < 2 {
 		t.Fatalf("expected at least 2 progress messages, got %d: %v", len(messages), messages)
+	}
+}
+
+func TestAddWorktree_WithDeps(t *testing.T) {
+	tmpDir := t.TempDir()
+	wtDir := filepath.Join(tmpDir, ".worktrees")
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == cmdRevParse {
+				return "", errors.New("not found")
+			}
+			if len(args) > 0 && args[0] == gitCmdWorktree && len(args) > 1 && args[1] == gitSubcmdAdd {
+				_ = os.MkdirAll(args[2], 0o755)
+				return "", nil
+			}
+			// ListWorktrees for deps
+			if len(args) > 0 && args[0] == gitCmdWorktree && len(args) > 1 && args[1] == "list" {
+				return "worktree " + tmpDir + "\nHEAD abc\nbranch refs/heads/main\n\n", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	result, err := AddWorktree(r, AddParams{
+		Task:        "login",
+		Prefix:      "feature/",
+		Source:      branchMain,
+		RepoRoot:    tmpDir,
+		WorktreeDir: wtDir,
+		SkipDeps:    false, // exercise deps path
+		AutoDetect:  false,
+		SkipHooks:   true,
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// DepsResults will be nil because no package.json etc. exists in the tmpDir
+	if result.DepsResults != nil {
+		t.Errorf("expected nil deps results (no modules), got %v", result.DepsResults)
+	}
+}
+
+func TestAddWorktree_WithHooks(t *testing.T) {
+	tmpDir := t.TempDir()
+	wtDir := filepath.Join(tmpDir, ".worktrees")
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == cmdRevParse {
+				return "", errors.New("not found")
+			}
+			if len(args) > 0 && args[0] == gitCmdWorktree && len(args) > 1 && args[1] == gitSubcmdAdd {
+				_ = os.MkdirAll(args[2], 0o755)
+				return "", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	result, err := AddWorktree(r, AddParams{
+		Task:        "login",
+		Prefix:      "feature/",
+		Source:      branchMain,
+		RepoRoot:    tmpDir,
+		WorktreeDir: wtDir,
+		SkipDeps:    true,
+		SkipHooks:   false, // exercise hooks path
+		PostCreate:  []string{"echo hello"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.HookResults) != 1 {
+		t.Fatalf("expected 1 hook result, got %d", len(result.HookResults))
 	}
 }
