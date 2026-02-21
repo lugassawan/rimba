@@ -5,10 +5,10 @@ import (
 	"io"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/lugassawan/rimba/internal/termcolor"
@@ -106,38 +106,26 @@ var logCmd = &cobra.Command{
 // collectLogEntries gathers commit info for each candidate in parallel,
 // returning only valid entries sorted by commit time descending.
 func collectLogEntries(r git.Runner, candidates []git.WorktreeEntry, s *spinner.Spinner) []logEntry {
-	results := make([]logEntry, len(candidates))
 	prefixes := resolver.AllPrefixes()
-	var wg sync.WaitGroup
-	sem := make(chan struct{}, 8)
+	s.Update("Collecting commit info...")
+	results := parallel.Collect(len(candidates), 8, func(i int) logEntry {
+		e := candidates[i]
+		task, matchedPrefix := resolver.TaskFromBranch(e.Branch, prefixes)
+		typeName := strings.TrimSuffix(matchedPrefix, "/")
 
-	for i, c := range candidates {
-		s.Update(fmt.Sprintf("Collecting commit info... (%d/%d)", i+1, len(candidates)))
-		wg.Add(1)
-		go func(idx int, e git.WorktreeEntry) {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
-			task, matchedPrefix := resolver.TaskFromBranch(e.Branch, prefixes)
-			typeName := strings.TrimSuffix(matchedPrefix, "/")
-
-			ct, subject, err := git.LastCommitInfo(r, e.Branch)
-			if err != nil {
-				results[idx] = logEntry{branch: e.Branch, task: task, typeName: typeName}
-				return
-			}
-			results[idx] = logEntry{
-				branch:     e.Branch,
-				task:       task,
-				typeName:   typeName,
-				commitTime: ct,
-				subject:    subject,
-				valid:      true,
-			}
-		}(i, c)
-	}
-	wg.Wait()
+		ct, subject, err := git.LastCommitInfo(r, e.Branch)
+		if err != nil {
+			return logEntry{branch: e.Branch, task: task, typeName: typeName}
+		}
+		return logEntry{
+			branch:     e.Branch,
+			task:       task,
+			typeName:   typeName,
+			commitTime: ct,
+			subject:    subject,
+			valid:      true,
+		}
+	})
 
 	var valid []logEntry
 	for _, r := range results {

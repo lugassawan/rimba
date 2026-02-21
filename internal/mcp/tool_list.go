@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
+	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -77,22 +77,11 @@ func handleList(hctx *HandlerContext) server.ToolHandlerFunc {
 
 		candidates := filterListCandidates(entries, wtDir, typeFilter, prefixes)
 
-		rows := make([]resolver.WorktreeDetail, len(candidates))
-		var wg sync.WaitGroup
-		sem := make(chan struct{}, 8)
-
-		for i, c := range candidates {
-			wg.Add(1)
-			go func(idx int, c listCandidate) {
-				defer wg.Done()
-				sem <- struct{}{}
-				defer func() { <-sem }()
-
-				status := operations.CollectWorktreeStatus(r, c.entry.Path)
-				rows[idx] = resolver.NewWorktreeDetail(c.entry.Branch, prefixes, c.displayPath, status, false)
-			}(i, c)
-		}
-		wg.Wait()
+		rows := parallel.Collect(len(candidates), 8, func(i int) resolver.WorktreeDetail {
+			c := candidates[i]
+			status := operations.CollectWorktreeStatus(r, c.entry.Path)
+			return resolver.NewWorktreeDetail(c.entry.Branch, prefixes, c.displayPath, status, false)
+		})
 
 		rows = operations.FilterDetailsByStatus(rows, dirty, behind)
 		resolver.SortDetailsByTask(rows)
