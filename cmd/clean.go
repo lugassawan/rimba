@@ -18,11 +18,10 @@ const (
 	flagMerged = "merged"
 	flagStale  = "stale"
 
-	hintMerged       = "Remove worktrees whose branches are already merged into main"
-	hintDryRunPrune  = "Preview what would be pruned without making changes"
-	hintDryRunMerged = "Preview what would be removed without making changes"
-	hintDryRunStale  = "Preview what would be removed without making changes"
-	hintForce        = "Skip confirmation prompt"
+	hintMerged      = "Remove worktrees whose branches are already merged into main"
+	hintDryRunPrune = "Preview what would be pruned without making changes"
+	hintDryRunClean = "Preview what would be removed without making changes"
+	hintForce       = "Skip confirmation prompt"
 )
 
 func init() {
@@ -98,7 +97,7 @@ func cleanMerged(cmd *cobra.Command, r git.Runner) error {
 	}
 
 	hint.New(cmd, hintPainter(cmd)).
-		Add(flagDryRun, hintDryRunMerged).
+		Add(flagDryRun, hintDryRunClean).
 		Add(flagForce, hintForce).
 		Show()
 
@@ -160,7 +159,7 @@ func cleanStale(cmd *cobra.Command, r git.Runner) error {
 	}
 
 	hint.New(cmd, hintPainter(cmd)).
-		Add(flagDryRun, hintDryRunStale).
+		Add(flagDryRun, hintDryRunClean).
 		Add(flagForce, hintForce).
 		Add(flagStaleDays, "Customize the staleness threshold (default: 14 days)").
 		Show()

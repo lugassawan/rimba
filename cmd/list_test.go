@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"strings"
@@ -9,7 +10,17 @@ import (
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/resolver"
+	"github.com/spf13/cobra"
 )
+
+func newListTestCmd() (*cobra.Command, *bytes.Buffer) {
+	cmd, buf := newTestCmd()
+	cmd.Flags().String(flagType, "", "")
+	cmd.Flags().Bool(flagDirty, false, "")
+	cmd.Flags().Bool(flagBehind, false, "")
+	cmd.Flags().Bool(flagArchived, false, "")
+	return cmd, buf
+}
 
 func TestListInvalidType(t *testing.T) {
 	repoDir := t.TempDir()
@@ -29,12 +40,8 @@ func TestListInvalidType(t *testing.T) {
 	restore := overrideNewRunner(r)
 	defer restore()
 
-	// Save and restore module-level vars
-	origType := listType
-	defer func() { listType = origType }()
-	listType = "invalid-type"
-
-	cmd, _ := newTestCmd()
+	cmd, _ := newListTestCmd()
+	_ = cmd.Flags().Set(flagType, "invalid-type")
 	cmd.SetContext(config.WithConfig(context.Background(), cfg))
 
 	err := listCmd.RunE(cmd, nil)
@@ -62,19 +69,7 @@ func TestListEmptyWorktrees(t *testing.T) {
 	restore := overrideNewRunner(r)
 	defer restore()
 
-	origType := listType
-	origDirty := listDirty
-	origBehind := listBehind
-	defer func() {
-		listType = origType
-		listDirty = origDirty
-		listBehind = origBehind
-	}()
-	listType = ""
-	listDirty = false
-	listBehind = false
-
-	cmd, buf := newTestCmd()
+	cmd, buf := newListTestCmd()
 	cmd.SetContext(config.WithConfig(context.Background(), cfg))
 
 	err := listCmd.RunE(cmd, nil)
@@ -113,19 +108,7 @@ func TestListWithWorktrees(t *testing.T) {
 	restore := overrideNewRunner(r)
 	defer restore()
 
-	origType := listType
-	origDirty := listDirty
-	origBehind := listBehind
-	defer func() {
-		listType = origType
-		listDirty = origDirty
-		listBehind = origBehind
-	}()
-	listType = ""
-	listDirty = false
-	listBehind = false
-
-	cmd, buf := newTestCmd()
+	cmd, buf := newListTestCmd()
 	cmd.SetContext(config.WithConfig(context.Background(), cfg))
 
 	err := listCmd.RunE(cmd, nil)
@@ -169,19 +152,8 @@ func TestListFilterByType(t *testing.T) {
 	restore := overrideNewRunner(r)
 	defer restore()
 
-	origType := listType
-	origDirty := listDirty
-	origBehind := listBehind
-	defer func() {
-		listType = origType
-		listDirty = origDirty
-		listBehind = origBehind
-	}()
-	listType = "bugfix"
-	listDirty = false
-	listBehind = false
-
-	cmd, buf := newTestCmd()
+	cmd, buf := newListTestCmd()
+	_ = cmd.Flags().Set(flagType, "bugfix")
 	cmd.SetContext(config.WithConfig(context.Background(), cfg))
 
 	err := listCmd.RunE(cmd, nil)
@@ -230,19 +202,13 @@ func testListFilterNoMatch(t *testing.T, dirty, behind bool) {
 	restore := overrideNewRunner(r)
 	defer restore()
 
-	origType := listType
-	origDirty := listDirty
-	origBehind := listBehind
-	defer func() {
-		listType = origType
-		listDirty = origDirty
-		listBehind = origBehind
-	}()
-	listType = ""
-	listDirty = dirty
-	listBehind = behind
-
-	cmd, buf := newTestCmd()
+	cmd, buf := newListTestCmd()
+	if dirty {
+		_ = cmd.Flags().Set(flagDirty, "true")
+	}
+	if behind {
+		_ = cmd.Flags().Set(flagBehind, "true")
+	}
 	cmd.SetContext(config.WithConfig(context.Background(), cfg))
 
 	err := listCmd.RunE(cmd, nil)
@@ -307,19 +273,8 @@ func TestListDirtyFilterWithMatch(t *testing.T) {
 	restore := overrideNewRunner(r)
 	defer restore()
 
-	origType := listType
-	origDirty := listDirty
-	origBehind := listBehind
-	defer func() {
-		listType = origType
-		listDirty = origDirty
-		listBehind = origBehind
-	}()
-	listType = ""
-	listDirty = true
-	listBehind = false
-
-	cmd, buf := newTestCmd()
+	cmd, buf := newListTestCmd()
+	_ = cmd.Flags().Set(flagDirty, "true")
 	cmd.SetContext(config.WithConfig(context.Background(), cfg))
 
 	err := listCmd.RunE(cmd, nil)
@@ -433,19 +388,7 @@ func TestListJSONEmpty(t *testing.T) {
 	restore := overrideNewRunner(r)
 	defer restore()
 
-	origType := listType
-	origDirty := listDirty
-	origBehind := listBehind
-	defer func() {
-		listType = origType
-		listDirty = origDirty
-		listBehind = origBehind
-	}()
-	listType = ""
-	listDirty = false
-	listBehind = false
-
-	cmd, buf := newTestCmd()
+	cmd, buf := newListTestCmd()
 	_ = cmd.Flags().Set(flagJSON, "true")
 	cmd.SetContext(config.WithConfig(context.Background(), cfg))
 
@@ -497,19 +440,7 @@ func TestListJSONWithWorktrees(t *testing.T) {
 	restore := overrideNewRunner(r)
 	defer restore()
 
-	origType := listType
-	origDirty := listDirty
-	origBehind := listBehind
-	defer func() {
-		listType = origType
-		listDirty = origDirty
-		listBehind = origBehind
-	}()
-	listType = ""
-	listDirty = false
-	listBehind = false
-
-	cmd, buf := newTestCmd()
+	cmd, buf := newListTestCmd()
 	_ = cmd.Flags().Set(flagJSON, "true")
 	cmd.SetContext(config.WithConfig(context.Background(), cfg))
 
@@ -624,19 +555,8 @@ func TestListBehindFilterWithMatch(t *testing.T) {
 	restore := overrideNewRunner(r)
 	defer restore()
 
-	origType := listType
-	origDirty := listDirty
-	origBehind := listBehind
-	defer func() {
-		listType = origType
-		listDirty = origDirty
-		listBehind = origBehind
-	}()
-	listType = ""
-	listDirty = false
-	listBehind = true
-
-	cmd, buf := newTestCmd()
+	cmd, buf := newListTestCmd()
+	_ = cmd.Flags().Set(flagBehind, "true")
 	cmd.SetContext(config.WithConfig(context.Background(), cfg))
 
 	err := listCmd.RunE(cmd, nil)

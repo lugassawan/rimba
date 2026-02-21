@@ -5,33 +5,18 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/output"
+	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/lugassawan/rimba/internal/termcolor"
 	"github.com/spf13/cobra"
 )
-
-type listJSONItem struct {
-	Task      string                  `json:"task"`
-	Type      string                  `json:"type"`
-	Branch    string                  `json:"branch"`
-	Path      string                  `json:"path"`
-	IsCurrent bool                    `json:"is_current"`
-	Status    resolver.WorktreeStatus `json:"status"`
-}
-
-type listArchivedJSONItem struct {
-	Task   string `json:"task"`
-	Type   string `json:"type"`
-	Branch string `json:"branch"`
-}
 
 const (
 	flagType     = "type"
@@ -51,20 +36,13 @@ type candidate struct {
 	isCurrent   bool
 }
 
-var (
-	listType     string
-	listDirty    bool
-	listBehind   bool
-	listArchived bool
-)
-
 func init() {
 	rootCmd.AddCommand(listCmd)
 
-	listCmd.Flags().StringVar(&listType, flagType, "", "filter by prefix type (e.g. feature, bugfix)")
-	listCmd.Flags().BoolVar(&listDirty, flagDirty, false, "show only dirty worktrees")
-	listCmd.Flags().BoolVar(&listBehind, flagBehind, false, "show only worktrees behind upstream")
-	listCmd.Flags().BoolVar(&listArchived, flagArchived, false, "show archived branches (not in any active worktree)")
+	listCmd.Flags().String(flagType, "", "filter by prefix type (e.g. feature, bugfix)")
+	listCmd.Flags().Bool(flagDirty, false, "show only dirty worktrees")
+	listCmd.Flags().Bool(flagBehind, false, "show only worktrees behind upstream")
+	listCmd.Flags().Bool(flagArchived, false, "show archived branches (not in any active worktree)")
 
 	listCmd.MarkFlagsMutuallyExclusive(flagArchived, flagType)
 	listCmd.MarkFlagsMutuallyExclusive(flagArchived, flagDirty)
@@ -87,6 +65,11 @@ var listCmd = &cobra.Command{
 	Short: "List all worktrees",
 	Long:  "Lists all git worktrees with their branch, path, and status (dirty, ahead/behind).",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		listType, _ := cmd.Flags().GetString(flagType)
+		listDirty, _ := cmd.Flags().GetBool(flagDirty)
+		listBehind, _ := cmd.Flags().GetBool(flagBehind)
+		listArchived, _ := cmd.Flags().GetBool(flagArchived)
+
 		if listArchived {
 			r := newRunner()
 			mainBranch, err := resolveMainBranch(r)
@@ -120,7 +103,7 @@ var listCmd = &cobra.Command{
 
 		if len(entries) == 0 {
 			if isJSON(cmd) {
-				return output.WriteJSON(cmd.OutOrStdout(), version, "list", make([]listJSONItem, 0))
+				return output.WriteJSON(cmd.OutOrStdout(), version, "list", make([]output.ListItem, 0))
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "No worktrees found.")
 			return nil
@@ -172,23 +155,11 @@ var listCmd = &cobra.Command{
 			candidates = append(candidates, candidate{entry: e, displayPath: displayPath, isCurrent: isCurrent})
 		}
 
-		rows := make([]resolver.WorktreeDetail, len(candidates))
-		var wg sync.WaitGroup
-		sem := make(chan struct{}, 8)
-
-		for i, c := range candidates {
-			s.Update(fmt.Sprintf("Loading worktrees... (%d/%d)", i+1, len(candidates)))
-			wg.Add(1)
-			go func(idx int, c candidate) {
-				defer wg.Done()
-				sem <- struct{}{}
-				defer func() { <-sem }()
-
-				status := operations.CollectWorktreeStatus(r, c.entry.Path)
-				rows[idx] = resolver.NewWorktreeDetail(c.entry.Branch, prefixes, c.displayPath, status, c.isCurrent)
-			}(i, c)
-		}
-		wg.Wait()
+		rows := parallel.Collect(len(candidates), 8, func(i int) resolver.WorktreeDetail {
+			c := candidates[i]
+			status := operations.CollectWorktreeStatus(r, c.entry.Path)
+			return resolver.NewWorktreeDetail(c.entry.Branch, prefixes, c.displayPath, status, c.isCurrent)
+		})
 
 		rows = operations.FilterDetailsByStatus(rows, listDirty, listBehind)
 
@@ -196,7 +167,7 @@ var listCmd = &cobra.Command{
 
 		if len(rows) == 0 {
 			if isJSON(cmd) {
-				return output.WriteJSON(cmd.OutOrStdout(), version, "list", make([]listJSONItem, 0))
+				return output.WriteJSON(cmd.OutOrStdout(), version, "list", make([]output.ListItem, 0))
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "No worktrees match the given filters.")
 			return nil
@@ -205,9 +176,9 @@ var listCmd = &cobra.Command{
 		resolver.SortDetailsByTask(rows)
 
 		if isJSON(cmd) {
-			items := make([]listJSONItem, len(rows))
+			items := make([]output.ListItem, len(rows))
 			for i, r := range rows {
-				items[i] = listJSONItem{
+				items[i] = output.ListItem{
 					Task:      r.Task,
 					Type:      r.Type,
 					Branch:    r.Branch,
@@ -264,11 +235,11 @@ func listArchivedBranches(cmd *cobra.Command, r git.Runner, mainBranch string) e
 	prefixes := resolver.AllPrefixes()
 
 	if isJSON(cmd) {
-		items := make([]listArchivedJSONItem, 0, len(archived))
+		items := make([]output.ListArchivedItem, 0, len(archived))
 		for _, b := range archived {
 			task, matchedPrefix := resolver.TaskFromBranch(b, prefixes)
 			typeName := strings.TrimSuffix(matchedPrefix, "/")
-			items = append(items, listArchivedJSONItem{Task: task, Type: typeName, Branch: b})
+			items = append(items, output.ListArchivedItem{Task: task, Type: typeName, Branch: b})
 		}
 		return output.WriteJSON(cmd.OutOrStdout(), version, "list", items)
 	}

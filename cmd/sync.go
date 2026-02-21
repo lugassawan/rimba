@@ -110,7 +110,7 @@ var syncCmd = &cobra.Command{
 func syncOne(sc syncContext, task string, worktrees []resolver.WorktreeInfo, prefixes []string, useMerge, push bool) error {
 	wt, found := resolver.FindBranchForTask(task, worktrees, prefixes)
 	if !found {
-		return fmt.Errorf(errWorktreeNotFound, task)
+		return fmt.Errorf(operations.ErrWorktreeNotFoundFmt, task)
 	}
 
 	dirty, err := git.IsDirty(sc.r, wt.Path)

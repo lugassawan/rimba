@@ -7,6 +7,7 @@ import (
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/deps"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
@@ -172,7 +173,7 @@ var depsInstallCmd = &cobra.Command{
 				}
 			}
 			if !found {
-				return fmt.Errorf(errWorktreeNotFound, task)
+				return fmt.Errorf(operations.ErrWorktreeNotFoundFmt, task)
 			}
 		}
 

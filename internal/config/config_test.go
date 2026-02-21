@@ -147,38 +147,6 @@ func TestFromContextNil(t *testing.T) {
 	}
 }
 
-func TestValidate(t *testing.T) {
-	tests := []struct {
-		name string
-		cfg  config.Config
-	}{
-		{
-			name: "fully populated config",
-			cfg:  config.Config{WorktreeDir: "../worktrees", DefaultSource: testDefaultBranch},
-		},
-		{
-			name: "empty worktree_dir is valid",
-			cfg:  config.Config{DefaultSource: testDefaultBranch},
-		},
-		{
-			name: "empty default_source is valid",
-			cfg:  config.Config{WorktreeDir: "../worktrees"},
-		},
-		{
-			name: "all empty is valid",
-			cfg:  config.Config{},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.cfg.Validate(); err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-		})
-	}
-}
-
 func TestLoadMinimalConfig(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, config.FileName)

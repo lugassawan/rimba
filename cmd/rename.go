@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	renameCmd.Flags().BoolP("force", "f", false, "Force rename even if worktree is locked")
+	renameCmd.Flags().BoolP(flagForce, "f", false, "Force rename even if worktree is locked")
 	rootCmd.AddCommand(renameCmd)
 }
 
@@ -49,7 +49,7 @@ var renameCmd = &cobra.Command{
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
 
-		force, _ := cmd.Flags().GetBool("force")
+		force, _ := cmd.Flags().GetBool(flagForce)
 		s.Start("Renaming worktree...")
 
 		if _, err := operations.RenameWorktree(r, wt, newTask, wtDir, force); err != nil {

@@ -49,7 +49,7 @@ func MergeWorktree(r git.Runner, params MergeParams, onProgress ProgressFunc) (M
 	// Resolve source
 	source, found := resolver.FindBranchForTask(params.SourceTask, worktrees, prefixes)
 	if !found {
-		return MergeResult{}, fmt.Errorf(errWorktreeNotFound, params.SourceTask)
+		return MergeResult{}, fmt.Errorf(ErrWorktreeNotFoundFmt, params.SourceTask)
 	}
 
 	// Resolve target
@@ -62,7 +62,7 @@ func MergeWorktree(r git.Runner, params MergeParams, onProgress ProgressFunc) (M
 	} else {
 		target, tgtFound := resolver.FindBranchForTask(params.IntoTask, worktrees, prefixes)
 		if !tgtFound {
-			return MergeResult{}, fmt.Errorf(errWorktreeNotFound, params.IntoTask)
+			return MergeResult{}, fmt.Errorf(ErrWorktreeNotFoundFmt, params.IntoTask)
 		}
 		targetDir = target.Path
 		targetLabel = target.Branch

@@ -52,11 +52,6 @@ func (c *Config) IsAutoDetectDeps() bool {
 	return *c.Deps.AutoDetect
 }
 
-// Validate checks config fields for consistency.
-func (c *Config) Validate() error {
-	return nil
-}
-
 // DefaultWorktreeDir returns the conventional worktree directory path for a repo.
 func DefaultWorktreeDir(repoName string) string {
 	return "../" + repoName + "-worktrees"
@@ -98,9 +93,6 @@ func Load(path string) (*Config, error) {
 	var cfg Config
 	if err := toml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
-	}
-	if err := cfg.Validate(); err != nil {
-		return nil, err
 	}
 	return &cfg, nil
 }
@@ -160,11 +152,7 @@ func LoadDir(dirPath string) (*Config, error) {
 		return nil, fmt.Errorf("failed to read local config: %w", err)
 	}
 
-	cfg := Merge(team, local)
-	if err := cfg.Validate(); err != nil {
-		return nil, err
-	}
-	return cfg, nil
+	return Merge(team, local), nil
 }
 
 // Resolve loads config by checking for the .rimba/ directory first,
