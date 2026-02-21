@@ -2,7 +2,7 @@
 description: rimba git worktree manager commands and workflows
 globs:
   - "*.go"
-  - ".rimba.toml"
+  - ".rimba/settings.toml"
 alwaysApply: false
 ---
 
@@ -22,6 +22,7 @@ See AGENTS.md at the repo root for full documentation.
 8. `rimba archive <task>` — remove worktree, keep branch
 9. `rimba exec <cmd>` — run across all worktrees
 10. `rimba clean --merged` — remove merged worktrees
+11. `rimba mcp` — start MCP server for AI tool integration
 
 ## Workflow Recipes
 
@@ -38,4 +39,4 @@ Envelope: `{"version", "command", "data"}` or `{"version", "command", "error", "
 
 - Prefer `archive` over `remove` to keep branches for reference.
 - Use `--force` only when you understand the implications.
-- Never modify `.rimba.toml` without asking the user.
+- Never modify `.rimba/settings.toml` without asking the user.

@@ -12,12 +12,11 @@ See AGENTS.md at the repo root for full rimba documentation.
 - `rimba merge <task>` — merge back to source branch
 - `rimba clean --merged` — remove merged worktrees
 - `rimba exec <cmd>` — run command across all worktrees
+- `rimba mcp` — start MCP server for AI tool integration
 
-### Config Shape (`.rimba.toml`)
+### Config Shape (`.rimba/settings.toml`)
 
 ```toml
-worktree_dir = "../<repo>-worktrees"
-default_source = "main"
 copy_files = [".env", ".env.local", ".envrc", ".tool-versions"]
 post_create = []
 ```

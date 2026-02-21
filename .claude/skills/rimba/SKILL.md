@@ -29,6 +29,7 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 | Run across worktrees | `rimba exec "<cmd>"` |
 | Check for conflicts | `rimba conflict-check` |
 | Check dependencies | `rimba deps status` |
+| Use MCP server | `rimba mcp` (stdio transport for AI agents) |
 
 ## JSON Output
 
@@ -50,8 +51,7 @@ Commands supporting `--json`: `list`, `status`, `exec`, `conflict-check`, `deps 
 | Error | Cause | Fix |
 |-------|-------|-----|
 | "not a git repository" | Not inside a git repo | `cd` into a git repo |
-| ".rimba.toml not found" | rimba not initialized | Run `rimba init` |
-| "worktree_dir must not be empty" | Bad config | Check `.rimba.toml` |
+| "config not found" | rimba not initialized | Run `rimba init` |
 | "branch already exists" | Task name in use | Pick a different task name |
 | "worktree has uncommitted changes" | Dirty worktree | Commit or stash changes, or use `--force` |
 
@@ -59,5 +59,5 @@ Commands supporting `--json`: `list`, `status`, `exec`, `conflict-check`, `deps 
 
 - Prefer `rimba archive` over `rimba remove` to preserve branches
 - Use `--force` only when you understand the implications
-- Never modify `.rimba.toml` without asking the user
+- Never modify `.rimba/settings.toml` without asking the user
 - Always check `rimba status` before bulk operations
