@@ -5,6 +5,7 @@ import (
 	"github.com/golangci/plugin-module-register/register"
 	"golang.org/x/tools/go/analysis"
 
+	"github.com/lugassawan/rimba/tools/lint/maxparams"
 	"github.com/lugassawan/rimba/tools/lint/nolateexport"
 	"github.com/lugassawan/rimba/tools/lint/nolocalstruct"
 )
@@ -21,6 +22,7 @@ type plugin struct{}
 
 func (p *plugin) BuildAnalyzers() ([]*analysis.Analyzer, error) {
 	return []*analysis.Analyzer{
+		maxparams.Analyzer,
 		nolocalstruct.Analyzer,
 		nolateexport.Analyzer,
 	}, nil

@@ -39,7 +39,7 @@ linters:
     custom:
       rimbalint:
         type: "module"
-        description: "Rimba custom lint rules (nolocalstruct, nolateexport)"
+        description: "Rimba custom lint rules (maxparams, nolocalstruct, nolateexport)"
     decorder:
       dec-order:
         - type

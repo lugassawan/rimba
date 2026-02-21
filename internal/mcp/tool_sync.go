@@ -33,6 +33,14 @@ func registerSyncTool(s *server.MCPServer, hctx *HandlerContext) {
 	s.AddTool(tool, handleSync(hctx))
 }
 
+// syncOpts bundles shared sync configuration derived from a single request.
+type syncOpts struct {
+	mainBranch   string
+	useMerge     bool
+	push         bool
+	fetchWarning string
+}
+
 func handleSync(hctx *HandlerContext) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		task := req.GetString("task", "")
@@ -40,7 +48,6 @@ func handleSync(hctx *HandlerContext) server.ToolHandlerFunc {
 		useMerge := req.GetBool("merge", false)
 		includeInherited := req.GetBool("include_inherited", false)
 		noPush := req.GetBool("no_push", false)
-		push := !noPush
 
 		cfg, cfgErr := hctx.requireConfig()
 		if cfgErr != nil {
@@ -65,36 +72,42 @@ func handleSync(hctx *HandlerContext) server.ToolHandlerFunc {
 		}
 
 		prefixes := resolver.AllPrefixes()
+		opts := syncOpts{
+			mainBranch:   cfg.DefaultSource,
+			useMerge:     useMerge,
+			push:         !noPush,
+			fetchWarning: fetchWarning,
+		}
 
 		if !all {
-			return syncSingle(r, task, worktrees, prefixes, cfg.DefaultSource, useMerge, push, fetchWarning)
+			return syncSingle(r, task, worktrees, prefixes, opts)
 		}
-		return syncMultiple(r, worktrees, prefixes, cfg.DefaultSource, useMerge, includeInherited, push, fetchWarning)
+		return syncMultiple(r, worktrees, prefixes, opts, includeInherited)
 	}
 }
 
-func syncSingle(r git.Runner, task string, worktrees []resolver.WorktreeInfo, prefixes []string, mainBranch string, useMerge, push bool, fetchWarning string) (*mcp.CallToolResult, error) {
+func syncSingle(r git.Runner, task string, worktrees []resolver.WorktreeInfo, prefixes []string, opts syncOpts) (*mcp.CallToolResult, error) {
 	wt, found := resolver.FindBranchForTask(task, worktrees, prefixes)
 	if !found {
 		return mcp.NewToolResultError("worktree not found for task \"" + task + "\""), nil
 	}
 
-	sr := operations.SyncWorktree(r, mainBranch, wt, useMerge, push)
+	sr := operations.SyncWorktree(r, opts.mainBranch, wt, opts.useMerge, opts.push)
 
 	results := []syncWorktreeResult{convertSyncResult(sr)}
 
-	return marshalResult(syncResult{FetchWarning: fetchWarning, Results: results})
+	return marshalResult(syncResult{FetchWarning: opts.fetchWarning, Results: results})
 }
 
-func syncMultiple(r git.Runner, worktrees []resolver.WorktreeInfo, prefixes []string, mainBranch string, useMerge, includeInherited, push bool, fetchWarning string) (*mcp.CallToolResult, error) {
+func syncMultiple(r git.Runner, worktrees []resolver.WorktreeInfo, prefixes []string, opts syncOpts, includeInherited bool) (*mcp.CallToolResult, error) {
 	allTasks := operations.CollectTasks(worktrees, prefixes)
-	eligible := operations.FilterEligible(worktrees, prefixes, mainBranch, allTasks, includeInherited)
+	eligible := operations.FilterEligible(worktrees, prefixes, opts.mainBranch, allTasks, includeInherited)
 
 	results := parallel.Collect(len(eligible), 4, func(i int) syncWorktreeResult {
-		return convertSyncResult(operations.SyncWorktree(r, mainBranch, eligible[i], useMerge, push))
+		return convertSyncResult(operations.SyncWorktree(r, opts.mainBranch, eligible[i], opts.useMerge, opts.push))
 	})
 
-	return marshalResult(syncResult{FetchWarning: fetchWarning, Results: results})
+	return marshalResult(syncResult{FetchWarning: opts.fetchWarning, Results: results})
 }
 
 func convertSyncResult(sr operations.SyncWorktreeResult) syncWorktreeResult {
