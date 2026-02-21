@@ -10,230 +10,9 @@ import (
 	"time"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/spf13/cobra"
 )
-
-// mergedWorktreeRunner returns a mockRunner that supports MergedBranches and ListWorktrees.
-func mergedWorktreeRunner(mergedOut, worktreeOut string) *mockRunner {
-	return &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 1 && args[0] == cmdBranch {
-				return mergedOut, nil
-			}
-			if len(args) >= 1 && args[0] == cmdWorktreeTest {
-				return worktreeOut, nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
-}
-
-func TestFindMergedCandidatesFound(t *testing.T) {
-	worktreeOut := strings.Join([]string{
-		wtRepo,
-		"HEAD abc123",
-		"branch refs/heads/main",
-		"",
-		wtDone,
-		"HEAD def456",
-		branchRefPrefix + branchDone,
-		"",
-		"worktree /wt/feature-active",
-		"HEAD ghi789",
-		"branch refs/heads/feature/active",
-		"",
-	}, "\n")
-
-	r := mergedWorktreeRunner("  "+branchDone+"\n  bugfix/old", worktreeOut)
-	candidates, err := findMergedCandidates(r, branchMain, branchMain)
-	if err != nil {
-		t.Fatalf(fatalFindMerged, err)
-	}
-	if len(candidates) != 1 {
-		t.Fatalf("got %d candidates, want 1", len(candidates))
-	}
-	if candidates[0].branch != branchDone {
-		t.Errorf("branch = %q, want %q", candidates[0].branch, branchDone)
-	}
-}
-
-func TestFindMergedCandidatesRemoteRef(t *testing.T) {
-	worktreeOut := strings.Join([]string{
-		wtRepo,
-		headABC123,
-		branchRefMain,
-		"",
-		wtDone,
-		headDEF456,
-		branchRefPrefix + branchDone,
-		"",
-	}, "\n")
-
-	// mergeRef differs from mainBranch — simulates post-fetch scenario
-	r := mergedWorktreeRunner("  "+branchDone+"\n  main", worktreeOut)
-	candidates, err := findMergedCandidates(r, "origin/"+branchMain, branchMain)
-	if err != nil {
-		t.Fatalf(fatalFindMerged, err)
-	}
-	if len(candidates) != 1 {
-		t.Fatalf("got %d candidates, want 1", len(candidates))
-	}
-	if candidates[0].branch != branchDone {
-		t.Errorf("branch = %q, want %q", candidates[0].branch, branchDone)
-	}
-}
-
-func TestFindMergedCandidatesNone(t *testing.T) {
-	r := mergedWorktreeRunner("", wtRepo+headMainBlock)
-	candidates, err := findMergedCandidates(r, branchMain, branchMain)
-	if err != nil {
-		t.Fatalf(fatalFindMerged, err)
-	}
-	if len(candidates) != 0 {
-		t.Errorf("expected 0 candidates, got %d", len(candidates))
-	}
-}
-
-func TestFindMergedCandidatesError(t *testing.T) {
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 1 && args[0] == cmdBranch {
-				return "", errGitFailed
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
-
-	_, err := findMergedCandidates(r, branchMain, branchMain)
-	if err == nil {
-		t.Fatal(errExpected)
-	}
-}
-
-func TestFindMergedCandidatesWorktreeError(t *testing.T) {
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 1 && args[0] == cmdBranch {
-				return "  feature/done", nil // MergedBranches succeeds
-			}
-			if len(args) >= 1 && args[0] == cmdWorktreeTest {
-				return "", errGitFailed // ListWorktrees fails
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
-
-	_, err := findMergedCandidates(r, branchMain, branchMain)
-	if err == nil {
-		t.Fatal("expected error from ListWorktrees failure")
-	}
-}
-
-// squashWorktreeRunner returns a mockRunner that supports MergedBranches, ListWorktrees,
-// and squash-merge detection (merge-base, rev-parse, commit-tree, cherry).
-func squashWorktreeRunner(mergedOut, worktreeOut string, cherryResult string, cherryErr error) *mockRunner {
-	return &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 1 && args[0] == cmdBranch {
-				return mergedOut, nil
-			}
-			if len(args) >= 1 && args[0] == cmdWorktreeTest {
-				return worktreeOut, nil
-			}
-			if len(args) >= 1 && args[0] == cmdMergeBase {
-				return "base123", nil
-			}
-			if len(args) >= 1 && args[0] == cmdRevParse {
-				return "tree456", nil
-			}
-			if len(args) >= 1 && args[0] == cmdCommitTree {
-				return "temp789", nil
-			}
-			if len(args) >= 1 && args[0] == cmdCherry {
-				return cherryResult, cherryErr
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
-}
-
-func squashWorktreeOut() string {
-	return strings.Join([]string{
-		wtRepo,
-		headABC123,
-		branchRefMain,
-		"",
-		"worktree " + pathWtSquash,
-		headDEF456,
-		branchRefPrefix + branchSquash,
-		"",
-	}, "\n")
-}
-
-func TestFindMergedCandidatesSquashMerge(t *testing.T) {
-	// Branch not in mergedSet, but detected via squash-merge fallback
-	r := squashWorktreeRunner("", squashWorktreeOut(), "- abc789", nil)
-	candidates, err := findMergedCandidates(r, branchMain, branchMain)
-	if err != nil {
-		t.Fatalf(fatalFindMerged, err)
-	}
-	if len(candidates) != 1 {
-		t.Fatalf("got %d candidates, want 1", len(candidates))
-	}
-	if candidates[0].branch != branchSquash {
-		t.Errorf("branch = %q, want %q", candidates[0].branch, branchSquash)
-	}
-}
-
-func TestFindMergedCandidatesSquashError(t *testing.T) {
-	// Squash detection errors are gracefully skipped
-	r := squashWorktreeRunner("", squashWorktreeOut(), "", errGitFailed)
-	candidates, err := findMergedCandidates(r, branchMain, branchMain)
-	if err != nil {
-		t.Fatalf(fatalFindMerged, err)
-	}
-	if len(candidates) != 0 {
-		t.Errorf("expected 0 candidates (squash error skipped), got %d", len(candidates))
-	}
-}
-
-func TestFindMergedCandidatesBothMergeTypes(t *testing.T) {
-	// One branch via regular merge, one via squash fallback
-	worktreeOut := strings.Join([]string{
-		wtRepo,
-		headABC123,
-		branchRefMain,
-		"",
-		wtDone,
-		headDEF456,
-		branchRefPrefix + branchDone,
-		"",
-		"worktree " + pathWtSquash,
-		"HEAD ghi789",
-		branchRefPrefix + branchSquash,
-		"",
-	}, "\n")
-
-	r := squashWorktreeRunner("  "+branchDone, worktreeOut, "- abc789", nil)
-	candidates, err := findMergedCandidates(r, branchMain, branchMain)
-	if err != nil {
-		t.Fatalf(fatalFindMerged, err)
-	}
-	if len(candidates) != 2 {
-		t.Fatalf("got %d candidates, want 2", len(candidates))
-	}
-	// First should be the regular merged one, second the squash-merged one
-	if candidates[0].branch != branchDone {
-		t.Errorf("candidates[0].branch = %q, want %q", candidates[0].branch, branchDone)
-	}
-	if candidates[1].branch != branchSquash {
-		t.Errorf("candidates[1].branch = %q, want %q", candidates[1].branch, branchSquash)
-	}
-}
 
 func TestCleanMergedFetchFails(t *testing.T) {
 	worktreeOut := cleanMergedWorktreeOut()
@@ -322,9 +101,9 @@ func TestCleanMergedFetchSucceeds(t *testing.T) {
 
 func TestPrintMergedCandidates(t *testing.T) {
 	cmd, buf := newTestCmd()
-	candidates := []cleanCandidate{
-		{path: pathWtDone, branch: branchDone},
-		{path: "/wt/bugfix-old", branch: "bugfix/old"},
+	candidates := []operations.CleanCandidate{
+		{Path: pathWtDone, Branch: branchDone},
+		{Path: "/wt/bugfix-old", Branch: "bugfix/old"},
 	}
 	printMergedCandidates(cmd, candidates)
 
@@ -337,65 +116,6 @@ func TestPrintMergedCandidates(t *testing.T) {
 	}
 	if !strings.Contains(out, "old") {
 		t.Errorf("output missing task 'old': %q", out)
-	}
-}
-
-func testMergedCandidate() []cleanCandidate {
-	return []cleanCandidate{{path: pathWtDone, branch: branchDone}}
-}
-
-func TestRemoveMergedWorktreesAllSucceed(t *testing.T) {
-	cmd, _ := newTestCmd()
-	r := &mockRunner{
-		run:      func(_ ...string) (string, error) { return "", nil },
-		runInDir: noopRunInDir,
-	}
-
-	removed := removeWorktrees(cmd, r, testMergedCandidate())
-	if removed != 1 {
-		t.Errorf("removed = %d, want 1", removed)
-	}
-}
-
-func TestRemoveMergedWorktreesRemoveFails(t *testing.T) {
-	cmd, buf := newTestCmd()
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == cmdRemove {
-				return "", errors.New("locked")
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
-
-	removed := removeWorktrees(cmd, r, testMergedCandidate())
-	if removed != 0 {
-		t.Errorf("removed = %d, want 0", removed)
-	}
-	if !strings.Contains(buf.String(), "Failed to remove") {
-		t.Errorf("output = %q, want failure message", buf.String())
-	}
-}
-
-func TestRemoveMergedWorktreesDeleteBranchFails(t *testing.T) {
-	cmd, buf := newTestCmd()
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 1 && args[0] == cmdBranch {
-				return "", errors.New("branch not found")
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
-
-	removed := removeWorktrees(cmd, r, testMergedCandidate())
-	if removed != 0 {
-		t.Errorf("removed = %d, want 0 (branch delete failed)", removed)
-	}
-	if !strings.Contains(buf.String(), "failed to delete branch") {
-		t.Errorf("output = %q, want branch delete failure message", buf.String())
 	}
 }
 
@@ -635,45 +355,6 @@ func newCleanStaleCmd() (*cobra.Command, *bytes.Buffer) {
 	return cmd, buf
 }
 
-func TestFindStaleCandidates(t *testing.T) {
-	oldTimestamp := strconv.FormatInt(time.Now().Add(-30*24*time.Hour).Unix(), 10)
-	recentTimestamp := strconv.FormatInt(time.Now().Add(-1*time.Hour).Unix(), 10)
-
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if args[0] == cmdWorktreeTest && args[1] == cmdList {
-				return strings.Join([]string{
-					wtRepo, headABC123, branchRefMain, "",
-					wtFeatureLogin, headDEF456, branchRefFeatureLogin, "",
-					wtDone, "HEAD ghi789", branchRefPrefix + branchDone, "",
-				}, "\n"), nil
-			}
-			if args[0] == cmdLog {
-				// Return old for feature/login, recent for feature/done
-				branch := args[len(args)-1]
-				if branch == branchFeature {
-					return oldTimestamp + "\tcommit", nil
-				}
-				return recentTimestamp + "\tcommit", nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
-
-	candidates, err := findStaleCandidates(r, branchMain, 14)
-	if err != nil {
-		t.Fatalf("findStaleCandidates: %v", err)
-	}
-
-	if len(candidates) != 1 {
-		t.Fatalf("got %d candidates, want 1", len(candidates))
-	}
-	if candidates[0].branch != branchFeature {
-		t.Errorf("branch = %q, want %q", candidates[0].branch, branchFeature)
-	}
-}
-
 func TestCleanStaleDryRun(t *testing.T) {
 	oldTimestamp := strconv.FormatInt(time.Now().Add(-30*24*time.Hour).Unix(), 10)
 	cmd, buf := newCleanStaleCmd()
@@ -801,49 +482,6 @@ func TestCleanStaleResolveError(t *testing.T) {
 	}
 }
 
-func TestFindStaleCandidatesWorktreeError(t *testing.T) {
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if args[0] == cmdWorktreeTest {
-				return "", errGitFailed
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
-
-	_, err := findStaleCandidates(r, branchMain, 14)
-	if err == nil {
-		t.Fatal("expected error from ListWorktrees failure")
-	}
-}
-
-func TestFindStaleCandidatesCommitError(t *testing.T) {
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if args[0] == cmdWorktreeTest && args[1] == cmdList {
-				return strings.Join([]string{
-					wtRepo, headABC123, branchRefMain, "",
-					wtFeatureLogin, headDEF456, branchRefFeatureLogin, "",
-				}, "\n"), nil
-			}
-			if args[0] == cmdLog {
-				return "", errGitFailed
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
-
-	candidates, err := findStaleCandidates(r, branchMain, 14)
-	if err != nil {
-		t.Fatalf("findStaleCandidates: %v", err)
-	}
-	if len(candidates) != 0 {
-		t.Errorf("expected 0 candidates (commit error skipped), got %d", len(candidates))
-	}
-}
-
 func TestCleanMergedFindCandidatesError(t *testing.T) {
 	cmd, _ := newCleanMergedCmd()
 	// resolveMainBranch succeeds but findMergedCandidates fails (MergedBranches error)
@@ -888,29 +526,6 @@ func TestCleanStaleFindCandidatesError(t *testing.T) {
 	err := cleanStale(cmd, r)
 	if err == nil {
 		t.Fatal("expected error from findStaleCandidates failure")
-	}
-}
-
-func TestFindStaleCandidatesSkipsBareAndEmpty(t *testing.T) {
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if args[0] == cmdWorktreeTest && args[1] == cmdList {
-				return strings.Join([]string{
-					wtRepo, headABC123, "bare", "",
-					"worktree /wt/detached", "HEAD def456", "",
-				}, "\n"), nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
-
-	candidates, err := findStaleCandidates(r, branchMain, 14)
-	if err != nil {
-		t.Fatalf("findStaleCandidates: %v", err)
-	}
-	if len(candidates) != 0 {
-		t.Errorf("expected 0 candidates (bare + detached filtered), got %d", len(candidates))
 	}
 }
 

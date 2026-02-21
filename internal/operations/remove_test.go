@@ -162,7 +162,7 @@ func TestRemoveAndCleanup_Success(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	wtRemoved, brDeleted, err := removeAndCleanup(r, "/wt/test", "feature/test", false)
+	wtRemoved, brDeleted, err := removeAndCleanup(r, "/wt/test", "feature/test")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -179,7 +179,7 @@ func TestRemoveAndCleanup_WtRemovalFails(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	wtRemoved, brDeleted, err := removeAndCleanup(r, "/wt/test", "feature/test", false)
+	wtRemoved, brDeleted, err := removeAndCleanup(r, "/wt/test", "feature/test")
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -200,7 +200,7 @@ func TestRemoveAndCleanup_BranchDeleteFails(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	wtRemoved, brDeleted, err := removeAndCleanup(r, "/wt/test", "feature/test", false)
+	wtRemoved, brDeleted, err := removeAndCleanup(r, "/wt/test", "feature/test")
 	if err == nil {
 		t.Fatal("expected error")
 	}
