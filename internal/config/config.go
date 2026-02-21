@@ -2,7 +2,6 @@ package config
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -21,8 +20,8 @@ const (
 )
 
 type Config struct {
-	WorktreeDir   string   `toml:"worktree_dir"`
-	DefaultSource string   `toml:"default_source"`
+	WorktreeDir   string   `toml:"worktree_dir,omitempty"`
+	DefaultSource string   `toml:"default_source,omitempty"`
 	CopyFiles     []string `toml:"copy_files"`
 	PostCreate    []string `toml:"post_create,omitempty"`
 
@@ -44,12 +43,6 @@ type ModuleConfig struct {
 	WorkDir  string `toml:"work_dir,omitempty"`
 }
 
-// Validation error messages for required config fields.
-const (
-	ErrMsgEmptyWorktreeDir   = "worktree_dir must not be empty"
-	ErrMsgEmptyDefaultSource = "default_source must not be empty"
-)
-
 // IsAutoDetectDeps returns whether automatic dependency detection is enabled.
 // Defaults to true when Deps or AutoDetect is not configured.
 func (c *Config) IsAutoDetectDeps() bool {
@@ -59,29 +52,41 @@ func (c *Config) IsAutoDetectDeps() bool {
 	return *c.Deps.AutoDetect
 }
 
-// Validate checks that required config fields are present.
+// Validate checks config fields for consistency.
 func (c *Config) Validate() error {
-	var errs []error
+	return nil
+}
+
+// DefaultWorktreeDir returns the conventional worktree directory path for a repo.
+func DefaultWorktreeDir(repoName string) string {
+	return "../" + repoName + "-worktrees"
+}
+
+// DefaultCopyFiles returns the default list of files copied to new worktrees.
+func DefaultCopyFiles() []string {
+	return []string{".env", ".env.local", ".envrc", ".tool-versions"}
+}
+
+// FillDefaults fills missing config fields with auto-derived values.
+// repoName is used for WorktreeDir; defaultBranch is used for DefaultSource.
+func (c *Config) FillDefaults(repoName, defaultBranch string) {
 	if c.WorktreeDir == "" {
-		errs = append(errs, errors.New(ErrMsgEmptyWorktreeDir))
+		c.WorktreeDir = DefaultWorktreeDir(repoName)
 	}
 	if c.DefaultSource == "" {
-		errs = append(errs, errors.New(ErrMsgEmptyDefaultSource))
+		c.DefaultSource = defaultBranch
 	}
-	if len(errs) > 0 {
-		return fmt.Errorf("invalid config: %w", errors.Join(errs...))
+	if c.CopyFiles == nil {
+		c.CopyFiles = DefaultCopyFiles()
 	}
-	return nil
 }
 
 type ctxKey struct{}
 
 func DefaultConfig(repoName, defaultBranch string) *Config {
-	return &Config{
-		WorktreeDir:   "../" + repoName + "-worktrees",
-		DefaultSource: defaultBranch,
-		CopyFiles:     []string{".env", ".env.local", ".envrc", ".tool-versions"},
-	}
+	cfg := &Config{}
+	cfg.FillDefaults(repoName, defaultBranch)
+	return cfg
 }
 
 func Load(path string) (*Config, error) {

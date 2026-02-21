@@ -54,7 +54,7 @@ func TestInitSuccess(t *testing.T) {
 
 	// Verify worktree dir was created
 	repoName := filepath.Base(repoDir)
-	wtDir := filepath.Join(repoDir, "../"+repoName+"-worktrees")
+	wtDir := filepath.Join(repoDir, config.DefaultWorktreeDir(repoName))
 	if _, err := os.Stat(wtDir); os.IsNotExist(err) {
 		t.Errorf("worktree dir not created at %s", wtDir)
 	}

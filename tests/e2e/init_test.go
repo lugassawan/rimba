@@ -21,12 +21,8 @@ func TestInitCreatesConfigAndDir(t *testing.T) {
 	assertFileExists(t, filepath.Join(repo, configDir, teamFile))
 	assertFileExists(t, filepath.Join(repo, configDir, localFile))
 
-	// Worktree dir is created relative to repo root
-	cfg, err := config.Resolve(repo)
-	if err != nil {
-		t.Fatalf("failed to load config: %v", err)
-	}
-	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	// Worktree dir is created using convention
+	wtDir := filepath.Join(repo, config.DefaultWorktreeDir(filepath.Base(repo)))
 	assertFileExists(t, wtDir)
 
 	// .gitignore is created with .rimba/settings.local.toml
@@ -43,16 +39,29 @@ func TestInitConfigDefaults(t *testing.T) {
 	repo := setupRepo(t)
 	rimbaSuccess(t, repo, "init")
 
-	cfg, err := config.Resolve(repo)
+	// Raw config should only have copy_files (worktree_dir/default_source auto-derived)
+	raw, err := config.Resolve(repo)
 	if err != nil {
 		t.Fatalf("failed to load config: %v", err)
 	}
 
-	if cfg.DefaultSource != branchMain {
-		t.Errorf("expected default_source %q, got %q", branchMain, cfg.DefaultSource)
+	if raw.WorktreeDir != "" {
+		t.Errorf("expected raw worktree_dir to be empty, got %q", raw.WorktreeDir)
 	}
-	if len(cfg.CopyFiles) == 0 {
+	if raw.DefaultSource != "" {
+		t.Errorf("expected raw default_source to be empty, got %q", raw.DefaultSource)
+	}
+	if len(raw.CopyFiles) == 0 {
 		t.Errorf("expected copy_files to be non-empty")
+	}
+
+	// After FillDefaults, fields should be populated
+	raw.FillDefaults(filepath.Base(repo), branchMain)
+	if raw.WorktreeDir == "" {
+		t.Errorf("expected worktree_dir to be non-empty after FillDefaults")
+	}
+	if raw.DefaultSource != branchMain {
+		t.Errorf("expected default_source %q, got %q", branchMain, raw.DefaultSource)
 	}
 }
 
