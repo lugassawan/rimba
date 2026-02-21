@@ -5,59 +5,8 @@ import (
 	"io"
 	"path/filepath"
 
-	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/deps"
-	"github.com/lugassawan/rimba/internal/git"
 )
-
-// installDeps detects modules and installs dependencies, returning the results.
-// existingEntries should contain the current worktree list to avoid a redundant git call.
-func installDeps(r git.Runner, cfg *config.Config, wtPath string, existingEntries []git.WorktreeEntry, onProgress deps.ProgressFunc) []deps.InstallResult {
-	var configModules []config.ModuleConfig
-	if cfg.Deps != nil {
-		configModules = cfg.Deps.Modules
-	}
-
-	existingPaths := worktreePathsExcluding(existingEntries, wtPath)
-
-	modules, err := deps.ResolveModules(wtPath, cfg.IsAutoDetectDeps(), configModules, existingPaths)
-	if err != nil || len(modules) == 0 {
-		return nil
-	}
-
-	mgr := &deps.Manager{Runner: r}
-	return mgr.Install(wtPath, modules, onProgress)
-}
-
-// installDepsPreferSource is like installDeps but prefers cloning from sourceWT.
-// existingEntries should contain the current worktree list to avoid a redundant git call.
-func installDepsPreferSource(r git.Runner, cfg *config.Config, wtPath, sourceWT string, existingEntries []git.WorktreeEntry, onProgress deps.ProgressFunc) []deps.InstallResult {
-	var configModules []config.ModuleConfig
-	if cfg.Deps != nil {
-		configModules = cfg.Deps.Modules
-	}
-
-	existingPaths := worktreePathsExcluding(existingEntries, wtPath)
-
-	modules, err := deps.ResolveModules(wtPath, cfg.IsAutoDetectDeps(), configModules, existingPaths)
-	if err != nil || len(modules) == 0 {
-		return nil
-	}
-
-	mgr := &deps.Manager{Runner: r}
-	return mgr.InstallPreferSource(wtPath, sourceWT, modules, onProgress)
-}
-
-// worktreePathsExcluding returns paths from entries, excluding the given path.
-func worktreePathsExcluding(entries []git.WorktreeEntry, exclude string) []string {
-	var paths []string
-	for _, e := range entries {
-		if e.Path != exclude {
-			paths = append(paths, e.Path)
-		}
-	}
-	return paths
-}
 
 func printInstallResults(out io.Writer, results []deps.InstallResult) {
 	var printed bool
@@ -75,11 +24,6 @@ func printInstallResults(out io.Writer, results []deps.InstallResult) {
 			fmt.Fprintf(out, "    %s: %v\n", r.Module.Dir, r.Error)
 		}
 	}
-}
-
-// runHooks executes post-create hooks and returns the results.
-func runHooks(wtPath string, hooks []string, onProgress deps.ProgressFunc) []deps.HookResult {
-	return deps.RunPostCreateHooks(wtPath, hooks, onProgress)
 }
 
 // printHookResultsList prints pre-computed hook results.

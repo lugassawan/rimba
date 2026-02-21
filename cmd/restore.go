@@ -75,10 +75,15 @@ var restoreCmd = &cobra.Command{
 		// Dependencies
 		wtEntries, _ := git.ListWorktrees(r)
 		skipDeps, _ := cmd.Flags().GetBool(flagSkipDeps)
+		var configModules []config.ModuleConfig
+		if cfg.Deps != nil {
+			configModules = cfg.Deps.Modules
+		}
+
 		var depsResults []deps.InstallResult
 		if !skipDeps {
 			s.Update("Installing dependencies...")
-			depsResults = installDeps(r, cfg, wtPath, wtEntries, func(cur, total int, name string) {
+			depsResults = operations.InstallDeps(r, wtPath, cfg.IsAutoDetectDeps(), configModules, wtEntries, func(cur, total int, name string) {
 				s.Update(fmt.Sprintf("Installing dependencies... (%s) [%d/%d]", name, cur, total))
 			})
 		}
@@ -88,7 +93,7 @@ var restoreCmd = &cobra.Command{
 		var hookResults []deps.HookResult
 		if !skipHooks && len(cfg.PostCreate) > 0 {
 			s.Update("Running hooks...")
-			hookResults = runHooks(wtPath, cfg.PostCreate, func(cur, total int, name string) {
+			hookResults = operations.RunPostCreateHooks(wtPath, cfg.PostCreate, func(cur, total int, name string) {
 				s.Update(fmt.Sprintf("Running hooks... (%s) [%d/%d]", name, cur, total))
 			})
 		}
