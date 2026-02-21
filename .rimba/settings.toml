@@ -1,0 +1,5 @@
+copy_files = ['.claude']
+
+[open]
+ide = 'code .'
+agent = 'claude'

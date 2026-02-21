@@ -33,7 +33,7 @@ custom-gcl
 .env
 
 # Rimba config (local to each repo)
-.rimba.toml
+.rimba/settings.local.toml
 
 # Editor/IDE
 # .idea/

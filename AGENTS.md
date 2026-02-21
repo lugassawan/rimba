@@ -4,7 +4,7 @@
 # rimba — Git Worktree Manager
 
 rimba manages parallel git worktrees so you can work on multiple tasks simultaneously.
-It is optional and detected via `.rimba.toml` in the repo root.
+It is optional and detected via `.rimba/settings.toml` in the repo root.
 
 ## Prerequisites
 
@@ -25,6 +25,7 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 | Sync & merge | `rimba sync [task]`, `rimba merge <task>` |
 | Clean up | `rimba clean --merged`, `rimba archive <task>`, `rimba remove <task>` |
 | Cross-cutting | `rimba exec <cmd>`, `rimba conflict-check`, `rimba deps status` |
+| AI integration | `rimba mcp` (MCP server for AI coding agents) |
 
 ## Workflow Recipes
 
@@ -57,6 +58,6 @@ Error: `{"version": "...", "command": "...", "error": "...", "code": "..."}`
 
 - Prefer `rimba archive` over `rimba remove` to preserve branches for later reference
 - Use `--force` only when you understand the implications (skips dirty checks)
-- Never modify `.rimba.toml` programmatically without asking the user
+- Never modify `.rimba/settings.toml` programmatically without asking the user
 
 <!-- END RIMBA -->

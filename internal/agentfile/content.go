@@ -32,6 +32,7 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 | Sync & merge | ` + "`" + `rimba sync [task]` + "`" + `, ` + "`" + `rimba merge <task>` + "`" + ` |
 | Clean up | ` + "`" + `rimba clean --merged` + "`" + `, ` + "`" + `rimba archive <task>` + "`" + `, ` + "`" + `rimba remove <task>` + "`" + ` |
 | Cross-cutting | ` + "`" + `rimba exec <cmd>` + "`" + `, ` + "`" + `rimba conflict-check` + "`" + `, ` + "`" + `rimba deps status` + "`" + ` |
+| AI integration | ` + "`" + `rimba mcp` + "`" + ` (MCP server for AI coding agents) |
 
 ## Workflow Recipes
 
@@ -85,12 +86,11 @@ See AGENTS.md at the repo root for full rimba documentation.
 - ` + "`" + `rimba merge <task>` + "`" + ` — merge back to source branch
 - ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
 - ` + "`" + `rimba exec <cmd>` + "`" + ` — run command across all worktrees
+- ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
 
 ### Config Shape (` + "`" + `.rimba/settings.toml` + "`" + `)
 
 ` + "```" + `toml
-worktree_dir = "../<repo>-worktrees"
-default_source = "main"
 copy_files = [".env", ".env.local", ".envrc", ".tool-versions"]
 post_create = []
 ` + "```" + `
@@ -130,6 +130,7 @@ See AGENTS.md at the repo root for full documentation.
 8. ` + "`" + `rimba archive <task>` + "`" + ` — remove worktree, keep branch
 9. ` + "`" + `rimba exec <cmd>` + "`" + ` — run across all worktrees
 10. ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
+11. ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
 
 ## Workflow Recipes
 
@@ -183,6 +184,7 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 | Run across worktrees | ` + "`" + `rimba exec "<cmd>"` + "`" + ` |
 | Check for conflicts | ` + "`" + `rimba conflict-check` + "`" + ` |
 | Check dependencies | ` + "`" + `rimba deps status` + "`" + ` |
+| Use MCP server | ` + "`" + `rimba mcp` + "`" + ` (stdio transport for AI agents) |
 
 ## JSON Output
 
@@ -204,8 +206,7 @@ Commands supporting ` + "`" + `--json` + "`" + `: ` + "`" + `list` + "`" + `, ` 
 | Error | Cause | Fix |
 |-------|-------|-----|
 | "not a git repository" | Not inside a git repo | ` + "`" + `cd` + "`" + ` into a git repo |
-| "config not found" | rimba not initialized | Run` + "`" + `rimba init` + "`" + ` |
-| "worktree_dir must not be empty" | Bad config | Check ` + "`" + `.rimba/settings.toml` + "`" + ` |
+| "config not found" | rimba not initialized | Run ` + "`" + `rimba init` + "`" + ` |
 | "branch already exists" | Task name in use | Pick a different task name |
 | "worktree has uncommitted changes" | Dirty worktree | Commit or stash changes, or use ` + "`" + `--force` + "`" + ` |
 

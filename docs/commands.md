@@ -31,6 +31,7 @@ rimba init --agent-files    # Also install AI agent instruction files
 | Flag | Description |
 |------|-------------|
 | `--agent-files` | Install AI agent instruction files (AGENTS.md, copilot, cursor, claude) |
+| `--personal` | Gitignore the entire `.rimba/` directory instead of just the local config file (for solo developers) |
 
 ---
 
@@ -263,11 +264,12 @@ rimba merge auth --no-ff                   # Force merge commit
 
 ### rimba sync
 
-Sync worktree(s) with the main branch by rebasing (default) or merging. Fetches the latest changes from origin first.
+Sync worktree(s) with the main branch by rebasing (default) or merging. Fetches the latest changes from origin first, then automatically pushes after a successful sync. Use `--no-push` to skip the push step.
 
 ```sh
-rimba sync my-feature                # Rebase a single worktree onto main
+rimba sync my-feature                # Rebase a single worktree onto main, then push
 rimba sync my-feature --merge        # Use merge instead of rebase
+rimba sync my-feature --no-push      # Sync without pushing
 rimba sync --all                     # Sync all eligible worktrees
 rimba sync --all --include-inherited # Include duplicate worktrees
 ```
@@ -277,8 +279,9 @@ rimba sync --all --include-inherited # Include duplicate worktrees
 | `--all` | Sync all eligible worktrees (skips dirty and inherited by default) |
 | `--merge` | Use merge instead of rebase |
 | `--include-inherited` | Include inherited/duplicate worktrees when using `--all` |
+| `--no-push` | Skip pushing after sync (useful for local-only rebase/merge) |
 
-> **Note:** Dirty worktrees are skipped with a warning. On conflict, the rebase is automatically aborted and a recovery hint is printed.
+> **Note:** Dirty worktrees are skipped with a warning. On conflict, the rebase is automatically aborted and a recovery hint is printed. After a successful sync, the branch is pushed to origin by default.
 
 ### rimba merge-plan
 
@@ -419,6 +422,55 @@ rimba deps install my-feature
 
 ---
 
+## AI Integration
+
+### rimba mcp
+
+Start a Model Context Protocol (MCP) server that exposes rimba's worktree management as tools for AI coding agents. The server runs over stdio and follows the MCP specification.
+
+```sh
+rimba mcp    # Start MCP server (stdio transport)
+```
+
+#### Setup
+
+**Claude Code** — add to `.mcp.json` or run:
+
+```sh
+claude mcp add rimba rimba mcp
+```
+
+**Cursor** — add to `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "rimba": {
+      "command": "rimba",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+#### MCP Tools
+
+| Tool | Description | Required Parameters |
+|------|-------------|---------------------|
+| `list` | List all worktrees with branch, path, and status | — |
+| `add` | Create a new worktree for a task | `task` |
+| `remove` | Remove a worktree and optionally delete its branch | `task` |
+| `status` | Show worktree dashboard with summary stats and age info | — |
+| `sync` | Sync worktree(s) with the main branch via rebase or merge, then push | `task` or `all` |
+| `merge` | Merge a worktree branch into main or another worktree | `source` |
+| `exec` | Run a shell command across matching worktrees in parallel | `command` |
+| `conflict-check` | Detect file overlaps between worktree branches | — |
+| `clean` | Clean up stale references, merged branches, or stale worktrees | `mode` (prune, merged, stale) |
+
+> **Note:** All tools return JSON responses. See `rimba mcp` help output for full parameter details.
+
+---
+
 ## Maintenance
 
 ### rimba clean
@@ -474,3 +526,18 @@ Print version, commit, and build date.
 rimba version
 # rimba v0.1.0 (commit: abc1234, built: 2026-01-01T00:00:00Z)
 ```
+
+---
+
+### rimba completion
+
+Generate shell completion scripts for bash, zsh, fish, or PowerShell.
+
+```sh
+rimba completion bash        # Generate bash completions
+rimba completion zsh         # Generate zsh completions
+rimba completion fish        # Generate fish completions
+rimba completion powershell  # Generate PowerShell completions
+```
+
+> **Note:** Follow the printed instructions after generating to install the completions for your shell.
