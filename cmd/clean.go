@@ -4,10 +4,10 @@ import (
 	"bufio"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
+	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
@@ -19,22 +19,11 @@ const (
 	flagStale  = "stale"
 
 	hintMerged       = "Remove worktrees whose branches are already merged into main"
-	hintStale        = "Remove worktrees with no recent commits (configure with --stale-days)"
 	hintDryRunPrune  = "Preview what would be pruned without making changes"
 	hintDryRunMerged = "Preview what would be removed without making changes"
 	hintDryRunStale  = "Preview what would be removed without making changes"
 	hintForce        = "Skip confirmation prompt"
 )
-
-type cleanCandidate struct {
-	path   string
-	branch string
-}
-
-type staleCandidate struct {
-	cleanCandidate
-	lastCommit time.Time
-}
 
 func init() {
 	cleanCmd.Flags().Bool(flagDryRun, false, "Show what would be pruned/removed without making changes")
@@ -127,7 +116,7 @@ func cleanMerged(cmd *cobra.Command, r git.Runner) error {
 	}
 
 	s.Update("Analyzing branches...")
-	candidates, err := findMergedCandidates(r, mergeRef, mainBranch)
+	candidates, err := operations.FindMergedCandidates(r, mergeRef, mainBranch)
 	if err != nil {
 		return err
 	}
@@ -150,80 +139,14 @@ func cleanMerged(cmd *cobra.Command, r git.Runner) error {
 		return nil
 	}
 
-	removed := removeWorktrees(cmd, r, candidates)
+	items := operations.RemoveCandidates(r, candidates, func(msg string) {
+		s.Update(msg)
+	})
+	printCleanedItems(cmd, items)
+
+	removed := countRemoved(items)
 	fmt.Fprintf(cmd.OutOrStdout(), "Cleaned %d merged worktree(s).\n", removed)
 	return nil
-}
-
-func findMergedCandidates(r git.Runner, mergeRef, mainBranch string) ([]cleanCandidate, error) {
-	mergedList, err := git.MergedBranches(r, mergeRef)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list merged branches: %w", err)
-	}
-
-	mergedSet := make(map[string]bool, len(mergedList))
-	for _, b := range mergedList {
-		mergedSet[b] = true
-	}
-
-	entries, err := git.ListWorktrees(r)
-	if err != nil {
-		return nil, err
-	}
-
-	var candidates []cleanCandidate
-	for _, e := range git.FilterEntries(entries, mainBranch) {
-		if mergedSet[e.Branch] {
-			candidates = append(candidates, cleanCandidate{path: e.Path, branch: e.Branch})
-			continue
-		}
-
-		// Fallback: squash-merge detection
-		squashed, err := git.IsSquashMerged(r, mergeRef, e.Branch)
-		if err != nil {
-			continue
-		}
-		if squashed {
-			candidates = append(candidates, cleanCandidate{path: e.Path, branch: e.Branch})
-		}
-	}
-	return candidates, nil
-}
-
-func printMergedCandidates(cmd *cobra.Command, candidates []cleanCandidate) {
-	prefixes := resolver.AllPrefixes()
-	fmt.Fprintln(cmd.OutOrStdout(), "Merged worktrees:")
-	for _, c := range candidates {
-		task, _ := resolver.TaskFromBranch(c.branch, prefixes)
-		fmt.Fprintf(cmd.OutOrStdout(), "  %s (%s)\n", task, c.branch)
-	}
-}
-
-func confirmRemoval(cmd *cobra.Command, count int, label string) bool {
-	fmt.Fprintf(cmd.OutOrStdout(), "\nRemove %d %s worktree(s)? [y/N] ", count, label)
-	reader := bufio.NewReader(cmd.InOrStdin())
-	answer, _ := reader.ReadString('\n')
-	answer = strings.TrimSpace(strings.ToLower(answer))
-	return answer == "y" || answer == "yes"
-}
-
-func removeWorktrees(cmd *cobra.Command, r git.Runner, candidates []cleanCandidate) int {
-	var removed int
-	for _, c := range candidates {
-		if err := git.RemoveWorktree(r, c.path, false); err != nil {
-			fmt.Fprintf(cmd.OutOrStdout(), "Failed to remove worktree %s: %v\nTo remove manually: rimba remove %s\n", c.branch, err, c.branch)
-			continue
-		}
-		fmt.Fprintf(cmd.OutOrStdout(), "Removed worktree: %s\n", c.path)
-
-		if err := git.DeleteBranch(r, c.branch, true); err != nil {
-			fmt.Fprintf(cmd.OutOrStdout(), "Worktree removed but failed to delete branch: %v\nTo delete manually: git branch -D %s\n", err, c.branch)
-			continue
-		}
-		fmt.Fprintf(cmd.OutOrStdout(), "Deleted branch: %s\n", c.branch)
-		removed++
-	}
-	return removed
 }
 
 func cleanStale(cmd *cobra.Command, r git.Runner) error {
@@ -246,7 +169,7 @@ func cleanStale(cmd *cobra.Command, r git.Runner) error {
 	defer s.Stop()
 
 	s.Start("Analyzing worktree activity...")
-	candidates, err := findStaleCandidates(r, mainBranch, staleDays)
+	candidates, err := operations.FindStaleCandidates(r, mainBranch, staleDays)
 	if err != nil {
 		return err
 	}
@@ -268,47 +191,69 @@ func cleanStale(cmd *cobra.Command, r git.Runner) error {
 		return nil
 	}
 
-	toRemove := make([]cleanCandidate, len(candidates))
+	toRemove := make([]operations.CleanCandidate, len(candidates))
 	for i, c := range candidates {
-		toRemove[i] = c.cleanCandidate
+		toRemove[i] = c.CleanCandidate
 	}
 
-	removed := removeWorktrees(cmd, r, toRemove)
+	items := operations.RemoveCandidates(r, toRemove, func(msg string) {
+		s.Update(msg)
+	})
+	printCleanedItems(cmd, items)
+
+	removed := countRemoved(items)
 	fmt.Fprintf(cmd.OutOrStdout(), "Cleaned %d stale worktree(s).\n", removed)
 	return nil
 }
 
-func findStaleCandidates(r git.Runner, mainBranch string, staleDays int) ([]staleCandidate, error) {
-	entries, err := git.ListWorktrees(r)
-	if err != nil {
-		return nil, err
+func printMergedCandidates(cmd *cobra.Command, candidates []operations.CleanCandidate) {
+	prefixes := resolver.AllPrefixes()
+	fmt.Fprintln(cmd.OutOrStdout(), "Merged worktrees:")
+	for _, c := range candidates {
+		task, _ := resolver.TaskFromBranch(c.Branch, prefixes)
+		fmt.Fprintf(cmd.OutOrStdout(), "  %s (%s)\n", task, c.Branch)
 	}
-
-	threshold := time.Now().Add(-time.Duration(staleDays) * 24 * time.Hour)
-
-	var candidates []staleCandidate
-	for _, e := range git.FilterEntries(entries, mainBranch) {
-		ct, err := git.LastCommitTime(r, e.Branch)
-		if err != nil {
-			continue
-		}
-
-		if ct.Before(threshold) {
-			candidates = append(candidates, staleCandidate{
-				cleanCandidate: cleanCandidate{path: e.Path, branch: e.Branch},
-				lastCommit:     ct,
-			})
-		}
-	}
-	return candidates, nil
 }
 
-func printStaleCandidates(cmd *cobra.Command, candidates []staleCandidate) {
+func printStaleCandidates(cmd *cobra.Command, candidates []operations.StaleCandidate) {
 	prefixes := resolver.AllPrefixes()
 	fmt.Fprintln(cmd.OutOrStdout(), "Stale worktrees:")
 	for _, c := range candidates {
-		task, _ := resolver.TaskFromBranch(c.branch, prefixes)
-		age := resolver.FormatAge(c.lastCommit)
-		fmt.Fprintf(cmd.OutOrStdout(), "  %s (%s) — last commit: %s\n", task, c.branch, age)
+		task, _ := resolver.TaskFromBranch(c.Branch, prefixes)
+		age := resolver.FormatAge(c.LastCommit)
+		fmt.Fprintf(cmd.OutOrStdout(), "  %s (%s) — last commit: %s\n", task, c.Branch, age)
 	}
+}
+
+func confirmRemoval(cmd *cobra.Command, count int, label string) bool {
+	fmt.Fprintf(cmd.OutOrStdout(), "\nRemove %d %s worktree(s)? [y/N] ", count, label)
+	reader := bufio.NewReader(cmd.InOrStdin())
+	answer, _ := reader.ReadString('\n')
+	answer = strings.TrimSpace(strings.ToLower(answer))
+	return answer == "y" || answer == "yes"
+}
+
+func printCleanedItems(cmd *cobra.Command, items []operations.CleanedItem) {
+	for _, item := range items {
+		if !item.WorktreeRemoved {
+			fmt.Fprintf(cmd.OutOrStdout(), "Failed to remove worktree %s\nTo remove manually: rimba remove %s\n", item.Branch, item.Branch)
+			continue
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Removed worktree: %s\n", item.Path)
+		if item.BranchDeleted {
+			fmt.Fprintf(cmd.OutOrStdout(), "Deleted branch: %s\n", item.Branch)
+		} else {
+			fmt.Fprintf(cmd.OutOrStdout(), "Worktree removed but failed to delete branch\nTo delete manually: git branch -D %s\n", item.Branch)
+		}
+	}
+}
+
+func countRemoved(items []operations.CleanedItem) int {
+	count := 0
+	for _, item := range items {
+		if item.WorktreeRemoved && item.BranchDeleted {
+			count++
+		}
+	}
+	return count
 }

@@ -9,6 +9,15 @@ import (
 
 const errWorktreeNotFound = "worktree not found for task %q"
 
+// ResolveMainBranch returns the main branch name.
+// If configDefault is non-empty it is used directly; otherwise git detection is used.
+func ResolveMainBranch(r git.Runner, configDefault string) (string, error) {
+	if configDefault != "" {
+		return configDefault, nil
+	}
+	return git.DefaultBranch(r)
+}
+
 // ListWorktreeInfos converts git worktree entries to resolver-compatible WorktreeInfo slice.
 func ListWorktreeInfos(r git.Runner) ([]resolver.WorktreeInfo, error) {
 	entries, err := git.ListWorktrees(r)

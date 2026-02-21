@@ -2,15 +2,12 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/lugassawan/rimba/internal/config"
-	"github.com/lugassawan/rimba/internal/deps"
-	"github.com/lugassawan/rimba/internal/fileutil"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
-	"github.com/lugassawan/rimba/internal/resolver"
+	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
 )
@@ -55,22 +52,8 @@ var addCmd = &cobra.Command{
 			source = cfg.DefaultSource
 		}
 
-		branch := resolver.BranchName(prefix, task)
-		wtDir := filepath.Join(repoRoot, cfg.WorktreeDir)
-		wtPath := resolver.WorktreePath(wtDir, branch)
-
-		wtEntries, err := git.ListWorktrees(r)
-		if err != nil {
-			return err
-		}
-
-		// Validate
-		if git.BranchExists(r, branch) {
-			return fmt.Errorf("branch %q already exists", branch)
-		}
-		if _, err := os.Stat(wtPath); err == nil {
-			return fmt.Errorf("worktree path already exists: %s", wtPath)
-		}
+		skipDeps, _ := cmd.Flags().GetBool(flagSkipDeps)
+		skipHooks, _ := cmd.Flags().GetBool(flagSkipHooks)
 
 		hint.New(cmd, hintPainter(cmd)).
 			Add(flagSkipDeps, hintSkipDeps).
@@ -81,54 +64,41 @@ var addCmd = &cobra.Command{
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
 
-		// Create worktree
-		s.Start("Creating worktree...")
-		if err := git.AddWorktree(r, wtPath, branch, source); err != nil {
+		var configModules []config.ModuleConfig
+		if cfg.Deps != nil {
+			configModules = cfg.Deps.Modules
+		}
+
+		result, err := operations.AddWorktree(r, operations.AddParams{
+			Task:          task,
+			Prefix:        prefix,
+			Source:        source,
+			RepoRoot:      repoRoot,
+			WorktreeDir:   filepath.Join(repoRoot, cfg.WorktreeDir),
+			CopyFiles:     cfg.CopyFiles,
+			SkipDeps:      skipDeps,
+			AutoDetect:    cfg.IsAutoDetectDeps(),
+			ConfigModules: configModules,
+			SkipHooks:     skipHooks,
+			PostCreate:    cfg.PostCreate,
+		}, func(msg string) { s.Start(msg) })
+		if err != nil {
 			return err
 		}
 
-		// Copy files
-		s.Update("Copying files...")
-		copied, err := fileutil.CopyEntries(repoRoot, wtPath, cfg.CopyFiles)
-		if err != nil {
-			return fmt.Errorf("worktree created but failed to copy files: %w\nTo retry, manually copy files to: %s\nTo remove the worktree: rimba remove %s", err, wtPath, task)
-		}
-
-		// Dependencies
-		skipDeps, _ := cmd.Flags().GetBool(flagSkipDeps)
-		var depsResults []deps.InstallResult
-		if !skipDeps {
-			s.Update("Installing dependencies...")
-			depsResults = installDeps(r, cfg, wtPath, wtEntries, func(cur, total int, name string) {
-				s.Update(fmt.Sprintf("Installing dependencies... (%s) [%d/%d]", name, cur, total))
-			})
-		}
-
-		// Post-create hooks
-		skipHooks, _ := cmd.Flags().GetBool(flagSkipHooks)
-		var hookResults []deps.HookResult
-		if !skipHooks && len(cfg.PostCreate) > 0 {
-			s.Update("Running hooks...")
-			hookResults = runHooks(wtPath, cfg.PostCreate, func(cur, total int, name string) {
-				s.Update(fmt.Sprintf("Running hooks... (%s) [%d/%d]", name, cur, total))
-			})
-		}
-
-		s.Stop()
-
 		out := cmd.OutOrStdout()
 		fmt.Fprintf(out, "Created worktree for task %q\n", task)
-		fmt.Fprintf(out, "  Branch: %s\n", branch)
-		fmt.Fprintf(out, "  Path:   %s\n", wtPath)
-		if len(copied) > 0 {
-			fmt.Fprintf(out, "  Copied: %v\n", copied)
+		fmt.Fprintf(out, "  Branch: %s\n", result.Branch)
+		fmt.Fprintf(out, "  Path:   %s\n", result.Path)
+		if len(result.Copied) > 0 {
+			fmt.Fprintf(out, "  Copied: %v\n", result.Copied)
 		}
-		if skipped := fileutil.SkippedEntries(cfg.CopyFiles, copied); len(skipped) > 0 {
-			fmt.Fprintf(out, "  Skipped (not found): %v\n", skipped)
+		if len(result.Skipped) > 0 {
+			fmt.Fprintf(out, "  Skipped (not found): %v\n", result.Skipped)
 		}
 
-		printInstallResults(out, depsResults)
-		printHookResultsList(out, hookResults)
+		printInstallResults(out, result.DepsResults)
+		printHookResultsList(out, result.HookResults)
 
 		return nil
 	},

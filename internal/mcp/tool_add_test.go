@@ -6,9 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/lugassawan/rimba/internal/config"
-	"github.com/lugassawan/rimba/internal/git"
 )
 
 const (
@@ -297,98 +294,6 @@ func TestAddToolBugfixType(t *testing.T) {
 	data := unmarshalJSON[addResult](t, result)
 	if data.Branch != "bugfix/fix-login" {
 		t.Errorf("branch = %q, want %q", data.Branch, "bugfix/fix-login")
-	}
-}
-
-// --- Tests for worktreePathsExcluding ---
-
-func TestWorktreePathsExcluding(t *testing.T) {
-	entries := []git.WorktreeEntry{
-		{Path: "/a"}, {Path: "/b"}, {Path: "/c"},
-	}
-	result := worktreePathsExcluding(entries, "/b")
-	if len(result) != 2 {
-		t.Fatalf("expected 2, got %d", len(result))
-	}
-	if result[0] != "/a" {
-		t.Errorf("result[0] = %q, want %q", result[0], "/a")
-	}
-	if result[1] != "/c" {
-		t.Errorf("result[1] = %q, want %q", result[1], "/c")
-	}
-}
-
-func TestWorktreePathsExcludingNone(t *testing.T) {
-	entries := []git.WorktreeEntry{{Path: "/a"}}
-	result := worktreePathsExcluding(entries, "/nonexistent")
-	if len(result) != 1 {
-		t.Fatalf("expected 1, got %d", len(result))
-	}
-	if result[0] != "/a" {
-		t.Errorf("result[0] = %q, want %q", result[0], "/a")
-	}
-}
-
-func TestWorktreePathsExcludingEmpty(t *testing.T) {
-	var entries []git.WorktreeEntry
-	result := worktreePathsExcluding(entries, "/a")
-	if len(result) != 0 {
-		t.Fatalf("expected 0, got %d", len(result))
-	}
-}
-
-func TestWorktreePathsExcludingAll(t *testing.T) {
-	entries := []git.WorktreeEntry{{Path: "/only"}}
-	result := worktreePathsExcluding(entries, "/only")
-	if len(result) != 0 {
-		t.Fatalf("expected 0, got %d", len(result))
-	}
-}
-
-// --- Tests for configModules ---
-
-func TestConfigModulesNil(t *testing.T) {
-	cfg := &config.Config{}
-	result := configModules(cfg)
-	if result != nil {
-		t.Errorf("expected nil, got %v", result)
-	}
-}
-
-func TestConfigModulesWithDeps(t *testing.T) {
-	cfg := &config.Config{
-		Deps: &config.DepsConfig{
-			Modules: []config.ModuleConfig{{Dir: ".", Lockfile: "package-lock.json", Install: "npm ci"}},
-		},
-	}
-	result := configModules(cfg)
-	if len(result) != 1 {
-		t.Fatalf("expected 1 module, got %d", len(result))
-	}
-	if result[0].Dir != "." {
-		t.Errorf("module dir = %q, want %q", result[0].Dir, ".")
-	}
-}
-
-func TestConfigModulesEmptyModules(t *testing.T) {
-	cfg := &config.Config{
-		Deps: &config.DepsConfig{
-			Modules: []config.ModuleConfig{},
-		},
-	}
-	result := configModules(cfg)
-	if len(result) != 0 {
-		t.Errorf("expected 0 modules, got %d", len(result))
-	}
-}
-
-func TestConfigModulesNilModules(t *testing.T) {
-	cfg := &config.Config{
-		Deps: &config.DepsConfig{},
-	}
-	result := configModules(cfg)
-	if result != nil {
-		t.Errorf("expected nil, got %v", result)
 	}
 }
 

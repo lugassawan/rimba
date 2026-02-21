@@ -32,7 +32,10 @@ func BenchmarkDirtyChecksParallel(b *testing.B) {
 
 	b.ResetTimer()
 	for b.Loop() {
-		var srcResult, tgtResult dirtyResult
+		var srcResult, tgtResult struct {
+			dirty bool
+			err   error
+		}
 		var wg sync.WaitGroup
 		wg.Add(2)
 		go func() {

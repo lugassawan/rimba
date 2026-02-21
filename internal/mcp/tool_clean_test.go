@@ -10,28 +10,20 @@ import (
 
 // Constants for repeated string literals in clean tests.
 const (
-	gitFetch      = "fetch"
-	gitBranch     = "branch"
-	gitLog        = "log"
-	gitRemove     = "remove"
-	gitMerged     = "--merged"
-	gitMergeBase  = "merge-base"
-	gitCommitTree = "commit-tree"
-	gitCherry     = "cherry"
+	gitFetch  = "fetch"
+	gitBranch = "branch"
+	gitLog    = "log"
+	gitRemove = "remove"
+	gitMerged = "--merged"
 
 	modeStale  = "stale"
 	modeMerged = "merged"
 	modePrune  = "prune"
 
-	branchFeatureDone = "feature/done"
 	branchFeatureA    = "feature/a"
-	branchFeatureB    = "feature/b"
+	branchFeatureDone = "feature/done"
 
 	mergedFeatureDoneOutput = "  feature/done\n"
-
-	hashAbc123  = "abc123"
-	hashTree123 = "tree123"
-	hashTemp123 = "temp123"
 )
 
 // mockCmdKey builds a dispatch key from git arguments.
@@ -123,35 +115,6 @@ func staleLogLookup(args []string, commitTimes map[string]string) string {
 		return ts
 	}
 	return ""
-}
-
-// newFindMergedRunner creates a mock runner for findMergedCandidates tests.
-// porcelain is the worktree list output, mergedBranches is the branch --merged output,
-// and cherryPrefix is the prefix returned by git cherry ("+ " or "- ").
-func newFindMergedRunner(porcelain, mergedBranches, cherryPrefix string) *mockRunner {
-	responses := map[string]string{
-		gitBranch + " " + gitMerged: mergedBranches,
-		gitWorktree + " " + gitList: porcelain,
-		gitMergeBase:                hashAbc123,
-		gitRevParse:                 hashTree123,
-		gitCommitTree:               hashTemp123,
-		gitCherry:                   cherryPrefix + hashTemp123,
-	}
-
-	return &mockRunner{
-		run: func(args ...string) (string, error) {
-			key := mockCmdKey(args)
-			if out, ok := responses[key]; ok {
-				return out, nil
-			}
-			if len(args) > 0 {
-				if out, ok := responses[args[0]]; ok {
-					return out, nil
-				}
-			}
-			return "", nil
-		},
-	}
 }
 
 func TestCleanToolRequiresMode(t *testing.T) {
@@ -480,217 +443,6 @@ func TestCleanToolStaleListWorktreesError(t *testing.T) {
 	errText := resultError(t, result)
 	if !strings.Contains(errText, "not a git repository") {
 		t.Errorf("expected git error, got: %s", errText)
-	}
-}
-
-// --- Tests for removeCandidates ---
-
-func TestRemoveCandidatesSuccess(t *testing.T) {
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			return "", nil
-		},
-	}
-	candidates := []mergedCandidate{
-		{path: "/wt/feature-a", branch: branchFeatureA},
-		{path: "/wt/feature-b", branch: branchFeatureB},
-	}
-	removed := removeCandidates(r, candidates)
-	if len(removed) != 2 {
-		t.Fatalf("expected 2 removed, got %d", len(removed))
-	}
-	if removed[0].Branch != branchFeatureA {
-		t.Errorf("removed[0].Branch = %q, want %q", removed[0].Branch, branchFeatureA)
-	}
-	if removed[1].Branch != branchFeatureB {
-		t.Errorf("removed[1].Branch = %q, want %q", removed[1].Branch, branchFeatureB)
-	}
-}
-
-func TestRemoveCandidatesWorktreeRemoveFails(t *testing.T) {
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			// worktree remove fails
-			if len(args) >= 2 && args[0] == gitWorktree && args[1] == gitRemove {
-				return "", errors.New("fatal: cannot remove")
-			}
-			return "", nil
-		},
-	}
-	candidates := []mergedCandidate{
-		{path: "/wt/feature-a", branch: branchFeatureA},
-	}
-	removed := removeCandidates(r, candidates)
-	if len(removed) != 0 {
-		t.Errorf("expected 0 removed when worktree remove fails, got %d", len(removed))
-	}
-}
-
-func TestRemoveCandidatesDeleteBranchFails(t *testing.T) {
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[0] == gitWorktree && args[1] == gitRemove {
-				return "", nil
-			}
-			// branch delete fails
-			if len(args) >= 1 && args[0] == gitBranch {
-				return "", errors.New("error: branch delete failed")
-			}
-			return "", nil
-		},
-	}
-	candidates := []mergedCandidate{
-		{path: "/wt/feature-a", branch: branchFeatureA},
-	}
-	removed := removeCandidates(r, candidates)
-	// Worktree removed but branch not - still reported
-	if len(removed) != 1 {
-		t.Fatalf("expected 1 removed (partial), got %d", len(removed))
-	}
-	if removed[0].Branch != branchFeatureA {
-		t.Errorf("removed[0].Branch = %q, want %q", removed[0].Branch, branchFeatureA)
-	}
-}
-
-func TestRemoveCandidatesMixed(t *testing.T) {
-	callCount := 0
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[0] == gitWorktree && args[1] == gitRemove {
-				callCount++
-				// First removal fails, second succeeds
-				if callCount == 1 {
-					return "", errors.New("fail")
-				}
-				return "", nil
-			}
-			return "", nil
-		},
-	}
-	candidates := []mergedCandidate{
-		{path: "/wt/feature-a", branch: branchFeatureA},
-		{path: "/wt/feature-b", branch: branchFeatureB},
-	}
-	removed := removeCandidates(r, candidates)
-	if len(removed) != 1 {
-		t.Fatalf("expected 1 removed, got %d", len(removed))
-	}
-	if removed[0].Branch != branchFeatureB {
-		t.Errorf("removed[0].Branch = %q, want %q", removed[0].Branch, branchFeatureB)
-	}
-}
-
-// --- Tests for findMergedCandidates ---
-
-func TestFindMergedCandidatesMergedBranch(t *testing.T) {
-	porcelain := worktreePorcelain(
-		struct{ path, branch string }{"/repo", "main"},
-		struct{ path, branch string }{"/wt/feature-done", branchFeatureDone},
-		struct{ path, branch string }{"/wt/feature-wip", "feature/wip"},
-	)
-
-	// "+" prefix means NOT merged (cherry-picked)
-	r := newFindMergedRunner(porcelain, "  feature/done\n  main\n", "+ ")
-	candidates, err := findMergedCandidates(r, "origin/main", "main")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(candidates) != 1 {
-		t.Fatalf("expected 1 candidate, got %d", len(candidates))
-	}
-	if candidates[0].branch != branchFeatureDone {
-		t.Errorf("candidate branch = %q, want %q", candidates[0].branch, branchFeatureDone)
-	}
-}
-
-func TestFindMergedCandidatesSquashMerged(t *testing.T) {
-	porcelain := worktreePorcelain(
-		struct{ path, branch string }{"/repo", "main"},
-		struct{ path, branch string }{"/wt/feature-squashed", "feature/squashed"},
-	)
-
-	// "- " prefix means content already merged (squash)
-	r := newFindMergedRunner(porcelain, "  main\n", "- ")
-	candidates, err := findMergedCandidates(r, "origin/main", "main")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(candidates) != 1 {
-		t.Fatalf("expected 1 candidate (squash merged), got %d", len(candidates))
-	}
-	if candidates[0].branch != "feature/squashed" {
-		t.Errorf("candidate branch = %q, want %q", candidates[0].branch, "feature/squashed")
-	}
-}
-
-func TestFindMergedCandidatesMergedBranchesError(t *testing.T) {
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[0] == gitBranch && args[1] == gitMerged {
-				return "", errors.New("fatal: bad ref")
-			}
-			return "", nil
-		},
-	}
-	_, err := findMergedCandidates(r, "origin/main", "main")
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "merged branches") {
-		t.Errorf("error = %q, expected to contain 'merged branches'", err.Error())
-	}
-}
-
-func TestFindMergedCandidatesListWorktreesError(t *testing.T) {
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[0] == gitBranch && args[1] == gitMerged {
-				return "", nil
-			}
-			if len(args) >= 2 && args[0] == gitWorktree && args[1] == gitList {
-				return "", errors.New("fatal: list error")
-			}
-			return "", nil
-		},
-	}
-	_, err := findMergedCandidates(r, "origin/main", "main")
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "list error") {
-		t.Errorf("error = %q, expected to contain 'list error'", err.Error())
-	}
-}
-
-func TestFindMergedCandidatesSquashMergeError(t *testing.T) {
-	// When IsSquashMerged errors, the branch should be skipped (not fail the whole op)
-	porcelain := worktreePorcelain(
-		struct{ path, branch string }{"/repo", "main"},
-		struct{ path, branch string }{"/wt/feature-err", "feature/err"},
-	)
-
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[0] == gitBranch && args[1] == gitMerged {
-				return "", nil // feature/err not in merged list
-			}
-			if len(args) >= 2 && args[0] == gitWorktree && args[1] == gitList {
-				return porcelain, nil
-			}
-			// IsSquashMerged: merge-base fails
-			if len(args) > 0 && args[0] == gitMergeBase {
-				return "", errors.New("fatal: merge-base error")
-			}
-			return "", nil
-		},
-	}
-	candidates, err := findMergedCandidates(r, "origin/main", "main")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	// The branch with squash-merge error should be skipped
-	if len(candidates) != 0 {
-		t.Errorf("expected 0 candidates (error branch skipped), got %d", len(candidates))
 	}
 }
 

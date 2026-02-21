@@ -42,13 +42,6 @@ const (
 	pathWorktreesFeatureLogin = "/worktrees/feature-login"
 	cmdRevList                = "rev-list"
 
-	// Squash merge detection constants
-	cmdCommitTree = "commit-tree"
-	cmdCherry     = "cherry"
-	cmdMergeBase  = "merge-base"
-	branchSquash  = "feature/squash"
-	pathWtSquash  = "/wt/feature-squash"
-
 	// Shared git command and value constants
 	cmdList               = "list"
 	cmdDiff               = "diff"
@@ -71,7 +64,6 @@ const (
 	branchListArchived = "main\nfeature/archived-task\nfeature/active-task"
 
 	// Shared fatalf format strings
-	fatalFindMerged  = "findMergedCandidates: %v"
 	fatalMergeRunE   = "mergeCmd.RunE: %v"
 	fatalCleanPrune  = "cleanPrune: %v"
 	fatalCleanMerged = "cleanMerged: %v"
