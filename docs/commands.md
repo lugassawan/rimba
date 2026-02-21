@@ -514,7 +514,7 @@ rimba update --force     # Also works on dev builds
 |------|-------------|
 | `--force` | Update even if running a development build |
 
-> **Note:** If the binary cannot be replaced due to file permissions, rimba automatically retries with `sudo`.
+> **Note:** If the binary cannot be replaced due to file permissions, rimba installs to `~/.local/bin` instead.
 
 ---
 

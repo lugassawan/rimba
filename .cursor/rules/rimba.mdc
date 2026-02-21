@@ -16,8 +16,8 @@ See AGENTS.md at the repo root for full documentation.
 2. `rimba list` — list all worktrees
 3. `rimba status` — health overview (dirty, stale, behind)
 4. `rimba open <task>` — print path or run shortcut (--ide, --agent)
-5. `rimba sync [task]` — rebase worktree(s) onto source
-6. `rimba merge <task>` — fast-forward merge into source
+5. `rimba sync [task]` — rebase worktree(s) onto main
+6. `rimba merge <task>` — merge into main and auto-clean up
 7. `rimba remove <task>` — delete worktree + branch
 8. `rimba archive <task>` — remove worktree, keep branch
 9. `rimba exec <cmd>` — run across all worktrees
@@ -27,7 +27,7 @@ See AGENTS.md at the repo root for full documentation.
 ## Workflow Recipes
 
 **New feature:** `rimba add <task>` then work in the worktree directory.
-**Finish feature:** `rimba merge <task>` then `rimba remove <task>`.
+**Finish feature:** `rimba merge <task>` (auto-removes worktree).
 **Housekeeping:** `rimba status` then `rimba clean --merged`.
 
 ## JSON Output

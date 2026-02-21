@@ -21,7 +21,7 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 | Concern | Commands |
 |---------|----------|
 | Create & navigate | `rimba add <task>`, `rimba open <task>` |
-| Inspect | `rimba list`, `rimba status`, `rimba log [task]` |
+| Inspect | `rimba list`, `rimba status`, `rimba log` |
 | Sync & merge | `rimba sync [task]`, `rimba merge <task>` |
 | Clean up | `rimba clean --merged`, `rimba archive <task>`, `rimba remove <task>` |
 | Cross-cutting | `rimba exec <cmd>`, `rimba conflict-check`, `rimba deps status` |
@@ -43,8 +43,7 @@ rimba clean --merged        # remove worktrees whose branches are merged
 
 **Merge and clean up:**
 ```sh
-rimba merge my-feature      # fast-forward merge into source branch
-rimba remove my-feature     # remove worktree + branch
+rimba merge my-feature      # merge into main and auto-clean up
 ```
 
 ## JSON Output

@@ -22,8 +22,8 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 | See all worktrees | `rimba list` or `rimba list --json` |
 | Check worktree health | `rimba status` |
 | Navigate to a worktree | `cd $(rimba open <task>)` |
-| Update from source branch | `rimba sync <task>` or `rimba sync` (all) |
-| Finish a feature | `rimba merge <task>` then `rimba remove <task>` |
+| Update from source branch | `rimba sync <task>` or `rimba sync --all` |
+| Finish a feature | `rimba merge <task>` (auto-removes worktree) |
 | Clean up merged work | `rimba clean --merged` |
 | Pause a task | `rimba archive <task>` (keeps branch) |
 | Run across worktrees | `rimba exec "<cmd>"` |
