@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 
-	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -43,25 +42,16 @@ func handleRemove(hctx *HandlerContext) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(findErr.Error()), nil
 		}
 
-		if err := git.RemoveWorktree(r, wt.Path, force); err != nil {
+		result, err := operations.RemoveWorktree(r, wt, task, keepBranch, force, nil)
+		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		result := removeResult{
-			Task:            task,
-			Branch:          wt.Branch,
-			WorktreeRemoved: true,
-			BranchDeleted:   false,
-		}
-
-		if !keepBranch {
-			if err := git.DeleteBranch(r, wt.Branch, true); err != nil {
-				// Worktree removed but branch deletion failed — partial success
-				return marshalResult(result)
-			}
-			result.BranchDeleted = true
-		}
-
-		return marshalResult(result)
+		return marshalResult(removeResult{
+			Task:            result.Task,
+			Branch:          result.Branch,
+			WorktreeRemoved: result.WorktreeRemoved,
+			BranchDeleted:   result.BranchDeleted,
+		})
 	}
 }

@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
+	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
 )
@@ -47,28 +47,27 @@ var removeCmd = &cobra.Command{
 			Add(flagForce, hintForceRm).
 			Show()
 
+		keepBranch, _ := cmd.Flags().GetBool(flagKeepBranch)
+		force, _ := cmd.Flags().GetBool(flagForce)
+
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
-
-		force, _ := cmd.Flags().GetBool(flagForce)
 		s.Start("Removing worktree...")
-		if err := git.RemoveWorktree(r, wt.Path, force); err != nil {
+
+		result, err := operations.RemoveWorktree(r, wt, task, keepBranch, force, func(msg string) {
+			s.Update(msg)
+		})
+		if err != nil {
 			return err
 		}
 
 		s.Stop()
-		fmt.Fprintf(cmd.OutOrStdout(), "Removed worktree: %s\n", wt.Path)
+		fmt.Fprintf(cmd.OutOrStdout(), "Removed worktree: %s\n", result.Path)
 
-		keepBranch, _ := cmd.Flags().GetBool(flagKeepBranch)
-		if !keepBranch {
-			s.Start("Deleting branch...")
-			if err := git.DeleteBranch(r, wt.Branch, true); err != nil {
-				s.Stop()
-				fmt.Fprintf(cmd.OutOrStdout(), "Worktree removed but failed to delete branch: %v\nTo delete manually: git branch -D %s\n", err, wt.Branch)
-				return nil
-			}
-			s.Stop()
-			fmt.Fprintf(cmd.OutOrStdout(), "Deleted branch: %s\n", wt.Branch)
+		if result.BranchDeleted {
+			fmt.Fprintf(cmd.OutOrStdout(), "Deleted branch: %s\n", result.Branch)
+		} else if result.BranchError != nil {
+			fmt.Fprintln(cmd.OutOrStdout(), result.BranchError)
 		}
 
 		return nil
