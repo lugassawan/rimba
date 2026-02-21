@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 
 	"github.com/lugassawan/rimba/internal/config"
-	"github.com/lugassawan/rimba/internal/deps"
-	"github.com/lugassawan/rimba/internal/fileutil"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
@@ -89,11 +87,6 @@ var duplicateCmd = &cobra.Command{
 		wtDir := filepath.Join(repoRoot, cfg.WorktreeDir)
 		wtPath := resolver.WorktreePath(wtDir, newBranch)
 
-		wtEntries, err := git.ListWorktrees(r)
-		if err != nil {
-			return err
-		}
-
 		// Validate
 		if git.BranchExists(r, newBranch) {
 			return fmt.Errorf("branch %q already exists", newBranch)
@@ -117,36 +110,28 @@ var duplicateCmd = &cobra.Command{
 			return err
 		}
 
-		// Copy files
-		s.Update("Copying files...")
-		copied, err := fileutil.CopyEntries(repoRoot, wtPath, cfg.CopyFiles)
-		if err != nil {
-			return fmt.Errorf("worktree created but failed to copy files: %w\nTo retry, manually copy files to: %s\nTo remove the worktree: rimba remove %s", err, wtPath, newTask)
-		}
-
-		// Dependencies — prefer cloning from source worktree
+		// Post-create setup: copy files, deps, hooks
 		skipDeps, _ := cmd.Flags().GetBool(flagSkipDeps)
+		skipHooks, _ := cmd.Flags().GetBool(flagSkipHooks)
 		var configModules []config.ModuleConfig
 		if cfg.Deps != nil {
 			configModules = cfg.Deps.Modules
 		}
 
-		var depsResults []deps.InstallResult
-		if !skipDeps {
-			s.Update("Installing dependencies...")
-			depsResults = operations.InstallDepsPreferSource(r, wtPath, wt.Path, cfg.IsAutoDetectDeps(), configModules, wtEntries, func(cur, total int, name string) {
-				s.Update(fmt.Sprintf("Installing dependencies... (%s) [%d/%d]", name, cur, total))
-			})
-		}
-
-		// Post-create hooks
-		skipHooks, _ := cmd.Flags().GetBool(flagSkipHooks)
-		var hookResults []deps.HookResult
-		if !skipHooks && len(cfg.PostCreate) > 0 {
-			s.Update("Running hooks...")
-			hookResults = operations.RunPostCreateHooks(wtPath, cfg.PostCreate, func(cur, total int, name string) {
-				s.Update(fmt.Sprintf("Running hooks... (%s) [%d/%d]", name, cur, total))
-			})
+		pcResult, err := operations.PostCreateSetup(r, operations.PostCreateParams{
+			RepoRoot:      repoRoot,
+			WtPath:        wtPath,
+			Task:          newTask,
+			CopyFiles:     cfg.CopyFiles,
+			SkipDeps:      skipDeps,
+			AutoDetect:    cfg.IsAutoDetectDeps(),
+			ConfigModules: configModules,
+			SkipHooks:     skipHooks,
+			PostCreate:    cfg.PostCreate,
+			SourcePath:    wt.Path,
+		}, func(msg string) { s.Update(msg) })
+		if err != nil {
+			return err
 		}
 
 		s.Stop()
@@ -155,15 +140,15 @@ var duplicateCmd = &cobra.Command{
 		fmt.Fprintf(out, "Duplicated worktree %q as %q\n", task, newTask)
 		fmt.Fprintf(out, "  Branch: %s\n", newBranch)
 		fmt.Fprintf(out, "  Path:   %s\n", wtPath)
-		if len(copied) > 0 {
-			fmt.Fprintf(out, "  Copied: %v\n", copied)
+		if len(pcResult.Copied) > 0 {
+			fmt.Fprintf(out, "  Copied: %v\n", pcResult.Copied)
 		}
-		if skipped := fileutil.SkippedEntries(cfg.CopyFiles, copied); len(skipped) > 0 {
-			fmt.Fprintf(out, "  Skipped (not found): %v\n", skipped)
+		if len(pcResult.Skipped) > 0 {
+			fmt.Fprintf(out, "  Skipped (not found): %v\n", pcResult.Skipped)
 		}
 
-		printInstallResults(out, depsResults)
-		printHookResultsList(out, hookResults)
+		printInstallResults(out, pcResult.DepsResults)
+		printHookResultsList(out, pcResult.HookResults)
 
 		return nil
 	},

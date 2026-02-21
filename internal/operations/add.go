@@ -6,7 +6,6 @@ import (
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/deps"
-	"github.com/lugassawan/rimba/internal/fileutil"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/resolver"
 )
@@ -64,27 +63,25 @@ func AddWorktree(r git.Runner, params AddParams, onProgress ProgressFunc) (AddRe
 		return result, err
 	}
 
-	// Copy files
-	notify(onProgress, "Copying files...")
-	copied, err := fileutil.CopyEntries(params.RepoRoot, wtPath, params.CopyFiles)
+	// Post-create setup: copy files, deps, hooks
+	pcResult, err := PostCreateSetup(r, PostCreateParams{
+		RepoRoot:      params.RepoRoot,
+		WtPath:        wtPath,
+		Task:          params.Task,
+		CopyFiles:     params.CopyFiles,
+		SkipDeps:      params.SkipDeps,
+		AutoDetect:    params.AutoDetect,
+		ConfigModules: params.ConfigModules,
+		SkipHooks:     params.SkipHooks,
+		PostCreate:    params.PostCreate,
+	}, onProgress)
 	if err != nil {
-		return result, fmt.Errorf("worktree created but failed to copy files: %w\nTo retry, manually copy files to: %s\nTo remove the worktree: rimba remove %s", err, wtPath, params.Task)
+		return result, err
 	}
-	result.Copied = copied
-	result.Skipped = fileutil.SkippedEntries(params.CopyFiles, copied)
-
-	// Dependencies
-	if !params.SkipDeps {
-		notify(onProgress, "Installing dependencies...")
-		wtEntries, _ := git.ListWorktrees(r)
-		result.DepsResults = InstallDeps(r, wtPath, params.AutoDetect, params.ConfigModules, wtEntries, nil)
-	}
-
-	// Post-create hooks
-	if !params.SkipHooks && len(params.PostCreate) > 0 {
-		notify(onProgress, "Running hooks...")
-		result.HookResults = RunPostCreateHooks(wtPath, params.PostCreate, nil)
-	}
+	result.Copied = pcResult.Copied
+	result.Skipped = pcResult.Skipped
+	result.DepsResults = pcResult.DepsResults
+	result.HookResults = pcResult.HookResults
 
 	return result, nil
 }

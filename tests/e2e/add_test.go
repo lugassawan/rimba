@@ -176,7 +176,7 @@ func TestAddPartialFailCopyHint(t *testing.T) {
 	saveConfig(t, repo, cfg)
 
 	r := rimbaFail(t, repo, "add", "copy-fail-task")
-	assertContains(t, r.Stderr, "worktree created but failed to copy files")
+	assertContains(t, r.Stderr, "failed to copy files")
 	assertContains(t, r.Stderr, "To retry, manually copy files to:")
 	assertContains(t, r.Stderr, "rimba remove copy-fail-task")
 }
