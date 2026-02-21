@@ -19,23 +19,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type execJSONData struct {
-	Command string           `json:"command"`
-	Results []execJSONResult `json:"results"`
-	Success bool             `json:"success"`
-}
-
-type execJSONResult struct {
-	Task      string `json:"task"`
-	Branch    string `json:"branch"`
-	Path      string `json:"path"`
-	ExitCode  int    `json:"exit_code"`
-	Stdout    string `json:"stdout"`
-	Stderr    string `json:"stderr"`
-	Error     string `json:"error,omitempty"`
-	Cancelled bool   `json:"cancelled,omitempty"`
-}
-
 const (
 	flagFailFast    = "fail-fast"
 	flagConcurrency = "concurrency"
@@ -157,9 +140,9 @@ var execCmd = &cobra.Command{
 		s.Stop()
 
 		if isJSON(cmd) {
-			jsonResults := make([]execJSONResult, len(results))
+			jsonResults := make([]output.ExecResult, len(results))
 			for i, r := range results {
-				jr := execJSONResult{
+				jr := output.ExecResult{
 					Task:      r.Target.Task,
 					Branch:    r.Target.Branch,
 					Path:      r.Target.Path,
@@ -173,7 +156,7 @@ var execCmd = &cobra.Command{
 				}
 				jsonResults[i] = jr
 			}
-			data := execJSONData{
+			data := output.ExecData{
 				Command: args[0],
 				Results: jsonResults,
 				Success: !hasFailure(results),

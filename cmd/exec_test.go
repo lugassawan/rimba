@@ -164,9 +164,9 @@ func TestPrintExecResultsJSON(t *testing.T) {
 	}
 
 	// Simulate the JSON output path from exec command
-	jsonResults := make([]execJSONResult, len(results))
+	jsonResults := make([]output.ExecResult, len(results))
 	for i, r := range results {
-		jr := execJSONResult{
+		jr := output.ExecResult{
 			Task:     r.Target.Task,
 			Branch:   r.Target.Branch,
 			Path:     r.Target.Path,
@@ -179,7 +179,7 @@ func TestPrintExecResultsJSON(t *testing.T) {
 		}
 		jsonResults[i] = jr
 	}
-	data := execJSONData{
+	data := output.ExecData{
 		Command: "echo hello",
 		Results: jsonResults,
 		Success: !hasFailure(results),
