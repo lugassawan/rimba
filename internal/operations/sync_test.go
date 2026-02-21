@@ -252,7 +252,7 @@ func TestSyncWorktreeMergeFailure(t *testing.T) {
 	r := &mockRunner{
 		run: func(_ ...string) (string, error) { return "", nil },
 		runInDir: func(_ string, args ...string) (string, error) {
-			if len(args) >= 1 && args[0] == "merge" {
+			if len(args) >= 1 && args[0] == gitCmdMerge {
 				return "", errors.New("merge conflict")
 			}
 			return "", nil

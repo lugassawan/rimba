@@ -10,8 +10,6 @@ import (
 const (
 	mergeCmd       = "merge"
 	dirtyFileEntry = " M dirty-file.go"
-	dirtyFile      = " M file.go"
-	targetDir      = "/target"
 )
 
 func TestMergeToolRequiresSource(t *testing.T) {
@@ -453,96 +451,6 @@ func TestMergeToolListWorktreesFails(t *testing.T) {
 	errText := resultError(t, result)
 	if !strings.Contains(errText, "worktree list failed") {
 		t.Errorf("expected worktree list error, got: %s", errText)
-	}
-}
-
-func TestCheckMergeDirtyBothClean(t *testing.T) {
-	r := &mockRunner{
-		runInDir: func(dir string, args ...string) (string, error) {
-			return "", nil
-		},
-	}
-	msg := checkMergeDirty(r, "/repo/.worktrees/feature-src", "/repo", "src", "", true, "main")
-	if msg != "" {
-		t.Errorf("expected empty string for clean worktrees, got: %s", msg)
-	}
-}
-
-func TestCheckMergeDirtySourceDirty(t *testing.T) {
-	r := &mockRunner{
-		runInDir: func(dir string, args ...string) (string, error) {
-			if dir == "/source" {
-				return dirtyFile, nil
-			}
-			return "", nil
-		},
-	}
-	msg := checkMergeDirty(r, "/source", targetDir, "src-task", "", true, "main")
-	if !strings.Contains(msg, "src-task") {
-		t.Errorf("expected source task in message, got: %s", msg)
-	}
-	if !strings.Contains(msg, "uncommitted") {
-		t.Errorf("expected 'uncommitted' in message, got: %s", msg)
-	}
-}
-
-func TestCheckMergeDirtyTargetDirty(t *testing.T) {
-	r := &mockRunner{
-		runInDir: func(dir string, args ...string) (string, error) {
-			if dir == targetDir {
-				return dirtyFile, nil
-			}
-			return "", nil
-		},
-	}
-	msg := checkMergeDirty(r, "/source", targetDir, "src-task", "", true, "main")
-	if !strings.Contains(msg, "main") {
-		t.Errorf("expected target label in message, got: %s", msg)
-	}
-}
-
-func TestCheckMergeDirtyTargetDirtyNotMain(t *testing.T) {
-	r := &mockRunner{
-		runInDir: func(dir string, args ...string) (string, error) {
-			if dir == targetDir {
-				return dirtyFile, nil
-			}
-			return "", nil
-		},
-	}
-	msg := checkMergeDirty(r, "/source", targetDir, "src-task", "tgt-task", false, "feature/target")
-	if !strings.Contains(msg, "tgt-task") {
-		t.Errorf("expected intoTask in message when not merging to main, got: %s", msg)
-	}
-}
-
-func TestCheckMergeDirtySourceError(t *testing.T) {
-	r := &mockRunner{
-		runInDir: func(dir string, args ...string) (string, error) {
-			if dir == "/source" {
-				return "", errors.New("source status error")
-			}
-			return "", nil
-		},
-	}
-	msg := checkMergeDirty(r, "/source", targetDir, "src-task", "", true, "main")
-	if !strings.Contains(msg, "source status error") {
-		t.Errorf("expected source error in message, got: %s", msg)
-	}
-}
-
-func TestCheckMergeDirtyTargetError(t *testing.T) {
-	r := &mockRunner{
-		runInDir: func(dir string, args ...string) (string, error) {
-			if dir == targetDir {
-				return "", errors.New("target status error")
-			}
-			return "", nil
-		},
-	}
-	msg := checkMergeDirty(r, "/source", targetDir, "src-task", "", true, "main")
-	if !strings.Contains(msg, "target status error") {
-		t.Errorf("expected target error in message, got: %s", msg)
 	}
 }
 

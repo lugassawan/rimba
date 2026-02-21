@@ -2,12 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
-	"github.com/lugassawan/rimba/internal/resolver"
+	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
 )
@@ -22,12 +21,6 @@ const (
 	hintKeep = "Keep source worktree after merge (continue working on it)"
 	hintInto = "Merge into another worktree instead of the main branch"
 )
-
-// dirtyResult holds the outcome of an IsDirty check.
-type dirtyResult struct {
-	dirty bool
-	err   error
-}
 
 func init() {
 	mergeCmd.Flags().String(flagInto, "", "Target worktree task to merge into (default: main/repo root)")
@@ -65,64 +58,10 @@ var mergeCmd = &cobra.Command{
 			return err
 		}
 
-		worktrees, err := listWorktreeInfos(r)
-		if err != nil {
-			return err
-		}
-
-		prefixes := resolver.AllPrefixes()
-
-		// Resolve source
-		source, found := resolver.FindBranchForTask(sourceTask, worktrees, prefixes)
-		if !found {
-			return fmt.Errorf(errWorktreeNotFound, sourceTask)
-		}
-
-		// Resolve target
 		intoTask, _ := cmd.Flags().GetString(flagInto)
-		var targetDir, targetLabel string
-		mergingToMain := intoTask == ""
-
-		if mergingToMain {
-			targetDir = repoRoot
-			targetLabel = cfg.DefaultSource
-		} else {
-			target, found := resolver.FindBranchForTask(intoTask, worktrees, prefixes)
-			if !found {
-				return fmt.Errorf(errWorktreeNotFound, intoTask)
-			}
-			targetDir = target.Path
-			targetLabel = target.Branch
-		}
-
-		var srcResult, tgtResult dirtyResult
-		var dwg sync.WaitGroup
-		dwg.Add(2)
-		go func() {
-			defer dwg.Done()
-			srcResult.dirty, srcResult.err = git.IsDirty(r, source.Path)
-		}()
-		go func() {
-			defer dwg.Done()
-			tgtResult.dirty, tgtResult.err = git.IsDirty(r, targetDir)
-		}()
-		dwg.Wait()
-
-		if srcResult.err != nil {
-			return srcResult.err
-		}
-		if srcResult.dirty {
-			return fmt.Errorf("source worktree %q has uncommitted changes\nCommit or stash changes before merging: cd %s", sourceTask, source.Path)
-		}
-		if tgtResult.err != nil {
-			return tgtResult.err
-		}
-		if tgtResult.dirty {
-			if mergingToMain {
-				return fmt.Errorf("target %q has uncommitted changes\nCommit or stash changes before merging: cd %s", targetLabel, targetDir)
-			}
-			return fmt.Errorf("target worktree %q has uncommitted changes\nCommit or stash changes before merging: cd %s", intoTask, targetDir)
-		}
+		noFF, _ := cmd.Flags().GetBool(flagNoFF)
+		keep, _ := cmd.Flags().GetBool(flagKeep)
+		del, _ := cmd.Flags().GetBool(flagDelete)
 
 		hint.New(cmd, hintPainter(cmd)).
 			Add(flagNoFF, hintNoFF).
@@ -133,45 +72,30 @@ var mergeCmd = &cobra.Command{
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
 
-		// Execute merge
-		noFF, _ := cmd.Flags().GetBool(flagNoFF)
-		s.Start("Merging...")
-		if err := git.Merge(r, targetDir, source.Branch, noFF); err != nil {
-			return fmt.Errorf("merge failed: %w\nTo resolve conflicts: cd %s", err, targetDir)
+		result, err := operations.MergeWorktree(r, operations.MergeParams{
+			SourceTask: sourceTask,
+			IntoTask:   intoTask,
+			RepoRoot:   repoRoot,
+			MainBranch: cfg.DefaultSource,
+			NoFF:       noFF,
+			Keep:       keep,
+			Delete:     del,
+		}, func(msg string) { s.Start(msg) })
+		if err != nil {
+			return err
 		}
 
-		s.Stop()
-		fmt.Fprintf(cmd.OutOrStdout(), "Merged %s into %s\n", source.Branch, targetLabel)
+		fmt.Fprintf(cmd.OutOrStdout(), "Merged %s into %s\n", result.SourceBranch, result.TargetLabel)
 
-		// Auto-cleanup
-		keep, _ := cmd.Flags().GetBool(flagKeep)
-		del, _ := cmd.Flags().GetBool(flagDelete)
-
-		shouldDelete := false
-		if mergingToMain {
-			shouldDelete = !keep
-		} else {
-			shouldDelete = del
-		}
-
-		if shouldDelete {
-			s.Start("Removing worktree...")
-			if err := git.RemoveWorktree(r, source.Path, false); err != nil {
-				s.Stop()
-				fmt.Fprintf(cmd.OutOrStdout(), "Merged successfully but failed to remove worktree: %v\nTo remove manually: rimba remove %s\n", err, sourceTask)
-				return nil
-			}
-			s.Stop()
-			fmt.Fprintf(cmd.OutOrStdout(), "Removed worktree: %s\n", source.Path)
-
-			s.Start("Deleting branch...")
-			if err := git.DeleteBranch(r, source.Branch, true); err != nil {
-				s.Stop()
-				fmt.Fprintf(cmd.OutOrStdout(), "Worktree removed but failed to delete branch: %v\nTo delete manually: git branch -D %s\n", err, source.Branch)
-				return nil
-			}
-			s.Stop()
-			fmt.Fprintf(cmd.OutOrStdout(), "Deleted branch: %s\n", source.Branch)
+		// Format cleanup results
+		if result.SourceRemoved {
+			fmt.Fprintf(cmd.OutOrStdout(), "Removed worktree: %s\n", result.SourcePath)
+			fmt.Fprintf(cmd.OutOrStdout(), "Deleted branch: %s\n", result.SourceBranch)
+		} else if result.WorktreeRemoved {
+			fmt.Fprintf(cmd.OutOrStdout(), "Removed worktree: %s\n", result.SourcePath)
+			fmt.Fprintf(cmd.OutOrStdout(), "Worktree removed but failed to delete branch: %v\nTo delete manually: git branch -D %s\n", result.RemoveError, result.SourceBranch)
+		} else if result.RemoveError != nil {
+			fmt.Fprintf(cmd.OutOrStdout(), "Merged successfully but failed to remove worktree: %v\nTo remove manually: rimba remove %s\n", result.RemoveError, sourceTask)
 		}
 
 		return nil
