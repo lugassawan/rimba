@@ -28,7 +28,7 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 | Concern | Commands |
 |---------|----------|
 | Create & navigate | ` + "`" + `rimba add <task>` + "`" + `, ` + "`" + `rimba open <task>` + "`" + ` |
-| Inspect | ` + "`" + `rimba list` + "`" + `, ` + "`" + `rimba status` + "`" + `, ` + "`" + `rimba log [task]` + "`" + ` |
+| Inspect | ` + "`" + `rimba list` + "`" + `, ` + "`" + `rimba status` + "`" + `, ` + "`" + `rimba log` + "`" + ` |
 | Sync & merge | ` + "`" + `rimba sync [task]` + "`" + `, ` + "`" + `rimba merge <task>` + "`" + ` |
 | Clean up | ` + "`" + `rimba clean --merged` + "`" + `, ` + "`" + `rimba archive <task>` + "`" + `, ` + "`" + `rimba remove <task>` + "`" + ` |
 | Cross-cutting | ` + "`" + `rimba exec <cmd>` + "`" + `, ` + "`" + `rimba conflict-check` + "`" + `, ` + "`" + `rimba deps status` + "`" + ` |
@@ -50,8 +50,7 @@ rimba clean --merged        # remove worktrees whose branches are merged
 
 **Merge and clean up:**
 ` + "```" + `sh
-rimba merge my-feature      # fast-forward merge into source branch
-rimba remove my-feature     # remove worktree + branch
+rimba merge my-feature      # merge into main and auto-clean up
 ` + "```" + `
 
 ## JSON Output
@@ -83,7 +82,7 @@ See AGENTS.md at the repo root for full rimba documentation.
 
 - ` + "`" + `rimba add <task>` + "`" + ` — create worktree
 - ` + "`" + `rimba list` + "`" + ` / ` + "`" + `rimba status` + "`" + ` — inspect worktrees
-- ` + "`" + `rimba merge <task>` + "`" + ` — merge back to source branch
+- ` + "`" + `rimba merge <task>` + "`" + ` — merge into main and auto-clean up
 - ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
 - ` + "`" + `rimba exec <cmd>` + "`" + ` — run command across all worktrees
 - ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
@@ -124,8 +123,8 @@ See AGENTS.md at the repo root for full documentation.
 2. ` + "`" + `rimba list` + "`" + ` — list all worktrees
 3. ` + "`" + `rimba status` + "`" + ` — health overview (dirty, stale, behind)
 4. ` + "`" + `rimba open <task>` + "`" + ` — print path or run shortcut (--ide, --agent)
-5. ` + "`" + `rimba sync [task]` + "`" + ` — rebase worktree(s) onto source
-6. ` + "`" + `rimba merge <task>` + "`" + ` — fast-forward merge into source
+5. ` + "`" + `rimba sync [task]` + "`" + ` — rebase worktree(s) onto main
+6. ` + "`" + `rimba merge <task>` + "`" + ` — merge into main and auto-clean up
 7. ` + "`" + `rimba remove <task>` + "`" + ` — delete worktree + branch
 8. ` + "`" + `rimba archive <task>` + "`" + ` — remove worktree, keep branch
 9. ` + "`" + `rimba exec <cmd>` + "`" + ` — run across all worktrees
@@ -135,7 +134,7 @@ See AGENTS.md at the repo root for full documentation.
 ## Workflow Recipes
 
 **New feature:** ` + "`" + `rimba add <task>` + "`" + ` then work in the worktree directory.
-**Finish feature:** ` + "`" + `rimba merge <task>` + "`" + ` then ` + "`" + `rimba remove <task>` + "`" + `.
+**Finish feature:** ` + "`" + `rimba merge <task>` + "`" + ` (auto-removes worktree).
 **Housekeeping:** ` + "`" + `rimba status` + "`" + ` then ` + "`" + `rimba clean --merged` + "`" + `.
 
 ## JSON Output
@@ -177,8 +176,8 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 | See all worktrees | ` + "`" + `rimba list` + "`" + ` or ` + "`" + `rimba list --json` + "`" + ` |
 | Check worktree health | ` + "`" + `rimba status` + "`" + ` |
 | Navigate to a worktree | ` + "`" + `cd $(rimba open <task>)` + "`" + ` |
-| Update from source branch | ` + "`" + `rimba sync <task>` + "`" + ` or ` + "`" + `rimba sync` + "`" + ` (all) |
-| Finish a feature | ` + "`" + `rimba merge <task>` + "`" + ` then ` + "`" + `rimba remove <task>` + "`" + ` |
+| Update from source branch | ` + "`" + `rimba sync <task>` + "`" + ` or ` + "`" + `rimba sync --all` + "`" + ` |
+| Finish a feature | ` + "`" + `rimba merge <task>` + "`" + ` (auto-removes worktree) |
 | Clean up merged work | ` + "`" + `rimba clean --merged` + "`" + ` |
 | Pause a task | ` + "`" + `rimba archive <task>` + "`" + ` (keeps branch) |
 | Run across worktrees | ` + "`" + `rimba exec "<cmd>"` + "`" + ` |

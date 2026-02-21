@@ -9,7 +9,7 @@ See AGENTS.md at the repo root for full rimba documentation.
 
 - `rimba add <task>` — create worktree
 - `rimba list` / `rimba status` — inspect worktrees
-- `rimba merge <task>` — merge back to source branch
+- `rimba merge <task>` — merge into main and auto-clean up
 - `rimba clean --merged` — remove merged worktrees
 - `rimba exec <cmd>` — run command across all worktrees
 - `rimba mcp` — start MCP server for AI tool integration
