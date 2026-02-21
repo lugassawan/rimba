@@ -114,26 +114,8 @@ func (m *Manager) installModule(worktreePath string, mh ModuleWithHash, existing
 		return InstallResult{Module: mod}
 	}
 
-	for _, wtPath := range existingPaths {
-		otherHash, err := HashLockfile(wtPath, mod.Lockfile)
-		if err != nil || otherHash != mh.Hash {
-			continue
-		}
-
-		modDir := filepath.Join(wtPath, mod.Dir)
-		if info, err := os.Stat(modDir); err != nil || !info.IsDir() {
-			continue
-		}
-
-		if err := CloneModule(wtPath, worktreePath, mod); err != nil {
-			if !mod.CloneOnly {
-				installErr := runInstall(worktreePath, mod)
-				return InstallResult{Module: mod, Error: installErr}
-			}
-			return InstallResult{Module: mod, Error: fmt.Errorf("clone from %s: %w", wtPath, err)}
-		}
-
-		return InstallResult{Module: mod, Source: wtPath, Cloned: true}
+	if result, ok := tryCloneFromExisting(worktreePath, mh, existingPaths); ok {
+		return result
 	}
 
 	if mod.CloneOnly {
@@ -171,6 +153,33 @@ func ResolveModules(worktreePath string, autoDetect bool, configModules []config
 	modules = FilterCloneOnly(modules, existingWTPaths)
 
 	return modules, nil
+}
+
+// tryCloneFromExisting attempts to clone the module from an existing worktree with matching lockfile.
+func tryCloneFromExisting(worktreePath string, mh ModuleWithHash, existingPaths []string) (InstallResult, bool) {
+	mod := mh.Module
+	for _, wtPath := range existingPaths {
+		otherHash, err := HashLockfile(wtPath, mod.Lockfile)
+		if err != nil || otherHash != mh.Hash {
+			continue
+		}
+
+		modDir := filepath.Join(wtPath, mod.Dir)
+		if info, err := os.Stat(modDir); err != nil || !info.IsDir() {
+			continue
+		}
+
+		if err := CloneModule(wtPath, worktreePath, mod); err != nil {
+			if !mod.CloneOnly {
+				installErr := runInstall(worktreePath, mod)
+				return InstallResult{Module: mod, Error: installErr}, true
+			}
+			return InstallResult{Module: mod, Error: fmt.Errorf("clone from %s: %w", wtPath, err)}, true
+		}
+
+		return InstallResult{Module: mod, Source: wtPath, Cloned: true}, true
+	}
+	return InstallResult{}, false
 }
 
 func runInstall(worktreePath string, mod Module) error {

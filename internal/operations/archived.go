@@ -23,32 +23,14 @@ func FindArchivedBranch(r git.Runner, task string) (string, error) {
 
 	prefixes := resolver.AllPrefixes()
 
-	// Try prefix+task combinations first
-	for _, p := range prefixes {
-		candidate := resolver.BranchName(p, task)
-		for _, b := range branches {
-			if b == candidate && !active[b] {
-				return b, nil
-			}
-		}
+	if b, ok := searchByPrefixedTask(branches, active, prefixes, task); ok {
+		return b, nil
 	}
-
-	// Fallback: exact match
-	for _, b := range branches {
-		if b == task && !active[b] {
-			return b, nil
-		}
+	if b, ok := searchByExactMatch(branches, active, task); ok {
+		return b, nil
 	}
-
-	// Fallback: match by task extraction
-	for _, b := range branches {
-		if active[b] {
-			continue
-		}
-		t, _ := resolver.TaskFromBranch(b, prefixes)
-		if t == task {
-			return b, nil
-		}
+	if b, ok := searchByTaskExtraction(branches, active, prefixes, task); ok {
+		return b, nil
 	}
 
 	return "", fmt.Errorf("no archived branch found for task %q\nTo see archived branches: rimba list --archived", task)
@@ -75,6 +57,43 @@ func ListArchivedBranches(r git.Runner, mainBranch string) ([]string, error) {
 		archived = append(archived, b)
 	}
 	return archived, nil
+}
+
+// searchByPrefixedTask tries prefix+task combinations against branches.
+func searchByPrefixedTask(branches []string, active map[string]bool, prefixes []string, task string) (string, bool) {
+	for _, p := range prefixes {
+		candidate := resolver.BranchName(p, task)
+		for _, b := range branches {
+			if b == candidate && !active[b] {
+				return b, true
+			}
+		}
+	}
+	return "", false
+}
+
+// searchByExactMatch checks if the task name exactly matches an inactive branch.
+func searchByExactMatch(branches []string, active map[string]bool, task string) (string, bool) {
+	for _, b := range branches {
+		if b == task && !active[b] {
+			return b, true
+		}
+	}
+	return "", false
+}
+
+// searchByTaskExtraction finds a branch whose extracted task matches the given task.
+func searchByTaskExtraction(branches []string, active map[string]bool, prefixes []string, task string) (string, bool) {
+	for _, b := range branches {
+		if active[b] {
+			continue
+		}
+		t, _ := resolver.TaskFromBranch(b, prefixes)
+		if t == task {
+			return b, true
+		}
+	}
+	return "", false
 }
 
 // buildActiveSet returns a set of branch names that are checked out in active worktrees.

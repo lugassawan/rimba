@@ -75,27 +75,7 @@ func handleList(hctx *HandlerContext) server.ToolHandlerFunc {
 		wtDir := filepath.Join(hctx.RepoRoot, cfg.WorktreeDir)
 		prefixes := resolver.AllPrefixes()
 
-		var candidates []listCandidate
-		for _, e := range entries {
-			if e.Bare {
-				continue
-			}
-
-			if typeFilter != "" {
-				_, matchedPrefix := resolver.TaskFromBranch(e.Branch, prefixes)
-				entryType := strings.TrimSuffix(matchedPrefix, "/")
-				if entryType != typeFilter {
-					continue
-				}
-			}
-
-			displayPath := e.Path
-			if rel, err := filepath.Rel(wtDir, e.Path); err == nil && len(rel) < len(displayPath) {
-				displayPath = rel
-			}
-
-			candidates = append(candidates, listCandidate{entry: e, displayPath: displayPath})
-		}
+		candidates := filterListCandidates(entries, wtDir, typeFilter, prefixes)
 
 		rows := make([]resolver.WorktreeDetail, len(candidates))
 		var wg sync.WaitGroup
@@ -117,20 +97,50 @@ func handleList(hctx *HandlerContext) server.ToolHandlerFunc {
 		rows = operations.FilterDetailsByStatus(rows, dirty, behind)
 		resolver.SortDetailsByTask(rows)
 
-		items := make([]listItem, len(rows))
-		for i, row := range rows {
-			items[i] = listItem{
-				Task:      row.Task,
-				Type:      row.Type,
-				Branch:    row.Branch,
-				Path:      row.Path,
-				IsCurrent: false,
-				Status:    row.Status,
+		return marshalResult(detailsToListItems(rows))
+	}
+}
+
+// detailsToListItems converts worktree details to list items.
+func detailsToListItems(rows []resolver.WorktreeDetail) []listItem {
+	items := make([]listItem, len(rows))
+	for i, row := range rows {
+		items[i] = listItem{
+			Task:      row.Task,
+			Type:      row.Type,
+			Branch:    row.Branch,
+			Path:      row.Path,
+			IsCurrent: false,
+			Status:    row.Status,
+		}
+	}
+	return items
+}
+
+// filterListCandidates filters worktree entries by type and computes display paths.
+func filterListCandidates(entries []git.WorktreeEntry, wtDir, typeFilter string, prefixes []string) []listCandidate {
+	var candidates []listCandidate
+	for _, e := range entries {
+		if e.Bare {
+			continue
+		}
+
+		if typeFilter != "" {
+			_, matchedPrefix := resolver.TaskFromBranch(e.Branch, prefixes)
+			entryType := strings.TrimSuffix(matchedPrefix, "/")
+			if entryType != typeFilter {
+				continue
 			}
 		}
 
-		return marshalResult(items)
+		displayPath := e.Path
+		if rel, err := filepath.Rel(wtDir, e.Path); err == nil && len(rel) < len(displayPath) {
+			displayPath = rel
+		}
+
+		candidates = append(candidates, listCandidate{entry: e, displayPath: displayPath})
 	}
+	return candidates
 }
 
 func handleListArchived(r git.Runner, hctx *HandlerContext) (*mcp.CallToolResult, error) {

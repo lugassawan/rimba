@@ -17,27 +17,13 @@ func CopyEntries(src, dst string, entries []string) ([]string, error) {
 		srcPath := filepath.Join(src, name)
 		dstPath := filepath.Join(dst, name)
 
-		info, err := os.Stat(srcPath)
+		ok, err := copyEntry(srcPath, dstPath, name)
 		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return copied, fmt.Errorf(copyErrFmt, name, err)
+			return copied, err
 		}
-
-		if info.IsDir() {
-			if err := copyDir(srcPath, dstPath); err != nil {
-				return copied, fmt.Errorf(copyErrFmt, name, err)
-			}
-		} else {
-			if err := os.MkdirAll(filepath.Dir(dstPath), 0750); err != nil {
-				return copied, fmt.Errorf(copyErrFmt, name, err)
-			}
-			if err := copyFile(srcPath, dstPath); err != nil {
-				return copied, fmt.Errorf(copyErrFmt, name, err)
-			}
+		if ok {
+			copied = append(copied, name)
 		}
-		copied = append(copied, name)
 	}
 	return copied, nil
 }
@@ -57,6 +43,32 @@ func SkippedEntries(requested, copied []string) []string {
 	return skipped
 }
 
+// copyEntry copies a single file or directory. Returns false if the source does not exist.
+func copyEntry(srcPath, dstPath, name string) (bool, error) {
+	info, err := os.Stat(srcPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf(copyErrFmt, name, err)
+	}
+
+	if info.IsDir() {
+		if err := copyDir(srcPath, dstPath); err != nil {
+			return false, fmt.Errorf(copyErrFmt, name, err)
+		}
+		return true, nil
+	}
+
+	if err := os.MkdirAll(filepath.Dir(dstPath), 0750); err != nil {
+		return false, fmt.Errorf(copyErrFmt, name, err)
+	}
+	if err := copyFile(srcPath, dstPath); err != nil {
+		return false, fmt.Errorf(copyErrFmt, name, err)
+	}
+	return true, nil
+}
+
 func copyDir(src, dst string) error {
 	srcInfo, err := os.Stat(src)
 	if err != nil {
@@ -70,22 +82,23 @@ func copyDir(src, dst string) error {
 		return err
 	}
 	for _, entry := range entries {
-		srcPath := filepath.Join(src, entry.Name())
-		dstPath := filepath.Join(dst, entry.Name())
-		if entry.Type()&os.ModeSymlink != 0 {
-			continue // skip symlinks
-		}
-		if entry.IsDir() {
-			if err := copyDir(srcPath, dstPath); err != nil {
-				return err
-			}
-		} else {
-			if err := copyFile(srcPath, dstPath); err != nil {
-				return err
-			}
+		if err := copyDirEntry(src, dst, entry); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+func copyDirEntry(src, dst string, entry os.DirEntry) error {
+	if entry.Type()&os.ModeSymlink != 0 {
+		return nil // skip symlinks
+	}
+	srcPath := filepath.Join(src, entry.Name())
+	dstPath := filepath.Join(dst, entry.Name())
+	if entry.IsDir() {
+		return copyDir(srcPath, dstPath)
+	}
+	return copyFile(srcPath, dstPath)
 }
 
 func copyFile(src, dst string) (retErr error) {

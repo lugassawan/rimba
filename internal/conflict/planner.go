@@ -18,14 +18,17 @@ func PlanMergeOrder(overlaps []FileOverlap, branches []string) []MergeStep {
 		return nil
 	}
 
-	// Build branch index
 	idx := make(map[string]int, len(branches))
 	for i, b := range branches {
 		idx[b] = i
 	}
 
-	// Build NxN conflict matrix
-	n := len(branches)
+	matrix := buildConflictMatrix(overlaps, idx, len(branches))
+	return selectMergeOrder(matrix, branches)
+}
+
+// buildConflictMatrix builds an NxN matrix counting file overlaps between branch pairs.
+func buildConflictMatrix(overlaps []FileOverlap, idx map[string]int, n int) [][]int {
 	matrix := make([][]int, n)
 	for i := range n {
 		matrix[i] = make([]int, n)
@@ -43,8 +46,12 @@ func PlanMergeOrder(overlaps []FileOverlap, branches []string) []MergeStep {
 			}
 		}
 	}
+	return matrix
+}
 
-	// Greedily pick branch with fewest total conflicts against remaining
+// selectMergeOrder greedily picks branches with fewest conflicts against remaining branches.
+func selectMergeOrder(matrix [][]int, branches []string) []MergeStep {
+	n := len(branches)
 	remaining := make([]int, n)
 	for i := range n {
 		remaining[i] = i
