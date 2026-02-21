@@ -36,7 +36,7 @@ func handleStatus(hctx *HandlerContext) server.ToolHandlerFunc {
 		staleDays := req.GetInt("stale_days", 14)
 		r := hctx.Runner
 
-		mainBranch, err := resolveMainBranch(r, hctx)
+		mainBranch, err := operations.ResolveMainBranch(r, configDefault(hctx))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

@@ -48,13 +48,12 @@ func resolveMainBranch(r git.Runner) (string, error) {
 		return "", err
 	}
 
-	cfg, err := config.Resolve(repoRoot)
-	if err == nil && cfg.DefaultSource != "" {
-		return cfg.DefaultSource, nil
+	var configDefault string
+	if cfg, err := config.Resolve(repoRoot); err == nil {
+		configDefault = cfg.DefaultSource
 	}
 
-	// No config — use git detection
-	return git.DefaultBranch(r)
+	return operations.ResolveMainBranch(r, configDefault)
 }
 
 // listWorktreeInfos converts git worktree entries to resolver-compatible WorktreeInfo slice.

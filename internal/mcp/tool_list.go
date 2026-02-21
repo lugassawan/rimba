@@ -134,7 +134,7 @@ func handleList(hctx *HandlerContext) server.ToolHandlerFunc {
 }
 
 func handleListArchived(r git.Runner, hctx *HandlerContext) (*mcp.CallToolResult, error) {
-	mainBranch, err := resolveMainBranch(r, hctx)
+	mainBranch, err := operations.ResolveMainBranch(r, configDefault(hctx))
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -155,12 +155,12 @@ func handleListArchived(r git.Runner, hctx *HandlerContext) (*mcp.CallToolResult
 	return marshalResult(items)
 }
 
-// resolveMainBranch tries config default_source, then git detection.
-func resolveMainBranch(r git.Runner, hctx *HandlerContext) (string, error) {
-	if hctx.Config != nil && hctx.Config.DefaultSource != "" {
-		return hctx.Config.DefaultSource, nil
+// configDefault returns the default_source from config, or "" if unset.
+func configDefault(hctx *HandlerContext) string {
+	if hctx.Config != nil {
+		return hctx.Config.DefaultSource
 	}
-	return git.DefaultBranch(r)
+	return ""
 }
 
 // marshalResult serializes data to JSON and wraps it in a tool result.
