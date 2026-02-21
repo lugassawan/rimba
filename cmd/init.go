@@ -101,7 +101,10 @@ directory is already personal.`,
 				return err
 			}
 
-			cfg := config.DefaultConfig(repoName, defaultBranch)
+			// Write minimal config — only copy_files (everything else auto-derived)
+			cfg := &config.Config{
+				CopyFiles: config.DefaultCopyFiles(),
+			}
 
 			if err := os.MkdirAll(dirPath, 0750); err != nil {
 				return fmt.Errorf("failed to create config directory: %w", err)
@@ -117,8 +120,8 @@ directory is already personal.`,
 				}
 			}
 
-			// Create the worktree directory
-			wtDir := filepath.Join(repoRoot, cfg.WorktreeDir)
+			// Create the worktree directory using convention
+			wtDir := filepath.Join(repoRoot, config.DefaultWorktreeDir(repoName))
 			if err := os.MkdirAll(wtDir, 0750); err != nil {
 				return fmt.Errorf("failed to create worktree directory: %w", err)
 			}

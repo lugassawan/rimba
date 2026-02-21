@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"path/filepath"
+
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
 	mcppkg "github.com/lugassawan/rimba/internal/mcp"
@@ -33,6 +35,14 @@ To configure in Claude Code, add to .claude/settings.json:
 
 		// Config is optional — some tools work without it.
 		cfg, _ := config.Resolve(repoRoot)
+		if cfg != nil {
+			repoName := filepath.Base(repoRoot)
+			var defaultBranch string
+			if cfg.DefaultSource == "" {
+				defaultBranch, _ = git.DefaultBranch(r)
+			}
+			cfg.FillDefaults(repoName, defaultBranch)
+		}
 
 		hctx := &mcppkg.HandlerContext{
 			Runner:   r,

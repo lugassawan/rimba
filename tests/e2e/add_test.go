@@ -420,12 +420,14 @@ func TestAddShowsSkippedFiles(t *testing.T) {
 }
 
 // loadConfig is a test helper that loads the rimba config from a repo.
+// It calls FillDefaults to auto-derive missing fields (worktree_dir, default_source).
 func loadConfig(t *testing.T, repo string) *config.Config {
 	t.Helper()
 	cfg, err := config.Resolve(repo)
 	if err != nil {
 		t.Fatalf("failed to load config: %v", err)
 	}
+	cfg.FillDefaults(filepath.Base(repo), branchMain)
 	return cfg
 }
 

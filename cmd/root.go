@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -57,6 +58,18 @@ var rootCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+
+		// Auto-derive missing fields
+		repoName := filepath.Base(repoRoot)
+		var defaultBranch string
+		if cfg.DefaultSource == "" {
+			defaultBranch, err = git.DefaultBranch(r)
+			if err != nil {
+				return err
+			}
+		}
+		cfg.FillDefaults(repoName, defaultBranch)
+
 		cmd.SetContext(config.WithConfig(cmd.Context(), cfg))
 		return nil
 	},
