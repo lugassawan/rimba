@@ -46,18 +46,18 @@ func TestFindMergedCandidates_NormalMerge(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	candidates, err := FindMergedCandidates(r, "origin/main", "main")
+	result, err := FindMergedCandidates(r, "origin/main", "main")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(candidates) != 2 {
-		t.Fatalf("expected 2 candidates, got %d", len(candidates))
+	if len(result.Candidates) != 2 {
+		t.Fatalf("expected 2 candidates, got %d", len(result.Candidates))
 	}
-	if candidates[0].Branch != "feature/done" {
-		t.Errorf("expected feature/done, got %s", candidates[0].Branch)
+	if result.Candidates[0].Branch != "feature/done" {
+		t.Errorf("expected feature/done, got %s", result.Candidates[0].Branch)
 	}
-	if candidates[1].Branch != "bugfix/fixed" {
-		t.Errorf("expected bugfix/fixed, got %s", candidates[1].Branch)
+	if result.Candidates[1].Branch != "bugfix/fixed" {
+		t.Errorf("expected bugfix/fixed, got %s", result.Candidates[1].Branch)
 	}
 }
 
@@ -93,12 +93,12 @@ func TestFindMergedCandidates_SquashMerge(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	candidates, err := FindMergedCandidates(r, "origin/main", "main")
+	result, err := FindMergedCandidates(r, "origin/main", "main")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(candidates) != 1 {
-		t.Fatalf("expected 1 candidate, got %d", len(candidates))
+	if len(result.Candidates) != 1 {
+		t.Fatalf("expected 1 candidate, got %d", len(result.Candidates))
 	}
 }
 
@@ -120,12 +120,12 @@ func TestFindMergedCandidates_NoCandidates(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	candidates, err := FindMergedCandidates(r, "origin/main", "main")
+	result, err := FindMergedCandidates(r, "origin/main", "main")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(candidates) != 0 {
-		t.Errorf("expected 0 candidates, got %d", len(candidates))
+	if len(result.Candidates) != 0 {
+		t.Errorf("expected 0 candidates, got %d", len(result.Candidates))
 	}
 }
 
@@ -161,15 +161,15 @@ func TestFindStaleCandidates_Found(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	candidates, err := FindStaleCandidates(r, "main", 14)
+	result, err := FindStaleCandidates(r, "main", 14)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(candidates) != 1 {
-		t.Fatalf("expected 1 candidate, got %d", len(candidates))
+	if len(result.Candidates) != 1 {
+		t.Fatalf("expected 1 candidate, got %d", len(result.Candidates))
 	}
-	if candidates[0].Branch != "feature/old" {
-		t.Errorf("expected feature/old, got %s", candidates[0].Branch)
+	if result.Candidates[0].Branch != "feature/old" {
+		t.Errorf("expected feature/old, got %s", result.Candidates[0].Branch)
 	}
 }
 
@@ -193,12 +193,12 @@ func TestFindStaleCandidates_NoneStale(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	candidates, err := FindStaleCandidates(r, "main", 14)
+	result, err := FindStaleCandidates(r, "main", 14)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(candidates) != 0 {
-		t.Errorf("expected 0 candidates, got %d", len(candidates))
+	if len(result.Candidates) != 0 {
+		t.Errorf("expected 0 candidates, got %d", len(result.Candidates))
 	}
 }
 
@@ -211,6 +211,22 @@ func TestFindStaleCandidates_GitError(t *testing.T) {
 	_, err := FindStaleCandidates(r, "main", 14)
 	if err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func assertCleanedItem(t *testing.T, item CleanedItem, wantRemoved, wantDeleted, wantErr bool) {
+	t.Helper()
+	if item.WorktreeRemoved != wantRemoved {
+		t.Errorf("WorktreeRemoved = %v, want %v", item.WorktreeRemoved, wantRemoved)
+	}
+	if item.BranchDeleted != wantDeleted {
+		t.Errorf("BranchDeleted = %v, want %v", item.BranchDeleted, wantDeleted)
+	}
+	if wantErr && item.Error == nil {
+		t.Error("expected error, got nil")
+	}
+	if !wantErr && item.Error != nil {
+		t.Errorf("expected no error, got %v", item.Error)
 	}
 }
 
@@ -244,18 +260,15 @@ func TestRemoveCandidates_MixedResults(t *testing.T) {
 		t.Fatalf("expected 3 items, got %d", len(items))
 	}
 
-	// First: success
-	if !items[0].WorktreeRemoved || !items[0].BranchDeleted {
-		t.Errorf("item 0: expected removed+deleted, got wt=%v br=%v", items[0].WorktreeRemoved, items[0].BranchDeleted)
-	}
-	// Second: failed removal
-	if items[1].WorktreeRemoved || items[1].BranchDeleted {
-		t.Errorf("item 1: expected not removed, got wt=%v br=%v", items[1].WorktreeRemoved, items[1].BranchDeleted)
-	}
-	// Third: success
-	if !items[2].WorktreeRemoved || !items[2].BranchDeleted {
-		t.Errorf("item 2: expected removed+deleted, got wt=%v br=%v", items[2].WorktreeRemoved, items[2].BranchDeleted)
-	}
+	t.Run("success", func(t *testing.T) {
+		assertCleanedItem(t, items[0], true, true, false)
+	})
+	t.Run("failed removal", func(t *testing.T) {
+		assertCleanedItem(t, items[1], false, false, true)
+	})
+	t.Run("success after failure", func(t *testing.T) {
+		assertCleanedItem(t, items[2], true, true, false)
+	})
 }
 
 func TestRemoveCandidates_ProgressCallbacks(t *testing.T) {
@@ -302,13 +315,17 @@ func TestFindMergedCandidates_SquashMergeError(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	candidates, err := FindMergedCandidates(r, "origin/main", branchMain)
+	result, err := FindMergedCandidates(r, "origin/main", branchMain)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	// The entry should be skipped (squash merge check errored), so no candidates
-	if len(candidates) != 0 {
-		t.Errorf("expected 0 candidates, got %d", len(candidates))
+	if len(result.Candidates) != 0 {
+		t.Errorf("expected 0 candidates, got %d", len(result.Candidates))
+	}
+	// But we should get a warning about the skipped branch
+	if len(result.Warnings) != 1 {
+		t.Errorf("expected 1 warning, got %d", len(result.Warnings))
 	}
 }
 
@@ -332,12 +349,16 @@ func TestFindStaleCandidates_LastCommitError(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	candidates, err := FindStaleCandidates(r, branchMain, 14)
+	result, err := FindStaleCandidates(r, branchMain, 14)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	// Entry should be skipped due to error, so no candidates
-	if len(candidates) != 0 {
-		t.Errorf("expected 0 candidates, got %d", len(candidates))
+	if len(result.Candidates) != 0 {
+		t.Errorf("expected 0 candidates, got %d", len(result.Candidates))
+	}
+	// But we should get a warning about the skipped branch
+	if len(result.Warnings) != 1 {
+		t.Errorf("expected 1 warning, got %d", len(result.Warnings))
 	}
 }

@@ -52,10 +52,10 @@ func AheadBehind(r Runner, dir string) (ahead, behind int, _ error) {
 		return 0, 0, nil
 	}
 
-	var a, b int
-	parseCount(parts[0], &b)
-	parseCount(parts[1], &a)
-	return a, b, nil
+	// parts[0] = upstream count (behind), parts[1] = HEAD count (ahead)
+	parseCount(parts[0], &behind)
+	parseCount(parts[1], &ahead)
+	return ahead, behind, nil
 }
 
 // IsSquashMerged checks whether a branch's content has been squash-merged into mergeRef.

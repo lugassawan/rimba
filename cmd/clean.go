@@ -115,30 +115,32 @@ func cleanMerged(cmd *cobra.Command, r git.Runner) error {
 	}
 
 	s.Update("Analyzing branches...")
-	candidates, err := operations.FindMergedCandidates(r, mergeRef, mainBranch)
+	mergedResult, err := operations.FindMergedCandidates(r, mergeRef, mainBranch)
 	if err != nil {
 		return err
 	}
 
 	s.Stop()
 
-	if len(candidates) == 0 {
+	printWarnings(cmd, mergedResult.Warnings)
+
+	if len(mergedResult.Candidates) == 0 {
 		fmt.Fprintln(cmd.OutOrStdout(), "No merged worktrees found.")
 		return nil
 	}
 
-	printMergedCandidates(cmd, candidates)
+	printMergedCandidates(cmd, mergedResult.Candidates)
 
 	if dryRun {
 		return nil
 	}
 
-	if !force && !confirmRemoval(cmd, len(candidates), "merged") {
+	if !force && !confirmRemoval(cmd, len(mergedResult.Candidates), "merged") {
 		fmt.Fprintln(cmd.OutOrStdout(), "Aborted.")
 		return nil
 	}
 
-	items := operations.RemoveCandidates(r, candidates, func(msg string) {
+	items := operations.RemoveCandidates(r, mergedResult.Candidates, func(msg string) {
 		s.Update(msg)
 	})
 	printCleanedItems(cmd, items)
@@ -168,30 +170,32 @@ func cleanStale(cmd *cobra.Command, r git.Runner) error {
 	defer s.Stop()
 
 	s.Start("Analyzing worktree activity...")
-	candidates, err := operations.FindStaleCandidates(r, mainBranch, staleDays)
+	staleResult, err := operations.FindStaleCandidates(r, mainBranch, staleDays)
 	if err != nil {
 		return err
 	}
 	s.Stop()
 
-	if len(candidates) == 0 {
+	printWarnings(cmd, staleResult.Warnings)
+
+	if len(staleResult.Candidates) == 0 {
 		fmt.Fprintln(cmd.OutOrStdout(), "No stale worktrees found.")
 		return nil
 	}
 
-	printStaleCandidates(cmd, candidates)
+	printStaleCandidates(cmd, staleResult.Candidates)
 
 	if dryRun {
 		return nil
 	}
 
-	if !force && !confirmRemoval(cmd, len(candidates), "stale") {
+	if !force && !confirmRemoval(cmd, len(staleResult.Candidates), "stale") {
 		fmt.Fprintln(cmd.OutOrStdout(), "Aborted.")
 		return nil
 	}
 
-	toRemove := make([]operations.CleanCandidate, len(candidates))
-	for i, c := range candidates {
+	toRemove := make([]operations.CleanCandidate, len(staleResult.Candidates))
+	for i, c := range staleResult.Candidates {
 		toRemove[i] = c.CleanCandidate
 	}
 
@@ -230,6 +234,12 @@ func confirmRemoval(cmd *cobra.Command, count int, label string) bool {
 	answer, _ := reader.ReadString('\n')
 	answer = strings.TrimSpace(strings.ToLower(answer))
 	return answer == "y" || answer == "yes"
+}
+
+func printWarnings(cmd *cobra.Command, warnings []string) {
+	for _, w := range warnings {
+		fmt.Fprintf(cmd.OutOrStdout(), "Warning: %s\n", w)
+	}
 }
 
 func printCleanedItems(cmd *cobra.Command, items []operations.CleanedItem) {

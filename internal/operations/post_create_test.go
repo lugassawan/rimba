@@ -1,8 +1,10 @@
 package operations
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -115,5 +117,36 @@ func TestPostCreateSetup_ProgressCallbacks(t *testing.T) {
 	}
 	if messages[0] != "Copying files..." {
 		t.Errorf("first message = %q, want 'Copying files...'", messages[0])
+	}
+}
+
+func TestPostCreateSetup_ListWorktreesError(t *testing.T) {
+	tmpDir := t.TempDir()
+	wtPath := filepath.Join(tmpDir, "worktree")
+	if err := os.MkdirAll(wtPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == gitCmdWorktree {
+				return "", errors.New("permission denied")
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	_, err := PostCreateSetup(r, PostCreateParams{
+		RepoRoot: tmpDir,
+		WtPath:   wtPath,
+		Task:     "test-task",
+		SkipDeps: false, // Enable deps so ListWorktrees is called
+	}, nil)
+	if err == nil {
+		t.Fatal("expected error when ListWorktrees fails")
+	}
+	if !strings.Contains(err.Error(), "failed to list worktrees") {
+		t.Errorf("error = %q, want to contain 'failed to list worktrees'", err.Error())
 	}
 }

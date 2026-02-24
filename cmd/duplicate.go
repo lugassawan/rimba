@@ -18,6 +18,8 @@ const (
 	flagAs = "as"
 
 	hintAs = "Use a custom name instead of auto-suffix (-1, -2, etc.)"
+
+	maxDuplicateSuffix = 1000
 )
 
 func init() {
@@ -73,13 +75,16 @@ var duplicateCmd = &cobra.Command{
 			newTask = asFlag
 		} else {
 			// Auto-suffix: try task-1, task-2, etc.
-			for i := 1; ; i++ {
+			for i := 1; i <= maxDuplicateSuffix; i++ {
 				candidate := fmt.Sprintf("%s-%d", task, i)
 				candidateBranch := resolver.BranchName(matchedPrefix, candidate)
 				if !git.BranchExists(r, candidateBranch) {
 					newTask = candidate
 					break
 				}
+			}
+			if newTask == "" {
+				return fmt.Errorf("could not find available suffix for %q (tried 1-%d); use --as to specify a name", task, maxDuplicateSuffix)
 			}
 		}
 
