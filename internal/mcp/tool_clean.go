@@ -79,33 +79,35 @@ func mcpCleanMerged(r git.Runner, hctx *HandlerContext, dryRun bool) (*mcp.CallT
 		mergeRef = "origin/" + mainBranch
 	}
 
-	candidates, err := operations.FindMergedCandidates(r, mergeRef, mainBranch)
+	mergedResult, err := operations.FindMergedCandidates(r, mergeRef, mainBranch)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	if len(candidates) == 0 || dryRun {
-		items := make([]cleanedItem, len(candidates))
-		for i, c := range candidates {
+	if len(mergedResult.Candidates) == 0 || dryRun {
+		items := make([]cleanedItem, len(mergedResult.Candidates))
+		for i, c := range mergedResult.Candidates {
 			items[i] = cleanedItem{Branch: c.Branch, Path: c.Path}
 		}
 		return marshalResult(cleanResult{
-			Mode:    "merged",
-			DryRun:  dryRun,
-			Removed: items,
+			Mode:     "merged",
+			DryRun:   dryRun,
+			Removed:  items,
+			Warnings: mergedResult.Warnings,
 		})
 	}
 
 	// Force mode: no confirmation prompts
-	opItems := operations.RemoveCandidates(r, candidates, nil)
+	opItems := operations.RemoveCandidates(r, mergedResult.Candidates, nil)
 	items := make([]cleanedItem, len(opItems))
 	for i, item := range opItems {
 		items[i] = cleanedItem{Branch: item.Branch, Path: item.Path}
 	}
 	return marshalResult(cleanResult{
-		Mode:    "merged",
-		DryRun:  false,
-		Removed: items,
+		Mode:     "merged",
+		DryRun:   false,
+		Removed:  items,
+		Warnings: mergedResult.Warnings,
 	})
 }
 
@@ -115,25 +117,26 @@ func mcpCleanStale(r git.Runner, hctx *HandlerContext, dryRun bool, staleDays in
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	candidates, err := operations.FindStaleCandidates(r, mainBranch, staleDays)
+	staleResult, err := operations.FindStaleCandidates(r, mainBranch, staleDays)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	if len(candidates) == 0 || dryRun {
-		items := make([]cleanedItem, len(candidates))
-		for i, c := range candidates {
+	if len(staleResult.Candidates) == 0 || dryRun {
+		items := make([]cleanedItem, len(staleResult.Candidates))
+		for i, c := range staleResult.Candidates {
 			items[i] = cleanedItem{Branch: c.Branch, Path: c.Path}
 		}
 		return marshalResult(cleanResult{
-			Mode:    "stale",
-			DryRun:  dryRun,
-			Removed: items,
+			Mode:     "stale",
+			DryRun:   dryRun,
+			Removed:  items,
+			Warnings: staleResult.Warnings,
 		})
 	}
 
-	toRemove := make([]operations.CleanCandidate, len(candidates))
-	for i, c := range candidates {
+	toRemove := make([]operations.CleanCandidate, len(staleResult.Candidates))
+	for i, c := range staleResult.Candidates {
 		toRemove[i] = c.CleanCandidate
 	}
 
@@ -143,8 +146,9 @@ func mcpCleanStale(r git.Runner, hctx *HandlerContext, dryRun bool, staleDays in
 		items[i] = cleanedItem{Branch: item.Branch, Path: item.Path}
 	}
 	return marshalResult(cleanResult{
-		Mode:    "stale",
-		DryRun:  false,
-		Removed: items,
+		Mode:     "stale",
+		DryRun:   false,
+		Removed:  items,
+		Warnings: staleResult.Warnings,
 	})
 }
