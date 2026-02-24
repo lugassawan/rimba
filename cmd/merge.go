@@ -72,6 +72,7 @@ var mergeCmd = &cobra.Command{
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
 
+		s.Start("Checking for uncommitted changes...")
 		result, err := operations.MergeWorktree(r, operations.MergeParams{
 			SourceTask: sourceTask,
 			IntoTask:   intoTask,
@@ -80,10 +81,12 @@ var mergeCmd = &cobra.Command{
 			NoFF:       noFF,
 			Keep:       keep,
 			Delete:     del,
-		}, func(msg string) { s.Start(msg) })
+		}, func(msg string) { s.Update(msg) })
 		if err != nil {
 			return err
 		}
+
+		s.Stop()
 
 		fmt.Fprintf(cmd.OutOrStdout(), "Merged %s into %s\n", result.SourceBranch, result.TargetLabel)
 

@@ -69,6 +69,7 @@ var addCmd = &cobra.Command{
 			configModules = cfg.Deps.Modules
 		}
 
+		s.Start("Creating worktree...")
 		result, err := operations.AddWorktree(r, operations.AddParams{
 			Task:          task,
 			Prefix:        prefix,
@@ -81,10 +82,12 @@ var addCmd = &cobra.Command{
 			ConfigModules: configModules,
 			SkipHooks:     skipHooks,
 			PostCreate:    cfg.PostCreate,
-		}, func(msg string) { s.Start(msg) })
+		}, func(msg string) { s.Update(msg) })
 		if err != nil {
 			return err
 		}
+
+		s.Stop()
 
 		out := cmd.OutOrStdout()
 		fmt.Fprintf(out, "Created worktree for task %q\n", task)
