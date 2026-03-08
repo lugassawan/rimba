@@ -29,7 +29,7 @@ var commandName string
 
 var rootCmd = &cobra.Command{
 	Use:           "rimba",
-	Short:         "Git worktree lifecycle manager",
+	Short:         "Manage git worktrees — create, sync, merge, and organize branches",
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {

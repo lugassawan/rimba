@@ -1,7 +1,7 @@
 <div align="center">
   <img src=".github/rimba-128.png" alt="rimba" width="128" height="128" />
   <h1>rimba</h1>
-  <p>Git worktree lifecycle manager</p>
+  <p>A CLI tool to create, sync, merge, and organize git worktrees — so you can work on multiple branches in parallel without the hassle.</p>
 </div>
 
 <p align="center">
@@ -10,6 +10,8 @@
   <a href="go.mod"><img src="https://img.shields.io/badge/go-%3E%3D1.25-00ADD8?logo=go" alt="Go" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License" /></a>
 </p>
+
+**rimba** automates the full git worktree lifecycle — branch naming, file copying, dependency sharing, post-create hooks, and cleanup — so you can develop across multiple branches simultaneously with zero friction.
 
 ---
 
