@@ -19,9 +19,28 @@ func TestListShowsWorktrees(t *testing.T) {
 
 	r := rimbaSuccess(t, repo, "list")
 	assertContains(t, r.Stdout, taskList)
+	assertContains(t, r.Stdout, "TASK")
+	assertContains(t, r.Stdout, "TYPE")
+	assertNotContains(t, r.Stdout, "BRANCH")
+	assertNotContains(t, r.Stdout, "PATH")
+}
+
+func TestListFullShowsAllColumns(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", taskList)
+
+	r := rimbaSuccess(t, repo, "list", "--full")
+	assertContains(t, r.Stdout, taskList)
 	assertContains(t, r.Stdout, defaultPrefix+taskList)
 	assertContains(t, r.Stdout, "TASK")
 	assertContains(t, r.Stdout, "TYPE")
+	assertContains(t, r.Stdout, "BRANCH")
+	assertContains(t, r.Stdout, "PATH")
+	assertContains(t, r.Stdout, "STATUS")
 }
 
 func TestListMultipleWorktrees(t *testing.T) {

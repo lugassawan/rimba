@@ -23,10 +23,12 @@ const (
 	flagDirty    = "dirty"
 	flagBehind   = "behind"
 	flagArchived = "archived"
+	flagFull     = "full"
 
 	hintType   = "Filter by prefix type (feature, bugfix, hotfix, etc.)"
 	hintDirty  = "Show only worktrees with uncommitted changes"
 	hintBehind = "Show only worktrees behind upstream"
+	hintFull   = "Show all columns including branch and path"
 )
 
 // candidate holds a pre-filtered worktree entry before status collection.
@@ -43,10 +45,12 @@ func init() {
 	listCmd.Flags().Bool(flagDirty, false, "show only dirty worktrees")
 	listCmd.Flags().Bool(flagBehind, false, "show only worktrees behind upstream")
 	listCmd.Flags().Bool(flagArchived, false, "show archived branches (not in any active worktree)")
+	listCmd.Flags().Bool(flagFull, false, "show all columns including branch and path")
 
 	listCmd.MarkFlagsMutuallyExclusive(flagArchived, flagType)
 	listCmd.MarkFlagsMutuallyExclusive(flagArchived, flagDirty)
 	listCmd.MarkFlagsMutuallyExclusive(flagArchived, flagBehind)
+	listCmd.MarkFlagsMutuallyExclusive(flagArchived, flagFull)
 
 	_ = listCmd.RegisterFlagCompletionFunc(flagType, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		var types []string
@@ -63,12 +67,13 @@ func init() {
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all worktrees",
-	Long:  "Lists all git worktrees with their branch, path, and status (dirty, ahead/behind).",
+	Long:  "Lists all git worktrees with task, type, and status. Use --full to show all columns including branch and path.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		listType, _ := cmd.Flags().GetString(flagType)
 		listDirty, _ := cmd.Flags().GetBool(flagDirty)
 		listBehind, _ := cmd.Flags().GetBool(flagBehind)
 		listArchived, _ := cmd.Flags().GetBool(flagArchived)
+		listFull, _ := cmd.Flags().GetBool(flagFull)
 
 		if listArchived {
 			r := newRunner()
@@ -119,6 +124,7 @@ var listCmd = &cobra.Command{
 
 		if !isJSON(cmd) {
 			hint.New(cmd, hintPainter(cmd)).
+				Add(flagFull, hintFull).
 				Add(flagType, hintType).
 				Add(flagDirty, hintDirty).
 				Add(flagBehind, hintBehind).
@@ -195,13 +201,21 @@ var listCmd = &cobra.Command{
 		p := termcolor.NewPainter(noColor)
 
 		tbl := termcolor.NewTable(2)
-		tbl.AddRow(
-			p.Paint("TASK", termcolor.Bold),
-			p.Paint("TYPE", termcolor.Bold),
-			p.Paint("BRANCH", termcolor.Bold),
-			p.Paint("PATH", termcolor.Bold),
-			p.Paint("STATUS", termcolor.Bold),
-		)
+		if listFull {
+			tbl.AddRow(
+				p.Paint("TASK", termcolor.Bold),
+				p.Paint("TYPE", termcolor.Bold),
+				p.Paint("BRANCH", termcolor.Bold),
+				p.Paint("PATH", termcolor.Bold),
+				p.Paint("STATUS", termcolor.Bold),
+			)
+		} else {
+			tbl.AddRow(
+				p.Paint("TASK", termcolor.Bold),
+				p.Paint("TYPE", termcolor.Bold),
+				p.Paint("STATUS", termcolor.Bold),
+			)
+		}
 
 		for _, row := range rows {
 			taskCell := "  " + row.Task
@@ -217,7 +231,11 @@ var listCmd = &cobra.Command{
 
 			statusCell := colorStatus(p, row.Status)
 
-			tbl.AddRow(taskCell, typeCell, row.Branch, row.Path, statusCell)
+			if listFull {
+				tbl.AddRow(taskCell, typeCell, row.Branch, row.Path, statusCell)
+			} else {
+				tbl.AddRow(taskCell, typeCell, statusCell)
+			}
 		}
 
 		tbl.Render(cmd.OutOrStdout())

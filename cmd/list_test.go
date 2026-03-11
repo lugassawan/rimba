@@ -19,6 +19,7 @@ func newListTestCmd() (*cobra.Command, *bytes.Buffer) {
 	cmd.Flags().Bool(flagDirty, false, "")
 	cmd.Flags().Bool(flagBehind, false, "")
 	cmd.Flags().Bool(flagArchived, false, "")
+	cmd.Flags().Bool(flagFull, false, "")
 	return cmd, buf
 }
 
@@ -514,6 +515,108 @@ func TestListArchivedJSON(t *testing.T) {
 	}
 	if len(arr) != 1 {
 		t.Errorf("expected 1 archived branch, got %d", len(arr))
+	}
+}
+
+func TestListCompactDefault(t *testing.T) {
+	repoDir := t.TempDir()
+	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: "worktrees"}
+
+	worktreeOut := strings.Join([]string{
+		wtPrefix + repoDir,
+		headABC123,
+		branchRefMain,
+		"",
+		wtPrefix + repoDir + pathWorktreesFeatureLogin,
+		headDEF456,
+		branchRefFeatureLogin,
+		"",
+	}, "\n")
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			return worktreeOut, nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newListTestCmd()
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	err := listCmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf(fatalListRunE, err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "TASK") {
+		t.Error("compact output should contain TASK header")
+	}
+	if !strings.Contains(out, "TYPE") {
+		t.Error("compact output should contain TYPE header")
+	}
+	if !strings.Contains(out, "STATUS") {
+		t.Error("compact output should contain STATUS header")
+	}
+	if strings.Contains(out, "BRANCH") {
+		t.Error("compact output should NOT contain BRANCH header")
+	}
+	if strings.Contains(out, "PATH") {
+		t.Error("compact output should NOT contain PATH header")
+	}
+}
+
+func TestListFullMode(t *testing.T) {
+	repoDir := t.TempDir()
+	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: "worktrees"}
+
+	worktreeOut := strings.Join([]string{
+		wtPrefix + repoDir,
+		headABC123,
+		branchRefMain,
+		"",
+		wtPrefix + repoDir + pathWorktreesFeatureLogin,
+		headDEF456,
+		branchRefFeatureLogin,
+		"",
+	}, "\n")
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			return worktreeOut, nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newListTestCmd()
+	_ = cmd.Flags().Set(flagFull, "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	err := listCmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf(fatalListRunE, err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "TASK") {
+		t.Error("full output should contain TASK header")
+	}
+	if !strings.Contains(out, "BRANCH") {
+		t.Error("full output should contain BRANCH header")
+	}
+	if !strings.Contains(out, "PATH") {
+		t.Error("full output should contain PATH header")
+	}
+	if !strings.Contains(out, "STATUS") {
+		t.Error("full output should contain STATUS header")
 	}
 }
 
