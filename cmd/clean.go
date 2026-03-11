@@ -140,9 +140,11 @@ func cleanMerged(cmd *cobra.Command, r git.Runner) error {
 		return nil
 	}
 
+	s.Start("Removing worktrees...")
 	items := operations.RemoveCandidates(r, mergedResult.Candidates, func(msg string) {
 		s.Update(msg)
 	})
+	s.Stop()
 	printCleanedItems(cmd, items)
 
 	removed := countRemoved(items)
@@ -199,9 +201,11 @@ func cleanStale(cmd *cobra.Command, r git.Runner) error {
 		toRemove[i] = c.CleanCandidate
 	}
 
+	s.Start("Removing worktrees...")
 	items := operations.RemoveCandidates(r, toRemove, func(msg string) {
 		s.Update(msg)
 	})
+	s.Stop()
 	printCleanedItems(cmd, items)
 
 	removed := countRemoved(items)
