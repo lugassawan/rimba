@@ -100,7 +100,7 @@ rimba remove my-feature
 | `rimba duplicate <task>` | Create a copy of an existing worktree |
 | `rimba archive <task>` | Archive a worktree (remove directory, keep branch) |
 | `rimba restore <task>` | Restore an archived worktree from its preserved branch |
-| `rimba list` | List all worktrees with status dashboard |
+| `rimba list` | List worktrees (compact by default; `--full` for all columns) |
 | `rimba status` | Show worktree dashboard with summary stats and age info |
 | `rimba log` | Show last commit from each worktree, sorted by recency |
 | `rimba open <task>` | Open a worktree or run a command inside it |

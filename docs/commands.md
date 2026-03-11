@@ -137,10 +137,11 @@ rimba restore my-feature
 
 ### rimba list
 
-List all worktrees with their task name, type, branch, path, and status. The current worktree is marked with `*`.
+List all worktrees with task, type, and status. Use `--full` to show all columns including branch and path. The current worktree is marked with `*`.
 
 ```sh
 rimba list
+rimba list --full               # Show all columns (branch, path)
 rimba list --type bugfix        # Show only bugfix worktrees
 rimba list --dirty              # Show only dirty worktrees
 rimba list --behind             # Show only worktrees behind upstream
@@ -148,7 +149,16 @@ rimba list --archived           # Show archived branches (not in any active work
 rimba list --json               # Output as JSON
 ```
 
-Example output:
+Example output (compact, default):
+
+```
+TASK            TYPE     STATUS
+* auth-flow     feature  [dirty]
+  fix-login     bugfix   ↑2 ↓1
+  ui-cleanup    chore    ✓
+```
+
+Example output with `--full`:
 
 ```
 TASK            TYPE     BRANCH              PATH              STATUS
@@ -159,6 +169,7 @@ TASK            TYPE     BRANCH              PATH              STATUS
 
 | Flag | Description |
 |------|-------------|
+| `--full` | Show all columns including branch and path |
 | `--type` | Filter by prefix type (e.g. `feature`, `bugfix`, `hotfix`, `docs`, `test`, `chore`) |
 | `--dirty` | Show only worktrees with uncommitted changes |
 | `--behind` | Show only worktrees behind their upstream branch |
