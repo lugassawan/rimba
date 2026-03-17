@@ -34,12 +34,12 @@ linters:
     - usestdlibvars
     - wastedassign
     - whitespace
-    - rimbalint
+    - tidygo
   settings:
     custom:
-      rimbalint:
+      tidygo:
         type: "module"
-        description: "Rimba custom lint rules (maxparams, nolocalstruct, nolateexport)"
+        description: "Custom lint rules (maxparams, nolocalstruct, nolateexport, funcname, nolateconst)"
     decorder:
       dec-order:
         - type
@@ -85,7 +85,7 @@ linters:
       - path: _test\.go
         linters: [gocognit]
       - path: _test\.go
-        linters: [rimbalint]
+        linters: [tidygo]
         text: "nolateexport:"
       - path: internal/agentfile/content\.go
         linters: [dupl]
