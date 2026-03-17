@@ -13,11 +13,6 @@ const (
 	hintForceArchive = "Force archival even if the worktree has uncommitted changes"
 )
 
-func init() {
-	archiveCmd.Flags().BoolP(flagForce, "f", false, "Force archival even if worktree is dirty")
-	rootCmd.AddCommand(archiveCmd)
-}
-
 var archiveCmd = &cobra.Command{
 	Use:   "archive <task>",
 	Short: "Archive a worktree (remove directory, keep branch)",
@@ -58,4 +53,9 @@ var archiveCmd = &cobra.Command{
 		fmt.Fprintf(out, "  To restore: rimba restore %s\n", task)
 		return nil
 	},
+}
+
+func init() {
+	archiveCmd.Flags().BoolP(flagForce, "f", false, "Force archival even if worktree is dirty")
+	rootCmd.AddCommand(archiveCmd)
 }

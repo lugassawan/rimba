@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestPostCreateSetup_CopiesFiles(t *testing.T) {
+func TestPostCreateSetupCopiesFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 	wtPath := filepath.Join(tmpDir, "worktree")
 	if err := os.MkdirAll(wtPath, 0o755); err != nil {
@@ -54,7 +54,7 @@ func TestPostCreateSetup_CopiesFiles(t *testing.T) {
 	}
 }
 
-func TestPostCreateSetup_SkipDepsAndHooks(t *testing.T) {
+func TestPostCreateSetupSkipDepsAndHooks(t *testing.T) {
 	tmpDir := t.TempDir()
 	wtPath := filepath.Join(tmpDir, "worktree")
 	if err := os.MkdirAll(wtPath, 0o755); err != nil {
@@ -86,7 +86,7 @@ func TestPostCreateSetup_SkipDepsAndHooks(t *testing.T) {
 	}
 }
 
-func TestPostCreateSetup_ProgressCallbacks(t *testing.T) {
+func TestPostCreateSetupProgressCallbacks(t *testing.T) {
 	tmpDir := t.TempDir()
 	wtPath := filepath.Join(tmpDir, "worktree")
 	if err := os.MkdirAll(wtPath, 0o755); err != nil {
@@ -120,7 +120,7 @@ func TestPostCreateSetup_ProgressCallbacks(t *testing.T) {
 	}
 }
 
-func TestPostCreateSetup_ListWorktreesError(t *testing.T) {
+func TestPostCreateSetupListWorktreesError(t *testing.T) {
 	tmpDir := t.TempDir()
 	wtPath := filepath.Join(tmpDir, "worktree")
 	if err := os.MkdirAll(wtPath, 0o755); err != nil {

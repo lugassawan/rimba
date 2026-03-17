@@ -13,12 +13,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func init() {
-	restoreCmd.Flags().Bool(flagSkipDeps, false, "Skip dependency detection and installation")
-	restoreCmd.Flags().Bool(flagSkipHooks, false, "Skip post-create hooks")
-	rootCmd.AddCommand(restoreCmd)
-}
-
 var restoreCmd = &cobra.Command{
 	Use:   "restore <task>",
 	Short: "Restore an archived worktree from its preserved branch",
@@ -104,4 +98,10 @@ var restoreCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+func init() {
+	restoreCmd.Flags().Bool(flagSkipDeps, false, "Skip dependency detection and installation")
+	restoreCmd.Flags().Bool(flagSkipHooks, false, "Skip post-create hooks")
+	rootCmd.AddCommand(restoreCmd)
 }

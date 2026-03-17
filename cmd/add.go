@@ -18,17 +18,6 @@ const (
 	hintSource = "Branch from a specific source instead of the default branch"
 )
 
-func init() {
-	addPrefixFlags(addCmd)
-	addCmd.Flags().StringP(flagSource, "s", "", "Source branch to create worktree from (default from config)")
-	addCmd.Flags().Bool(flagSkipDeps, false, "Skip dependency detection and installation")
-	addCmd.Flags().Bool(flagSkipHooks, false, "Skip post-create hooks")
-	_ = addCmd.RegisterFlagCompletionFunc(flagSource, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return completeBranchNames(cmd, toComplete), cobra.ShellCompDirectiveNoFileComp
-	})
-	rootCmd.AddCommand(addCmd)
-}
-
 var addCmd = &cobra.Command{
 	Use:   "add <task>",
 	Short: "Create a new worktree for a task",
@@ -105,4 +94,15 @@ var addCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+func init() {
+	addPrefixFlags(addCmd)
+	addCmd.Flags().StringP(flagSource, "s", "", "Source branch to create worktree from (default from config)")
+	addCmd.Flags().Bool(flagSkipDeps, false, "Skip dependency detection and installation")
+	addCmd.Flags().Bool(flagSkipHooks, false, "Skip post-create hooks")
+	_ = addCmd.RegisterFlagCompletionFunc(flagSource, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return completeBranchNames(cmd, toComplete), cobra.ShellCompDirectiveNoFileComp
+	})
+	rootCmd.AddCommand(addCmd)
 }

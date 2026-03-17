@@ -11,11 +11,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func init() {
-	renameCmd.Flags().BoolP(flagForce, "f", false, "Force rename even if worktree is locked")
-	rootCmd.AddCommand(renameCmd)
-}
-
 var renameCmd = &cobra.Command{
 	Use:   "rename <task> <new-task>",
 	Short: "Rename a worktree's task, branch, and directory",
@@ -60,4 +55,9 @@ var renameCmd = &cobra.Command{
 		fmt.Fprintf(cmd.OutOrStdout(), "Renamed worktree: %s -> %s\n", task, newTask)
 		return nil
 	},
+}
+
+func init() {
+	renameCmd.Flags().BoolP(flagForce, "f", false, "Force rename even if worktree is locked")
+	rootCmd.AddCommand(renameCmd)
 }

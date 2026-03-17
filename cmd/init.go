@@ -17,12 +17,6 @@ const (
 	flagPersonal   = "personal"
 )
 
-func init() {
-	rootCmd.AddCommand(initCmd)
-	initCmd.Flags().Bool(flagAgentFiles, false, "Install AI agent instruction files (AGENTS.md, copilot, cursor, claude)")
-	initCmd.Flags().Bool(flagPersonal, false, "Gitignore the .rimba/ directory (for solo developers)")
-}
-
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize rimba in the current repository",
@@ -156,6 +150,12 @@ directory is already personal.`,
 
 		return nil
 	},
+}
+
+func init() {
+	rootCmd.AddCommand(initCmd)
+	initCmd.Flags().Bool(flagAgentFiles, false, "Install AI agent instruction files (AGENTS.md, copilot, cursor, claude)")
+	initCmd.Flags().Bool(flagPersonal, false, "Gitignore the .rimba/ directory (for solo developers)")
 }
 
 // dirExists returns true if path exists and is a directory.

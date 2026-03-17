@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestAddWorktree_Success(t *testing.T) {
+func TestAddWorktreeSuccess(t *testing.T) {
 	tmpDir := t.TempDir()
 	wtDir := filepath.Join(tmpDir, ".worktrees")
 
@@ -54,7 +54,7 @@ func TestAddWorktree_Success(t *testing.T) {
 	}
 }
 
-func TestAddWorktree_BranchExists(t *testing.T) {
+func TestAddWorktreeBranchExists(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			// BranchExists: rev-parse succeeds = branch exists
@@ -82,7 +82,7 @@ func TestAddWorktree_BranchExists(t *testing.T) {
 	}
 }
 
-func TestAddWorktree_PathExists(t *testing.T) {
+func TestAddWorktreePathExists(t *testing.T) {
 	tmpDir := t.TempDir()
 	wtDir := filepath.Join(tmpDir, ".worktrees")
 	// Create the worktree path so it already exists
@@ -115,7 +115,7 @@ func TestAddWorktree_PathExists(t *testing.T) {
 	}
 }
 
-func TestAddWorktree_CreateFails(t *testing.T) {
+func TestAddWorktreeCreateFails(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			if len(args) > 0 && args[0] == cmdRevParse {
@@ -145,7 +145,7 @@ func TestAddWorktree_CreateFails(t *testing.T) {
 	}
 }
 
-func TestAddWorktree_ProgressCallbacks(t *testing.T) {
+func TestAddWorktreeProgressCallbacks(t *testing.T) {
 	tmpDir := t.TempDir()
 	wtDir := filepath.Join(tmpDir, ".worktrees")
 
@@ -183,7 +183,7 @@ func TestAddWorktree_ProgressCallbacks(t *testing.T) {
 	}
 }
 
-func TestAddWorktree_WithDeps(t *testing.T) {
+func TestAddWorktreeWithDeps(t *testing.T) {
 	tmpDir := t.TempDir()
 	wtDir := filepath.Join(tmpDir, ".worktrees")
 
@@ -224,7 +224,7 @@ func TestAddWorktree_WithDeps(t *testing.T) {
 	}
 }
 
-func TestAddWorktree_WithHooks(t *testing.T) {
+func TestAddWorktreeWithHooks(t *testing.T) {
 	tmpDir := t.TempDir()
 	wtDir := filepath.Join(tmpDir, ".worktrees")
 

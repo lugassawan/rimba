@@ -22,13 +22,6 @@ const (
 	maxDuplicateSuffix = 1000
 )
 
-func init() {
-	duplicateCmd.Flags().String(flagAs, "", "Custom name for the duplicate worktree")
-	duplicateCmd.Flags().Bool(flagSkipDeps, false, "Skip dependency detection and installation")
-	duplicateCmd.Flags().Bool(flagSkipHooks, false, "Skip post-create hooks")
-	rootCmd.AddCommand(duplicateCmd)
-}
-
 var duplicateCmd = &cobra.Command{
 	Use:   "duplicate <task>",
 	Short: "Create a new worktree from an existing worktree",
@@ -157,4 +150,11 @@ var duplicateCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+func init() {
+	duplicateCmd.Flags().String(flagAs, "", "Custom name for the duplicate worktree")
+	duplicateCmd.Flags().Bool(flagSkipDeps, false, "Skip dependency detection and installation")
+	duplicateCmd.Flags().Bool(flagSkipHooks, false, "Skip post-create hooks")
+	rootCmd.AddCommand(duplicateCmd)
 }

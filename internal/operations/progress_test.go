@@ -2,7 +2,7 @@ package operations
 
 import "testing"
 
-func TestNotify_WithFunc(t *testing.T) {
+func TestNotifyWithFunc(t *testing.T) {
 	var got string
 	fn := ProgressFunc(func(msg string) { got = msg })
 	notify(fn, "hello")
@@ -11,7 +11,7 @@ func TestNotify_WithFunc(t *testing.T) {
 	}
 }
 
-func TestNotify_Nil(t *testing.T) {
+func TestNotifyNil(t *testing.T) {
 	// Must not panic.
 	notify(nil, "hello")
 }

@@ -30,27 +30,6 @@ const (
 	hintConcurrency = "Limit the number of parallel executions"
 )
 
-func init() {
-	execCmd.Flags().Bool(flagAll, false, "run in all eligible worktrees")
-	execCmd.Flags().String(flagType, "", "filter by prefix type (e.g. feature, bugfix)")
-	execCmd.Flags().Bool(flagDirty, false, "run only in dirty worktrees")
-	execCmd.Flags().Bool(flagFailFast, false, "stop after the first failure")
-	execCmd.Flags().Int(flagConcurrency, 0, "max parallel executions (0 = unlimited)")
-
-	_ = execCmd.RegisterFlagCompletionFunc(flagType, func(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		var types []string
-		for _, p := range resolver.AllPrefixes() {
-			t := strings.TrimSuffix(p, "/")
-			if strings.HasPrefix(t, toComplete) {
-				types = append(types, t)
-			}
-		}
-		return types, cobra.ShellCompDirectiveNoFileComp
-	})
-
-	rootCmd.AddCommand(execCmd)
-}
-
 var execCmd = &cobra.Command{
 	Use:   "exec <command>",
 	Short: "Run a shell command across worktrees",
@@ -178,6 +157,27 @@ var execCmd = &cobra.Command{
 		}
 		return nil
 	},
+}
+
+func init() {
+	execCmd.Flags().Bool(flagAll, false, "run in all eligible worktrees")
+	execCmd.Flags().String(flagType, "", "filter by prefix type (e.g. feature, bugfix)")
+	execCmd.Flags().Bool(flagDirty, false, "run only in dirty worktrees")
+	execCmd.Flags().Bool(flagFailFast, false, "stop after the first failure")
+	execCmd.Flags().Int(flagConcurrency, 0, "max parallel executions (0 = unlimited)")
+
+	_ = execCmd.RegisterFlagCompletionFunc(flagType, func(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		var types []string
+		for _, p := range resolver.AllPrefixes() {
+			t := strings.TrimSuffix(p, "/")
+			if strings.HasPrefix(t, toComplete) {
+				types = append(types, t)
+			}
+		}
+		return types, cobra.ShellCompDirectiveNoFileComp
+	})
+
+	rootCmd.AddCommand(execCmd)
 }
 
 // filterDirtyWorktrees filters worktrees to only those with uncommitted changes.

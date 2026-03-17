@@ -14,10 +14,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func init() {
-	rootCmd.AddCommand(mergePlanCmd)
-}
-
 var mergePlanCmd = &cobra.Command{
 	Use:   "merge-plan",
 	Short: "Recommend optimal merge order",
@@ -100,4 +96,8 @@ var mergePlanCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+func init() {
+	rootCmd.AddCommand(mergePlanCmd)
 }

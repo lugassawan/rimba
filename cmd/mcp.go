@@ -10,10 +10,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func init() {
-	rootCmd.AddCommand(mcpCmd)
-}
-
 var mcpCmd = &cobra.Command{
 	Use:   "mcp",
 	Short: "Start MCP server for AI tool integration",
@@ -51,4 +47,8 @@ rimba commands with structured parameters and typed responses.`,
 		s := mcppkg.NewServer(hctx)
 		return server.ServeStdio(s)
 	},
+}
+
+func init() {
+	rootCmd.AddCommand(mcpCmd)
 }

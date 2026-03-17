@@ -28,11 +28,6 @@ const (
 	hintDryMerge = "Simulate merges with git merge-tree (git 2.38+)"
 )
 
-func init() {
-	conflictCheckCmd.Flags().Bool(flagDryMerge, false, "simulate merges with git merge-tree (git 2.38+)")
-	rootCmd.AddCommand(conflictCheckCmd)
-}
-
 var conflictCheckCmd = &cobra.Command{
 	Use:   "conflict-check",
 	Short: "Detect file overlaps between worktree branches",
@@ -127,6 +122,11 @@ var conflictCheckCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+func init() {
+	conflictCheckCmd.Flags().Bool(flagDryMerge, false, "simulate merges with git merge-tree (git 2.38+)")
+	rootCmd.AddCommand(conflictCheckCmd)
 }
 
 func renderOverlapTable(cmd *cobra.Command, p *termcolor.Painter, result *conflict.CheckResult, prefixes []string) {

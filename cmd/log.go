@@ -29,12 +29,6 @@ type logEntry struct {
 	valid      bool
 }
 
-func init() {
-	logCmd.Flags().Int(flagLimit, 0, "Maximum number of entries to show (0 = all)")
-	logCmd.Flags().String(flagSince, "", "Show entries since duration (e.g. 7d, 2w, 3h)")
-	rootCmd.AddCommand(logCmd)
-}
-
 var logCmd = &cobra.Command{
 	Use:         "log",
 	Short:       "Show last commit from each worktree, sorted by recency",
@@ -101,6 +95,12 @@ var logCmd = &cobra.Command{
 		renderLogTable(cmd.OutOrStdout(), p, valid)
 		return nil
 	},
+}
+
+func init() {
+	logCmd.Flags().Int(flagLimit, 0, "Maximum number of entries to show (0 = all)")
+	logCmd.Flags().String(flagSince, "", "Show entries since duration (e.g. 7d, 2w, 3h)")
+	rootCmd.AddCommand(logCmd)
 }
 
 // collectLogEntries gathers commit info for each candidate in parallel,
