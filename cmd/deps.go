@@ -21,12 +21,6 @@ type depsStatusJSONItem struct {
 	Error   string                `json:"error,omitempty"`
 }
 
-func init() {
-	depsCmd.AddCommand(depsStatusCmd)
-	depsCmd.AddCommand(depsInstallCmd)
-	rootCmd.AddCommand(depsCmd)
-}
-
 var depsCmd = &cobra.Command{
 	Use:   "deps",
 	Short: "Manage worktree dependencies",
@@ -218,4 +212,10 @@ var depsInstallCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+func init() {
+	depsCmd.AddCommand(depsStatusCmd)
+	depsCmd.AddCommand(depsInstallCmd)
+	rootCmd.AddCommand(depsCmd)
 }

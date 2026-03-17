@@ -22,20 +22,6 @@ const (
 	hintInto = "Merge into another worktree instead of the main branch"
 )
 
-func init() {
-	mergeCmd.Flags().String(flagInto, "", "Target worktree task to merge into (default: main/repo root)")
-	mergeCmd.Flags().Bool(flagNoFF, false, "Force a merge commit (no fast-forward)")
-	mergeCmd.Flags().Bool(flagKeep, false, "Keep source worktree after merging into main")
-	mergeCmd.Flags().Bool(flagDelete, false, "Delete source worktree after merging into another worktree")
-	mergeCmd.MarkFlagsMutuallyExclusive(flagKeep, flagDelete)
-
-	_ = mergeCmd.RegisterFlagCompletionFunc(flagInto, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return completeWorktreeTasks(cmd, toComplete), cobra.ShellCompDirectiveNoFileComp
-	})
-
-	rootCmd.AddCommand(mergeCmd)
-}
-
 var mergeCmd = &cobra.Command{
 	Use:   "merge <source-task>",
 	Short: "Merge a worktree branch into main or another worktree",
@@ -103,4 +89,18 @@ var mergeCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+func init() {
+	mergeCmd.Flags().String(flagInto, "", "Target worktree task to merge into (default: main/repo root)")
+	mergeCmd.Flags().Bool(flagNoFF, false, "Force a merge commit (no fast-forward)")
+	mergeCmd.Flags().Bool(flagKeep, false, "Keep source worktree after merging into main")
+	mergeCmd.Flags().Bool(flagDelete, false, "Delete source worktree after merging into another worktree")
+	mergeCmd.MarkFlagsMutuallyExclusive(flagKeep, flagDelete)
+
+	_ = mergeCmd.RegisterFlagCompletionFunc(flagInto, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return completeWorktreeTasks(cmd, toComplete), cobra.ShellCompDirectiveNoFileComp
+	})
+
+	rootCmd.AddCommand(mergeCmd)
 }

@@ -38,32 +38,6 @@ type candidate struct {
 	isCurrent   bool
 }
 
-func init() {
-	rootCmd.AddCommand(listCmd)
-
-	listCmd.Flags().String(flagType, "", "filter by prefix type (e.g. feature, bugfix)")
-	listCmd.Flags().Bool(flagDirty, false, "show only dirty worktrees")
-	listCmd.Flags().Bool(flagBehind, false, "show only worktrees behind upstream")
-	listCmd.Flags().Bool(flagArchived, false, "show archived branches (not in any active worktree)")
-	listCmd.Flags().Bool(flagFull, false, "show all columns including branch and path")
-
-	listCmd.MarkFlagsMutuallyExclusive(flagArchived, flagType)
-	listCmd.MarkFlagsMutuallyExclusive(flagArchived, flagDirty)
-	listCmd.MarkFlagsMutuallyExclusive(flagArchived, flagBehind)
-	listCmd.MarkFlagsMutuallyExclusive(flagArchived, flagFull)
-
-	_ = listCmd.RegisterFlagCompletionFunc(flagType, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		var types []string
-		for _, p := range resolver.AllPrefixes() {
-			t := strings.TrimSuffix(p, "/")
-			if strings.HasPrefix(t, toComplete) {
-				types = append(types, t)
-			}
-		}
-		return types, cobra.ShellCompDirectiveNoFileComp
-	})
-}
-
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all worktrees",
@@ -241,6 +215,32 @@ var listCmd = &cobra.Command{
 		tbl.Render(cmd.OutOrStdout())
 		return nil
 	},
+}
+
+func init() {
+	rootCmd.AddCommand(listCmd)
+
+	listCmd.Flags().String(flagType, "", "filter by prefix type (e.g. feature, bugfix)")
+	listCmd.Flags().Bool(flagDirty, false, "show only dirty worktrees")
+	listCmd.Flags().Bool(flagBehind, false, "show only worktrees behind upstream")
+	listCmd.Flags().Bool(flagArchived, false, "show archived branches (not in any active worktree)")
+	listCmd.Flags().Bool(flagFull, false, "show all columns including branch and path")
+
+	listCmd.MarkFlagsMutuallyExclusive(flagArchived, flagType)
+	listCmd.MarkFlagsMutuallyExclusive(flagArchived, flagDirty)
+	listCmd.MarkFlagsMutuallyExclusive(flagArchived, flagBehind)
+	listCmd.MarkFlagsMutuallyExclusive(flagArchived, flagFull)
+
+	_ = listCmd.RegisterFlagCompletionFunc(flagType, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		var types []string
+		for _, p := range resolver.AllPrefixes() {
+			t := strings.TrimSuffix(p, "/")
+			if strings.HasPrefix(t, toComplete) {
+				types = append(types, t)
+			}
+		}
+		return types, cobra.ShellCompDirectiveNoFileComp
+	})
 }
 
 // listArchivedBranches shows branches not associated with any active worktree.

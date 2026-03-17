@@ -12,11 +12,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func init() {
-	updateCmd.Flags().Bool("force", false, "update even if running a development build")
-	rootCmd.AddCommand(updateCmd)
-}
-
 var updateCmd = &cobra.Command{
 	Use:         "update",
 	Short:       "Update rimba to the latest version",
@@ -127,4 +122,9 @@ var updateCmd = &cobra.Command{
 		}
 		return nil
 	},
+}
+
+func init() {
+	updateCmd.Flags().Bool("force", false, "update even if running a development build")
+	rootCmd.AddCommand(updateCmd)
 }

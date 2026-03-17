@@ -16,12 +16,6 @@ const (
 	hintForceRm    = "Force removal even if the worktree has uncommitted changes"
 )
 
-func init() {
-	removeCmd.Flags().BoolP(flagKeepBranch, "k", false, "Keep the local branch after removing the worktree")
-	removeCmd.Flags().BoolP(flagForce, "f", false, "Force removal even if worktree is dirty")
-	rootCmd.AddCommand(removeCmd)
-}
-
 var removeCmd = &cobra.Command{
 	Use:   "remove <task>",
 	Short: "Remove a worktree and delete its branch",
@@ -72,4 +66,10 @@ var removeCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+func init() {
+	removeCmd.Flags().BoolP(flagKeepBranch, "k", false, "Keep the local branch after removing the worktree")
+	removeCmd.Flags().BoolP(flagForce, "f", false, "Force removal even if worktree is dirty")
+	rootCmd.AddCommand(removeCmd)
 }

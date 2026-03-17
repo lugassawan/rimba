@@ -18,19 +18,6 @@ const (
 	flagAgent = "agent"
 )
 
-func init() {
-	openCmd.Flags().StringP(flagWith, "w", "", "run a named shortcut from [open] config")
-	openCmd.Flags().Bool(flagIDE, false, "run the 'ide' shortcut from [open] config")
-	openCmd.Flags().Bool(flagAgent, false, "run the 'agent' shortcut from [open] config")
-	openCmd.MarkFlagsMutuallyExclusive(flagWith, flagIDE, flagAgent)
-
-	_ = openCmd.RegisterFlagCompletionFunc(flagWith, func(cmd *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return completeOpenShortcuts(cmd, toComplete), cobra.ShellCompDirectiveNoFileComp
-	})
-
-	rootCmd.AddCommand(openCmd)
-}
-
 var openCmd = &cobra.Command{
 	Use:   "open <task> [command args...]",
 	Short: "Open a worktree or run a command inside it",
@@ -94,6 +81,19 @@ Shortcuts are configured in .rimba/settings.toml:
 
 		return nil
 	},
+}
+
+func init() {
+	openCmd.Flags().StringP(flagWith, "w", "", "run a named shortcut from [open] config")
+	openCmd.Flags().Bool(flagIDE, false, "run the 'ide' shortcut from [open] config")
+	openCmd.Flags().Bool(flagAgent, false, "run the 'agent' shortcut from [open] config")
+	openCmd.MarkFlagsMutuallyExclusive(flagWith, flagIDE, flagAgent)
+
+	_ = openCmd.RegisterFlagCompletionFunc(flagWith, func(cmd *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return completeOpenShortcuts(cmd, toComplete), cobra.ShellCompDirectiveNoFileComp
+	})
+
+	rootCmd.AddCommand(openCmd)
 }
 
 // resolveOpenCommand determines the command to execute based on flags and inline args.

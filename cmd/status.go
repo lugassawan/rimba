@@ -24,11 +24,6 @@ type statusEntry struct {
 	hasTime    bool
 }
 
-func init() {
-	statusCmd.Flags().Int(flagStaleDays, defaultStaleDays, "Number of days after which a worktree is considered stale")
-	rootCmd.AddCommand(statusCmd)
-}
-
 var statusCmd = &cobra.Command{
 	Use:         "status",
 	Short:       "Show worktree dashboard with summary stats and age info",
@@ -80,6 +75,11 @@ var statusCmd = &cobra.Command{
 		renderStatusDashboard(cmd.OutOrStdout(), p, results, staleDays)
 		return nil
 	},
+}
+
+func init() {
+	statusCmd.Flags().Int(flagStaleDays, defaultStaleDays, "Number of days after which a worktree is considered stale")
+	rootCmd.AddCommand(statusCmd)
 }
 
 // collectStatuses gathers dirty/ahead/behind state and last commit time for each candidate.

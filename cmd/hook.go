@@ -9,13 +9,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func init() {
-	hookCmd.AddCommand(hookInstallCmd)
-	hookCmd.AddCommand(hookUninstallCmd)
-	hookCmd.AddCommand(hookStatusCmd)
-	rootCmd.AddCommand(hookCmd)
-}
-
 var hookCmd = &cobra.Command{
 	Use:         "hook",
 	Short:       "Manage Git hooks for worktree workflow",
@@ -147,4 +140,11 @@ var hookStatusCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+func init() {
+	hookCmd.AddCommand(hookInstallCmd)
+	hookCmd.AddCommand(hookUninstallCmd)
+	hookCmd.AddCommand(hookStatusCmd)
+	rootCmd.AddCommand(hookCmd)
 }

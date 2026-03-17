@@ -31,6 +31,8 @@ type mockRunner struct {
 	worktreeOutput string
 }
 
+var errGitFailed = errors.New("git worktree list failed")
+
 func (m *mockRunner) Run(args ...string) (string, error) {
 	return m.worktreeOutput, nil
 }
@@ -557,8 +559,6 @@ type errorRunner struct {
 
 func (e *errorRunner) Run(_ ...string) (string, error)                { return "", e.err }
 func (e *errorRunner) RunInDir(_ string, _ ...string) (string, error) { return "", e.err }
-
-var errGitFailed = errors.New("git worktree list failed")
 
 func TestInstallListWorktreesError(t *testing.T) {
 	newWT := t.TempDir()

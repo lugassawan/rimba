@@ -43,15 +43,6 @@ type syncResult struct {
 	failures                        []string
 }
 
-func init() {
-	syncCmd.Flags().Bool(flagAll, false, "Sync all eligible worktrees")
-	syncCmd.Flags().Bool(flagSyncMerge, false, "Use merge instead of rebase")
-	syncCmd.Flags().Bool(flagIncludeInherited, false, "Include inherited/duplicate worktrees when using --all")
-	syncCmd.Flags().Bool(flagNoPush, false, "Skip pushing after sync")
-
-	rootCmd.AddCommand(syncCmd)
-}
-
 var syncCmd = &cobra.Command{
 	Use:   "sync [task]",
 	Short: "Sync worktree(s) with the main branch",
@@ -107,6 +98,15 @@ var syncCmd = &cobra.Command{
 		}
 		return syncOne(sc, args[0], worktrees, prefixes, useMerge, push)
 	},
+}
+
+func init() {
+	syncCmd.Flags().Bool(flagAll, false, "Sync all eligible worktrees")
+	syncCmd.Flags().Bool(flagSyncMerge, false, "Use merge instead of rebase")
+	syncCmd.Flags().Bool(flagIncludeInherited, false, "Include inherited/duplicate worktrees when using --all")
+	syncCmd.Flags().Bool(flagNoPush, false, "Skip pushing after sync")
+
+	rootCmd.AddCommand(syncCmd)
 }
 
 func syncOne(sc *syncContext, task string, worktrees []resolver.WorktreeInfo, prefixes []string, useMerge, push bool) error {

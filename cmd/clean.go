@@ -24,18 +24,6 @@ const (
 	hintForce       = "Skip confirmation prompt"
 )
 
-func init() {
-	cleanCmd.Flags().Bool(flagDryRun, false, "Show what would be pruned/removed without making changes")
-	cleanCmd.Flags().Bool(flagMerged, false, "Remove worktrees whose branches are merged into main")
-	cleanCmd.Flags().Bool(flagStale, false, "Remove worktrees with no recent commits")
-	cleanCmd.Flags().Int(flagStaleDays, defaultStaleDays, "Number of days to consider a worktree stale (used with --stale)")
-	cleanCmd.Flags().Bool(flagForce, false, "Skip confirmation prompt when used with --merged or --stale")
-
-	cleanCmd.MarkFlagsMutuallyExclusive(flagMerged, flagStale)
-
-	rootCmd.AddCommand(cleanCmd)
-}
-
 var cleanCmd = &cobra.Command{
 	Use:         "clean",
 	Short:       "Prune stale worktree references or remove merged worktrees",
@@ -55,6 +43,18 @@ var cleanCmd = &cobra.Command{
 			return cleanPrune(cmd, r)
 		}
 	},
+}
+
+func init() {
+	cleanCmd.Flags().Bool(flagDryRun, false, "Show what would be pruned/removed without making changes")
+	cleanCmd.Flags().Bool(flagMerged, false, "Remove worktrees whose branches are merged into main")
+	cleanCmd.Flags().Bool(flagStale, false, "Remove worktrees with no recent commits")
+	cleanCmd.Flags().Int(flagStaleDays, defaultStaleDays, "Number of days to consider a worktree stale (used with --stale)")
+	cleanCmd.Flags().Bool(flagForce, false, "Skip confirmation prompt when used with --merged or --stale")
+
+	cleanCmd.MarkFlagsMutuallyExclusive(flagMerged, flagStale)
+
+	rootCmd.AddCommand(cleanCmd)
 }
 
 func cleanPrune(cmd *cobra.Command, r git.Runner) error {
