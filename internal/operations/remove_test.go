@@ -8,7 +8,7 @@ import (
 	"github.com/lugassawan/rimba/internal/resolver"
 )
 
-func TestRemoveWorktree_Success(t *testing.T) {
+func TestRemoveWorktreeSuccess(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			cmd := strings.Join(args, " ")
@@ -42,7 +42,7 @@ func TestRemoveWorktree_Success(t *testing.T) {
 	}
 }
 
-func TestRemoveWorktree_KeepBranch(t *testing.T) {
+func TestRemoveWorktreeKeepBranch(t *testing.T) {
 	branchDeleted := false
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
@@ -75,7 +75,7 @@ func TestRemoveWorktree_KeepBranch(t *testing.T) {
 	}
 }
 
-func TestRemoveWorktree_RemovalFails(t *testing.T) {
+func TestRemoveWorktreeRemovalFails(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			return "", errors.New("worktree is dirty")
@@ -93,7 +93,7 @@ func TestRemoveWorktree_RemovalFails(t *testing.T) {
 	}
 }
 
-func TestRemoveWorktree_BranchDeleteFails(t *testing.T) {
+func TestRemoveWorktreeBranchDeleteFails(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			cmd := strings.Join(args, " ")
@@ -127,7 +127,7 @@ func TestRemoveWorktree_BranchDeleteFails(t *testing.T) {
 	}
 }
 
-func TestRemoveWorktree_ProgressCallbacks(t *testing.T) {
+func TestRemoveWorktreeProgressCallbacks(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			return "", nil
@@ -154,7 +154,7 @@ func TestRemoveWorktree_ProgressCallbacks(t *testing.T) {
 	}
 }
 
-func TestRemoveAndCleanup_Success(t *testing.T) {
+func TestRemoveAndCleanupSuccess(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			return "", nil
@@ -171,7 +171,7 @@ func TestRemoveAndCleanup_Success(t *testing.T) {
 	}
 }
 
-func TestRemoveAndCleanup_WtRemovalFails(t *testing.T) {
+func TestRemoveAndCleanupWtRemovalFails(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			return "", errors.New("removal failed")
@@ -188,7 +188,7 @@ func TestRemoveAndCleanup_WtRemovalFails(t *testing.T) {
 	}
 }
 
-func TestRemoveAndCleanup_BranchDeleteFails(t *testing.T) {
+func TestRemoveAndCleanupBranchDeleteFails(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			cmd := strings.Join(args, " ")

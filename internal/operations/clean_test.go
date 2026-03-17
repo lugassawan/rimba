@@ -25,7 +25,7 @@ func porcelainEntries(entries ...struct{ path, branch string }) string {
 	return sb.String()
 }
 
-func TestFindMergedCandidates_NormalMerge(t *testing.T) {
+func TestFindMergedCandidatesNormalMerge(t *testing.T) {
 	wt := porcelainEntries(
 		struct{ path, branch string }{"/repo", "main"},
 		struct{ path, branch string }{"/wt/done", "feature/done"},
@@ -61,7 +61,7 @@ func TestFindMergedCandidates_NormalMerge(t *testing.T) {
 	}
 }
 
-func TestFindMergedCandidates_SquashMerge(t *testing.T) {
+func TestFindMergedCandidatesSquashMerge(t *testing.T) {
 	wt := porcelainEntries(
 		struct{ path, branch string }{"/repo", "main"},
 		struct{ path, branch string }{"/wt/squashed", "feature/squashed"},
@@ -102,7 +102,7 @@ func TestFindMergedCandidates_SquashMerge(t *testing.T) {
 	}
 }
 
-func TestFindMergedCandidates_NoCandidates(t *testing.T) {
+func TestFindMergedCandidatesNoCandidates(t *testing.T) {
 	wt := porcelainEntries(
 		struct{ path, branch string }{"/repo", "main"},
 	)
@@ -129,7 +129,7 @@ func TestFindMergedCandidates_NoCandidates(t *testing.T) {
 	}
 }
 
-func TestFindMergedCandidates_GitError(t *testing.T) {
+func TestFindMergedCandidatesGitError(t *testing.T) {
 	r := &mockRunner{
 		run:      func(args ...string) (string, error) { return "", errors.New("git failed") },
 		runInDir: noopRunInDir,
@@ -141,7 +141,7 @@ func TestFindMergedCandidates_GitError(t *testing.T) {
 	}
 }
 
-func TestFindStaleCandidates_Found(t *testing.T) {
+func TestFindStaleCandidatesFound(t *testing.T) {
 	wt := porcelainEntries(
 		struct{ path, branch string }{"/repo", "main"},
 		struct{ path, branch string }{"/wt/old", "feature/old"},
@@ -173,7 +173,7 @@ func TestFindStaleCandidates_Found(t *testing.T) {
 	}
 }
 
-func TestFindStaleCandidates_NoneStale(t *testing.T) {
+func TestFindStaleCandidatesNoneStale(t *testing.T) {
 	wt := porcelainEntries(
 		struct{ path, branch string }{"/repo", "main"},
 		struct{ path, branch string }{"/wt/fresh", "feature/fresh"},
@@ -202,7 +202,7 @@ func TestFindStaleCandidates_NoneStale(t *testing.T) {
 	}
 }
 
-func TestFindStaleCandidates_GitError(t *testing.T) {
+func TestFindStaleCandidatesGitError(t *testing.T) {
 	r := &mockRunner{
 		run:      func(args ...string) (string, error) { return "", errors.New("git failed") },
 		runInDir: noopRunInDir,
@@ -230,7 +230,7 @@ func assertCleanedItem(t *testing.T, item CleanedItem, wantRemoved, wantDeleted,
 	}
 }
 
-func TestRemoveCandidates_MixedResults(t *testing.T) {
+func TestRemoveCandidatesMixedResults(t *testing.T) {
 	callCount := 0
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
@@ -271,7 +271,7 @@ func TestRemoveCandidates_MixedResults(t *testing.T) {
 	})
 }
 
-func TestRemoveCandidates_ProgressCallbacks(t *testing.T) {
+func TestRemoveCandidatesProgressCallbacks(t *testing.T) {
 	r := &mockRunner{
 		run:      func(args ...string) (string, error) { return "", nil },
 		runInDir: noopRunInDir,
@@ -291,7 +291,7 @@ func TestRemoveCandidates_ProgressCallbacks(t *testing.T) {
 	}
 }
 
-func TestFindMergedCandidates_SquashMergeError(t *testing.T) {
+func TestFindMergedCandidatesSquashMergeError(t *testing.T) {
 	wt := porcelainEntries(
 		struct{ path, branch string }{"/repo", branchMain},
 		struct{ path, branch string }{"/wt/active", "feature/active"},
@@ -329,7 +329,7 @@ func TestFindMergedCandidates_SquashMergeError(t *testing.T) {
 	}
 }
 
-func TestFindStaleCandidates_LastCommitError(t *testing.T) {
+func TestFindStaleCandidatesLastCommitError(t *testing.T) {
 	wt := porcelainEntries(
 		struct{ path, branch string }{"/repo", branchMain},
 		struct{ path, branch string }{"/wt/broken", "feature/broken"},

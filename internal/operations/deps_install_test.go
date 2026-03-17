@@ -22,7 +22,7 @@ func TestWorktreePathsExcluding(t *testing.T) {
 	}
 }
 
-func TestWorktreePathsExcluding_NoMatch(t *testing.T) {
+func TestWorktreePathsExcludingNoMatch(t *testing.T) {
 	entries := []git.WorktreeEntry{
 		{Path: "/wt/a", Branch: "a"},
 	}
@@ -33,14 +33,14 @@ func TestWorktreePathsExcluding_NoMatch(t *testing.T) {
 	}
 }
 
-func TestWorktreePathsExcluding_Empty(t *testing.T) {
+func TestWorktreePathsExcludingEmpty(t *testing.T) {
 	got := WorktreePathsExcluding(nil, "/wt/a")
 	if got != nil {
 		t.Errorf("expected nil, got %v", got)
 	}
 }
 
-func TestResolveMainBranch_ConfigDefault(t *testing.T) {
+func TestResolveMainBranchConfigDefault(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			t.Fatal("git should not be called when configDefault is set")
@@ -57,7 +57,7 @@ func TestResolveMainBranch_ConfigDefault(t *testing.T) {
 	}
 }
 
-func TestResolveMainBranch_FallbackToGit(t *testing.T) {
+func TestResolveMainBranchFallbackToGit(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			// git.DefaultBranch calls: git symbolic-ref refs/remotes/origin/HEAD
@@ -74,7 +74,7 @@ func TestResolveMainBranch_FallbackToGit(t *testing.T) {
 	}
 }
 
-func TestResolveMainBranch_GitError(t *testing.T) {
+func TestResolveMainBranchGitError(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			return "", errGitFailed
@@ -87,7 +87,7 @@ func TestResolveMainBranch_GitError(t *testing.T) {
 	}
 }
 
-func TestInstallDeps_NoModules(t *testing.T) {
+func TestInstallDepsNoModules(t *testing.T) {
 	// ResolveModules on an empty dir finds nothing → returns nil
 	tmpDir := t.TempDir()
 	r := &mockRunner{
@@ -100,7 +100,7 @@ func TestInstallDeps_NoModules(t *testing.T) {
 	}
 }
 
-func TestInstallDepsPreferSource_NoModules(t *testing.T) {
+func TestInstallDepsPreferSourceNoModules(t *testing.T) {
 	tmpDir := t.TempDir()
 	r := &mockRunner{
 		run:      func(args ...string) (string, error) { return "", nil },
@@ -112,7 +112,7 @@ func TestInstallDepsPreferSource_NoModules(t *testing.T) {
 	}
 }
 
-func TestRunPostCreateHooks_Empty(t *testing.T) {
+func TestRunPostCreateHooksEmpty(t *testing.T) {
 	tmpDir := t.TempDir()
 	results := RunPostCreateHooks(tmpDir, nil, nil)
 	if len(results) != 0 {
@@ -120,7 +120,7 @@ func TestRunPostCreateHooks_Empty(t *testing.T) {
 	}
 }
 
-func TestRunPostCreateHooks_InvalidCommand(t *testing.T) {
+func TestRunPostCreateHooksInvalidCommand(t *testing.T) {
 	tmpDir := t.TempDir()
 	results := RunPostCreateHooks(tmpDir, []string{"nonexistent-command-xyz"}, nil)
 	if len(results) != 1 {

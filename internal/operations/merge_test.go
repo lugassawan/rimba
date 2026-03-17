@@ -41,7 +41,7 @@ func mergeRunner(mergeErr error) *mockRunner {
 	}
 }
 
-func TestMergeWorktree_MergeToMain(t *testing.T) {
+func TestMergeWorktreeMergeToMain(t *testing.T) {
 	r := mergeRunner(nil)
 
 	result, err := MergeWorktree(r, MergeParams{
@@ -66,7 +66,7 @@ func TestMergeWorktree_MergeToMain(t *testing.T) {
 	}
 }
 
-func TestMergeWorktree_MergeToMainKeep(t *testing.T) {
+func TestMergeWorktreeMergeToMainKeep(t *testing.T) {
 	r := mergeRunner(nil)
 
 	result, err := MergeWorktree(r, MergeParams{
@@ -83,7 +83,7 @@ func TestMergeWorktree_MergeToMainKeep(t *testing.T) {
 	}
 }
 
-func TestMergeWorktree_MergeToWorktree(t *testing.T) {
+func TestMergeWorktreeMergeToWorktree(t *testing.T) {
 	r := mergeRunner(nil)
 
 	result, err := MergeWorktree(r, MergeParams{
@@ -109,7 +109,7 @@ func TestMergeWorktree_MergeToWorktree(t *testing.T) {
 	}
 }
 
-func TestMergeWorktree_MergeToWorktreeWithDelete(t *testing.T) {
+func TestMergeWorktreeMergeToWorktreeWithDelete(t *testing.T) {
 	r := mergeRunner(nil)
 
 	result, err := MergeWorktree(r, MergeParams{
@@ -127,7 +127,7 @@ func TestMergeWorktree_MergeToWorktreeWithDelete(t *testing.T) {
 	}
 }
 
-func TestMergeWorktree_SourceNotFound(t *testing.T) {
+func TestMergeWorktreeSourceNotFound(t *testing.T) {
 	r := mergeRunner(nil)
 
 	_, err := MergeWorktree(r, MergeParams{
@@ -143,7 +143,7 @@ func TestMergeWorktree_SourceNotFound(t *testing.T) {
 	}
 }
 
-func TestMergeWorktree_TargetNotFound(t *testing.T) {
+func TestMergeWorktreeTargetNotFound(t *testing.T) {
 	r := mergeRunner(nil)
 
 	_, err := MergeWorktree(r, MergeParams{
@@ -160,7 +160,7 @@ func TestMergeWorktree_TargetNotFound(t *testing.T) {
 	}
 }
 
-func TestMergeWorktree_SourceDirty(t *testing.T) {
+func TestMergeWorktreeSourceDirty(t *testing.T) {
 	wt := mergeWorktreeList()
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
@@ -190,7 +190,7 @@ func TestMergeWorktree_SourceDirty(t *testing.T) {
 	}
 }
 
-func TestMergeWorktree_TargetDirty(t *testing.T) {
+func TestMergeWorktreeTargetDirty(t *testing.T) {
 	wt := mergeWorktreeList()
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
@@ -220,7 +220,7 @@ func TestMergeWorktree_TargetDirty(t *testing.T) {
 	}
 }
 
-func TestMergeWorktree_MergeConflict(t *testing.T) {
+func TestMergeWorktreeMergeConflict(t *testing.T) {
 	r := mergeRunner(errors.New("conflict"))
 
 	_, err := MergeWorktree(r, MergeParams{
@@ -237,7 +237,7 @@ func TestMergeWorktree_MergeConflict(t *testing.T) {
 	}
 }
 
-func TestMergeWorktree_CleanupPartialFailure(t *testing.T) {
+func TestMergeWorktreeCleanupPartialFailure(t *testing.T) {
 	wt := mergeWorktreeList()
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
@@ -276,7 +276,7 @@ func TestMergeWorktree_CleanupPartialFailure(t *testing.T) {
 	}
 }
 
-func TestMergeWorktree_ProgressCallbacks(t *testing.T) {
+func TestMergeWorktreeProgressCallbacks(t *testing.T) {
 	r := mergeRunner(nil)
 
 	var messages []string
@@ -296,7 +296,7 @@ func TestMergeWorktree_ProgressCallbacks(t *testing.T) {
 	}
 }
 
-func TestMergeWorktree_ListWorktreesFails(t *testing.T) {
+func TestMergeWorktreeListWorktreesFails(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			return "", errors.New("worktree list failed")
@@ -314,7 +314,7 @@ func TestMergeWorktree_ListWorktreesFails(t *testing.T) {
 	}
 }
 
-func TestMergeWorktree_SourceDirtyCheckError(t *testing.T) {
+func TestMergeWorktreeSourceDirtyCheckError(t *testing.T) {
 	wt := mergeWorktreeList()
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
@@ -345,7 +345,7 @@ func TestMergeWorktree_SourceDirtyCheckError(t *testing.T) {
 	}
 }
 
-func TestMergeWorktree_TargetDirtyCheckError(t *testing.T) {
+func TestMergeWorktreeTargetDirtyCheckError(t *testing.T) {
 	wt := mergeWorktreeList()
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {

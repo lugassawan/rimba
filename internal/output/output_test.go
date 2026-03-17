@@ -65,7 +65,7 @@ func TestWriteJSONError(t *testing.T) {
 	}
 }
 
-func TestIsJSON_FlagSet(t *testing.T) {
+func TestIsJSONFlagSet(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	cmd.Flags().Bool("json", false, "")
 	_ = cmd.Flags().Set("json", "true")
@@ -75,7 +75,7 @@ func TestIsJSON_FlagSet(t *testing.T) {
 	}
 }
 
-func TestIsJSON_FlagNotSet(t *testing.T) {
+func TestIsJSONFlagNotSet(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	cmd.Flags().Bool("json", false, "")
 
@@ -84,7 +84,7 @@ func TestIsJSON_FlagNotSet(t *testing.T) {
 	}
 }
 
-func TestIsJSON_NoFlag(t *testing.T) {
+func TestIsJSONNoFlag(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 
 	if IsJSON(cmd) {
@@ -92,7 +92,7 @@ func TestIsJSON_NoFlag(t *testing.T) {
 	}
 }
 
-func TestIsJSON_InheritedPersistentFlag(t *testing.T) {
+func TestIsJSONInheritedPersistentFlag(t *testing.T) {
 	parent := &cobra.Command{Use: "root"}
 	parent.PersistentFlags().Bool("json", false, "")
 	_ = parent.PersistentFlags().Set("json", "true")
@@ -115,7 +115,7 @@ func TestSilentError(t *testing.T) {
 	}
 }
 
-func TestWriteJSON_PrettyPrinted(t *testing.T) {
+func TestWriteJSONPrettyPrinted(t *testing.T) {
 	var buf bytes.Buffer
 	err := WriteJSON(&buf, "1.0.0", "test", []string{"a"})
 	if err != nil {
