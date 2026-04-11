@@ -24,11 +24,13 @@ const (
 	flagBehind   = "behind"
 	flagArchived = "archived"
 	flagFull     = "full"
+	flagService  = "service"
 
-	hintType   = "Filter by prefix type (feature, bugfix, hotfix, etc.)"
-	hintDirty  = "Show only worktrees with uncommitted changes"
-	hintBehind = "Show only worktrees behind upstream"
-	hintFull   = "Show all columns including branch and path"
+	hintType    = "Filter by prefix type (feature, bugfix, hotfix, etc.)"
+	hintDirty   = "Show only worktrees with uncommitted changes"
+	hintBehind  = "Show only worktrees behind upstream"
+	hintFull    = "Show all columns including branch and path"
+	hintService = "Filter by service name (monorepo)"
 )
 
 // candidate holds a pre-filtered worktree entry before status collection.
@@ -48,6 +50,7 @@ var listCmd = &cobra.Command{
 		listBehind, _ := cmd.Flags().GetBool(flagBehind)
 		listArchived, _ := cmd.Flags().GetBool(flagArchived)
 		listFull, _ := cmd.Flags().GetBool(flagFull)
+		listService, _ := cmd.Flags().GetString(flagService)
 
 		if listArchived {
 			r := newRunner()
@@ -100,6 +103,7 @@ var listCmd = &cobra.Command{
 			hint.New(cmd, hintPainter(cmd)).
 				Add(flagFull, hintFull).
 				Add(flagType, hintType).
+				Add(flagService, hintService).
 				Add(flagDirty, hintDirty).
 				Add(flagBehind, hintBehind).
 				Show()
@@ -143,6 +147,17 @@ var listCmd = &cobra.Command{
 
 		rows = operations.FilterDetailsByStatus(rows, listDirty, listBehind)
 
+		// Filter by service
+		if listService != "" {
+			var filtered []resolver.WorktreeDetail
+			for _, row := range rows {
+				if row.Service == listService {
+					filtered = append(filtered, row)
+				}
+			}
+			rows = filtered
+		}
+
 		s.Stop()
 
 		if len(rows) == 0 {
@@ -160,6 +175,7 @@ var listCmd = &cobra.Command{
 			for i, r := range rows {
 				items[i] = output.ListItem{
 					Task:      r.Task,
+					Service:   r.Service,
 					Type:      r.Type,
 					Branch:    r.Branch,
 					Path:      r.Path,
@@ -170,25 +186,46 @@ var listCmd = &cobra.Command{
 			return output.WriteJSON(cmd.OutOrStdout(), version, "list", items)
 		}
 
+		// Detect if any worktree has a service (monorepo mode)
+		hasService := false
+		for _, row := range rows {
+			if row.Service != "" {
+				hasService = true
+				break
+			}
+		}
+
 		// Setup color painter
 		noColor, _ := cmd.Flags().GetBool(flagNoColor)
 		p := termcolor.NewPainter(noColor)
 
 		tbl := termcolor.NewTable(2)
 		if listFull {
-			tbl.AddRow(
+			header := []string{
 				p.Paint("TASK", termcolor.Bold),
+			}
+			if hasService {
+				header = append(header, p.Paint("SERVICE", termcolor.Bold))
+			}
+			header = append(header,
 				p.Paint("TYPE", termcolor.Bold),
 				p.Paint("BRANCH", termcolor.Bold),
 				p.Paint("PATH", termcolor.Bold),
 				p.Paint("STATUS", termcolor.Bold),
 			)
+			tbl.AddRow(header...)
 		} else {
-			tbl.AddRow(
+			header := []string{
 				p.Paint("TASK", termcolor.Bold),
+			}
+			if hasService {
+				header = append(header, p.Paint("SERVICE", termcolor.Bold))
+			}
+			header = append(header,
 				p.Paint("TYPE", termcolor.Bold),
 				p.Paint("STATUS", termcolor.Bold),
 			)
+			tbl.AddRow(header...)
 		}
 
 		for _, row := range rows {
@@ -206,9 +243,19 @@ var listCmd = &cobra.Command{
 			statusCell := colorStatus(p, row.Status)
 
 			if listFull {
-				tbl.AddRow(taskCell, typeCell, row.Branch, row.Path, statusCell)
+				cells := []string{taskCell}
+				if hasService {
+					cells = append(cells, row.Service)
+				}
+				cells = append(cells, typeCell, row.Branch, row.Path, statusCell)
+				tbl.AddRow(cells...)
 			} else {
-				tbl.AddRow(taskCell, typeCell, statusCell)
+				cells := []string{taskCell}
+				if hasService {
+					cells = append(cells, row.Service)
+				}
+				cells = append(cells, typeCell, statusCell)
+				tbl.AddRow(cells...)
 			}
 		}
 
@@ -221,6 +268,7 @@ func init() {
 	rootCmd.AddCommand(listCmd)
 
 	listCmd.Flags().String(flagType, "", "filter by prefix type (e.g. feature, bugfix)")
+	listCmd.Flags().String(flagService, "", "filter by service name (monorepo)")
 	listCmd.Flags().Bool(flagDirty, false, "show only dirty worktrees")
 	listCmd.Flags().Bool(flagBehind, false, "show only worktrees behind upstream")
 	listCmd.Flags().Bool(flagArchived, false, "show archived branches (not in any active worktree)")

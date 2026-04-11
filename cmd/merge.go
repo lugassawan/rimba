@@ -34,7 +34,6 @@ var mergeCmd = &cobra.Command{
 		return completeWorktreeTasks(cmd, toComplete), cobra.ShellCompDirectiveNoFileComp
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		sourceTask := args[0]
 		cfg := config.FromContext(cmd.Context())
 
 		r := newRunner()
@@ -44,7 +43,12 @@ var mergeCmd = &cobra.Command{
 			return err
 		}
 
-		intoTask, _ := cmd.Flags().GetString(flagInto)
+		sourceService, sourceTask := operations.ResolveTaskInput(args[0], repoRoot)
+		intoTaskRaw, _ := cmd.Flags().GetString(flagInto)
+		var intoService, intoTask string
+		if intoTaskRaw != "" {
+			intoService, intoTask = operations.ResolveTaskInput(intoTaskRaw, repoRoot)
+		}
 		noFF, _ := cmd.Flags().GetBool(flagNoFF)
 		keep, _ := cmd.Flags().GetBool(flagKeep)
 		del, _ := cmd.Flags().GetBool(flagDelete)
@@ -60,13 +64,15 @@ var mergeCmd = &cobra.Command{
 
 		s.Start("Checking for uncommitted changes...")
 		result, err := operations.MergeWorktree(r, operations.MergeParams{
-			SourceTask: sourceTask,
-			IntoTask:   intoTask,
-			RepoRoot:   repoRoot,
-			MainBranch: cfg.DefaultSource,
-			NoFF:       noFF,
-			Keep:       keep,
-			Delete:     del,
+			SourceTask:    sourceTask,
+			SourceService: sourceService,
+			IntoTask:      intoTask,
+			IntoService:   intoService,
+			RepoRoot:      repoRoot,
+			MainBranch:    cfg.DefaultSource,
+			NoFF:          noFF,
+			Keep:          keep,
+			Delete:        del,
 		}, func(msg string) { s.Update(msg) })
 		if err != nil {
 			return err

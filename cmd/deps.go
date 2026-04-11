@@ -155,7 +155,8 @@ var depsInstallCmd = &cobra.Command{
 		}
 
 		prefixes := resolver.AllPrefixes()
-		wt, found := resolver.FindBranchForTask(task, worktrees, prefixes)
+		svc, resolvedTask := operations.ResolveTaskInput(task, repoRoot)
+		wt, found := resolver.FindBranchForTask(svc, resolvedTask, worktrees, prefixes)
 		if !found {
 			// Also try resolving as a worktree path
 			wtDir := filepath.Join(repoRoot, cfg.WorktreeDir)

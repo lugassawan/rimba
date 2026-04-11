@@ -8,6 +8,7 @@ import (
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
+	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
 )
@@ -24,7 +25,6 @@ var addCmd = &cobra.Command{
 	Long:  "Creates a new git worktree with a branch named <prefix><task> and copies dotfiles from the repo root.",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		task := args[0]
 		cfg := config.FromContext(cmd.Context())
 
 		r := newRunner()
@@ -34,7 +34,18 @@ var addCmd = &cobra.Command{
 			return err
 		}
 
+		service, task := operations.ResolveTaskInput(args[0], repoRoot)
 		prefix := resolvedPrefixString(cmd)
+
+		// If no explicit prefix flag was set and the input starts with a known prefix,
+		// use that prefix from the input
+		if !hasExplicitPrefixFlag(cmd) {
+			if candidate, _ := resolver.SplitServiceInput(args[0]); resolver.ValidPrefixType(candidate) {
+				if p, ok := resolver.PrefixString(resolver.PrefixType(candidate)); ok {
+					prefix = p
+				}
+			}
+		}
 
 		source, _ := cmd.Flags().GetString(flagSource)
 		if source == "" {
@@ -61,6 +72,7 @@ var addCmd = &cobra.Command{
 		s.Start("Creating worktree...")
 		result, err := operations.AddWorktree(r, operations.AddParams{
 			Task:          task,
+			Service:       service,
 			Prefix:        prefix,
 			Source:        source,
 			RepoRoot:      repoRoot,
@@ -79,7 +91,11 @@ var addCmd = &cobra.Command{
 		s.Stop()
 
 		out := cmd.OutOrStdout()
-		fmt.Fprintf(out, "Created worktree for task %q\n", task)
+		if result.Service != "" {
+			fmt.Fprintf(out, "Created worktree for task %q (service: %s)\n", task, result.Service)
+		} else {
+			fmt.Fprintf(out, "Created worktree for task %q\n", task)
+		}
 		fmt.Fprintf(out, "  Branch: %s\n", result.Branch)
 		fmt.Fprintf(out, "  Path:   %s\n", result.Path)
 		if len(result.Copied) > 0 {

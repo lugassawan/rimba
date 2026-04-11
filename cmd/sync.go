@@ -109,10 +109,12 @@ func init() {
 	rootCmd.AddCommand(syncCmd)
 }
 
-func syncOne(sc *syncContext, task string, worktrees []resolver.WorktreeInfo, prefixes []string, useMerge, push bool) error {
-	wt, found := resolver.FindBranchForTask(task, worktrees, prefixes)
+func syncOne(sc *syncContext, input string, worktrees []resolver.WorktreeInfo, prefixes []string, useMerge, push bool) error {
+	repoRoot, _ := git.MainRepoRoot(sc.r)
+	service, task := operations.ResolveTaskInput(input, repoRoot)
+	wt, found := resolver.FindBranchForTask(service, task, worktrees, prefixes)
 	if !found {
-		return fmt.Errorf(operations.ErrWorktreeNotFoundFmt, task)
+		return fmt.Errorf(operations.ErrWorktreeNotFoundFmt, input)
 	}
 
 	dirty, err := git.IsDirty(sc.r, wt.Path)

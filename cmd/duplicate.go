@@ -55,8 +55,8 @@ var duplicateCmd = &cobra.Command{
 			return fmt.Errorf("cannot duplicate the default branch %q; use 'rimba add' instead", cfg.DefaultSource)
 		}
 
-		// Extract prefix from source branch
-		_, matchedPrefix := resolver.TaskFromBranch(wt.Branch, prefixes)
+		// Extract service and prefix from source branch
+		svc, _, matchedPrefix := resolver.ServiceFromBranch(wt.Branch, prefixes)
 		if matchedPrefix == "" {
 			matchedPrefix, _ = resolver.PrefixString(resolver.DefaultPrefixType)
 		}
@@ -70,7 +70,7 @@ var duplicateCmd = &cobra.Command{
 			// Auto-suffix: try task-1, task-2, etc.
 			for i := 1; i <= maxDuplicateSuffix; i++ {
 				candidate := fmt.Sprintf("%s-%d", task, i)
-				candidateBranch := resolver.BranchName(matchedPrefix, candidate)
+				candidateBranch := resolver.FullBranchName(svc, matchedPrefix, candidate)
 				if !git.BranchExists(r, candidateBranch) {
 					newTask = candidate
 					break
@@ -81,7 +81,7 @@ var duplicateCmd = &cobra.Command{
 			}
 		}
 
-		newBranch := resolver.BranchName(matchedPrefix, newTask)
+		newBranch := resolver.FullBranchName(svc, matchedPrefix, newTask)
 		wtDir := filepath.Join(repoRoot, cfg.WorktreeDir)
 		wtPath := resolver.WorktreePath(wtDir, newBranch)
 

@@ -87,7 +87,7 @@ func handleSync(hctx *HandlerContext) server.ToolHandlerFunc {
 }
 
 func syncSingle(r git.Runner, task string, worktrees []resolver.WorktreeInfo, prefixes []string, opts syncOpts) (*mcp.CallToolResult, error) {
-	wt, found := resolver.FindBranchForTask(task, worktrees, prefixes)
+	wt, found := resolver.FindBranchForTask("", task, worktrees, prefixes)
 	if !found {
 		return mcp.NewToolResultError("worktree not found for task \"" + task + "\""), nil
 	}

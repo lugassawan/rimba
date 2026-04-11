@@ -44,3 +44,13 @@ func resolvedPrefixString(cmd *cobra.Command) string {
 	s, _ := resolver.PrefixString(resolver.DefaultPrefixType)
 	return s
 }
+
+// hasExplicitPrefixFlag returns true if any prefix flag was explicitly set by the user.
+func hasExplicitPrefixFlag(cmd *cobra.Command) bool {
+	for _, pf := range prefixFlags {
+		if set, _ := cmd.Flags().GetBool(pf.Flag); set {
+			return true
+		}
+	}
+	return false
+}
