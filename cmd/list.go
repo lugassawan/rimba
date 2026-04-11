@@ -146,16 +146,7 @@ var listCmd = &cobra.Command{
 		})
 
 		rows = operations.FilterDetailsByStatus(rows, listDirty, listBehind)
-
-		if listService != "" {
-			var filtered []resolver.WorktreeDetail
-			for _, row := range rows {
-				if row.Service == listService {
-					filtered = append(filtered, row)
-				}
-			}
-			rows = filtered
-		}
+		rows = resolver.FilterByService(rows, listService)
 
 		s.Stop()
 

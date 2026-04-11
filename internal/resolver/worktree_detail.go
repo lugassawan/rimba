@@ -80,6 +80,21 @@ func HasService(details []WorktreeDetail) bool {
 	return false
 }
 
+// FilterByService returns only details matching the given service name.
+// If service is empty, returns the original slice unchanged.
+func FilterByService(details []WorktreeDetail, service string) []WorktreeDetail {
+	if service == "" {
+		return details
+	}
+	var filtered []WorktreeDetail
+	for _, d := range details {
+		if d.Service == service {
+			filtered = append(filtered, d)
+		}
+	}
+	return filtered
+}
+
 // SortDetailsByTask sorts a slice of WorktreeDetail by task name ascending.
 func SortDetailsByTask(details []WorktreeDetail) {
 	slices.SortFunc(details, func(a, b WorktreeDetail) int {

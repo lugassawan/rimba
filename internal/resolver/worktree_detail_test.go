@@ -152,6 +152,42 @@ func TestHasService(t *testing.T) {
 	})
 }
 
+func TestFilterByService(t *testing.T) {
+	details := []resolver.WorktreeDetail{
+		{Task: "login", Service: "auth-api"},
+		{Task: "signup", Service: "web-app"},
+		{Task: "plain", Service: ""},
+	}
+
+	t.Run("filter by auth-api", func(t *testing.T) {
+		got := resolver.FilterByService(details, "auth-api")
+		if len(got) != 1 || got[0].Task != "login" {
+			t.Errorf("expected [login], got %v", got)
+		}
+	})
+
+	t.Run("filter by web-app", func(t *testing.T) {
+		got := resolver.FilterByService(details, "web-app")
+		if len(got) != 1 || got[0].Task != "signup" {
+			t.Errorf("expected [signup], got %v", got)
+		}
+	})
+
+	t.Run("no match", func(t *testing.T) {
+		got := resolver.FilterByService(details, "unknown")
+		if len(got) != 0 {
+			t.Errorf("expected empty, got %v", got)
+		}
+	})
+
+	t.Run("empty service returns original", func(t *testing.T) {
+		got := resolver.FilterByService(details, "")
+		if len(got) != len(details) {
+			t.Errorf("expected %d items, got %d", len(details), len(got))
+		}
+	})
+}
+
 func TestNewWorktreeDetailUnknownPrefix(t *testing.T) {
 	const customBranch = "custom-branch"
 	prefixes := resolver.AllPrefixes()
