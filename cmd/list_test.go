@@ -16,6 +16,7 @@ import (
 func newListTestCmd() (*cobra.Command, *bytes.Buffer) {
 	cmd, buf := newTestCmd()
 	cmd.Flags().String(flagType, "", "")
+	cmd.Flags().String(flagService, "", "")
 	cmd.Flags().Bool(flagDirty, false, "")
 	cmd.Flags().Bool(flagBehind, false, "")
 	cmd.Flags().Bool(flagArchived, false, "")
@@ -617,6 +618,93 @@ func TestListFullMode(t *testing.T) {
 	}
 	if !strings.Contains(out, "STATUS") {
 		t.Error("full output should contain STATUS header")
+	}
+}
+
+func TestListWithServiceColumn(t *testing.T) {
+	repoDir := t.TempDir()
+	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: "worktrees"}
+
+	worktreeOut := strings.Join([]string{
+		wtPrefix + repoDir,
+		headABC123,
+		branchRefMain,
+		"",
+		wtPrefix + repoDir + "/worktrees/auth-api-feature-login",
+		headDEF456,
+		"branch refs/heads/auth-api/feature/login",
+		"",
+	}, "\n")
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			return worktreeOut, nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newListTestCmd()
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	err := listCmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf(fatalListRunE, err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "SERVICE") {
+		t.Error("expected SERVICE column header when monorepo worktrees exist")
+	}
+	if !strings.Contains(out, "auth-api") {
+		t.Error("expected auth-api in service column")
+	}
+}
+
+func TestListWithServiceColumnFull(t *testing.T) {
+	repoDir := t.TempDir()
+	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: "worktrees"}
+
+	worktreeOut := strings.Join([]string{
+		wtPrefix + repoDir,
+		headABC123,
+		branchRefMain,
+		"",
+		wtPrefix + repoDir + "/worktrees/auth-api-feature-login",
+		headDEF456,
+		"branch refs/heads/auth-api/feature/login",
+		"",
+	}, "\n")
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			return worktreeOut, nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newListTestCmd()
+	_ = cmd.Flags().Set(flagFull, "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	err := listCmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf(fatalListRunE, err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "SERVICE") {
+		t.Error("expected SERVICE column in full mode")
+	}
+	if !strings.Contains(out, "BRANCH") {
+		t.Error("expected BRANCH column in full mode")
 	}
 }
 
