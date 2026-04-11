@@ -28,12 +28,13 @@ const (
 
 // syncContext bundles shared state for sync operations.
 type syncContext struct {
-	cmd *cobra.Command
-	r   git.Runner
-	cfg *config.Config
-	s   *spinner.Spinner
-	res *syncResult // used by syncAll goroutines
-	mu  sync.Mutex  // guards res and output in syncAll
+	cmd      *cobra.Command
+	r        git.Runner
+	cfg      *config.Config
+	s        *spinner.Spinner
+	repoRoot string
+	res      *syncResult // used by syncAll goroutines
+	mu       sync.Mutex  // guards res and output in syncAll
 }
 
 // syncResult tracks the outcome of syncing multiple worktrees.
@@ -85,13 +86,18 @@ var syncCmd = &cobra.Command{
 			fmt.Fprintf(cmd.OutOrStdout(), "Warning: fetch failed (no remote?): continuing with local state\n")
 		}
 
+		repoRoot, err := git.MainRepoRoot(r)
+		if err != nil {
+			return err
+		}
+
 		worktrees, err := listWorktreeInfos(r)
 		if err != nil {
 			return err
 		}
 
 		prefixes := resolver.AllPrefixes()
-		sc := &syncContext{cmd: cmd, r: r, cfg: cfg, s: s}
+		sc := &syncContext{cmd: cmd, r: r, cfg: cfg, s: s, repoRoot: repoRoot}
 
 		if all {
 			return syncAll(sc, worktrees, prefixes, useMerge, includeInherited, push)
@@ -110,8 +116,7 @@ func init() {
 }
 
 func syncOne(sc *syncContext, input string, worktrees []resolver.WorktreeInfo, prefixes []string, useMerge, push bool) error {
-	repoRoot, _ := git.MainRepoRoot(sc.r)
-	service, task := operations.ResolveTaskInput(input, repoRoot)
+	service, task := operations.ResolveTaskInput(input, sc.repoRoot)
 	wt, found := resolver.FindBranchForTask(service, task, worktrees, prefixes)
 	if !found {
 		return fmt.Errorf(operations.ErrWorktreeNotFoundFmt, input)
