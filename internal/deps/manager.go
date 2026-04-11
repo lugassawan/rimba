@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/debug"
 	"github.com/lugassawan/rimba/internal/git"
 )
 
@@ -66,6 +67,7 @@ func ResolveModules(worktreePath, service string, autoDetect bool, configModules
 }
 
 func (m *Manager) install(worktreePath, sourceWT string, modules []Module, existingEntries []git.WorktreeEntry, onProgress ProgressFunc) []InstallResult {
+	defer debug.StartTimer("installing dependencies")()
 	results := make([]InstallResult, 0, len(modules))
 
 	hashed, err := HashModules(worktreePath, modules)
