@@ -2,6 +2,8 @@ package mcp
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -232,6 +234,41 @@ func TestSyncSingleMergeMode(t *testing.T) {
 		t.Fatalf("expected 1 result, got %d", len(data.Results))
 	}
 	if !data.Results[0].Synced {
+		t.Errorf("expected synced=true")
+	}
+}
+
+func TestSyncSingleServiceScoped(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmpDir, "auth-api"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	porcelain := worktreePorcelain(
+		struct{ path, branch string }{tmpDir, "main"},
+		struct{ path, branch string }{tmpDir + "/.worktrees/auth-api-feature-my-task", branchServiceFeatureMyTask},
+	)
+
+	r := newSyncMockRunner(porcelain, syncMockConfig{}, nil, nil)
+	hctx := &HandlerContext{
+		Runner:   r,
+		Config:   testConfig(),
+		RepoRoot: tmpDir,
+		Version:  "test",
+	}
+	handler := handleSync(hctx)
+
+	result := callTool(t, handler, map[string]any{"task": "auth-api/my-task"})
+	data := unmarshalJSON[syncResult](t, result)
+
+	if len(data.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(data.Results))
+	}
+	sr := data.Results[0]
+	if sr.Branch != branchServiceFeatureMyTask {
+		t.Errorf("expected branch 'auth-api/feature/my-task', got %q", sr.Branch)
+	}
+	if !sr.Synced {
 		t.Errorf("expected synced=true")
 	}
 }

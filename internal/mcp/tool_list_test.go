@@ -283,7 +283,7 @@ func TestListToolBareEntrySkipped(t *testing.T) {
 	items := unmarshalJSON[[]listItem](t, result)
 	// Only the feature worktree should appear (bare is skipped)
 	for _, item := range items {
-		if item.Branch == "main" {
+		if item.Branch == sourceMain {
 			t.Error("bare entry should be skipped")
 		}
 	}

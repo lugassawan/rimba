@@ -9,8 +9,10 @@ import (
 )
 
 const (
-	branchFeatureMyTask = "feature/my-task"
-	sourceMain          = "main"
+	taskMyTask                 = "my-task"
+	branchFeatureMyTask        = "feature/my-task"
+	branchServiceFeatureMyTask = "auth-api/feature/my-task"
+	sourceMain                 = "main"
 )
 
 func TestAddToolRequiresTask(t *testing.T) {
@@ -93,8 +95,8 @@ func TestAddToolSuccess(t *testing.T) {
 
 	result := callTool(t, handler, map[string]any{"task": "my-task", "skip_deps": true, "skip_hooks": true})
 	data := unmarshalJSON[addResult](t, result)
-	if data.Task != "my-task" {
-		t.Errorf("task = %q, want %q", data.Task, "my-task")
+	if data.Task != taskMyTask {
+		t.Errorf("task = %q, want %q", data.Task, taskMyTask)
 	}
 	if data.Branch != branchFeatureMyTask {
 		t.Errorf("branch = %q, want %q", data.Branch, branchFeatureMyTask)
@@ -216,8 +218,8 @@ func TestAddToolCopyEntriesSkipsMissing(t *testing.T) {
 
 	result := callTool(t, handler, map[string]any{"task": "my-task", "skip_deps": true, "skip_hooks": true})
 	data := unmarshalJSON[addResult](t, result)
-	if data.Task != "my-task" {
-		t.Errorf("task = %q, want %q", data.Task, "my-task")
+	if data.Task != taskMyTask {
+		t.Errorf("task = %q, want %q", data.Task, taskMyTask)
 	}
 }
 
@@ -327,6 +329,43 @@ func TestAddToolPathAlreadyExists(t *testing.T) {
 	errText := resultError(t, result)
 	if !strings.Contains(errText, "already exists") {
 		t.Errorf("expected 'already exists' error, got: %s", errText)
+	}
+}
+
+func TestAddToolServiceScoped(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmpDir, "auth-api"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == gitRevParse {
+				return "", errors.New("not found")
+			}
+			if len(args) > 0 && args[0] == gitWorktree {
+				return "", nil
+			}
+			return "", nil
+		},
+	}
+	cfg := testConfig()
+	cfg.CopyFiles = nil
+	hctx := &HandlerContext{
+		Runner:   r,
+		Config:   cfg,
+		RepoRoot: tmpDir,
+		Version:  "test",
+	}
+	handler := handleAdd(hctx)
+
+	result := callTool(t, handler, map[string]any{"task": "auth-api/my-task", "skip_deps": true, "skip_hooks": true})
+	data := unmarshalJSON[addResult](t, result)
+	if data.Task != taskMyTask {
+		t.Errorf("task = %q, want %q", data.Task, taskMyTask)
+	}
+	if data.Branch != branchServiceFeatureMyTask {
+		t.Errorf("branch = %q, want %q", data.Branch, branchServiceFeatureMyTask)
 	}
 }
 

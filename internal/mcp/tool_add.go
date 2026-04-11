@@ -14,9 +14,9 @@ import (
 
 func registerAddTool(s *server.MCPServer, hctx *HandlerContext) {
 	tool := mcp.NewTool("add",
-		mcp.WithDescription("Create a new worktree for a task"),
+		mcp.WithDescription("Create a new worktree for a task (supports 'service/task' for monorepo)"),
 		mcp.WithString("task",
-			mcp.Description("Task identifier (e.g. 'my-feature', 'JIRA-123')"),
+			mcp.Description("Task identifier (e.g. 'my-feature', 'JIRA-123', or 'auth-api/my-feature' for monorepo)"),
 			mcp.Required(),
 		),
 		mcp.WithString("type",
@@ -43,6 +43,8 @@ func handleAdd(hctx *HandlerContext) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("task is required"), nil
 		}
 
+		service, task := operations.ResolveTaskInput(task, hctx.RepoRoot)
+
 		prefixType := req.GetString("type", "feature")
 
 		cfg, cfgErr := hctx.requireConfig()
@@ -68,6 +70,7 @@ func handleAdd(hctx *HandlerContext) server.ToolHandlerFunc {
 
 		result, err := operations.AddWorktree(hctx.Runner, operations.AddParams{
 			Task:          task,
+			Service:       service,
 			Prefix:        prefix,
 			Source:        source,
 			RepoRoot:      hctx.RepoRoot,

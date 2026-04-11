@@ -2,6 +2,8 @@ package mcp
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -61,17 +63,14 @@ func TestMergeToolSourceNotFound(t *testing.T) {
 
 // mergeHappyPathRunner builds a mock runner for the happy-path merge-to-main
 // scenario. The boolean pointers let callers observe which git operations ran.
-func mergeHappyPathRunner(porcelain string, mergedCalled, removedCalled, deletedCalled *bool) *mockRunner {
+func mergeHappyPathRunner(porcelain string, removedCalled *bool) *mockRunner {
 	return &mockRunner{
-		run: mergeHappyPathRun(porcelain, removedCalled, deletedCalled),
+		run: mergeHappyPathRun(porcelain, removedCalled),
 		runInDir: func(dir string, args ...string) (string, error) {
 			if len(args) >= 1 && args[0] == gitStatus {
 				return "", nil
 			}
 			if len(args) >= 1 && args[0] == mergeCmd {
-				if mergedCalled != nil {
-					*mergedCalled = true
-				}
 				return "", nil
 			}
 			return "", nil
@@ -79,7 +78,7 @@ func mergeHappyPathRunner(porcelain string, mergedCalled, removedCalled, deleted
 	}
 }
 
-func mergeHappyPathRun(porcelain string, removedCalled, deletedCalled *bool) func(args ...string) (string, error) {
+func mergeHappyPathRun(porcelain string, removedCalled *bool) func(args ...string) (string, error) {
 	return func(args ...string) (string, error) {
 		if len(args) >= 2 && args[0] == gitWorktree && args[1] == gitList {
 			return porcelain, nil
@@ -91,9 +90,6 @@ func mergeHappyPathRun(porcelain string, removedCalled, deletedCalled *bool) fun
 			return "", nil
 		}
 		if len(args) >= 2 && args[0] == gitBranch && args[1] == "-D" {
-			if deletedCalled != nil {
-				*deletedCalled = true
-			}
 			return "", nil
 		}
 		return "", nil
@@ -106,7 +102,7 @@ func TestMergeToolHappyPathMergeToMain(t *testing.T) {
 		struct{ path, branch string }{"/repo/.worktrees/feature-my-task", branchFeatureMyTask},
 	)
 
-	r := mergeHappyPathRunner(porcelain, nil, nil, nil)
+	r := mergeHappyPathRunner(porcelain, nil)
 	hctx := testContext(r)
 	handler := handleMerge(hctx)
 
@@ -131,7 +127,7 @@ func TestMergeToolKeepSourceWorktree(t *testing.T) {
 	)
 
 	var removeWorktreeCalled bool
-	r := mergeHappyPathRunner(porcelain, nil, &removeWorktreeCalled, nil)
+	r := mergeHappyPathRunner(porcelain, &removeWorktreeCalled)
 	hctx := testContext(r)
 	handler := handleMerge(hctx)
 
@@ -204,7 +200,7 @@ func TestMergeToolIntoAnotherWorktreeWithDelete(t *testing.T) {
 		struct{ path, branch string }{"/repo/.worktrees/feature-target", "feature/target"},
 	)
 
-	r := mergeHappyPathRunner(porcelain, nil, nil, nil)
+	r := mergeHappyPathRunner(porcelain, nil)
 	hctx := testContext(r)
 	handler := handleMerge(hctx)
 
@@ -458,7 +454,7 @@ func TestMergeToolListWorktreesFails(t *testing.T) {
 // arguments via the provided pointer.
 func mergeNoFFRunner(porcelain string, mergeArgs *[]string) *mockRunner {
 	return &mockRunner{
-		run: mergeHappyPathRun(porcelain, nil, nil),
+		run: mergeHappyPathRun(porcelain, nil),
 		runInDir: func(dir string, args ...string) (string, error) {
 			if len(args) >= 1 && args[0] == gitStatus {
 				return "", nil
@@ -469,6 +465,40 @@ func mergeNoFFRunner(porcelain string, mergeArgs *[]string) *mockRunner {
 			}
 			return "", nil
 		},
+	}
+}
+
+func TestMergeToolServiceScoped(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmpDir, "auth-api"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	porcelain := worktreePorcelain(
+		struct{ path, branch string }{tmpDir, "main"},
+		struct{ path, branch string }{tmpDir + "/.worktrees/auth-api-feature-my-task", branchServiceFeatureMyTask},
+	)
+
+	r := mergeHappyPathRunner(porcelain, nil)
+	hctx := &HandlerContext{
+		Runner:   r,
+		Config:   testConfig(),
+		RepoRoot: tmpDir,
+		Version:  "test",
+	}
+	handler := handleMerge(hctx)
+
+	result := callTool(t, handler, map[string]any{"source": "auth-api/my-task"})
+	data := unmarshalJSON[mergeResult](t, result)
+
+	if data.Source != branchServiceFeatureMyTask {
+		t.Errorf("expected source 'auth-api/feature/my-task', got %q", data.Source)
+	}
+	if data.Into != "main" {
+		t.Errorf("expected into 'main', got %q", data.Into)
+	}
+	if !data.SourceRemoved {
+		t.Errorf("expected source to be removed (auto-cleanup)")
 	}
 }
 
