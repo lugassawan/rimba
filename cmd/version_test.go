@@ -19,10 +19,13 @@ func TestVersionCmd(t *testing.T) {
 	versionCmd.Run(cmd, nil)
 
 	out := buf.String()
-	if !strings.Contains(out, "rimba") {
-		t.Errorf("version output %q does not contain 'rimba'", out)
+	for _, want := range []string{"rimba", version, "commit:", "built:", "os:", "arch:"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("version output %q does not contain %q", out, want)
+		}
 	}
-	if !strings.Contains(out, version) {
-		t.Errorf("version output %q does not contain version %q", out, version)
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) != 5 {
+		t.Errorf("expected 5 lines, got %d: %q", len(lines), out)
 	}
 }

@@ -12,6 +12,10 @@ func TestVersionPrintsInfo(t *testing.T) {
 	repo := setupRepo(t)
 	r := rimbaSuccess(t, repo, "version")
 	assertContains(t, r.Stdout, "rimba")
+	assertContains(t, r.Stdout, "commit:")
+	assertContains(t, r.Stdout, "built:")
+	assertContains(t, r.Stdout, "os:")
+	assertContains(t, r.Stdout, "arch:")
 }
 
 func TestVersionWorksOutsideRepo(t *testing.T) {
