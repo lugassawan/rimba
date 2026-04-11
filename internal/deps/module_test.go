@@ -20,7 +20,7 @@ func TestDetectModulesPnpmPriority(t *testing.T) {
 	writeFile(t, dir, LockfilePnpm, "lockfile-v6")
 	writeFile(t, dir, LockfileNpm, "{}")
 
-	modules, err := DetectModules(dir)
+	modules, err := DetectModules(dir, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func TestDetectModulesYarnWithExtraDirs(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, LockfileYarn, "# yarn")
 
-	modules, err := DetectModules(dir)
+	modules, err := DetectModules(dir, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestDetectModulesNestedLockfile(t *testing.T) {
 	}
 	writeFile(t, filepath.Join(dir, testDirAPI), LockfileGo, "hash123")
 
-	modules, err := DetectModules(dir)
+	modules, err := DetectModules(dir, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestDetectModulesPolyglot(t *testing.T) {
 	}
 	writeFile(t, filepath.Join(dir, testDirAPI), LockfileGo, "hash123")
 
-	modules, err := DetectModules(dir)
+	modules, err := DetectModules(dir, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,10 +117,47 @@ func TestDetectModulesPolyglot(t *testing.T) {
 	}
 }
 
+func TestDetectModulesScopedToService(t *testing.T) {
+	dir := t.TempDir()
+
+	// Root: pnpm
+	writeFile(t, dir, LockfilePnpm, "lockfile-v6")
+
+	// Two service subdirs with lockfiles
+	for _, svc := range []string{"auth-api", "web-app"} {
+		if err := os.MkdirAll(filepath.Join(dir, svc), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeFile(t, filepath.Join(dir, "auth-api"), LockfileGo, "hash-go")
+	writeFile(t, filepath.Join(dir, "web-app"), LockfileNpm, "{}")
+
+	// Scoped to auth-api: root pnpm + auth-api/go.sum only
+	modules, err := DetectModules(dir, "auth-api")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertModuleCount(t, modules, 2)
+	if modules[0].Lockfile != LockfilePnpm {
+		t.Errorf("expected root module %s, got %s", LockfilePnpm, modules[0].Lockfile)
+	}
+	if modules[1].Lockfile != filepath.Join("auth-api", LockfileGo) {
+		t.Errorf("expected auth-api/go.sum, got %s", modules[1].Lockfile)
+	}
+
+	// Full scan: root pnpm + auth-api/go.sum + web-app/npm
+	all, err := DetectModules(dir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertModuleCount(t, all, 3)
+}
+
 func TestDetectModulesNoLockfiles(t *testing.T) {
 	dir := t.TempDir()
 
-	modules, err := DetectModules(dir)
+	modules, err := DetectModules(dir, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +179,7 @@ func TestDetectModulesRootWinsOverSubdir(t *testing.T) {
 	}
 	writeFile(t, filepath.Join(dir, "subdir"), LockfileGo, "subdir-hash")
 
-	modules, err := DetectModules(dir)
+	modules, err := DetectModules(dir, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +299,7 @@ func TestDetectModulesHiddenDirSkipped(t *testing.T) {
 	}
 	writeFile(t, hiddenDir, LockfilePnpm, "lockfile")
 
-	modules, err := DetectModules(dir)
+	modules, err := DetectModules(dir, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +319,7 @@ func TestDetectSubdirModulesReadDirError(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(dir, 0755) })
 
 	seenDirs := make(map[string]bool)
-	result := detectSubdirModules(dir, nil, seenDirs)
+	result := detectSubdirModules(dir, "", nil, seenDirs)
 
 	if len(result) != 0 {
 		t.Errorf("expected 0 modules on ReadDir error, got %d", len(result))

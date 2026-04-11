@@ -71,6 +71,7 @@ func AddWorktree(r git.Runner, params AddParams, onProgress ProgressFunc) (AddRe
 		RepoRoot:      params.RepoRoot,
 		WtPath:        wtPath,
 		Task:          params.Task,
+		Service:       params.Service,
 		CopyFiles:     params.CopyFiles,
 		SkipDeps:      params.SkipDeps,
 		AutoDetect:    params.AutoDetect,

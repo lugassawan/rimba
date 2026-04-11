@@ -57,7 +57,7 @@ var depsStatusCmd = &cobra.Command{
 					Path:   wt.Path,
 				}
 
-				modules, err := deps.ResolveModules(wt.Path, cfg.IsAutoDetectDeps(), configModules, existingPaths)
+				modules, err := deps.ResolveModules(wt.Path, wt.Service, cfg.IsAutoDetectDeps(), configModules, existingPaths)
 				if err != nil {
 					item.Error = err.Error()
 					item.Modules = make([]deps.ModuleWithHash, 0)
@@ -88,7 +88,7 @@ var depsStatusCmd = &cobra.Command{
 		out := cmd.OutOrStdout()
 
 		for _, wt := range worktrees {
-			modules, err := deps.ResolveModules(wt.Path, cfg.IsAutoDetectDeps(), configModules, existingPaths)
+			modules, err := deps.ResolveModules(wt.Path, wt.Service, cfg.IsAutoDetectDeps(), configModules, existingPaths)
 			if err != nil {
 				fmt.Fprintf(out, "%s (%s)\n  error: %v\n", wt.Branch, wt.Path, err)
 				continue
@@ -177,7 +177,7 @@ var depsInstallCmd = &cobra.Command{
 			configModules = cfg.Deps.Modules
 		}
 
-		modules, err := deps.ResolveModules(wt.Path, cfg.IsAutoDetectDeps(), configModules, existingPaths)
+		modules, err := deps.ResolveModules(wt.Path, wt.Service, cfg.IsAutoDetectDeps(), configModules, existingPaths)
 		if err != nil {
 			return err
 		}
@@ -192,7 +192,7 @@ var depsInstallCmd = &cobra.Command{
 
 		s.Start("Installing dependencies...")
 		mgr := &deps.Manager{Runner: r}
-		results := mgr.Install(wt.Path, modules, func(cur, total int, name string) {
+		results := mgr.Install(wt.Path, modules, nil, func(cur, total int, name string) {
 			s.Update(fmt.Sprintf("Installing dependencies... (%s) [%d/%d]", name, cur, total))
 		})
 		s.Stop()

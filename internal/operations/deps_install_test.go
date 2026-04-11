@@ -94,7 +94,7 @@ func TestInstallDepsNoModules(t *testing.T) {
 		run:      func(args ...string) (string, error) { return "", nil },
 		runInDir: noopRunInDir,
 	}
-	result := InstallDeps(r, tmpDir, false, nil, nil, nil)
+	result := InstallDeps(r, DepsParams{WtPath: tmpDir}, nil)
 	if result != nil {
 		t.Errorf("expected nil result for no modules, got %v", result)
 	}
@@ -106,7 +106,7 @@ func TestInstallDepsPreferSourceNoModules(t *testing.T) {
 		run:      func(args ...string) (string, error) { return "", nil },
 		runInDir: noopRunInDir,
 	}
-	result := InstallDepsPreferSource(r, tmpDir, "/other/wt", false, nil, nil, nil)
+	result := InstallDepsPreferSource(r, "/other/wt", DepsParams{WtPath: tmpDir}, nil)
 	if result != nil {
 		t.Errorf("expected nil result for no modules, got %v", result)
 	}

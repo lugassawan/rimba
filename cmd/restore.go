@@ -65,10 +65,13 @@ var restoreCmd = &cobra.Command{
 			configModules = cfg.Deps.Modules
 		}
 
+		svc, _, _ := resolver.ServiceFromBranch(branch, resolver.AllPrefixes())
+
 		pcResult, err := operations.PostCreateSetup(r, operations.PostCreateParams{
 			RepoRoot:      repoRoot,
 			WtPath:        wtPath,
 			Task:          task,
+			Service:       svc,
 			CopyFiles:     cfg.CopyFiles,
 			SkipDeps:      skipDeps,
 			AutoDetect:    cfg.IsAutoDetectDeps(),
