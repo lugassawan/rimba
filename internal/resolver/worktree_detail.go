@@ -70,6 +70,16 @@ func FormatStatus(s WorktreeStatus) string {
 	return strings.Join(parts, " ")
 }
 
+// HasService reports whether any detail in the slice has a non-empty service.
+func HasService(details []WorktreeDetail) bool {
+	for _, d := range details {
+		if d.Service != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // SortDetailsByTask sorts a slice of WorktreeDetail by task name ascending.
 func SortDetailsByTask(details []WorktreeDetail) {
 	slices.SortFunc(details, func(a, b WorktreeDetail) int {

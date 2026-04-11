@@ -143,17 +143,19 @@ func collectLogEntries(r git.Runner, candidates []git.WorktreeEntry, s *spinner.
 	return valid
 }
 
-// renderLogTable prints the log entries as a formatted table.
+func logEntriesHaveService(entries []logEntry) bool {
+	for _, e := range entries {
+		if e.service != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func renderLogTable(out io.Writer, p *termcolor.Painter, entries []logEntry) {
 	fmt.Fprintf(out, "Recent commits across %d worktree(s):\n\n", len(entries))
 
-	hasService := false
-	for _, e := range entries {
-		if e.service != "" {
-			hasService = true
-			break
-		}
-	}
+	hasService := logEntriesHaveService(entries)
 
 	tbl := termcolor.NewTable(2)
 	header := []string{p.Paint("TASK", termcolor.Bold)}

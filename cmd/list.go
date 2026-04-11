@@ -185,46 +185,13 @@ var listCmd = &cobra.Command{
 			return output.WriteJSON(cmd.OutOrStdout(), version, "list", items)
 		}
 
-		hasService := false
-		for _, row := range rows {
-			if row.Service != "" {
-				hasService = true
-				break
-			}
-		}
+		hasService := resolver.HasService(rows)
 
-		// Setup color painter
 		noColor, _ := cmd.Flags().GetBool(flagNoColor)
 		p := termcolor.NewPainter(noColor)
 
 		tbl := termcolor.NewTable(2)
-		if listFull {
-			header := []string{
-				p.Paint("TASK", termcolor.Bold),
-			}
-			if hasService {
-				header = append(header, p.Paint("SERVICE", termcolor.Bold))
-			}
-			header = append(header,
-				p.Paint("TYPE", termcolor.Bold),
-				p.Paint("BRANCH", termcolor.Bold),
-				p.Paint("PATH", termcolor.Bold),
-				p.Paint("STATUS", termcolor.Bold),
-			)
-			tbl.AddRow(header...)
-		} else {
-			header := []string{
-				p.Paint("TASK", termcolor.Bold),
-			}
-			if hasService {
-				header = append(header, p.Paint("SERVICE", termcolor.Bold))
-			}
-			header = append(header,
-				p.Paint("TYPE", termcolor.Bold),
-				p.Paint("STATUS", termcolor.Bold),
-			)
-			tbl.AddRow(header...)
-		}
+		tbl.AddRow(listHeader(p, hasService, listFull)...)
 
 		for _, row := range rows {
 			taskCell := "  " + row.Task
@@ -239,22 +206,7 @@ var listCmd = &cobra.Command{
 			}
 
 			statusCell := colorStatus(p, row.Status)
-
-			if listFull {
-				cells := []string{taskCell}
-				if hasService {
-					cells = append(cells, row.Service)
-				}
-				cells = append(cells, typeCell, row.Branch, row.Path, statusCell)
-				tbl.AddRow(cells...)
-			} else {
-				cells := []string{taskCell}
-				if hasService {
-					cells = append(cells, row.Service)
-				}
-				cells = append(cells, typeCell, statusCell)
-				tbl.AddRow(cells...)
-			}
+			tbl.AddRow(listRow(taskCell, row, typeCell, statusCell, hasService, listFull)...)
 		}
 
 		tbl.Render(cmd.OutOrStdout())
@@ -290,6 +242,32 @@ func init() {
 }
 
 // listArchivedBranches shows branches not associated with any active worktree.
+func listHeader(p *termcolor.Painter, hasService, full bool) []string {
+	h := []string{p.Paint("TASK", termcolor.Bold)}
+	if hasService {
+		h = append(h, p.Paint("SERVICE", termcolor.Bold))
+	}
+	h = append(h, p.Paint("TYPE", termcolor.Bold))
+	if full {
+		h = append(h, p.Paint("BRANCH", termcolor.Bold), p.Paint("PATH", termcolor.Bold))
+	}
+	h = append(h, p.Paint("STATUS", termcolor.Bold))
+	return h
+}
+
+func listRow(taskCell string, row resolver.WorktreeDetail, typeCell, statusCell string, hasService, full bool) []string {
+	cells := []string{taskCell}
+	if hasService {
+		cells = append(cells, row.Service)
+	}
+	cells = append(cells, typeCell)
+	if full {
+		cells = append(cells, row.Branch, row.Path)
+	}
+	cells = append(cells, statusCell)
+	return cells
+}
+
 func listArchivedBranches(cmd *cobra.Command, r git.Runner, mainBranch string) error {
 	archived, err := operations.ListArchivedBranches(r, mainBranch)
 	if err != nil {
