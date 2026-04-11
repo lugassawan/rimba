@@ -11,9 +11,9 @@ import (
 // MergeParams holds the inputs for a merge operation.
 type MergeParams struct {
 	SourceTask    string
-	SourceService string // monorepo service for source (empty for standard)
+	SourceService string
 	IntoTask      string // empty = merge into main
-	IntoService   string // monorepo service for target (empty for standard)
+	IntoService   string
 	RepoRoot      string
 	MainBranch    string
 	NoFF          bool

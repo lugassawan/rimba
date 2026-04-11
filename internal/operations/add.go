@@ -13,7 +13,7 @@ import (
 // AddParams holds the inputs for creating a new worktree.
 type AddParams struct {
 	Task          string
-	Service       string // monorepo service name (empty for standard)
+	Service       string
 	Prefix        string // e.g. "feature/"
 	Source        string // source branch
 	RepoRoot      string

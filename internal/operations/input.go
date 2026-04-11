@@ -21,17 +21,14 @@ func ResolveTaskInput(input, repoRoot string) (service, task string) {
 		return "", input
 	}
 
-	// Known prefix → standard mode, sanitize rest
 	if resolver.ValidPrefixType(candidate) {
 		return "", resolver.SanitizeTask(rest)
 	}
 
-	// Check if candidate is a valid service directory
 	dirPath := filepath.Join(repoRoot, candidate)
 	if info, err := os.Stat(dirPath); err == nil && info.IsDir() {
 		return candidate, resolver.SanitizeTask(rest)
 	}
 
-	// Not a prefix, not a valid dir → treat full input as task
 	return "", resolver.SanitizeTask(input)
 }
