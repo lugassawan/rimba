@@ -17,6 +17,7 @@ type WorktreeStatus struct {
 // WorktreeDetail holds the resolved view of a worktree with extracted task and type.
 type WorktreeDetail struct {
 	Task      string         `json:"task"`
+	Service   string         `json:"service,omitempty"`
 	Type      string         `json:"type"`
 	Branch    string         `json:"branch"`
 	Path      string         `json:"path"`
@@ -24,10 +25,10 @@ type WorktreeDetail struct {
 	Status    WorktreeStatus `json:"status"`
 }
 
-// NewWorktreeDetail constructs a WorktreeDetail by resolving the task name and type
-// from the branch using the given prefixes.
+// NewWorktreeDetail constructs a WorktreeDetail by resolving the task name, service,
+// and type from the branch using the given prefixes.
 func NewWorktreeDetail(branch string, prefixes []string, path string, status WorktreeStatus, isCurrent bool) WorktreeDetail {
-	task, matchedPrefix := TaskFromBranch(branch, prefixes)
+	svc, task, matchedPrefix := ServiceFromBranch(branch, prefixes)
 
 	typeLabel := ""
 	if matchedPrefix != "" {
@@ -36,6 +37,7 @@ func NewWorktreeDetail(branch string, prefixes []string, path string, status Wor
 
 	return WorktreeDetail{
 		Task:      task,
+		Service:   svc,
 		Type:      typeLabel,
 		Branch:    branch,
 		Path:      path,

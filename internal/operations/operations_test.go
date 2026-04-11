@@ -67,7 +67,7 @@ func TestFindWorktree(t *testing.T) {
 	}
 
 	t.Run("found", func(t *testing.T) {
-		wt, err := FindWorktree(r, "login")
+		wt, err := FindWorktree(r, "", "login")
 		if err != nil {
 			t.Fatalf("FindWorktree: %v", err)
 		}
@@ -77,7 +77,7 @@ func TestFindWorktree(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		if _, err := FindWorktree(r, "nonexistent"); err == nil {
+		if _, err := FindWorktree(r, "", "nonexistent"); err == nil {
 			t.Fatal("expected error for missing worktree")
 		}
 	})
@@ -88,7 +88,7 @@ func TestFindWorktreeError(t *testing.T) {
 		run:      func(_ ...string) (string, error) { return "", errGitFailed },
 		runInDir: noopRunInDir,
 	}
-	if _, err := FindWorktree(r, "login"); err == nil {
+	if _, err := FindWorktree(r, "", "login"); err == nil {
 		t.Fatal("expected error")
 	}
 }

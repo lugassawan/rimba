@@ -13,6 +13,7 @@ import (
 // AddParams holds the inputs for creating a new worktree.
 type AddParams struct {
 	Task          string
+	Service       string // monorepo service name (empty for standard)
 	Prefix        string // e.g. "feature/"
 	Source        string // source branch
 	RepoRoot      string
@@ -28,6 +29,7 @@ type AddParams struct {
 // AddResult holds the outcome of creating a worktree.
 type AddResult struct {
 	Task        string
+	Service     string
 	Branch      string
 	Path        string
 	Source      string
@@ -39,14 +41,15 @@ type AddResult struct {
 
 // AddWorktree creates a new worktree, copies files, installs deps, and runs hooks.
 func AddWorktree(r git.Runner, params AddParams, onProgress ProgressFunc) (AddResult, error) {
-	branch := resolver.BranchName(params.Prefix, params.Task)
+	branch := resolver.FullBranchName(params.Service, params.Prefix, params.Task)
 	wtPath := resolver.WorktreePath(params.WorktreeDir, branch)
 
 	result := AddResult{
-		Task:   params.Task,
-		Branch: branch,
-		Path:   wtPath,
-		Source: params.Source,
+		Task:    params.Task,
+		Service: params.Service,
+		Branch:  branch,
+		Path:    wtPath,
+		Source:  params.Source,
 	}
 
 	// Validate
