@@ -19,7 +19,9 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 | User wants to... | Run |
 |-------------------|-----|
 | Start a new task | `rimba add <task>` |
+| Start a task in a monorepo service | `rimba add service/task` (auto-detects service from repo dirs) |
 | See all worktrees | `rimba list` or `rimba list --json` |
+| Filter by service (monorepo) | `rimba list --service <svc>` |
 | Check worktree health | `rimba status` |
 | Navigate to a worktree | `cd $(rimba open <task>)` |
 | Update from source branch | `rimba sync <task>` or `rimba sync --all` |
@@ -40,7 +42,7 @@ Commands supporting `--json`: `list`, `status`, `exec`, `conflict-check`, `deps 
 
 ### Data Shapes
 
-**list:** `[{task, type, branch, path, is_current, status: {dirty, ahead, behind}}]`
+**list:** `[{task, type, service?, branch, path, is_current, status: {dirty, ahead, behind}}]`
 **status:** `{summary: {total, dirty, stale, behind}, worktrees: [...], stale_days}`
 **exec:** `{command, results: [{task, branch, path, exit_code, stdout, stderr}], success}`
 **conflict-check:** `{overlaps: [{file, branches, severity}], dry_merges?, total_files, total_branches}`
@@ -54,6 +56,8 @@ Commands supporting `--json`: `list`, `status`, `exec`, `conflict-check`, `deps 
 | "config not found" | rimba not initialized | Run `rimba init` |
 | "branch already exists" | Task name in use | Pick a different task name |
 | "worktree has uncommitted changes" | Dirty worktree | Commit or stash changes, or use `--force` |
+
+> **Tip:** Use `RIMBA_DEBUG=1 rimba <cmd>` to log git command timing to stderr when troubleshooting performance issues.
 
 ## Best Practices
 
