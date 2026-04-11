@@ -2,6 +2,8 @@ package mcp
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -183,6 +185,52 @@ func TestRemoveToolRemoveWorktreeFails(t *testing.T) {
 	errText := resultError(t, result)
 	if !strings.Contains(errText, "has changes") {
 		t.Errorf("expected removal error, got: %s", errText)
+	}
+}
+
+func TestRemoveToolServiceScoped(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmpDir, "auth-api"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	porcelain := worktreePorcelain(
+		struct{ path, branch string }{tmpDir, "main"},
+		struct{ path, branch string }{tmpDir + "/.worktrees/auth-api-feature-login", "auth-api/feature/login"},
+	)
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == gitWorktree && args[1] == gitList {
+				return porcelain, nil
+			}
+			if len(args) >= 2 && args[0] == gitWorktree && args[1] == gitRemove {
+				return "", nil
+			}
+			if len(args) >= 1 && args[0] == gitBranch {
+				return "", nil
+			}
+			return "", nil
+		},
+	}
+	hctx := &HandlerContext{
+		Runner:   r,
+		Config:   testConfig(),
+		RepoRoot: tmpDir,
+		Version:  "test",
+	}
+	handler := handleRemove(hctx)
+
+	result := callTool(t, handler, map[string]any{"task": "auth-api/login"})
+	data := unmarshalJSON[removeResult](t, result)
+	if data.Task != "login" {
+		t.Errorf("task = %q, want %q", data.Task, "login")
+	}
+	if data.Branch != "auth-api/feature/login" {
+		t.Errorf("branch = %q, want %q", data.Branch, "auth-api/feature/login")
+	}
+	if !data.WorktreeRemoved {
+		t.Error("expected worktree_removed=true")
 	}
 }
 

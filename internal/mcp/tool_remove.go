@@ -10,9 +10,9 @@ import (
 
 func registerRemoveTool(s *server.MCPServer, hctx *HandlerContext) {
 	tool := mcp.NewTool("remove",
-		mcp.WithDescription("Remove a worktree and optionally delete its branch"),
+		mcp.WithDescription("Remove a worktree and optionally delete its branch (supports 'service/task' for monorepo)"),
 		mcp.WithString("task",
-			mcp.Description("Task identifier of the worktree to remove"),
+			mcp.Description("Task identifier of the worktree to remove (e.g. 'my-task' or 'auth-api/my-task' for monorepo)"),
 			mcp.Required(),
 		),
 		mcp.WithBoolean("keep_branch",
@@ -32,12 +32,14 @@ func handleRemove(hctx *HandlerContext) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("task is required"), nil
 		}
 
+		service, task := operations.ResolveTaskInput(task, hctx.RepoRoot)
+
 		keepBranch := req.GetBool("keep_branch", false)
 		force := req.GetBool("force", false)
 
 		r := hctx.Runner
 
-		wt, findErr := operations.FindWorktree(r, "", task)
+		wt, findErr := operations.FindWorktree(r, service, task)
 		if findErr != nil {
 			return mcp.NewToolResultError(findErr.Error()), nil
 		}

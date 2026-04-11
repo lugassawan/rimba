@@ -13,9 +13,9 @@ import (
 
 func registerSyncTool(s *server.MCPServer, hctx *HandlerContext) {
 	tool := mcp.NewTool("sync",
-		mcp.WithDescription("Sync worktree(s) with the main branch via rebase or merge, then push"),
+		mcp.WithDescription("Sync worktree(s) with the main branch via rebase or merge, then push (supports 'service/task' for monorepo)"),
 		mcp.WithString("task",
-			mcp.Description("Single task to sync"),
+			mcp.Description("Single task to sync (e.g. 'my-task' or 'auth-api/my-task' for monorepo)"),
 		),
 		mcp.WithBoolean("all",
 			mcp.Description("Sync all eligible worktrees"),
@@ -58,6 +58,11 @@ func handleSync(hctx *HandlerContext) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("provide a task name or set all=true to sync all worktrees"), nil
 		}
 
+		var service string
+		if task != "" {
+			service, task = operations.ResolveTaskInput(task, hctx.RepoRoot)
+		}
+
 		r := hctx.Runner
 
 		// Fetch (non-fatal)
@@ -80,14 +85,14 @@ func handleSync(hctx *HandlerContext) server.ToolHandlerFunc {
 		}
 
 		if !all {
-			return syncSingle(r, task, worktrees, prefixes, opts)
+			return syncSingle(r, service, task, worktrees, prefixes, opts)
 		}
 		return syncMultiple(r, worktrees, prefixes, opts, includeInherited)
 	}
 }
 
-func syncSingle(r git.Runner, task string, worktrees []resolver.WorktreeInfo, prefixes []string, opts syncOpts) (*mcp.CallToolResult, error) {
-	wt, found := resolver.FindBranchForTask("", task, worktrees, prefixes)
+func syncSingle(r git.Runner, service, task string, worktrees []resolver.WorktreeInfo, prefixes []string, opts syncOpts) (*mcp.CallToolResult, error) {
+	wt, found := resolver.FindBranchForTask(service, task, worktrees, prefixes)
 	if !found {
 		return mcp.NewToolResultError("worktree not found for task \"" + task + "\""), nil
 	}

@@ -10,13 +10,13 @@ import (
 
 func registerMergeTool(s *server.MCPServer, hctx *HandlerContext) {
 	tool := mcp.NewTool("merge",
-		mcp.WithDescription("Merge a worktree branch into main or another worktree"),
+		mcp.WithDescription("Merge a worktree branch into main or another worktree (supports 'service/task' for monorepo)"),
 		mcp.WithString("source",
-			mcp.Description("Source task to merge"),
+			mcp.Description("Source task to merge (e.g. 'my-task' or 'auth-api/my-task' for monorepo)"),
 			mcp.Required(),
 		),
 		mcp.WithString("into",
-			mcp.Description("Target task to merge into (default: main branch)"),
+			mcp.Description("Target task to merge into (default: main branch; supports 'service/task' for monorepo)"),
 		),
 		mcp.WithBoolean("no_ff",
 			mcp.Description("Force a merge commit (no fast-forward)"),
@@ -38,19 +38,29 @@ func handleMerge(hctx *HandlerContext) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("source is required"), nil
 		}
 
+		sourceService, sourceTask := operations.ResolveTaskInput(sourceTask, hctx.RepoRoot)
+
+		intoTask := req.GetString("into", "")
+		var intoService string
+		if intoTask != "" {
+			intoService, intoTask = operations.ResolveTaskInput(intoTask, hctx.RepoRoot)
+		}
+
 		cfg, cfgErr := hctx.requireConfig()
 		if cfgErr != nil {
 			return mcp.NewToolResultError(cfgErr.Error()), nil
 		}
 
 		result, err := operations.MergeWorktree(hctx.Runner, operations.MergeParams{
-			SourceTask: sourceTask,
-			IntoTask:   req.GetString("into", ""),
-			RepoRoot:   hctx.RepoRoot,
-			MainBranch: cfg.DefaultSource,
-			NoFF:       req.GetBool("no_ff", false),
-			Keep:       req.GetBool("keep", false),
-			Delete:     req.GetBool("delete", false),
+			SourceTask:    sourceTask,
+			SourceService: sourceService,
+			IntoTask:      intoTask,
+			IntoService:   intoService,
+			RepoRoot:      hctx.RepoRoot,
+			MainBranch:    cfg.DefaultSource,
+			NoFF:          req.GetBool("no_ff", false),
+			Keep:          req.GetBool("keep", false),
+			Delete:        req.GetBool("delete", false),
 		}, nil)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
