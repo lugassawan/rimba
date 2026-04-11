@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lugassawan/rimba/internal/progress"
 	"github.com/lugassawan/rimba/internal/resolver"
 )
 
@@ -136,10 +137,10 @@ func TestRemoveWorktreeProgressCallbacks(t *testing.T) {
 	}
 
 	var messages []string
-	progress := ProgressFunc(func(msg string) { messages = append(messages, msg) })
+	onProgress := progress.Func(func(msg string) { messages = append(messages, msg) })
 
 	wt := resolver.WorktreeInfo{Path: "/wt/feature-login", Branch: "feature/login"}
-	_, err := RemoveWorktree(r, wt, "login", false, false, progress)
+	_, err := RemoveWorktree(r, wt, "login", false, false, onProgress)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

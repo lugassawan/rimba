@@ -7,6 +7,7 @@ import (
 	"github.com/lugassawan/rimba/internal/deps"
 	"github.com/lugassawan/rimba/internal/fileutil"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/progress"
 )
 
 // PostCreateParams holds the inputs for the post-create setup sequence
@@ -35,11 +36,11 @@ type PostCreateResult struct {
 
 // PostCreateSetup runs the post-create sequence: copy files, install deps, run hooks.
 // This is used after creating a worktree via git.AddWorktree, git.AddWorktreeFromBranch, etc.
-func PostCreateSetup(r git.Runner, params PostCreateParams, onProgress ProgressFunc) (PostCreateResult, error) {
+func PostCreateSetup(r git.Runner, params PostCreateParams, onProgress progress.Func) (PostCreateResult, error) {
 	var result PostCreateResult
 
 	// Copy files
-	notify(onProgress, "Copying files...")
+	progress.Notify(onProgress, "Copying files...")
 	copied, err := fileutil.CopyEntries(params.RepoRoot, params.WtPath, params.CopyFiles)
 	if err != nil {
 		return result, fmt.Errorf("failed to copy files: %w\nTo retry, manually copy files to: %s\nTo remove the worktree: rimba remove %s", err, params.WtPath, params.Task)
@@ -49,7 +50,7 @@ func PostCreateSetup(r git.Runner, params PostCreateParams, onProgress ProgressF
 
 	// Dependencies
 	if !params.SkipDeps {
-		notify(onProgress, "Installing dependencies...")
+		progress.Notify(onProgress, "Installing dependencies...")
 		wtEntries, err := git.ListWorktrees(r)
 		if err != nil {
 			return result, fmt.Errorf("failed to list worktrees for dependency setup: %w", err)
@@ -63,16 +64,16 @@ func PostCreateSetup(r git.Runner, params PostCreateParams, onProgress ProgressF
 			Entries:       wtEntries,
 		}
 		if params.SourcePath != "" {
-			result.DepsResults = InstallDepsPreferSource(r, params.SourcePath, dp, nil)
+			result.DepsResults = InstallDepsPreferSource(r, params.SourcePath, dp, onProgress)
 		} else {
-			result.DepsResults = InstallDeps(r, dp, nil)
+			result.DepsResults = InstallDeps(r, dp, onProgress)
 		}
 	}
 
 	// Post-create hooks
 	if !params.SkipHooks && len(params.PostCreate) > 0 {
-		notify(onProgress, "Running hooks...")
-		result.HookResults = RunPostCreateHooks(params.WtPath, params.PostCreate, nil)
+		progress.Notify(onProgress, "Running hooks...")
+		result.HookResults = RunPostCreateHooks(params.WtPath, params.PostCreate, onProgress)
 	}
 
 	return result, nil

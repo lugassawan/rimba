@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/lugassawan/rimba/internal/progress"
 )
 
 func TestAddWorktreeSuccess(t *testing.T) {
@@ -164,7 +166,7 @@ func TestAddWorktreeProgressCallbacks(t *testing.T) {
 	}
 
 	var messages []string
-	progress := ProgressFunc(func(msg string) { messages = append(messages, msg) })
+	onProgress := progress.Func(func(msg string) { messages = append(messages, msg) })
 
 	_, err := AddWorktree(r, AddParams{
 		Task:        "login",
@@ -174,7 +176,7 @@ func TestAddWorktreeProgressCallbacks(t *testing.T) {
 		WorktreeDir: wtDir,
 		SkipDeps:    true,
 		SkipHooks:   true,
-	}, progress)
+	}, onProgress)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/lugassawan/rimba/internal/progress"
 )
 
 const (
@@ -278,14 +280,14 @@ func TestRemoveCandidatesProgressCallbacks(t *testing.T) {
 	}
 
 	var messages []string
-	progress := ProgressFunc(func(msg string) { messages = append(messages, msg) })
+	onProgress := progress.Func(func(msg string) { messages = append(messages, msg) })
 
 	candidates := []CleanCandidate{
 		{Path: "/wt/a", Branch: "feature/a"},
 		{Path: "/wt/b", Branch: "feature/b"},
 	}
 
-	RemoveCandidates(r, candidates, progress)
+	RemoveCandidates(r, candidates, onProgress)
 	if len(messages) != 2 {
 		t.Fatalf("expected 2 progress messages, got %d", len(messages))
 	}

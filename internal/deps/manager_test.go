@@ -19,11 +19,9 @@ const (
 	testDirCustomDeps    = "custom/deps"
 )
 
-// progressCall records a single invocation of a ProgressFunc callback.
+// progressCall records a single invocation of a progress callback.
 type progressCall struct {
-	current int
-	total   int
-	name    string
+	message string
 }
 
 // mockRunner implements git.Runner for testing.
@@ -756,8 +754,8 @@ func TestInstallProgressCallback(t *testing.T) {
 	}
 
 	var calls []progressCall
-	onProgress := func(current, total int, name string) {
-		calls = append(calls, progressCall{current, total, name})
+	onProgress := func(msg string) {
+		calls = append(calls, progressCall{msg})
 	}
 
 	mgr.Install(newWT, modules, nil, onProgress)
@@ -765,11 +763,11 @@ func TestInstallProgressCallback(t *testing.T) {
 	if len(calls) != 2 {
 		t.Fatalf("expected 2 progress calls, got %d", len(calls))
 	}
-	if calls[0].current != 1 || calls[0].total != 2 || calls[0].name != DirNodeModules {
-		t.Errorf("calls[0] = %+v, want {1 2 %s}", calls[0], DirNodeModules)
+	if want := DirNodeModules + " (1/2)"; calls[0].message != want {
+		t.Errorf("calls[0] = %q, want %q", calls[0].message, want)
 	}
-	if calls[1].current != 2 || calls[1].total != 2 || calls[1].name != DirVendor {
-		t.Errorf("calls[1] = %+v, want {2 2 %s}", calls[1], DirVendor)
+	if want := DirVendor + " (2/2)"; calls[1].message != want {
+		t.Errorf("calls[1] = %q, want %q", calls[1].message, want)
 	}
 }
 

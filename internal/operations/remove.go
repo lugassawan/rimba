@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/progress"
 	"github.com/lugassawan/rimba/internal/resolver"
 )
 
@@ -18,21 +19,21 @@ type RemoveResult struct {
 }
 
 // RemoveWorktree removes a worktree and optionally deletes its branch.
-func RemoveWorktree(r git.Runner, wt resolver.WorktreeInfo, task string, keepBranch, force bool, onProgress ProgressFunc) (RemoveResult, error) {
+func RemoveWorktree(r git.Runner, wt resolver.WorktreeInfo, task string, keepBranch, force bool, onProgress progress.Func) (RemoveResult, error) {
 	result := RemoveResult{
 		Task:   task,
 		Branch: wt.Branch,
 		Path:   wt.Path,
 	}
 
-	notify(onProgress, "Removing worktree...")
+	progress.Notify(onProgress, "Removing worktree...")
 	if err := git.RemoveWorktree(r, wt.Path, force); err != nil {
 		return result, err
 	}
 	result.WorktreeRemoved = true
 
 	if !keepBranch {
-		notify(onProgress, "Deleting branch...")
+		progress.Notify(onProgress, "Deleting branch...")
 		if err := git.DeleteBranch(r, wt.Branch, true); err != nil {
 			result.BranchError = fmt.Errorf("worktree removed but failed to delete branch: %w\nTo delete manually: git branch -D %s", err, wt.Branch)
 			return result, nil

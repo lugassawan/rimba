@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/progress"
 )
 
 // CleanCandidate holds a branch/path pair eligible for removal.
@@ -106,10 +107,10 @@ func FindStaleCandidates(r git.Runner, mainBranch string, staleDays int) (StaleR
 }
 
 // RemoveCandidates removes worktrees and their branches, returning the outcome of each.
-func RemoveCandidates(r git.Runner, candidates []CleanCandidate, onProgress ProgressFunc) []CleanedItem {
+func RemoveCandidates(r git.Runner, candidates []CleanCandidate, onProgress progress.Func) []CleanedItem {
 	items := make([]CleanedItem, 0, len(candidates))
 	for _, c := range candidates {
-		notify(onProgress, fmt.Sprintf("Removing %s...", c.Branch))
+		progress.Notifyf(onProgress, "Removing %s...", c.Branch)
 		wtRemoved, brDeleted, err := removeAndCleanup(r, c.Path, c.Branch)
 		items = append(items, CleanedItem{
 			Branch:          c.Branch,

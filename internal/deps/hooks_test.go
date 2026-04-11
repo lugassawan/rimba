@@ -92,8 +92,8 @@ func TestRunPostCreateHooksProgressCallback(t *testing.T) {
 	dir := t.TempDir()
 
 	var calls []progressCall
-	onProgress := func(current, total int, name string) {
-		calls = append(calls, progressCall{current, total, name})
+	onProgress := func(msg string) {
+		calls = append(calls, progressCall{msg})
 	}
 
 	hooks := []string{"touch a.txt", "touch b.txt"}
@@ -102,11 +102,11 @@ func TestRunPostCreateHooksProgressCallback(t *testing.T) {
 	if len(calls) != 2 {
 		t.Fatalf("expected 2 progress calls, got %d", len(calls))
 	}
-	if calls[0].current != 1 || calls[0].total != 2 || calls[0].name != "touch a.txt" {
-		t.Errorf("calls[0] = %+v, want {1 2 touch a.txt}", calls[0])
+	if want := "touch a.txt (1/2)"; calls[0].message != want {
+		t.Errorf("calls[0] = %q, want %q", calls[0].message, want)
 	}
-	if calls[1].current != 2 || calls[1].total != 2 || calls[1].name != "touch b.txt" {
-		t.Errorf("calls[1] = %+v, want {2 2 touch b.txt}", calls[1])
+	if want := "touch b.txt (2/2)"; calls[1].message != want {
+		t.Errorf("calls[1] = %q, want %q", calls[1].message, want)
 	}
 }
 

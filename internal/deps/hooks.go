@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/lugassawan/rimba/internal/progress"
 )
 
 // HookResult holds the outcome of a post-create hook execution.
@@ -15,12 +17,10 @@ type HookResult struct {
 
 // RunPostCreateHooks executes shell commands in the worktree directory.
 // It collects errors but does not stop on failure — all hooks run regardless.
-func RunPostCreateHooks(worktreeDir string, hooks []string, onProgress ProgressFunc) []HookResult {
+func RunPostCreateHooks(worktreeDir string, hooks []string, onProgress progress.Func) []HookResult {
 	results := make([]HookResult, 0, len(hooks))
 	for i, hook := range hooks {
-		if onProgress != nil {
-			onProgress(i+1, len(hooks), hook)
-		}
+		progress.Notifyf(onProgress, "%s (%d/%d)", hook, i+1, len(hooks))
 
 		cmd := exec.Command("sh", "-c", hook) //nolint:gosec // hook commands come from user config
 		cmd.Dir = worktreeDir
