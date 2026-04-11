@@ -2,6 +2,7 @@ package operations
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/resolver"
@@ -26,25 +27,36 @@ func ListWorktreeInfos(r git.Runner) ([]resolver.WorktreeInfo, error) {
 		return nil, err
 	}
 
+	prefixes := resolver.AllPrefixes()
 	worktrees := make([]resolver.WorktreeInfo, len(entries))
 	for i, e := range entries {
+		svc, _, _ := resolver.ServiceFromBranch(e.Branch, prefixes)
 		worktrees[i] = resolver.WorktreeInfo{
-			Path:   e.Path,
-			Branch: e.Branch,
+			Path:    e.Path,
+			Branch:  e.Branch,
+			Service: svc,
 		}
 	}
 	return worktrees, nil
 }
 
-// FindWorktree looks up a worktree by task name.
-func FindWorktree(r git.Runner, task string) (resolver.WorktreeInfo, error) {
+// FindWorktree looks up a worktree by service and task name.
+// When service is empty and the task matches multiple services, an ambiguity error is returned.
+func FindWorktree(r git.Runner, service, task string) (resolver.WorktreeInfo, error) {
 	worktrees, err := ListWorktreeInfos(r)
 	if err != nil {
 		return resolver.WorktreeInfo{}, err
 	}
 
-	wt, found := resolver.FindBranchForTask(task, worktrees, resolver.AllPrefixes())
+	prefixes := resolver.AllPrefixes()
+	wt, found := resolver.FindBranchForTask(service, task, worktrees, prefixes)
 	if !found {
+		if service == "" {
+			matches := resolver.FindAllBranchesForTask(task, worktrees, prefixes)
+			if len(matches) > 1 {
+				return resolver.WorktreeInfo{}, ambiguityError(task, matches)
+			}
+		}
 		return resolver.WorktreeInfo{}, fmt.Errorf(ErrWorktreeNotFoundFmt, task)
 	}
 	return wt, nil
@@ -62,4 +74,14 @@ func FilterByType(worktrees []resolver.WorktreeInfo, prefixes []string, typeStr 
 		}
 	}
 	return out
+}
+
+// ambiguityError builds a descriptive error when a bare task matches multiple services.
+func ambiguityError(task string, matches []resolver.WorktreeInfo) error {
+	branches := make([]string, len(matches))
+	for i, m := range matches {
+		branches[i] = "  " + m.Branch
+	}
+	return fmt.Errorf("multiple worktrees match %q:\n%s\nSpecify the service: rimba <command> <service>/%s",
+		task, strings.Join(branches, "\n"), task)
 }

@@ -6,6 +6,27 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func TestHasExplicitPrefixFlag(t *testing.T) {
+	t.Run("no flag set", func(t *testing.T) {
+		cmd := &cobra.Command{Use: "test"}
+		addPrefixFlags(cmd)
+		if hasExplicitPrefixFlag(cmd) {
+			t.Error("expected false when no flag set")
+		}
+	})
+
+	t.Run("bugfix flag set", func(t *testing.T) {
+		cmd := &cobra.Command{Use: "test"}
+		addPrefixFlags(cmd)
+		if err := cmd.Flags().Set("bugfix", "true"); err != nil {
+			t.Fatal(err)
+		}
+		if !hasExplicitPrefixFlag(cmd) {
+			t.Error("expected true when bugfix flag set")
+		}
+	})
+}
+
 func TestResolvedPrefixString(t *testing.T) {
 	tests := []struct {
 		name string

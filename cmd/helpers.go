@@ -61,7 +61,13 @@ func listWorktreeInfos(r git.Runner) ([]resolver.WorktreeInfo, error) {
 	return operations.ListWorktreeInfos(r)
 }
 
-// findWorktree looks up a worktree by task name.
-func findWorktree(r git.Runner, task string) (resolver.WorktreeInfo, error) {
-	return operations.FindWorktree(r, task)
+// findWorktree looks up a worktree by user input (task or service/task).
+// It resolves the input to detect monorepo service names.
+func findWorktree(r git.Runner, input string) (resolver.WorktreeInfo, error) {
+	repoRoot, err := git.MainRepoRoot(r)
+	if err != nil {
+		return operations.FindWorktree(r, "", input)
+	}
+	service, task := operations.ResolveTaskInput(input, repoRoot)
+	return operations.FindWorktree(r, service, task)
 }

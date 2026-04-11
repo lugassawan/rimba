@@ -10,13 +10,15 @@ import (
 
 // MergeParams holds the inputs for a merge operation.
 type MergeParams struct {
-	SourceTask string
-	IntoTask   string // empty = merge into main
-	RepoRoot   string
-	MainBranch string
-	NoFF       bool
-	Keep       bool
-	Delete     bool
+	SourceTask    string
+	SourceService string
+	IntoTask      string // empty = merge into main
+	IntoService   string
+	RepoRoot      string
+	MainBranch    string
+	NoFF          bool
+	Keep          bool
+	Delete        bool
 }
 
 // MergeResult holds the outcome of a merge operation.
@@ -47,7 +49,7 @@ func MergeWorktree(r git.Runner, params MergeParams, onProgress ProgressFunc) (M
 	prefixes := resolver.AllPrefixes()
 
 	// Resolve source
-	source, found := resolver.FindBranchForTask(params.SourceTask, worktrees, prefixes)
+	source, found := resolver.FindBranchForTask(params.SourceService, params.SourceTask, worktrees, prefixes)
 	if !found {
 		return MergeResult{}, fmt.Errorf(ErrWorktreeNotFoundFmt, params.SourceTask)
 	}
@@ -60,7 +62,7 @@ func MergeWorktree(r git.Runner, params MergeParams, onProgress ProgressFunc) (M
 		targetDir = params.RepoRoot
 		targetLabel = params.MainBranch
 	} else {
-		target, tgtFound := resolver.FindBranchForTask(params.IntoTask, worktrees, prefixes)
+		target, tgtFound := resolver.FindBranchForTask(params.IntoService, params.IntoTask, worktrees, prefixes)
 		if !tgtFound {
 			return MergeResult{}, fmt.Errorf(ErrWorktreeNotFoundFmt, params.IntoTask)
 		}

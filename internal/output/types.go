@@ -5,6 +5,7 @@ import "github.com/lugassawan/rimba/internal/resolver"
 // ListItem represents a worktree entry in JSON output.
 type ListItem struct {
 	Task      string                  `json:"task"`
+	Service   string                  `json:"service,omitempty"`
 	Type      string                  `json:"type"`
 	Branch    string                  `json:"branch"`
 	Path      string                  `json:"path"`

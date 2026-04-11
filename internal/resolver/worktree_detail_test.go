@@ -109,6 +109,85 @@ func TestSortDetailsByTaskEmpty(t *testing.T) {
 	resolver.SortDetailsByTask(details) // should not panic
 }
 
+func TestNewWorktreeDetailWithService(t *testing.T) {
+	prefixes := resolver.AllPrefixes()
+	d := resolver.NewWorktreeDetail("auth-api/feature/login", prefixes, "/wt/auth-api-feature-login", resolver.WorktreeStatus{}, false)
+
+	if d.Service != "auth-api" {
+		t.Errorf("Service = %q, want %q", d.Service, "auth-api")
+	}
+	if d.Task != "login" {
+		t.Errorf("Task = %q, want %q", d.Task, "login")
+	}
+	if d.Type != "feature" {
+		t.Errorf("Type = %q, want %q", d.Type, "feature")
+	}
+}
+
+func TestHasService(t *testing.T) {
+	t.Run("with service", func(t *testing.T) {
+		details := []resolver.WorktreeDetail{
+			{Task: "login", Service: ""},
+			{Task: "signup", Service: "auth-api"},
+		}
+		if !resolver.HasService(details) {
+			t.Error("expected true when a detail has service")
+		}
+	})
+
+	t.Run("without service", func(t *testing.T) {
+		details := []resolver.WorktreeDetail{
+			{Task: "login"},
+			{Task: "signup"},
+		}
+		if resolver.HasService(details) {
+			t.Error("expected false when no detail has service")
+		}
+	})
+
+	t.Run("empty", func(t *testing.T) {
+		if resolver.HasService(nil) {
+			t.Error("expected false for nil slice")
+		}
+	})
+}
+
+func TestFilterByService(t *testing.T) {
+	details := []resolver.WorktreeDetail{
+		{Task: "login", Service: "auth-api"},
+		{Task: "signup", Service: "web-app"},
+		{Task: "plain", Service: ""},
+	}
+
+	t.Run("filter by auth-api", func(t *testing.T) {
+		got := resolver.FilterByService(details, "auth-api")
+		if len(got) != 1 || got[0].Task != "login" {
+			t.Errorf("expected [login], got %v", got)
+		}
+	})
+
+	t.Run("filter by web-app", func(t *testing.T) {
+		got := resolver.FilterByService(details, "web-app")
+		if len(got) != 1 || got[0].Task != "signup" {
+			t.Errorf("expected [signup], got %v", got)
+		}
+	})
+
+	t.Run("no match", func(t *testing.T) {
+		got := resolver.FilterByService(details, "unknown")
+		if len(got) != 0 {
+			t.Errorf("expected empty, got %v", got)
+		}
+	})
+
+	t.Run("empty service returns original", func(t *testing.T) {
+		got := resolver.FilterByService(details, "")
+		if len(got) != len(details) {
+			t.Errorf("expected %d items, got %d", len(details), len(got))
+		}
+	})
+}
+
 func TestNewWorktreeDetailUnknownPrefix(t *testing.T) {
 	const customBranch = "custom-branch"
 	prefixes := resolver.AllPrefixes()

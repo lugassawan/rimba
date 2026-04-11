@@ -204,6 +204,47 @@ func TestLogWithLimit(t *testing.T) {
 	}
 }
 
+func TestLogWithServiceColumn(t *testing.T) {
+	ts := strconv.FormatInt(time.Now().Add(-1*time.Hour).Unix(), 10)
+
+	restore := overrideNewRunner(&mockRunner{
+		run: func(args ...string) (string, error) {
+			switch {
+			case args[0] == cmdRevParse && args[1] == cmdShowToplevel:
+				return repoPath, nil
+			case args[0] == cmdSymbolicRef:
+				return refsRemotesOriginMain, nil
+			case args[0] == cmdWorktreeTest && args[1] == cmdList:
+				return strings.Join([]string{
+					wtRepo + headMainBlock,
+					"worktree /wt/auth-api-feature-login", headDEF456, "branch refs/heads/auth-api/feature/login", "",
+				}, "\n"), nil
+			case args[0] == cmdLog:
+				return ts + "\tadd login", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	})
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().Int(flagLimit, 0, "")
+	cmd.Flags().String(flagSince, "", "")
+
+	if err := logCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("logCmd.RunE: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "SERVICE") {
+		t.Errorf("expected SERVICE column, got: %q", output)
+	}
+	if !strings.Contains(output, "auth-api") {
+		t.Errorf("expected auth-api service, got: %q", output)
+	}
+}
+
 func TestLogCommitInfoError(t *testing.T) {
 	restore := overrideNewRunner(logRunnerWithWorktree(func(_ string) (string, error) {
 		return "", errors.New("no commits")

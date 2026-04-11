@@ -37,7 +37,7 @@ func handleRemove(hctx *HandlerContext) server.ToolHandlerFunc {
 
 		r := hctx.Runner
 
-		wt, findErr := operations.FindWorktree(r, task)
+		wt, findErr := operations.FindWorktree(r, "", task)
 		if findErr != nil {
 			return mcp.NewToolResultError(findErr.Error()), nil
 		}

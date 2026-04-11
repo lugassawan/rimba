@@ -20,12 +20,12 @@ type RenameResult struct {
 func RenameWorktree(r git.Runner, wt resolver.WorktreeInfo, newTask, wtDir string, force bool) (RenameResult, error) {
 	prefixes := resolver.AllPrefixes()
 
-	_, matchedPrefix := resolver.TaskFromBranch(wt.Branch, prefixes)
+	svc, _, matchedPrefix := resolver.ServiceFromBranch(wt.Branch, prefixes)
 	if matchedPrefix == "" {
 		matchedPrefix, _ = resolver.PrefixString(resolver.DefaultPrefixType)
 	}
 
-	newBranch := resolver.BranchName(matchedPrefix, newTask)
+	newBranch := resolver.FullBranchName(svc, matchedPrefix, newTask)
 
 	if git.BranchExists(r, newBranch) {
 		return RenameResult{}, fmt.Errorf("branch %q already exists", newBranch)

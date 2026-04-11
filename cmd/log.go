@@ -23,6 +23,7 @@ const (
 type logEntry struct {
 	branch     string
 	task       string
+	service    string
 	typeName   string
 	commitTime time.Time
 	subject    string
@@ -110,16 +111,17 @@ func collectLogEntries(r git.Runner, candidates []git.WorktreeEntry, s *spinner.
 	s.Update("Collecting commit info...")
 	results := parallel.Collect(len(candidates), 8, func(i int) logEntry {
 		e := candidates[i]
-		task, matchedPrefix := resolver.TaskFromBranch(e.Branch, prefixes)
+		svc, task, matchedPrefix := resolver.ServiceFromBranch(e.Branch, prefixes)
 		typeName := strings.TrimSuffix(matchedPrefix, "/")
 
 		ct, subject, err := git.LastCommitInfo(r, e.Branch)
 		if err != nil {
-			return logEntry{branch: e.Branch, task: task, typeName: typeName}
+			return logEntry{branch: e.Branch, task: task, service: svc, typeName: typeName}
 		}
 		return logEntry{
 			branch:     e.Branch,
 			task:       task,
+			service:    svc,
 			typeName:   typeName,
 			commitTime: ct,
 			subject:    subject,
@@ -141,17 +143,31 @@ func collectLogEntries(r git.Runner, candidates []git.WorktreeEntry, s *spinner.
 	return valid
 }
 
-// renderLogTable prints the log entries as a formatted table.
+func logEntriesHaveService(entries []logEntry) bool {
+	for _, e := range entries {
+		if e.service != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func renderLogTable(out io.Writer, p *termcolor.Painter, entries []logEntry) {
 	fmt.Fprintf(out, "Recent commits across %d worktree(s):\n\n", len(entries))
 
+	hasService := logEntriesHaveService(entries)
+
 	tbl := termcolor.NewTable(2)
-	tbl.AddRow(
-		p.Paint("TASK", termcolor.Bold),
+	header := []string{p.Paint("TASK", termcolor.Bold)}
+	if hasService {
+		header = append(header, p.Paint("SERVICE", termcolor.Bold))
+	}
+	header = append(header,
 		p.Paint("TYPE", termcolor.Bold),
 		p.Paint("AGE", termcolor.Bold),
 		p.Paint("COMMIT", termcolor.Bold),
 	)
+	tbl.AddRow(header...)
 
 	for _, e := range entries {
 		typeCell := e.typeName
@@ -162,7 +178,12 @@ func renderLogTable(out io.Writer, p *termcolor.Painter, entries []logEntry) {
 		ageStr := resolver.FormatAge(e.commitTime)
 		ageCell := p.Paint(ageStr, resolver.AgeColor(e.commitTime))
 
-		tbl.AddRow("  "+e.task, typeCell, ageCell, e.subject)
+		cells := []string{"  " + e.task}
+		if hasService {
+			cells = append(cells, e.service)
+		}
+		cells = append(cells, typeCell, ageCell, e.subject)
+		tbl.AddRow(cells...)
 	}
 
 	tbl.Render(out)
