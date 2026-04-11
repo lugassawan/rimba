@@ -20,9 +20,9 @@ const (
 )
 
 var addCmd = &cobra.Command{
-	Use:   "add <task>",
+	Use:   "add <task> or add <service>/<task>",
 	Short: "Create a new worktree for a task",
-	Long:  "Creates a new git worktree with a branch named <prefix><task> and copies dotfiles from the repo root.",
+	Long:  "Create a worktree, copy files, install dependencies, and run hooks.\nUse <service>/<task> to scope to a specific service in a monorepo.",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.FromContext(cmd.Context())
