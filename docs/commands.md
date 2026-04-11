@@ -39,13 +39,17 @@ rimba init --agent-files    # Also install AI agent instruction files
 
 ### rimba add
 
-Create a new worktree with a branch named `<prefix><task>` and copy dotfiles from the repo root.
+Create a new worktree with a branch named `<prefix><task>` and copy dotfiles from the repo root. In monorepos, prefix the task with a service directory name to create service-scoped branches.
 
 ```sh
 rimba add my-feature
 rimba add my-feature --bugfix        # Use bugfix/ prefix instead of feature/
 rimba add my-feature -s develop      # Branch from a different source
+rimba add auth-api/my-feature        # Monorepo: branch auth-api/feature/my-feature
+rimba add auth-api/my-feature --bugfix  # Monorepo: branch auth-api/bugfix/my-feature
 ```
+
+> **Monorepo:** If the first segment before `/` matches a directory in the repo root, rimba treats it as a service scope. The branch uses a 3-segment pattern: `<service>/<prefix>/<task>`. No configuration needed — detection is automatic.
 
 | Flag | Description |
 |------|-------------|
@@ -146,6 +150,7 @@ rimba list --type bugfix        # Show only bugfix worktrees
 rimba list --dirty              # Show only dirty worktrees
 rimba list --behind             # Show only worktrees behind upstream
 rimba list --archived           # Show archived branches (not in any active worktree)
+rimba list --service auth-api   # Show only worktrees for a service (monorepo)
 rimba list --json               # Output as JSON
 ```
 
@@ -174,6 +179,7 @@ TASK            TYPE     BRANCH              PATH              STATUS
 | `--dirty` | Show only worktrees with uncommitted changes |
 | `--behind` | Show only worktrees behind their upstream branch |
 | `--archived` | Show archived branches not in any active worktree (mutually exclusive with other filters) |
+| `--service` | Filter by service name (monorepo) |
 
 ### rimba status
 
@@ -469,7 +475,7 @@ claude mcp add rimba rimba mcp
 | Tool | Description | Required Parameters |
 |------|-------------|---------------------|
 | `list` | List all worktrees with branch, path, and status | — |
-| `add` | Create a new worktree for a task | `task` |
+| `add` | Create a new worktree for a task (supports `service/task` for monorepos) | `task` |
 | `remove` | Remove a worktree and optionally delete its branch | `task` |
 | `status` | Show worktree dashboard with summary stats and age info | — |
 | `sync` | Sync worktree(s) with the main branch via rebase or merge, then push | `task` or `all` |

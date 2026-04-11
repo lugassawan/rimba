@@ -34,6 +34,7 @@
 - **Duplicate worktrees** — copy an existing worktree with auto-suffixed or custom name
 - **Local merge** — merge worktree branches into main or other worktrees with auto-cleanup
 - **Sync worktrees** — rebase or merge onto the latest main branch, with bulk sync support
+- **Monorepo support** — service-scoped worktrees with auto-detected 3-segment branch naming (`service/prefix/task`)
 
 🔧 **Automation**
 
@@ -94,7 +95,7 @@ rimba remove my-feature
 | Command | Description |
 |---------|-------------|
 | `rimba init` | Initialize rimba in the current repository |
-| `rimba add <task>` | Create a new worktree with auto-prefixed branch |
+| `rimba add <task>` | Create a new worktree with auto-prefixed branch (`service/task` for monorepos) |
 | `rimba remove <task>` | Remove a worktree and delete its branch |
 | `rimba rename <old> <new>` | Rename a worktree's task, branch, and directory |
 | `rimba duplicate <task>` | Create a copy of an existing worktree |

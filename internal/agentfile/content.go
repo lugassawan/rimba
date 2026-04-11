@@ -27,7 +27,7 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 
 | Concern | Commands |
 |---------|----------|
-| Create & navigate | ` + "`" + `rimba add <task>` + "`" + `, ` + "`" + `rimba open <task>` + "`" + ` |
+| Create & navigate | ` + "`" + `rimba add <task>` + "`" + ` (or ` + "`" + `rimba add service/task` + "`" + ` for monorepos), ` + "`" + `rimba open <task>` + "`" + ` |
 | Inspect | ` + "`" + `rimba list` + "`" + `, ` + "`" + `rimba status` + "`" + `, ` + "`" + `rimba log` + "`" + ` |
 | Sync & merge | ` + "`" + `rimba sync [task]` + "`" + `, ` + "`" + `rimba merge <task>` + "`" + ` |
 | Clean up | ` + "`" + `rimba clean --merged` + "`" + `, ` + "`" + `rimba archive <task>` + "`" + `, ` + "`" + `rimba remove <task>` + "`" + ` |
@@ -53,6 +53,22 @@ rimba clean --merged        # remove worktrees whose branches are merged
 rimba merge my-feature      # merge into main and auto-clean up
 ` + "```" + `
 
+## Monorepo (Service-Scoped Worktrees)
+
+In monorepos, prefix the task with a service directory name to create service-scoped branches:
+
+` + "```" + `sh
+rimba add auth-api/my-feature           # branch: auth-api/feature/my-feature
+rimba add auth-api/my-feature --bugfix  # branch: auth-api/bugfix/my-feature
+rimba list --service auth-api           # filter worktrees by service
+` + "```" + `
+
+**How it works:** rimba auto-detects services — if the first segment before ` + "`" + `/` + "`" + ` matches a directory in the repo root, it becomes the service scope. No configuration needed.
+
+**Branch pattern:** ` + "`" + `<service>/<prefix>/<task>` + "`" + ` (e.g. ` + "`" + `auth-api/feature/my-feature` + "`" + `)
+
+MCP tools also accept ` + "`" + `service/task` + "`" + ` format in the ` + "`" + `task` + "`" + ` parameter.
+
 ## JSON Output
 
 Commands that support ` + "`" + `--json` + "`" + `: list, status, exec, conflict-check, deps status.
@@ -65,6 +81,7 @@ Error: ` + "`" + `{"version": "...", "command": "...", "error": "...", "code": "
 - Prefer ` + "`" + `rimba archive` + "`" + ` over ` + "`" + `rimba remove` + "`" + ` to preserve branches for later reference
 - Use ` + "`" + `--force` + "`" + ` only when you understand the implications (skips dirty checks)
 - Never modify ` + "`" + `.rimba/settings.toml` + "`" + ` programmatically without asking the user
+- Use ` + "`" + `RIMBA_DEBUG=1 rimba <cmd>` + "`" + ` to log git command timing to stderr when troubleshooting
 
 <!-- END RIMBA -->`
 }
@@ -80,8 +97,8 @@ See AGENTS.md at the repo root for full rimba documentation.
 
 ### Key Commands
 
-- ` + "`" + `rimba add <task>` + "`" + ` — create worktree
-- ` + "`" + `rimba list` + "`" + ` / ` + "`" + `rimba status` + "`" + ` — inspect worktrees
+- ` + "`" + `rimba add <task>` + "`" + ` — create worktree (` + "`" + `rimba add service/task` + "`" + ` for monorepos)
+- ` + "`" + `rimba list` + "`" + ` / ` + "`" + `rimba status` + "`" + ` — inspect worktrees (` + "`" + `--service <svc>` + "`" + ` to filter)
 - ` + "`" + `rimba merge <task>` + "`" + ` — merge into main and auto-clean up
 - ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
 - ` + "`" + `rimba exec <cmd>` + "`" + ` — run command across all worktrees
@@ -134,6 +151,7 @@ See AGENTS.md at the repo root for full documentation.
 ## Workflow Recipes
 
 **New feature:** ` + "`" + `rimba add <task>` + "`" + ` then work in the worktree directory.
+**Monorepo feature:** ` + "`" + `rimba add service/task` + "`" + ` — auto-detects service from repo directories.
 **Finish feature:** ` + "`" + `rimba merge <task>` + "`" + ` (auto-removes worktree).
 **Housekeeping:** ` + "`" + `rimba status` + "`" + ` then ` + "`" + `rimba clean --merged` + "`" + `.
 
@@ -173,7 +191,9 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 | User wants to... | Run |
 |-------------------|-----|
 | Start a new task | ` + "`" + `rimba add <task>` + "`" + ` |
+| Start a task in a monorepo service | ` + "`" + `rimba add service/task` + "`" + ` (auto-detects service from repo dirs) |
 | See all worktrees | ` + "`" + `rimba list` + "`" + ` or ` + "`" + `rimba list --json` + "`" + ` |
+| Filter by service (monorepo) | ` + "`" + `rimba list --service <svc>` + "`" + ` |
 | Check worktree health | ` + "`" + `rimba status` + "`" + ` |
 | Navigate to a worktree | ` + "`" + `cd $(rimba open <task>)` + "`" + ` |
 | Update from source branch | ` + "`" + `rimba sync <task>` + "`" + ` or ` + "`" + `rimba sync --all` + "`" + ` |
@@ -194,7 +214,7 @@ Commands supporting ` + "`" + `--json` + "`" + `: ` + "`" + `list` + "`" + `, ` 
 
 ### Data Shapes
 
-**list:** ` + "`" + `[{task, type, branch, path, is_current, status: {dirty, ahead, behind}}]` + "`" + `
+**list:** ` + "`" + `[{task, type, service?, branch, path, is_current, status: {dirty, ahead, behind}}]` + "`" + `
 **status:** ` + "`" + `{summary: {total, dirty, stale, behind}, worktrees: [...], stale_days}` + "`" + `
 **exec:** ` + "`" + `{command, results: [{task, branch, path, exit_code, stdout, stderr}], success}` + "`" + `
 **conflict-check:** ` + "`" + `{overlaps: [{file, branches, severity}], dry_merges?, total_files, total_branches}` + "`" + `
@@ -208,6 +228,8 @@ Commands supporting ` + "`" + `--json` + "`" + `: ` + "`" + `list` + "`" + `, ` 
 | "config not found" | rimba not initialized | Run ` + "`" + `rimba init` + "`" + ` |
 | "branch already exists" | Task name in use | Pick a different task name |
 | "worktree has uncommitted changes" | Dirty worktree | Commit or stash changes, or use ` + "`" + `--force` + "`" + ` |
+
+> **Tip:** Use ` + "`" + `RIMBA_DEBUG=1 rimba <cmd>` + "`" + ` to log git command timing to stderr when troubleshooting performance issues.
 
 ## Best Practices
 

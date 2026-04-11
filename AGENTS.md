@@ -20,7 +20,7 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 
 | Concern | Commands |
 |---------|----------|
-| Create & navigate | `rimba add <task>`, `rimba open <task>` |
+| Create & navigate | `rimba add <task>` (or `rimba add service/task` for monorepos), `rimba open <task>` |
 | Inspect | `rimba list`, `rimba status`, `rimba log` |
 | Sync & merge | `rimba sync [task]`, `rimba merge <task>` |
 | Clean up | `rimba clean --merged`, `rimba archive <task>`, `rimba remove <task>` |
@@ -46,6 +46,22 @@ rimba clean --merged        # remove worktrees whose branches are merged
 rimba merge my-feature      # merge into main and auto-clean up
 ```
 
+## Monorepo (Service-Scoped Worktrees)
+
+In monorepos, prefix the task with a service directory name to create service-scoped branches:
+
+```sh
+rimba add auth-api/my-feature           # branch: auth-api/feature/my-feature
+rimba add auth-api/my-feature --bugfix  # branch: auth-api/bugfix/my-feature
+rimba list --service auth-api           # filter worktrees by service
+```
+
+**How it works:** rimba auto-detects services — if the first segment before `/` matches a directory in the repo root, it becomes the service scope. No configuration needed.
+
+**Branch pattern:** `<service>/<prefix>/<task>` (e.g. `auth-api/feature/my-feature`)
+
+MCP tools also accept `service/task` format in the `task` parameter.
+
 ## JSON Output
 
 Commands that support `--json`: list, status, exec, conflict-check, deps status.
@@ -58,5 +74,6 @@ Error: `{"version": "...", "command": "...", "error": "...", "code": "..."}`
 - Prefer `rimba archive` over `rimba remove` to preserve branches for later reference
 - Use `--force` only when you understand the implications (skips dirty checks)
 - Never modify `.rimba/settings.toml` programmatically without asking the user
+- Use `RIMBA_DEBUG=1 rimba <cmd>` to log git command timing to stderr when troubleshooting
 
 <!-- END RIMBA -->

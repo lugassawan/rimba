@@ -27,6 +27,7 @@ See AGENTS.md at the repo root for full documentation.
 ## Workflow Recipes
 
 **New feature:** `rimba add <task>` then work in the worktree directory.
+**Monorepo feature:** `rimba add service/task` — auto-detects service from repo directories.
 **Finish feature:** `rimba merge <task>` (auto-removes worktree).
 **Housekeeping:** `rimba status` then `rimba clean --merged`.
 
