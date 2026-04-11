@@ -192,8 +192,8 @@ var depsInstallCmd = &cobra.Command{
 
 		s.Start("Installing dependencies...")
 		mgr := &deps.Manager{Runner: r}
-		results := mgr.Install(wt.Path, modules, nil, func(cur, total int, name string) {
-			s.Update(fmt.Sprintf("Installing dependencies... (%s) [%d/%d]", name, cur, total))
+		results := mgr.Install(wt.Path, modules, nil, func(msg string) {
+			s.Update("Installing dependencies... " + msg)
 		})
 		s.Stop()
 

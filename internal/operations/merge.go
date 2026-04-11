@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/progress"
 	"github.com/lugassawan/rimba/internal/resolver"
 )
 
@@ -40,7 +41,7 @@ type dirtyResult struct {
 
 // MergeWorktree merges a source worktree branch into main or another worktree.
 // It handles worktree resolution, concurrent dirty checks, merge execution, and cleanup.
-func MergeWorktree(r git.Runner, params MergeParams, onProgress ProgressFunc) (MergeResult, error) {
+func MergeWorktree(r git.Runner, params MergeParams, onProgress progress.Func) (MergeResult, error) {
 	worktrees, err := ListWorktreeInfos(r)
 	if err != nil {
 		return MergeResult{}, err
@@ -78,13 +79,13 @@ func MergeWorktree(r git.Runner, params MergeParams, onProgress ProgressFunc) (M
 	}
 
 	// Concurrent dirty checks
-	notify(onProgress, "Checking for uncommitted changes...")
+	progress.Notify(onProgress, "Checking for uncommitted changes...")
 	if err := checkDirty(r, source.Path, targetDir, params.SourceTask, params.IntoTask, mergingToMain, targetLabel); err != nil {
 		return result, err
 	}
 
 	// Execute merge
-	notify(onProgress, "Merging...")
+	progress.Notify(onProgress, "Merging...")
 	if err := git.Merge(r, targetDir, source.Branch, params.NoFF); err != nil {
 		return result, fmt.Errorf("merge failed: %w\nTo resolve conflicts: cd %s", err, targetDir)
 	}
@@ -92,7 +93,7 @@ func MergeWorktree(r git.Runner, params MergeParams, onProgress ProgressFunc) (M
 	// Auto-cleanup
 	shouldDelete := (mergingToMain && !params.Keep) || (!mergingToMain && params.Delete)
 	if shouldDelete {
-		notify(onProgress, "Removing worktree...")
+		progress.Notify(onProgress, "Removing worktree...")
 		wtRemoved, brDeleted, rmErr := removeAndCleanup(r, source.Path, source.Branch)
 		result.WorktreeRemoved = wtRemoved
 		result.SourceRemoved = wtRemoved && brDeleted

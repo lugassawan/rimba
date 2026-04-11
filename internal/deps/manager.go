@@ -11,11 +11,8 @@ import (
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/debug"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/progress"
 )
-
-// ProgressFunc is called before each item is processed to report progress.
-// current is 1-based, total is the count of items, name identifies the item.
-type ProgressFunc func(current, total int, name string)
 
 // Manager orchestrates dependency installation for worktrees.
 type Manager struct {
@@ -32,12 +29,12 @@ type InstallResult struct {
 
 // Install clones or installs deps for each module.
 // Pass existingEntries to skip an extra git.ListWorktrees call; nil fetches its own.
-func (m *Manager) Install(worktreePath string, modules []Module, existingEntries []git.WorktreeEntry, onProgress ProgressFunc) []InstallResult {
+func (m *Manager) Install(worktreePath string, modules []Module, existingEntries []git.WorktreeEntry, onProgress progress.Func) []InstallResult {
 	return m.install(worktreePath, "", modules, existingEntries, onProgress)
 }
 
 // InstallPreferSource is like Install but tries sourceWT first when cloning.
-func (m *Manager) InstallPreferSource(worktreePath, sourceWT string, modules []Module, existingEntries []git.WorktreeEntry, onProgress ProgressFunc) []InstallResult {
+func (m *Manager) InstallPreferSource(worktreePath, sourceWT string, modules []Module, existingEntries []git.WorktreeEntry, onProgress progress.Func) []InstallResult {
 	return m.install(worktreePath, sourceWT, modules, existingEntries, onProgress)
 }
 
@@ -66,7 +63,7 @@ func ResolveModules(worktreePath, service string, autoDetect bool, configModules
 	return modules, nil
 }
 
-func (m *Manager) install(worktreePath, sourceWT string, modules []Module, existingEntries []git.WorktreeEntry, onProgress ProgressFunc) []InstallResult {
+func (m *Manager) install(worktreePath, sourceWT string, modules []Module, existingEntries []git.WorktreeEntry, onProgress progress.Func) []InstallResult {
 	defer debug.StartTimer("installing dependencies")()
 	results := make([]InstallResult, 0, len(modules))
 
@@ -92,9 +89,7 @@ func (m *Manager) install(worktreePath, sourceWT string, modules []Module, exist
 	existingPaths := buildExistingPaths(entries, worktreePath, sourceWT)
 
 	for i, mh := range hashed {
-		if onProgress != nil {
-			onProgress(i+1, len(hashed), mh.Module.Dir)
-		}
+		progress.Notifyf(onProgress, "%s (%d/%d)", mh.Module.Dir, i+1, len(hashed))
 		result := m.installModule(worktreePath, mh, existingPaths)
 		results = append(results, result)
 	}

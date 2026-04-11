@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/lugassawan/rimba/internal/progress"
 )
 
 const (
@@ -280,14 +282,14 @@ func TestMergeWorktreeProgressCallbacks(t *testing.T) {
 	r := mergeRunner(nil)
 
 	var messages []string
-	progress := ProgressFunc(func(msg string) { messages = append(messages, msg) })
+	onProgress := progress.Func(func(msg string) { messages = append(messages, msg) })
 
 	_, err := MergeWorktree(r, MergeParams{
 		SourceTask: "login",
 		RepoRoot:   "/repo",
 		MainBranch: "main",
 		Keep:       true,
-	}, progress)
+	}, onProgress)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -4,6 +4,7 @@ import (
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/deps"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/progress"
 )
 
 // DepsParams groups inputs for dependency detection and installation.
@@ -16,7 +17,7 @@ type DepsParams struct {
 }
 
 // InstallDeps detects modules and installs dependencies.
-func InstallDeps(r git.Runner, p DepsParams, onProgress deps.ProgressFunc) []deps.InstallResult {
+func InstallDeps(r git.Runner, p DepsParams, onProgress progress.Func) []deps.InstallResult {
 	existingPaths := WorktreePathsExcluding(p.Entries, p.WtPath)
 
 	modules, err := deps.ResolveModules(p.WtPath, p.Service, p.AutoDetect, p.ConfigModules, existingPaths)
@@ -29,7 +30,7 @@ func InstallDeps(r git.Runner, p DepsParams, onProgress deps.ProgressFunc) []dep
 }
 
 // InstallDepsPreferSource is like InstallDeps but prefers cloning from sourceWT.
-func InstallDepsPreferSource(r git.Runner, sourceWT string, p DepsParams, onProgress deps.ProgressFunc) []deps.InstallResult {
+func InstallDepsPreferSource(r git.Runner, sourceWT string, p DepsParams, onProgress progress.Func) []deps.InstallResult {
 	existingPaths := WorktreePathsExcluding(p.Entries, p.WtPath)
 
 	modules, err := deps.ResolveModules(p.WtPath, p.Service, p.AutoDetect, p.ConfigModules, existingPaths)
@@ -42,7 +43,7 @@ func InstallDepsPreferSource(r git.Runner, sourceWT string, p DepsParams, onProg
 }
 
 // RunPostCreateHooks executes post-create hooks and returns the results.
-func RunPostCreateHooks(wtPath string, hooks []string, onProgress deps.ProgressFunc) []deps.HookResult {
+func RunPostCreateHooks(wtPath string, hooks []string, onProgress progress.Func) []deps.HookResult {
 	return deps.RunPostCreateHooks(wtPath, hooks, onProgress)
 }
 

@@ -7,6 +7,7 @@ import (
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/deps"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/progress"
 	"github.com/lugassawan/rimba/internal/resolver"
 )
 
@@ -40,7 +41,7 @@ type AddResult struct {
 }
 
 // AddWorktree creates a new worktree, copies files, installs deps, and runs hooks.
-func AddWorktree(r git.Runner, params AddParams, onProgress ProgressFunc) (AddResult, error) {
+func AddWorktree(r git.Runner, params AddParams, onProgress progress.Func) (AddResult, error) {
 	branch := resolver.FullBranchName(params.Service, params.Prefix, params.Task)
 	wtPath := resolver.WorktreePath(params.WorktreeDir, branch)
 
@@ -61,7 +62,7 @@ func AddWorktree(r git.Runner, params AddParams, onProgress ProgressFunc) (AddRe
 	}
 
 	// Create worktree
-	notify(onProgress, "Creating worktree...")
+	progress.Notify(onProgress, "Creating worktree...")
 	if err := git.AddWorktree(r, wtPath, branch, params.Source); err != nil {
 		return result, err
 	}
