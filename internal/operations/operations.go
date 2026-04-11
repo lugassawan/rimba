@@ -51,7 +51,6 @@ func FindWorktree(r git.Runner, service, task string) (resolver.WorktreeInfo, er
 	prefixes := resolver.AllPrefixes()
 	wt, found := resolver.FindBranchForTask(service, task, worktrees, prefixes)
 	if !found {
-		// Check for ambiguity
 		if service == "" {
 			matches := resolver.FindAllBranchesForTask(task, worktrees, prefixes)
 			if len(matches) > 1 {

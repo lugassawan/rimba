@@ -55,7 +55,6 @@ var duplicateCmd = &cobra.Command{
 			return fmt.Errorf("cannot duplicate the default branch %q; use 'rimba add' instead", cfg.DefaultSource)
 		}
 
-		// Extract service and prefix from source branch
 		svc, _, matchedPrefix := resolver.ServiceFromBranch(wt.Branch, prefixes)
 		if matchedPrefix == "" {
 			matchedPrefix, _ = resolver.PrefixString(resolver.DefaultPrefixType)

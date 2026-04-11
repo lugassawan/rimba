@@ -39,13 +39,12 @@ func SanitizeTask(task string) string {
 // "auth-api/feature/auth-redirect" → ("auth-api", "auth-redirect", "feature/")
 // "feature/auth-redirect"          → ("", "auth-redirect", "feature/")
 func ServiceFromBranch(branch string, prefixes []string) (service, task, matchedPrefix string) {
-	// Try direct prefix match first (standard mode)
 	for _, p := range prefixes {
 		if t, ok := strings.CutPrefix(branch, p); ok {
 			return "", t, p
 		}
 	}
-	// Try service/prefix/task pattern (monorepo mode)
+
 	if i := strings.Index(branch, "/"); i > 0 {
 		rest := branch[i+1:]
 		for _, p := range prefixes {
@@ -84,7 +83,7 @@ func TaskFromBranch(branch string, prefixes []string) (task, matchedPrefix strin
 type WorktreeInfo struct {
 	Path    string
 	Branch  string
-	Service string // extracted from branch, empty for standard
+	Service string
 }
 
 // FindBranchForTask searches worktrees for one matching the given service and task.
@@ -92,17 +91,14 @@ type WorktreeInfo struct {
 // When service is empty, it searches for prefix/task patterns and falls back
 // to a cross-service task search (returning the match only if unambiguous).
 func FindBranchForTask(service, task string, worktrees []WorktreeInfo, prefixes []string) (WorktreeInfo, bool) {
-	// Try prefix-based match (with or without service)
 	if wt, ok := findByPrefix(service, task, worktrees, prefixes); ok {
 		return wt, true
 	}
 
-	// Fallback: exact branch name match
 	if wt, ok := findExact(task, worktrees); ok {
 		return wt, true
 	}
 
-	// Fallback: task-only search across all services (monorepo convenience)
 	if service == "" {
 		matches := FindAllBranchesForTask(task, worktrees, prefixes)
 		if len(matches) == 1 {

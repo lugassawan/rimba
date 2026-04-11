@@ -66,7 +66,6 @@ func listWorktreeInfos(r git.Runner) ([]resolver.WorktreeInfo, error) {
 func findWorktree(r git.Runner, input string) (resolver.WorktreeInfo, error) {
 	repoRoot, err := git.MainRepoRoot(r)
 	if err != nil {
-		// Fallback: try without service resolution
 		return operations.FindWorktree(r, "", input)
 	}
 	service, task := operations.ResolveTaskInput(input, repoRoot)

@@ -37,8 +37,6 @@ var addCmd = &cobra.Command{
 		service, task := operations.ResolveTaskInput(args[0], repoRoot)
 		prefix := resolvedPrefixString(cmd)
 
-		// If no explicit prefix flag was set and the input starts with a known prefix,
-		// use that prefix from the input
 		if !hasExplicitPrefixFlag(cmd) {
 			if candidate, _ := resolver.SplitServiceInput(args[0]); resolver.ValidPrefixType(candidate) {
 				if p, ok := resolver.PrefixString(resolver.PrefixType(candidate)); ok {

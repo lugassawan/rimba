@@ -147,7 +147,6 @@ var listCmd = &cobra.Command{
 
 		rows = operations.FilterDetailsByStatus(rows, listDirty, listBehind)
 
-		// Filter by service
 		if listService != "" {
 			var filtered []resolver.WorktreeDetail
 			for _, row := range rows {
@@ -186,7 +185,6 @@ var listCmd = &cobra.Command{
 			return output.WriteJSON(cmd.OutOrStdout(), version, "list", items)
 		}
 
-		// Detect if any worktree has a service (monorepo mode)
 		hasService := false
 		for _, row := range rows {
 			if row.Service != "" {
