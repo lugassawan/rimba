@@ -6,31 +6,39 @@ import (
 	"github.com/lugassawan/rimba/internal/git"
 )
 
-// InstallDeps detects modules and installs dependencies, returning the results.
-// existingEntries should contain the current worktree list to avoid a redundant git call.
-func InstallDeps(r git.Runner, wtPath string, autoDetect bool, configModules []config.ModuleConfig, existingEntries []git.WorktreeEntry, onProgress deps.ProgressFunc) []deps.InstallResult {
-	existingPaths := WorktreePathsExcluding(existingEntries, wtPath)
+// DepsParams groups inputs for dependency detection and installation.
+type DepsParams struct {
+	WtPath        string
+	Service       string
+	AutoDetect    bool
+	ConfigModules []config.ModuleConfig
+	Entries       []git.WorktreeEntry
+}
 
-	modules, err := deps.ResolveModules(wtPath, autoDetect, configModules, existingPaths)
+// InstallDeps detects modules and installs dependencies.
+func InstallDeps(r git.Runner, p DepsParams, onProgress deps.ProgressFunc) []deps.InstallResult {
+	existingPaths := WorktreePathsExcluding(p.Entries, p.WtPath)
+
+	modules, err := deps.ResolveModules(p.WtPath, p.Service, p.AutoDetect, p.ConfigModules, existingPaths)
 	if err != nil || len(modules) == 0 {
 		return nil
 	}
 
 	mgr := &deps.Manager{Runner: r}
-	return mgr.Install(wtPath, modules, onProgress)
+	return mgr.Install(p.WtPath, modules, p.Entries, onProgress)
 }
 
 // InstallDepsPreferSource is like InstallDeps but prefers cloning from sourceWT.
-func InstallDepsPreferSource(r git.Runner, wtPath, sourceWT string, autoDetect bool, configModules []config.ModuleConfig, existingEntries []git.WorktreeEntry, onProgress deps.ProgressFunc) []deps.InstallResult {
-	existingPaths := WorktreePathsExcluding(existingEntries, wtPath)
+func InstallDepsPreferSource(r git.Runner, sourceWT string, p DepsParams, onProgress deps.ProgressFunc) []deps.InstallResult {
+	existingPaths := WorktreePathsExcluding(p.Entries, p.WtPath)
 
-	modules, err := deps.ResolveModules(wtPath, autoDetect, configModules, existingPaths)
+	modules, err := deps.ResolveModules(p.WtPath, p.Service, p.AutoDetect, p.ConfigModules, existingPaths)
 	if err != nil || len(modules) == 0 {
 		return nil
 	}
 
 	mgr := &deps.Manager{Runner: r}
-	return mgr.InstallPreferSource(wtPath, sourceWT, modules, onProgress)
+	return mgr.InstallPreferSource(p.WtPath, sourceWT, modules, p.Entries, onProgress)
 }
 
 // RunPostCreateHooks executes post-create hooks and returns the results.

@@ -4,6 +4,7 @@ import (
 	"io"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/debug"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/output"
@@ -15,8 +16,9 @@ import (
 
 // newRunner creates a git.Runner for command execution.
 // Defined as a variable to allow test overrides (same pattern as newUpdater).
+// When RIMBA_DEBUG is set, wraps the runner with timing instrumentation.
 var newRunner = func() git.Runner {
-	return &git.ExecRunner{}
+	return debug.WrapRunner(&git.ExecRunner{})
 }
 
 // hintPainter returns a termcolor.Painter derived from the cobra command flags.

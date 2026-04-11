@@ -69,9 +69,9 @@ var presets = []preset{
 	},
 }
 
-// DetectModules scans a worktree path for known lockfiles and returns matching modules.
-// It scans the root directory first, then depth-1 subdirectories.
-func DetectModules(worktreePath string) ([]Module, error) {
+// DetectModules scans a worktree for known lockfiles. Root is always scanned.
+// When service is non-empty, only that subdirectory is checked instead of all depth-1 dirs.
+func DetectModules(worktreePath, service string) ([]Module, error) {
 	var modules []Module
 	seenDirs := make(map[string]bool)
 
@@ -79,7 +79,7 @@ func DetectModules(worktreePath string) ([]Module, error) {
 	modules = detectRootModules(worktreePath, modules, seenDirs)
 
 	// Phase 2: Scan depth-1 subdirectories for lockfiles
-	modules = detectSubdirModules(worktreePath, modules, seenDirs)
+	modules = detectSubdirModules(worktreePath, service, modules, seenDirs)
 
 	return modules, nil
 }
@@ -149,7 +149,11 @@ func detectRootModules(worktreePath string, modules []Module, seenDirs map[strin
 	return modules
 }
 
-func detectSubdirModules(worktreePath string, modules []Module, seenDirs map[string]bool) []Module {
+func detectSubdirModules(worktreePath, service string, modules []Module, seenDirs map[string]bool) []Module {
+	if service != "" {
+		return matchPresetsInSubdir(worktreePath, service, modules, seenDirs)
+	}
+
 	entries, err := os.ReadDir(worktreePath)
 	if err != nil {
 		return modules

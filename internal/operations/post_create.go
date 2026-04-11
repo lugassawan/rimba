@@ -15,6 +15,7 @@ type PostCreateParams struct {
 	RepoRoot      string
 	WtPath        string
 	Task          string // for error messages
+	Service       string // monorepo service name; scopes dep detection to this subdir
 	CopyFiles     []string
 	SkipDeps      bool
 	AutoDetect    bool
@@ -54,10 +55,17 @@ func PostCreateSetup(r git.Runner, params PostCreateParams, onProgress ProgressF
 			return result, fmt.Errorf("failed to list worktrees for dependency setup: %w", err)
 		}
 
+		dp := DepsParams{
+			WtPath:        params.WtPath,
+			Service:       params.Service,
+			AutoDetect:    params.AutoDetect,
+			ConfigModules: params.ConfigModules,
+			Entries:       wtEntries,
+		}
 		if params.SourcePath != "" {
-			result.DepsResults = InstallDepsPreferSource(r, params.WtPath, params.SourcePath, params.AutoDetect, params.ConfigModules, wtEntries, nil)
+			result.DepsResults = InstallDepsPreferSource(r, params.SourcePath, dp, nil)
 		} else {
-			result.DepsResults = InstallDeps(r, params.WtPath, params.AutoDetect, params.ConfigModules, wtEntries, nil)
+			result.DepsResults = InstallDeps(r, dp, nil)
 		}
 	}
 

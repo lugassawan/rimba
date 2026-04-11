@@ -119,6 +119,7 @@ var duplicateCmd = &cobra.Command{
 			RepoRoot:      repoRoot,
 			WtPath:        wtPath,
 			Task:          newTask,
+			Service:       svc,
 			CopyFiles:     cfg.CopyFiles,
 			SkipDeps:      skipDeps,
 			AutoDetect:    cfg.IsAutoDetectDeps(),
