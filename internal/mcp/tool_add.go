@@ -81,6 +81,7 @@ func handleAdd(hctx *HandlerContext) server.ToolHandlerFunc {
 			ConfigModules: configModules,
 			SkipHooks:     req.GetBool("skip_hooks", false),
 			PostCreate:    cfg.PostCreate,
+			Concurrency:   cfg.DepsConcurrency(),
 		}, nil)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil

@@ -25,6 +25,7 @@ type AddParams struct {
 	ConfigModules []config.ModuleConfig
 	SkipHooks     bool
 	PostCreate    []string // hook commands
+	Concurrency   int      // max parallel module installs; 0 = Manager default
 }
 
 // AddResult holds the outcome of creating a worktree.
@@ -79,6 +80,7 @@ func AddWorktree(r git.Runner, params AddParams, onProgress progress.Func) (AddR
 		ConfigModules: params.ConfigModules,
 		SkipHooks:     params.SkipHooks,
 		PostCreate:    params.PostCreate,
+		Concurrency:   params.Concurrency,
 	}, onProgress)
 	if err != nil {
 		return result, err

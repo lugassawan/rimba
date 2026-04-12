@@ -81,6 +81,7 @@ var addCmd = &cobra.Command{
 			ConfigModules: configModules,
 			SkipHooks:     skipHooks,
 			PostCreate:    cfg.PostCreate,
+			Concurrency:   cfg.DepsConcurrency(),
 		}, func(msg string) { s.Update(msg) })
 		if err != nil {
 			return err

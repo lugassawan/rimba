@@ -14,6 +14,7 @@ type DepsParams struct {
 	AutoDetect    bool
 	ConfigModules []config.ModuleConfig
 	Entries       []git.WorktreeEntry
+	Concurrency   int
 }
 
 // InstallDeps detects modules and installs dependencies.
@@ -25,7 +26,7 @@ func InstallDeps(r git.Runner, p DepsParams, onProgress progress.Func) []deps.In
 		return nil
 	}
 
-	mgr := &deps.Manager{Runner: r}
+	mgr := &deps.Manager{Runner: r, Concurrency: p.Concurrency}
 	return mgr.Install(p.WtPath, modules, p.Entries, onProgress)
 }
 
@@ -38,7 +39,7 @@ func InstallDepsPreferSource(r git.Runner, sourceWT string, p DepsParams, onProg
 		return nil
 	}
 
-	mgr := &deps.Manager{Runner: r}
+	mgr := &deps.Manager{Runner: r, Concurrency: p.Concurrency}
 	return mgr.InstallPreferSource(p.WtPath, sourceWT, modules, p.Entries, onProgress)
 }
 

@@ -4,6 +4,7 @@ import "fmt"
 
 // Func is called to report operation progress.
 // CLI wires this to spinner updates; MCP passes nil.
+// Implementations must be goroutine-safe.
 type Func func(message string)
 
 // Notify safely invokes fn if non-nil.

@@ -113,7 +113,7 @@ func (s *Spinner) animate() {
 		msg := s.msg
 		s.mu.Unlock()
 
-		fmt.Fprintf(s.w, "\r%s %s", frames[i%len(frames)], msg)
+		fmt.Fprintf(s.w, "\r%s %s\033[K", frames[i%len(frames)], msg)
 
 		select {
 		case <-s.stopCh:

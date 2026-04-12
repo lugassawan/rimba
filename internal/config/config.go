@@ -33,6 +33,8 @@ type Config struct {
 type DepsConfig struct {
 	AutoDetect *bool          `toml:"auto_detect,omitempty"`
 	Modules    []ModuleConfig `toml:"modules,omitempty"`
+	// Concurrency caps parallel module installs. 0 = auto.
+	Concurrency int `toml:"concurrency,omitempty"`
 }
 
 // ModuleConfig defines a manually configured dependency module.
@@ -50,6 +52,14 @@ func (c *Config) IsAutoDetectDeps() bool {
 		return true
 	}
 	return *c.Deps.AutoDetect
+}
+
+// DepsConcurrency returns the configured install concurrency, or 0 if unset.
+func (c *Config) DepsConcurrency() int {
+	if c.Deps == nil {
+		return 0
+	}
+	return c.Deps.Concurrency
 }
 
 // DefaultWorktreeDir returns the conventional worktree directory path for a repo.

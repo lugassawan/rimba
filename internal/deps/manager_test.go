@@ -2,9 +2,12 @@ package deps
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/config"
@@ -747,14 +750,18 @@ func TestInstallProgressCallback(t *testing.T) {
 	writeFile(t, newWT, LockfilePnpm, "lock-content")
 
 	runner := &mockRunner{worktreeOutput: mockWorktreeList(newWT)}
-	mgr := &Manager{Runner: runner}
+	// Force sequential so progress messages appear in a predictable order.
+	mgr := &Manager{Runner: runner, Concurrency: 1}
 	modules := []Module{
 		{Dir: DirNodeModules, Lockfile: LockfilePnpm, InstallCmd: "echo ok"},
 		{Dir: DirVendor, Lockfile: LockfileGo},
 	}
 
+	var mu sync.Mutex
 	var calls []progressCall
 	onProgress := func(msg string) {
+		mu.Lock()
+		defer mu.Unlock()
 		calls = append(calls, progressCall{msg})
 	}
 
@@ -763,11 +770,104 @@ func TestInstallProgressCallback(t *testing.T) {
 	if len(calls) != 2 {
 		t.Fatalf("expected 2 progress calls, got %d", len(calls))
 	}
-	if want := DirNodeModules + " (1/2)"; calls[0].message != want {
+	if want := "1/2 complete"; calls[0].message != want {
 		t.Errorf("calls[0] = %q, want %q", calls[0].message, want)
 	}
-	if want := DirVendor + " (2/2)"; calls[1].message != want {
+	if want := "2/2 complete"; calls[1].message != want {
 		t.Errorf("calls[1] = %q, want %q", calls[1].message, want)
+	}
+}
+
+func TestInstallPreservesOrderWhenParallel(t *testing.T) {
+	// Use distinct InstallCmds with different sleep durations so completion
+	// order differs from input order. Results must still match input order.
+	newWT := t.TempDir()
+	writeFile(t, newWT, LockfilePnpm, "lock")
+
+	runner := &mockRunner{worktreeOutput: mockWorktreeList(newWT)}
+	mgr := &Manager{Runner: runner, Concurrency: 4}
+
+	// Create unique WorkDir subdirectories so each module runs in its own dir.
+	modules := make([]Module, 5)
+	for i := range modules {
+		sub := fmt.Sprintf("m%d", i)
+		if err := os.MkdirAll(filepath.Join(newWT, sub), 0755); err != nil {
+			t.Fatal(err)
+		}
+		// Earlier modules sleep longer so they complete last.
+		sleep := strconv.Itoa(5 - i) // module 0 sleeps 5cs, module 4 sleeps 1cs
+		modules[i] = Module{
+			Dir:        sub,
+			Lockfile:   LockfilePnpm,
+			InstallCmd: fmt.Sprintf("sleep 0.0%s && echo %s", sleep, sub),
+			WorkDir:    sub,
+		}
+	}
+
+	results := mgr.Install(newWT, modules, nil, nil)
+
+	if len(results) != len(modules) {
+		t.Fatalf("expected %d results, got %d", len(modules), len(results))
+	}
+	for i, r := range results {
+		if r.Module.Dir != modules[i].Dir {
+			t.Errorf("results[%d].Module.Dir = %q, want %q (order not preserved)",
+				i, r.Module.Dir, modules[i].Dir)
+		}
+		if r.Error != nil {
+			t.Errorf("results[%d] unexpected error: %v", i, r.Error)
+		}
+	}
+}
+
+func TestInstallParallelErrorIsolation(t *testing.T) {
+	// One failing module must not prevent others from running.
+	newWT := t.TempDir()
+	writeFile(t, newWT, LockfilePnpm, "lock")
+
+	runner := &mockRunner{worktreeOutput: mockWorktreeList(newWT)}
+	mgr := &Manager{Runner: runner, Concurrency: 3}
+
+	for _, sub := range []string{"a", "b", "c"} {
+		if err := os.MkdirAll(filepath.Join(newWT, sub), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	modules := []Module{
+		{Dir: "a", Lockfile: LockfilePnpm, InstallCmd: "echo ok-a", WorkDir: "a"},
+		{Dir: "b", Lockfile: LockfilePnpm, InstallCmd: "/nonexistent-xyz-command", WorkDir: "b"},
+		{Dir: "c", Lockfile: LockfilePnpm, InstallCmd: "echo ok-c", WorkDir: "c"},
+	}
+
+	results := mgr.Install(newWT, modules, nil, nil)
+
+	if len(results) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(results))
+	}
+	if results[0].Error != nil {
+		t.Errorf("module a: unexpected error %v", results[0].Error)
+	}
+	if results[1].Error == nil {
+		t.Error("module b: expected error for nonexistent command, got nil")
+	}
+	if results[2].Error != nil {
+		t.Errorf("module c: unexpected error %v", results[2].Error)
+	}
+}
+
+func TestManagerResolveConcurrencyExplicit(t *testing.T) {
+	m := &Manager{Concurrency: 7}
+	if got := m.resolveConcurrency(); got != 7 {
+		t.Errorf("resolveConcurrency() = %d, want 7", got)
+	}
+}
+
+func TestManagerResolveConcurrencyAuto(t *testing.T) {
+	m := &Manager{} // Concurrency == 0
+	got := m.resolveConcurrency()
+	if got < 1 || got > defaultDepsConcurrencyCap {
+		t.Errorf("resolveConcurrency() = %d, want in [1, %d]", got, defaultDepsConcurrencyCap)
 	}
 }
 
