@@ -1,10 +1,13 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
+	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/executor"
 	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/resolver"
@@ -275,4 +278,204 @@ func TestExecTypeFlagCompletion(t *testing.T) {
 
 func testExecSpinner(cmd *cobra.Command) *spinner.Spinner {
 	return spinner.New(spinnerOpts(cmd))
+}
+
+func TestExecReadFlags(t *testing.T) {
+	const typeFeature = "feature"
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool(flagAll, false, "")
+	cmd.Flags().String(flagType, "", "")
+	cmd.Flags().Bool(flagDirty, false, "")
+	cmd.Flags().Bool(flagFailFast, false, "")
+	cmd.Flags().Int(flagConcurrency, 0, "")
+	if err := cmd.ParseFlags([]string{"--all", "--type", typeFeature, "--dirty", "--fail-fast", "--concurrency", "4"}); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	opts := execReadFlags(cmd)
+	if !opts.all || opts.typeFilter != typeFeature || !opts.dirty || !opts.failFast || opts.concurrency != 4 {
+		t.Errorf("unexpected opts: %+v", opts)
+	}
+}
+
+func TestExecValidateFlagsNeedsAllOrType(t *testing.T) {
+	if err := execValidateFlags(execOpts{}); err == nil {
+		t.Error("expected error when neither --all nor --type set")
+	}
+}
+
+func TestExecValidateFlagsInvalidType(t *testing.T) {
+	err := execValidateFlags(execOpts{typeFilter: "nope"})
+	if err == nil || !strings.Contains(err.Error(), "invalid type") {
+		t.Errorf("expected invalid type error, got %v", err)
+	}
+}
+
+func TestExecValidateFlagsOK(t *testing.T) {
+	if err := execValidateFlags(execOpts{all: true}); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if err := execValidateFlags(execOpts{typeFilter: "feature"}); err != nil {
+		t.Errorf("unexpected error for valid type: %v", err)
+	}
+}
+
+func TestExecBuildTargets(t *testing.T) {
+	wts := []resolver.WorktreeInfo{
+		{Branch: "feature/foo", Path: "/tmp/foo"},
+		{Branch: "bugfix/bar", Path: "/tmp/bar"},
+	}
+	targets := execBuildTargets(wts, resolver.AllPrefixes())
+	if len(targets) != 2 {
+		t.Fatalf("got %d targets, want 2", len(targets))
+	}
+	if targets[0].Task != "foo" || targets[0].Path != "/tmp/foo" {
+		t.Errorf("target[0] = %+v", targets[0])
+	}
+	if targets[1].Task != "bar" {
+		t.Errorf("target[1].Task = %q, want bar", targets[1].Task)
+	}
+}
+
+func TestExecRenderJSONSuccess(t *testing.T) {
+	cmd := &cobra.Command{}
+	var buf strings.Builder
+	cmd.SetOut(&buf)
+	results := []executor.Result{
+		{Target: executor.Target{Task: "foo", Branch: "feature/foo", Path: "/tmp/foo"}, ExitCode: 0, Stdout: []byte("hi")},
+	}
+	if err := execRenderJSON(cmd, "echo hi", results); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	var data map[string]any
+	if err := json.Unmarshal([]byte(buf.String()), &data); err != nil {
+		t.Fatalf("invalid json: %v", err)
+	}
+}
+
+func TestExecRenderJSONFailureReturnsSilentError(t *testing.T) {
+	cmd := &cobra.Command{}
+	var buf strings.Builder
+	cmd.SetOut(&buf)
+	results := []executor.Result{
+		{Target: executor.Target{Task: "foo", Branch: "feature/foo"}, ExitCode: 1},
+	}
+	err := execRenderJSON(cmd, "false", results)
+	if err == nil {
+		t.Fatal("expected SilentError on failure")
+	}
+	var se *output.SilentError
+	if !errors.As(err, &se) || se.ExitCode != 1 {
+		t.Errorf("expected SilentError exit=1, got %#v", err)
+	}
+}
+
+func TestExecRenderTextFailureReturnsError(t *testing.T) {
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool(flagNoColor, true, "")
+	_ = cmd.ParseFlags([]string{"--no-color"})
+	var buf strings.Builder
+	cmd.SetOut(&buf)
+	results := []executor.Result{
+		{Target: executor.Target{Task: "foo", Branch: "feature/foo"}, ExitCode: 1},
+	}
+	if err := execRenderText(cmd, results, resolver.AllPrefixes()); err == nil {
+		t.Error("expected error on non-zero exit")
+	}
+}
+
+func TestExecRenderTextSuccess(t *testing.T) {
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool(flagNoColor, true, "")
+	_ = cmd.ParseFlags([]string{"--no-color"})
+	var buf strings.Builder
+	cmd.SetOut(&buf)
+	results := []executor.Result{
+		{Target: executor.Target{Task: "foo", Branch: "feature/foo"}, ExitCode: 0},
+	}
+	if err := execRenderText(cmd, results, resolver.AllPrefixes()); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestExecSelectWorktreesListError(t *testing.T) {
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return "", errGitFailed },
+		runInDir: noopRunInDir,
+	}
+	cmd, _ := newTestCmd()
+	cmd.SetContext(config.WithConfig(context.Background(), &config.Config{DefaultSource: "main"}))
+	s := spinner.New(spinnerOpts(cmd))
+	_, err := execSelectWorktrees(cmd, r, s, execOpts{all: true}, resolver.AllPrefixes())
+	if err == nil {
+		t.Fatal("expected error from listWorktreeInfos")
+	}
+}
+
+func TestExecSelectWorktreesTypeFilter(t *testing.T) {
+	porcelain := strings.Join([]string{
+		"worktree /repo",
+		"HEAD abc",
+		"branch refs/heads/main",
+		"",
+		"worktree /wt/foo",
+		"HEAD def",
+		"branch refs/heads/feature/foo",
+		"",
+		"worktree /wt/bar",
+		"HEAD ghi",
+		"branch refs/heads/bugfix/bar",
+		"",
+	}, "\n")
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return porcelain, nil },
+		runInDir: noopRunInDir,
+	}
+	cmd, _ := newTestCmd()
+	cmd.SetContext(config.WithConfig(context.Background(), &config.Config{DefaultSource: "main"}))
+	s := spinner.New(spinnerOpts(cmd))
+	got, err := execSelectWorktrees(cmd, r, s, execOpts{typeFilter: "feature"}, resolver.AllPrefixes())
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if len(got) != 1 || got[0].Branch != "feature/foo" {
+		t.Errorf("got %+v, want one feature worktree", got)
+	}
+}
+
+func TestExecSelectWorktreesAllEligible(t *testing.T) {
+	porcelain := strings.Join([]string{
+		"worktree /repo",
+		"HEAD abc",
+		"branch refs/heads/main",
+		"",
+		"worktree /wt/foo",
+		"HEAD def",
+		"branch refs/heads/feature/foo",
+		"",
+	}, "\n")
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return porcelain, nil },
+		runInDir: noopRunInDir,
+	}
+	cmd, _ := newTestCmd()
+	cmd.SetContext(config.WithConfig(context.Background(), &config.Config{DefaultSource: "main"}))
+	s := spinner.New(spinnerOpts(cmd))
+	got, err := execSelectWorktrees(cmd, r, s, execOpts{all: true}, resolver.AllPrefixes())
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if len(got) == 0 {
+		t.Error("expected at least one eligible worktree")
+	}
+}
+
+func TestExecShowHintsNoJSON(t *testing.T) {
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool(flagJSON, false, "")
+	cmd.Flags().Bool(flagNoColor, true, "")
+	_ = cmd.ParseFlags([]string{"--no-color"})
+	var buf strings.Builder
+	cmd.SetErr(&buf)
+	cmd.SetOut(&buf)
+	execShowHints(cmd) // should not panic; output goes to stderr for hint pkg
 }
