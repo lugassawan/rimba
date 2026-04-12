@@ -6,17 +6,30 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync/atomic"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/debug"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/progress"
 )
+
+// defaultDepsConcurrencyCap bounds the auto-selected worker pool.
+// Package-manager global stores (pnpm, npm) serialize on their own locks,
+// so going wider than this rarely helps and can starve CPU on small machines.
+const defaultDepsConcurrencyCap = 4
 
 // Manager orchestrates dependency installation for worktrees.
 type Manager struct {
 	Runner git.Runner
+
+	// Concurrency is the max number of modules installed in parallel.
+	// When <= 0, the Manager auto-picks min(runtime.NumCPU(), 4).
+	// Set to 1 to force sequential installation.
+	Concurrency int
 }
 
 // InstallResult holds the outcome of installing a single module.
@@ -88,13 +101,25 @@ func (m *Manager) install(worktreePath, sourceWT string, modules []Module, exist
 
 	existingPaths := buildExistingPaths(entries, worktreePath, sourceWT)
 
-	for i, mh := range hashed {
-		progress.Notifyf(onProgress, "%s (%d/%d)", mh.Module.Dir, i+1, len(hashed))
-		result := m.installModule(worktreePath, mh, existingPaths)
-		results = append(results, result)
-	}
+	concurrency := m.resolveConcurrency()
+	var done atomic.Int32
+	total := len(hashed)
+
+	results = parallel.Collect(total, concurrency, func(i int) InstallResult {
+		res := m.installModule(worktreePath, hashed[i], existingPaths)
+		completed := done.Add(1)
+		progress.Notifyf(onProgress, "%d/%d complete", completed, total)
+		return res
+	})
 
 	return results
+}
+
+func (m *Manager) resolveConcurrency() int {
+	if m.Concurrency >= 1 {
+		return m.Concurrency
+	}
+	return max(1, min(runtime.NumCPU(), defaultDepsConcurrencyCap))
 }
 
 func buildExistingPaths(entries []git.WorktreeEntry, exclude, preferred string) []string {
