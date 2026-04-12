@@ -479,3 +479,17 @@ func TestExecShowHintsNoJSON(t *testing.T) {
 	cmd.SetOut(&buf)
 	execShowHints(cmd) // should not panic; output goes to stderr for hint pkg
 }
+
+func TestExecShowHintsJSONEarlyReturn(t *testing.T) {
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool(flagJSON, true, "")
+	cmd.Flags().Bool(flagNoColor, true, "")
+	_ = cmd.ParseFlags([]string{"--json", "--no-color"})
+	var buf strings.Builder
+	cmd.SetErr(&buf)
+	cmd.SetOut(&buf)
+	execShowHints(cmd)
+	if buf.Len() != 0 {
+		t.Errorf("expected no output in JSON mode, got %q", buf.String())
+	}
+}
