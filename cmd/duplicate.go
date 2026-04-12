@@ -127,6 +127,7 @@ var duplicateCmd = &cobra.Command{
 			SkipHooks:     skipHooks,
 			PostCreate:    cfg.PostCreate,
 			SourcePath:    wt.Path,
+			Concurrency:   cfg.DepsConcurrency(),
 		}, func(msg string) { s.Update(msg) })
 		if err != nil {
 			return err

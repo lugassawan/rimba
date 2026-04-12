@@ -24,6 +24,7 @@ type PostCreateParams struct {
 	SkipHooks     bool
 	PostCreate    []string // hook commands
 	SourcePath    string   // if non-empty, prefer copying deps from this worktree
+	Concurrency   int      // max parallel module installs; 0 = Manager default
 }
 
 // PostCreateResult holds the outcome of the post-create setup sequence.
@@ -62,6 +63,7 @@ func PostCreateSetup(r git.Runner, params PostCreateParams, onProgress progress.
 			AutoDetect:    params.AutoDetect,
 			ConfigModules: params.ConfigModules,
 			Entries:       wtEntries,
+			Concurrency:   params.Concurrency,
 		}
 		if params.SourcePath != "" {
 			result.DepsResults = InstallDepsPreferSource(r, params.SourcePath, dp, onProgress)
