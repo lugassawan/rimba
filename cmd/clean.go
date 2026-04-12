@@ -104,52 +104,55 @@ func cleanMerged(cmd *cobra.Command, r git.Runner) error {
 	s := spinner.New(spinnerOpts(cmd))
 	defer s.Stop()
 
-	// Fetch latest (non-fatal)
-	mergeRef := mainBranch
-	s.Start("Fetching from origin...")
-	if err := git.Fetch(r, "origin"); err != nil {
-		s.Stop()
-		fmt.Fprintf(cmd.OutOrStdout(), "Warning: fetch failed (no remote?): continuing with local state\n")
-	} else {
-		mergeRef = "origin/" + mainBranch
-	}
+	mergeRef := cleanFetchMergeRef(cmd, r, s, mainBranch)
 
 	s.Update("Analyzing branches...")
 	mergedResult, err := operations.FindMergedCandidates(r, mergeRef, mainBranch)
 	if err != nil {
 		return err
 	}
-
 	s.Stop()
 
 	printWarnings(cmd, mergedResult.Warnings)
-
 	if len(mergedResult.Candidates) == 0 {
 		fmt.Fprintln(cmd.OutOrStdout(), "No merged worktrees found.")
 		return nil
 	}
 
 	printMergedCandidates(cmd, mergedResult.Candidates)
-
 	if dryRun {
 		return nil
 	}
-
 	if !force && !confirmRemoval(cmd, len(mergedResult.Candidates), "merged") {
 		fmt.Fprintln(cmd.OutOrStdout(), "Aborted.")
 		return nil
 	}
 
+	removed := cleanRemoveCandidates(cmd, r, s, mergedResult.Candidates)
+	fmt.Fprintf(cmd.OutOrStdout(), "Cleaned %d merged worktree(s).\n", removed)
+	return nil
+}
+
+// cleanFetchMergeRef fetches from origin and returns the ref to diff against.
+// Falls back to local mainBranch (with a warning) when fetch fails.
+func cleanFetchMergeRef(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, mainBranch string) string {
+	s.Start("Fetching from origin...")
+	if err := git.Fetch(r, "origin"); err != nil {
+		s.Stop()
+		fmt.Fprintf(cmd.OutOrStdout(), "Warning: fetch failed (no remote?): continuing with local state\n")
+		return mainBranch
+	}
+	return "origin/" + mainBranch
+}
+
+func cleanRemoveCandidates(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, candidates []operations.CleanCandidate) int {
 	s.Start("Removing worktrees...")
-	items := operations.RemoveCandidates(r, mergedResult.Candidates, func(msg string) {
+	items := operations.RemoveCandidates(r, candidates, func(msg string) {
 		s.Update(msg)
 	})
 	s.Stop()
 	printCleanedItems(cmd, items)
-
-	removed := countRemoved(items)
-	fmt.Fprintf(cmd.OutOrStdout(), "Cleaned %d merged worktree(s).\n", removed)
-	return nil
+	return countRemoved(items)
 }
 
 func cleanStale(cmd *cobra.Command, r git.Runner) error {
@@ -179,38 +182,32 @@ func cleanStale(cmd *cobra.Command, r git.Runner) error {
 	s.Stop()
 
 	printWarnings(cmd, staleResult.Warnings)
-
 	if len(staleResult.Candidates) == 0 {
 		fmt.Fprintln(cmd.OutOrStdout(), "No stale worktrees found.")
 		return nil
 	}
 
 	printStaleCandidates(cmd, staleResult.Candidates)
-
 	if dryRun {
 		return nil
 	}
-
 	if !force && !confirmRemoval(cmd, len(staleResult.Candidates), "stale") {
 		fmt.Fprintln(cmd.OutOrStdout(), "Aborted.")
 		return nil
 	}
 
-	toRemove := make([]operations.CleanCandidate, len(staleResult.Candidates))
-	for i, c := range staleResult.Candidates {
-		toRemove[i] = c.CleanCandidate
-	}
-
-	s.Start("Removing worktrees...")
-	items := operations.RemoveCandidates(r, toRemove, func(msg string) {
-		s.Update(msg)
-	})
-	s.Stop()
-	printCleanedItems(cmd, items)
-
-	removed := countRemoved(items)
+	toRemove := flattenStaleCandidates(staleResult.Candidates)
+	removed := cleanRemoveCandidates(cmd, r, s, toRemove)
 	fmt.Fprintf(cmd.OutOrStdout(), "Cleaned %d stale worktree(s).\n", removed)
 	return nil
+}
+
+func flattenStaleCandidates(candidates []operations.StaleCandidate) []operations.CleanCandidate {
+	out := make([]operations.CleanCandidate, len(candidates))
+	for i, c := range candidates {
+		out[i] = c.CleanCandidate
+	}
+	return out
 }
 
 func printMergedCandidates(cmd *cobra.Command, candidates []operations.CleanCandidate) {
