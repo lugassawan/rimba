@@ -31,9 +31,11 @@ type Config struct {
 
 // DepsConfig holds optional dependency management settings.
 type DepsConfig struct {
-	AutoDetect  *bool          `toml:"auto_detect,omitempty"`
-	Modules     []ModuleConfig `toml:"modules,omitempty"`
-	Concurrency int            `toml:"concurrency,omitempty"`
+	AutoDetect *bool          `toml:"auto_detect,omitempty"`
+	Modules    []ModuleConfig `toml:"modules,omitempty"`
+	// Concurrency caps parallel module installs.
+	// 0 or unset = auto (min(NumCPU, 4)); 1 = sequential; N >= 1 = cap at N.
+	Concurrency int `toml:"concurrency,omitempty"`
 }
 
 // ModuleConfig defines a manually configured dependency module.
