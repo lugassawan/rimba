@@ -45,14 +45,9 @@ var listCmd = &cobra.Command{
 	Short: "List all worktrees",
 	Long:  "Lists all git worktrees with task, type, and status. Use --full to show all columns including branch and path.",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		listType, _ := cmd.Flags().GetString(flagType)
-		listDirty, _ := cmd.Flags().GetBool(flagDirty)
-		listBehind, _ := cmd.Flags().GetBool(flagBehind)
-		listArchived, _ := cmd.Flags().GetBool(flagArchived)
-		listFull, _ := cmd.Flags().GetBool(flagFull)
-		listService, _ := cmd.Flags().GetString(flagService)
+		opts := listReadFlags(cmd)
 
-		if listArchived {
+		if opts.archived {
 			r := newRunner()
 			mainBranch, err := resolveMainBranch(r)
 			if err != nil {
@@ -61,148 +56,202 @@ var listCmd = &cobra.Command{
 			return listArchivedBranches(cmd, r, mainBranch)
 		}
 
-		cfg := config.FromContext(cmd.Context())
-
-		if listType != "" && !resolver.ValidPrefixType(listType) {
-			valid := make([]string, 0, len(resolver.AllPrefixes()))
-			for _, p := range resolver.AllPrefixes() {
-				valid = append(valid, strings.TrimSuffix(p, "/"))
-			}
-			return fmt.Errorf("invalid type %q; valid types: %s", listType, strings.Join(valid, ", "))
-		}
-
-		r := newRunner()
-
-		repoRoot, err := git.MainRepoRoot(r)
-		if err != nil {
+		if err := listValidateType(opts.typeFilter); err != nil {
 			return err
 		}
 
-		entries, err := git.ListWorktrees(r)
+		r := newRunner()
+		entries, wtDir, err := listLoadEntries(r, cmd)
 		if err != nil {
 			return err
 		}
 
 		if len(entries) == 0 {
-			if isJSON(cmd) {
-				return output.WriteJSON(cmd.OutOrStdout(), version, "list", make([]output.ListItem, 0))
-			}
-			fmt.Fprintln(cmd.OutOrStdout(), "No worktrees found.")
-			return nil
+			return listRenderEmpty(cmd, "No worktrees found.")
 		}
 
-		wtDir := filepath.Join(repoRoot, cfg.WorktreeDir)
-		prefixes := resolver.AllPrefixes()
-
-		// Detect current worktree
-		cwd, _ := os.Getwd()
-		cwdResolved, _ := filepath.EvalSymlinks(cwd)
-		cwdResolved = filepath.Clean(cwdResolved)
-
-		if !isJSON(cmd) {
-			hint.New(cmd, hintPainter(cmd)).
-				Add(flagFull, hintFull).
-				Add(flagType, hintType).
-				Add(flagService, hintService).
-				Add(flagDirty, hintDirty).
-				Add(flagBehind, hintBehind).
-				Show()
-		}
+		listShowHints(cmd)
 
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
 		s.Start("Loading worktrees...")
 
-		var candidates []candidate
-		for _, e := range entries {
-			if e.Bare {
-				continue
-			}
-
-			if listType != "" {
-				_, matchedPrefix := resolver.TaskFromBranch(e.Branch, prefixes)
-				entryType := strings.TrimSuffix(matchedPrefix, "/")
-				if entryType != listType {
-					continue
-				}
-			}
-
-			displayPath := e.Path
-			if rel, err := filepath.Rel(wtDir, e.Path); err == nil && len(rel) < len(displayPath) {
-				displayPath = rel
-			}
-
-			entryResolved, _ := filepath.EvalSymlinks(e.Path)
-			entryResolved = filepath.Clean(entryResolved)
-			isCurrent := cwdResolved == entryResolved
-
-			candidates = append(candidates, candidate{entry: e, displayPath: displayPath, isCurrent: isCurrent})
-		}
-
-		rows := parallel.Collect(len(candidates), 8, func(i int) resolver.WorktreeDetail {
-			c := candidates[i]
-			status := operations.CollectWorktreeStatus(r, c.entry.Path)
-			return resolver.NewWorktreeDetail(c.entry.Branch, prefixes, c.displayPath, status, c.isCurrent)
-		})
-
-		rows = operations.FilterDetailsByStatus(rows, listDirty, listBehind)
-		rows = resolver.FilterByService(rows, listService)
+		prefixes := resolver.AllPrefixes()
+		candidates := listBuildCandidates(entries, wtDir, prefixes, opts.typeFilter)
+		rows := listCollectRows(r, candidates, prefixes)
+		rows = operations.FilterDetailsByStatus(rows, opts.dirty, opts.behind)
+		rows = resolver.FilterByService(rows, opts.service)
 
 		s.Stop()
 
 		if len(rows) == 0 {
-			if isJSON(cmd) {
-				return output.WriteJSON(cmd.OutOrStdout(), version, "list", make([]output.ListItem, 0))
-			}
-			fmt.Fprintln(cmd.OutOrStdout(), "No worktrees match the given filters.")
-			return nil
+			return listRenderEmpty(cmd, "No worktrees match the given filters.")
 		}
 
 		resolver.SortDetailsByTask(rows)
 
 		if isJSON(cmd) {
-			items := make([]output.ListItem, len(rows))
-			for i, r := range rows {
-				items[i] = output.ListItem{
-					Task:      r.Task,
-					Service:   r.Service,
-					Type:      r.Type,
-					Branch:    r.Branch,
-					Path:      r.Path,
-					IsCurrent: r.IsCurrent,
-					Status:    r.Status,
-				}
-			}
-			return output.WriteJSON(cmd.OutOrStdout(), version, "list", items)
+			return listRenderJSON(cmd, rows)
 		}
-
-		hasService := resolver.HasService(rows)
-
-		noColor, _ := cmd.Flags().GetBool(flagNoColor)
-		p := termcolor.NewPainter(noColor)
-
-		tbl := termcolor.NewTable(2)
-		tbl.AddRow(listHeader(p, hasService, listFull)...)
-
-		for _, row := range rows {
-			taskCell := "  " + row.Task
-			if row.IsCurrent {
-				taskCell = "* " + row.Task
-				taskCell = p.Paint(taskCell, termcolor.Green, termcolor.Bold)
-			}
-
-			typeCell := row.Type
-			if c := typeColor(row.Type); c != "" {
-				typeCell = p.Paint(typeCell, c)
-			}
-
-			statusCell := colorStatus(p, row.Status)
-			tbl.AddRow(listRow(taskCell, row, typeCell, statusCell, hasService, listFull)...)
-		}
-
-		tbl.Render(cmd.OutOrStdout())
+		listRenderTable(cmd, rows, opts.full)
 		return nil
 	},
+}
+
+// listOpts holds parsed list flags.
+type listOpts struct {
+	typeFilter string
+	dirty      bool
+	behind     bool
+	archived   bool
+	full       bool
+	service    string
+}
+
+func listReadFlags(cmd *cobra.Command) listOpts {
+	typeFilter, _ := cmd.Flags().GetString(flagType)
+	dirty, _ := cmd.Flags().GetBool(flagDirty)
+	behind, _ := cmd.Flags().GetBool(flagBehind)
+	archived, _ := cmd.Flags().GetBool(flagArchived)
+	full, _ := cmd.Flags().GetBool(flagFull)
+	service, _ := cmd.Flags().GetString(flagService)
+	return listOpts{
+		typeFilter: typeFilter,
+		dirty:      dirty,
+		behind:     behind,
+		archived:   archived,
+		full:       full,
+		service:    service,
+	}
+}
+
+func listValidateType(typeFilter string) error {
+	if typeFilter == "" || resolver.ValidPrefixType(typeFilter) {
+		return nil
+	}
+	valid := make([]string, 0, len(resolver.AllPrefixes()))
+	for _, p := range resolver.AllPrefixes() {
+		valid = append(valid, strings.TrimSuffix(p, "/"))
+	}
+	return fmt.Errorf("invalid type %q; valid types: %s", typeFilter, strings.Join(valid, ", "))
+}
+
+func listLoadEntries(r git.Runner, cmd *cobra.Command) ([]git.WorktreeEntry, string, error) {
+	cfg := config.FromContext(cmd.Context())
+	repoRoot, err := git.MainRepoRoot(r)
+	if err != nil {
+		return nil, "", err
+	}
+	entries, err := git.ListWorktrees(r)
+	if err != nil {
+		return nil, "", err
+	}
+	return entries, filepath.Join(repoRoot, cfg.WorktreeDir), nil
+}
+
+func listShowHints(cmd *cobra.Command) {
+	if isJSON(cmd) {
+		return
+	}
+	hint.New(cmd, hintPainter(cmd)).
+		Add(flagFull, hintFull).
+		Add(flagType, hintType).
+		Add(flagService, hintService).
+		Add(flagDirty, hintDirty).
+		Add(flagBehind, hintBehind).
+		Show()
+}
+
+func listRenderEmpty(cmd *cobra.Command, msg string) error {
+	if isJSON(cmd) {
+		return output.WriteJSON(cmd.OutOrStdout(), version, "list", make([]output.ListItem, 0))
+	}
+	fmt.Fprintln(cmd.OutOrStdout(), msg)
+	return nil
+}
+
+func listBuildCandidates(entries []git.WorktreeEntry, wtDir string, prefixes []string, typeFilter string) []candidate {
+	cwd, _ := os.Getwd()
+	cwdResolved, _ := filepath.EvalSymlinks(cwd)
+	cwdResolved = filepath.Clean(cwdResolved)
+
+	var candidates []candidate
+	for _, e := range entries {
+		if e.Bare {
+			continue
+		}
+
+		if typeFilter != "" {
+			_, matchedPrefix := resolver.TaskFromBranch(e.Branch, prefixes)
+			entryType := strings.TrimSuffix(matchedPrefix, "/")
+			if entryType != typeFilter {
+				continue
+			}
+		}
+
+		displayPath := e.Path
+		if rel, err := filepath.Rel(wtDir, e.Path); err == nil && len(rel) < len(displayPath) {
+			displayPath = rel
+		}
+
+		entryResolved, _ := filepath.EvalSymlinks(e.Path)
+		entryResolved = filepath.Clean(entryResolved)
+		isCurrent := cwdResolved == entryResolved
+
+		candidates = append(candidates, candidate{entry: e, displayPath: displayPath, isCurrent: isCurrent})
+	}
+	return candidates
+}
+
+func listCollectRows(r git.Runner, candidates []candidate, prefixes []string) []resolver.WorktreeDetail {
+	return parallel.Collect(len(candidates), 8, func(i int) resolver.WorktreeDetail {
+		c := candidates[i]
+		status := operations.CollectWorktreeStatus(r, c.entry.Path)
+		return resolver.NewWorktreeDetail(c.entry.Branch, prefixes, c.displayPath, status, c.isCurrent)
+	})
+}
+
+func listRenderJSON(cmd *cobra.Command, rows []resolver.WorktreeDetail) error {
+	items := make([]output.ListItem, len(rows))
+	for i, r := range rows {
+		items[i] = output.ListItem{
+			Task:      r.Task,
+			Service:   r.Service,
+			Type:      r.Type,
+			Branch:    r.Branch,
+			Path:      r.Path,
+			IsCurrent: r.IsCurrent,
+			Status:    r.Status,
+		}
+	}
+	return output.WriteJSON(cmd.OutOrStdout(), version, "list", items)
+}
+
+func listRenderTable(cmd *cobra.Command, rows []resolver.WorktreeDetail, full bool) {
+	hasService := resolver.HasService(rows)
+	noColor, _ := cmd.Flags().GetBool(flagNoColor)
+	p := termcolor.NewPainter(noColor)
+
+	tbl := termcolor.NewTable(2)
+	tbl.AddRow(listHeader(p, hasService, full)...)
+
+	for _, row := range rows {
+		taskCell := "  " + row.Task
+		if row.IsCurrent {
+			taskCell = "* " + row.Task
+			taskCell = p.Paint(taskCell, termcolor.Green, termcolor.Bold)
+		}
+
+		typeCell := row.Type
+		if c := typeColor(row.Type); c != "" {
+			typeCell = p.Paint(typeCell, c)
+		}
+
+		statusCell := colorStatus(p, row.Status)
+		tbl.AddRow(listRow(taskCell, row, typeCell, statusCell, hasService, full)...)
+	}
+
+	tbl.Render(cmd.OutOrStdout())
 }
 
 func init() {
