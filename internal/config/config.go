@@ -31,8 +31,9 @@ type Config struct {
 
 // DepsConfig holds optional dependency management settings.
 type DepsConfig struct {
-	AutoDetect *bool          `toml:"auto_detect,omitempty"`
-	Modules    []ModuleConfig `toml:"modules,omitempty"`
+	AutoDetect  *bool          `toml:"auto_detect,omitempty"`
+	Modules     []ModuleConfig `toml:"modules,omitempty"`
+	Concurrency int            `toml:"concurrency,omitempty"`
 }
 
 // ModuleConfig defines a manually configured dependency module.
@@ -50,6 +51,15 @@ func (c *Config) IsAutoDetectDeps() bool {
 		return true
 	}
 	return *c.Deps.AutoDetect
+}
+
+// DepsConcurrency returns the configured concurrency for dependency installation.
+// Returns 0 when unset; Manager resolves 0 to its own default (min(NumCPU, 4)).
+func (c *Config) DepsConcurrency() int {
+	if c.Deps == nil {
+		return 0
+	}
+	return c.Deps.Concurrency
 }
 
 // DefaultWorktreeDir returns the conventional worktree directory path for a repo.
