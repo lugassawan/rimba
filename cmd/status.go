@@ -125,6 +125,39 @@ func renderStatusDashboard(out io.Writer, p *termcolor.Painter, results []status
 	}
 
 	tbl.Render(out)
+	renderActionHints(out, p, summary)
+}
+
+// renderActionHints prints one-line next-step suggestions derived from the
+// summary counts. Emits nothing when all counts are zero. The hints are
+// CLI-only and never appear in the JSON output.
+func renderActionHints(out io.Writer, p *termcolor.Painter, summary cliStatusSummary) {
+	if summary.behind == 0 && summary.stale == 0 && summary.dirty == 0 {
+		return
+	}
+
+	fmt.Fprintln(out)
+
+	if summary.behind > 0 {
+		fmt.Fprintf(out, "%s %d behind main. Run: %s\n",
+			p.Paint("→", termcolor.Yellow),
+			summary.behind,
+			p.Paint("rimba sync --all", termcolor.Bold),
+		)
+	}
+	if summary.stale > 0 {
+		fmt.Fprintf(out, "%s %d stale. Run: %s\n",
+			p.Paint("→", termcolor.Yellow),
+			summary.stale,
+			p.Paint("rimba clean --stale", termcolor.Bold),
+		)
+	}
+	if summary.dirty > 0 {
+		fmt.Fprintf(out, "%s %d dirty. Review uncommitted changes before merging.\n",
+			p.Paint("→", termcolor.Yellow),
+			summary.dirty,
+		)
+	}
 }
 
 type cliStatusSummary struct {

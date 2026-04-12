@@ -246,3 +246,106 @@ func TestColorCount(t *testing.T) {
 		t.Errorf("colorCount(0) = %q, want %q", s, "0")
 	}
 }
+
+func TestRenderActionHints(t *testing.T) {
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool(flagNoColor, true, "")
+	p := hintPainter(cmd)
+
+	tests := []struct {
+		name       string
+		summary    cliStatusSummary
+		wantEmpty  bool
+		wantSubstr []string
+		notSubstr  []string
+	}{
+		{
+			name:      "all zero emits nothing",
+			summary:   cliStatusSummary{total: 3},
+			wantEmpty: true,
+		},
+		{
+			name:       "behind only emits sync hint",
+			summary:    cliStatusSummary{total: 3, behind: 2},
+			wantSubstr: []string{"2 behind main", "rimba sync --all"},
+			notSubstr:  []string{"stale", "dirty", "Review"},
+		},
+		{
+			name:       "stale only emits clean hint",
+			summary:    cliStatusSummary{total: 3, stale: 1},
+			wantSubstr: []string{"1 stale", "rimba clean --stale"},
+			notSubstr:  []string{"behind main", "dirty", "Review"},
+		},
+		{
+			name:       "dirty only emits review hint",
+			summary:    cliStatusSummary{total: 3, dirty: 4},
+			wantSubstr: []string{"4 dirty", "Review uncommitted changes"},
+			notSubstr:  []string{"behind main", "stale", "rimba sync", "rimba clean"},
+		},
+		{
+			name:    "multiple non-zero emits all applicable hints",
+			summary: cliStatusSummary{total: 5, behind: 2, stale: 1, dirty: 3},
+			wantSubstr: []string{
+				"2 behind main", "rimba sync --all",
+				"1 stale", "rimba clean --stale",
+				"3 dirty", "Review uncommitted changes",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf strings.Builder
+			renderActionHints(&buf, p, tc.summary)
+			got := buf.String()
+
+			if tc.wantEmpty {
+				if got != "" {
+					t.Errorf("expected no output, got: %q", got)
+				}
+				return
+			}
+
+			for _, want := range tc.wantSubstr {
+				if !strings.Contains(got, want) {
+					t.Errorf("output missing %q\nfull output: %q", want, got)
+				}
+			}
+			for _, notWant := range tc.notSubstr {
+				if strings.Contains(got, notWant) {
+					t.Errorf("output should not contain %q\nfull output: %q", notWant, got)
+				}
+			}
+		})
+	}
+}
+
+func TestStatusJSONHasNoHintsField(t *testing.T) {
+	restore := overrideNewRunner(statusMultiRunner())
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	cmd.Flags().Int(flagStaleDays, 14, "")
+	if err := statusCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("statusCmd.RunE: %v", err)
+	}
+
+	// Verify the JSON schema is unchanged — no hints field at any level.
+	raw := buf.String()
+	if strings.Contains(raw, `"hints"`) {
+		t.Errorf("JSON output must not contain a 'hints' field; got: %s", raw)
+	}
+
+	var env output.Envelope
+	if err := json.Unmarshal(buf.Bytes(), &env); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	dataMap, ok := env.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("data type = %T, want map[string]any", env.Data)
+	}
+	if _, present := dataMap["hints"]; present {
+		t.Errorf("data unexpectedly contains 'hints' key: %+v", dataMap)
+	}
+}
