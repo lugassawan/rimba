@@ -26,9 +26,7 @@ const defaultDepsConcurrencyCap = 4
 type Manager struct {
 	Runner git.Runner
 
-	// Concurrency is the max number of modules installed in parallel.
-	// When <= 0, the Manager auto-picks min(runtime.NumCPU(), 4).
-	// Set to 1 to force sequential installation.
+	// Concurrency caps parallel module installs. <= 0 auto-picks a default.
 	Concurrency int
 }
 

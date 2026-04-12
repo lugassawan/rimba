@@ -33,8 +33,7 @@ type Config struct {
 type DepsConfig struct {
 	AutoDetect *bool          `toml:"auto_detect,omitempty"`
 	Modules    []ModuleConfig `toml:"modules,omitempty"`
-	// Concurrency caps parallel module installs.
-	// 0 or unset = auto (min(NumCPU, 4)); 1 = sequential; N >= 1 = cap at N.
+	// Concurrency caps parallel module installs. 0 = auto.
 	Concurrency int `toml:"concurrency,omitempty"`
 }
 
@@ -55,8 +54,7 @@ func (c *Config) IsAutoDetectDeps() bool {
 	return *c.Deps.AutoDetect
 }
 
-// DepsConcurrency returns the configured concurrency for dependency installation.
-// Returns 0 when unset; Manager resolves 0 to its own default (min(NumCPU, 4)).
+// DepsConcurrency returns the configured install concurrency, or 0 if unset.
 func (c *Config) DepsConcurrency() int {
 	if c.Deps == nil {
 		return 0
