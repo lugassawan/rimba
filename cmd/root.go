@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 )
 
 const (
+	flagDebug        = "debug"
 	flagForce        = "force"
 	flagJSON         = "json"
 	flagNoColor      = "no-color"
@@ -34,6 +36,10 @@ var rootCmd = &cobra.Command{
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		commandName = strings.TrimPrefix(cmd.CommandPath(), "rimba ")
+
+		if debug, _ := cmd.Flags().GetBool(flagDebug); debug {
+			_ = os.Setenv("RIMBA_DEBUG", "1")
+		}
 
 		// Skip config for Cobra internals (completion, __complete)
 		if cmd.Name() == "completion" || cmd.Name() == "__complete" {
@@ -77,6 +83,7 @@ var rootCmd = &cobra.Command{
 func init() {
 	rootCmd.PersistentFlags().Bool(flagJSON, false, "output in JSON format")
 	rootCmd.PersistentFlags().Bool(flagNoColor, false, "disable colored output")
+	rootCmd.PersistentFlags().Bool(flagDebug, false, "Log git commands and timings to stderr")
 
 	originalHelp := rootCmd.HelpFunc()
 	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {

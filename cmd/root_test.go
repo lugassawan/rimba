@@ -152,6 +152,32 @@ func TestPersistentPreRunESuccessWithDirConfig(t *testing.T) {
 	}
 }
 
+func TestPersistentPreRunESetsDebugEnv(t *testing.T) {
+	// Ensure RIMBA_DEBUG starts unset and is cleaned up after the test.
+	t.Setenv("RIMBA_DEBUG", "")
+	os.Unsetenv("RIMBA_DEBUG")
+	t.Cleanup(func() { os.Unsetenv("RIMBA_DEBUG") })
+
+	preRunE := rootCmd.PersistentPreRunE
+
+	cmd := &cobra.Command{
+		Use:         "debug-test",
+		Annotations: map[string]string{"skipConfig": "true"},
+	}
+	cmd.Flags().Bool(flagDebug, false, "")
+	if err := cmd.Flags().Set(flagDebug, "true"); err != nil {
+		t.Fatalf("set debug flag: %v", err)
+	}
+
+	if err := preRunE(cmd, nil); err != nil {
+		t.Fatalf("PreRunE: %v", err)
+	}
+
+	if os.Getenv("RIMBA_DEBUG") == "" {
+		t.Error("expected RIMBA_DEBUG to be set after --debug flag")
+	}
+}
+
 func TestRootHelpFunctionSubcommand(t *testing.T) {
 	sub := &cobra.Command{Use: "sub", Short: "a subcommand"}
 	rootCmd.AddCommand(sub)

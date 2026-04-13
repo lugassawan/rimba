@@ -22,6 +22,7 @@
 - [Quick Start](#quick-start)
 - [Commands](#commands)
 - [Configuration](#configuration)
+- [Troubleshooting](#troubleshooting)
 - [Contributing](CONTRIBUTING.md)
 - [License](#license)
 
@@ -137,6 +138,14 @@ agent = 'claude'
 ```
 
 > See [docs/configuration.md](docs/configuration.md) for the full field reference, dependency management, and environment variables.
+
+## Troubleshooting
+
+Pass `--debug` to any command (or set `RIMBA_DEBUG=1`) to log git commands and their timings to stderr:
+
+```sh
+rimba list --debug
+```
 
 ## License
 
