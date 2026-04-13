@@ -75,6 +75,10 @@ var rootCmd = &cobra.Command{
 		}
 		cfg.FillDefaults(repoName, defaultBranch)
 
+		if err := cfg.Validate(); err != nil {
+			return err
+		}
+
 		cmd.SetContext(config.WithConfig(cmd.Context(), cfg))
 		return nil
 	},
