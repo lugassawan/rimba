@@ -90,10 +90,7 @@ func (c *Config) FillDefaults(repoName, defaultBranch string) {
 	}
 }
 
-// Validate checks invariants on the loaded config and returns a joined error
-// describing all issues at once, or nil if the config is valid. It performs no
-// I/O and is safe to call after Resolve and FillDefaults. Each issue names the
-// offending field or section so users can fix them in one pass.
+// Validate returns a joined error of all invariant violations, or nil if valid.
 func (c *Config) Validate() error {
 	var errs []error
 	errs = appendIf(errs, validateWorktreeDir(c.WorktreeDir)...)
