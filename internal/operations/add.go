@@ -6,6 +6,7 @@ import (
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/deps"
+	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/progress"
 	"github.com/lugassawan/rimba/internal/resolver"
@@ -56,10 +57,16 @@ func AddWorktree(r git.Runner, params AddParams, onProgress progress.Func) (AddR
 
 	// Validate
 	if git.BranchExists(r, branch) {
-		return result, fmt.Errorf("branch %q already exists", branch)
+		return result, errhint.WithFix(
+			fmt.Errorf("branch %q already exists", branch),
+			"run 'rimba list' to see existing tasks, or use a different task name",
+		)
 	}
 	if _, err := os.Stat(wtPath); err == nil {
-		return result, fmt.Errorf("worktree path already exists: %s", wtPath)
+		return result, errhint.WithFix(
+			fmt.Errorf("worktree path already exists: %s", wtPath),
+			"run 'rimba list' to see existing tasks, or use a different task name",
+		)
 	}
 
 	// Create worktree

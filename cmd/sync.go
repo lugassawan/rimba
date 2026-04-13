@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
@@ -127,7 +128,10 @@ func syncOne(sc *syncContext, input string, worktrees []resolver.WorktreeInfo, p
 		return err
 	}
 	if dirty {
-		return fmt.Errorf("worktree %q has uncommitted changes\nCommit or stash changes before syncing: cd %s", task, wt.Path)
+		return errhint.WithFix(
+			fmt.Errorf("worktree %q has uncommitted changes", task),
+			"Commit or stash changes before syncing: cd "+wt.Path,
+		)
 	}
 
 	verb := "Rebasing"
@@ -151,7 +155,10 @@ func syncOne(sc *syncContext, input string, worktrees []resolver.WorktreeInfo, p
 			if useMerge {
 				pushHint = fmt.Sprintf("cd %s && git push", wt.Path)
 			}
-			return fmt.Errorf("push failed for %s: %w\nTo resolve: %s", wt.Branch, pushErr, pushHint)
+			return errhint.WithFix(
+				fmt.Errorf("push failed for %s: %w", wt.Branch, pushErr),
+				pushHint,
+			)
 		}
 		if pushed {
 			fmt.Fprintf(sc.cmd.OutOrStdout(), "Pushed %s to origin\n", wt.Branch)

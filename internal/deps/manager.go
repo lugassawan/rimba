@@ -12,6 +12,7 @@ import (
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/debug"
+	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/progress"
@@ -197,8 +198,9 @@ func runInstall(worktreePath string, mod Module) error {
 	cmd.Stderr = &buf
 
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("install %q in %s: %w\n%s\nTo fix: cd %s && %s",
-			mod.Dir, dir, err, strings.TrimSpace(buf.String()), dir, mod.InstallCmd)
+		wrapped := fmt.Errorf("install %q in %s: %w\n%s",
+			mod.Dir, dir, err, strings.TrimSpace(buf.String()))
+		return errhint.WithFix(wrapped, fmt.Sprintf("cd %s && %s", dir, mod.InstallCmd))
 	}
 	return nil
 }
