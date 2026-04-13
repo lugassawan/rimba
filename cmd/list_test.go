@@ -762,3 +762,97 @@ func TestListBehindFilterWithMatch(t *testing.T) {
 		t.Errorf("output = %q, want 'login' in filtered table", out)
 	}
 }
+
+func TestListLoadEntriesRepoRootError(t *testing.T) {
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return "", errGitFailed },
+		runInDir: noopRunInDir,
+	}
+	cmd, _ := newListTestCmd()
+	cmd.SetContext(config.WithConfig(context.Background(), &config.Config{WorktreeDir: "worktrees"}))
+	if _, _, err := listLoadEntries(r, cmd); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestListLoadEntriesListError(t *testing.T) {
+	calls := 0
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			calls++
+			if calls == 1 {
+				return "/repo", nil // MainRepoRoot succeeds
+			}
+			return "", errGitFailed
+		},
+		runInDir: noopRunInDir,
+	}
+	cmd, _ := newListTestCmd()
+	cmd.SetContext(config.WithConfig(context.Background(), &config.Config{WorktreeDir: "worktrees"}))
+	if _, _, err := listLoadEntries(r, cmd); err == nil {
+		t.Fatal("expected list error")
+	}
+}
+
+func TestListValidateTypeEmpty(t *testing.T) {
+	if err := listValidateType(""); err != nil {
+		t.Errorf("expected nil for empty type, got %v", err)
+	}
+}
+
+func TestListValidateTypeValid(t *testing.T) {
+	if err := listValidateType("feature"); err != nil {
+		t.Errorf("expected nil for valid type, got %v", err)
+	}
+}
+
+func TestListReadFlags(t *testing.T) {
+	cmd, _ := newListTestCmd()
+	_ = cmd.Flags().Set(flagType, "feature")
+	_ = cmd.Flags().Set(flagService, "web")
+	_ = cmd.Flags().Set(flagDirty, "true")
+	_ = cmd.Flags().Set(flagBehind, "true")
+	_ = cmd.Flags().Set(flagArchived, "true")
+	_ = cmd.Flags().Set(flagFull, "true")
+	opts := listReadFlags(cmd)
+	if opts.typeFilter != "feature" || opts.service != "web" || !opts.dirty || !opts.behind || !opts.archived || !opts.full {
+		t.Errorf("unexpected opts: %+v", opts)
+	}
+}
+
+func TestListRenderEmptyJSON(t *testing.T) {
+	cmd, buf := newListTestCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	if err := listRenderEmpty(cmd, "none"); err != nil {
+		t.Fatalf("unexpected: %v", err)
+	}
+	var data map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &data); err != nil {
+		t.Errorf("output not JSON: %v", err)
+	}
+}
+
+func TestListRenderEmptyText(t *testing.T) {
+	cmd, buf := newListTestCmd()
+	if err := listRenderEmpty(cmd, "none here"); err != nil {
+		t.Fatalf("unexpected: %v", err)
+	}
+	if !strings.Contains(buf.String(), "none here") {
+		t.Errorf("expected 'none here' in %q", buf.String())
+	}
+}
+
+func TestListRenderTableWithFullAndService(t *testing.T) {
+	cmd, buf := newListTestCmd()
+	rows := []resolver.WorktreeDetail{
+		{Task: "foo", Branch: "feature/foo", Type: "feature", Path: "/wt/foo", Service: "web", IsCurrent: true, Status: resolver.WorktreeStatus{}},
+		{Task: "bar", Branch: "bugfix/bar", Type: "bugfix", Path: "/wt/bar", Status: resolver.WorktreeStatus{Dirty: true}},
+	}
+	listRenderTable(cmd, rows, true)
+	out := buf.String()
+	for _, want := range []string{"foo", "bar", "feature/foo", "bugfix/bar", "SERVICE", "BRANCH", "PATH"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("want %q in output: %s", want, out)
+		}
+	}
+}

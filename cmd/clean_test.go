@@ -566,3 +566,49 @@ func TestCleanStaleForce(t *testing.T) {
 		t.Errorf("output = %q, want 'Cleaned'", out)
 	}
 }
+
+func TestPrintWarnings(t *testing.T) {
+	cmd := &cobra.Command{}
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	printWarnings(cmd, []string{"first", "second"})
+	out := buf.String()
+	if !strings.Contains(out, "Warning: first") || !strings.Contains(out, "Warning: second") {
+		t.Errorf("got %q", out)
+	}
+
+	buf.Reset()
+	printWarnings(cmd, nil)
+	if buf.Len() != 0 {
+		t.Errorf("expected no output for empty warnings, got %q", buf.String())
+	}
+}
+
+func TestPrintCleanedItemsAllBranches(t *testing.T) {
+	cmd := &cobra.Command{}
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	items := []operations.CleanedItem{
+		// Success: worktree removed + branch deleted
+		{Branch: "feature/ok", Path: "/wt/ok", WorktreeRemoved: true, BranchDeleted: true},
+		// Partial: worktree removed but branch delete failed
+		{Branch: "feature/partial", Path: "/wt/partial", WorktreeRemoved: true, BranchDeleted: false},
+		// Failure: worktree removal failed
+		{Branch: "feature/fail", Path: "/wt/fail", WorktreeRemoved: false, BranchDeleted: false},
+	}
+	printCleanedItems(cmd, items)
+	out := buf.String()
+	for _, want := range []string{
+		"Removed worktree: /wt/ok",
+		"Deleted branch: feature/ok",
+		"Removed worktree: /wt/partial",
+		"failed to delete branch",
+		"git branch -D feature/partial",
+		"Failed to remove worktree feature/fail",
+		"rimba remove feature/fail",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in output: %s", want, out)
+		}
+	}
+}

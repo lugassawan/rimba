@@ -36,58 +36,22 @@ var execCmd = &cobra.Command{
 	Long:  "Executes a shell command in parallel across matching worktrees. Use --all to target all worktrees, or --type to filter by prefix type.",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg := config.FromContext(cmd.Context())
+		opts := execReadFlags(cmd)
+		if err := execValidateFlags(opts); err != nil {
+			return err
+		}
+
+		execShowHints(cmd)
 
 		r := newRunner()
-		all, _ := cmd.Flags().GetBool(flagAll)
-		typeFilter, _ := cmd.Flags().GetString(flagType)
-		dirty, _ := cmd.Flags().GetBool(flagDirty)
-		failFast, _ := cmd.Flags().GetBool(flagFailFast)
-		concurrency, _ := cmd.Flags().GetInt(flagConcurrency)
-
-		if !all && typeFilter == "" {
-			return errors.New("provide --all or --type to select worktrees")
-		}
-
-		if typeFilter != "" && !resolver.ValidPrefixType(typeFilter) {
-			valid := make([]string, 0, len(resolver.AllPrefixes()))
-			for _, p := range resolver.AllPrefixes() {
-				valid = append(valid, strings.TrimSuffix(p, "/"))
-			}
-			return fmt.Errorf("invalid type %q; valid types: %s", typeFilter, strings.Join(valid, ", "))
-		}
-
-		if !isJSON(cmd) {
-			hint.New(cmd, hintPainter(cmd)).
-				Add(flagAll, hintExecAll).
-				Add(flagType, hintExecType).
-				Add(flagDirty, hintExecDirty).
-				Add(flagFailFast, hintFailFast).
-				Add(flagConcurrency, hintConcurrency).
-				Show()
-		}
-
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
 		s.Start("Collecting worktrees...")
 
-		worktrees, err := listWorktreeInfos(r)
+		prefixes := resolver.AllPrefixes()
+		filtered, err := execSelectWorktrees(cmd, r, s, opts, prefixes)
 		if err != nil {
 			return err
-		}
-
-		prefixes := resolver.AllPrefixes()
-
-		var filtered []resolver.WorktreeInfo
-		if typeFilter != "" {
-			filtered = operations.FilterByType(worktrees, prefixes, typeFilter)
-		} else {
-			allTasks := operations.CollectTasks(worktrees, prefixes)
-			filtered = operations.FilterEligible(worktrees, prefixes, cfg.DefaultSource, allTasks, true)
-		}
-
-		if dirty {
-			filtered = filterDirtyWorktrees(r, s, filtered)
 		}
 
 		if len(filtered) == 0 {
@@ -96,67 +60,148 @@ var execCmd = &cobra.Command{
 			return nil
 		}
 
-		targets := make([]executor.Target, len(filtered))
-		for i, wt := range filtered {
-			task, _ := resolver.TaskFromBranch(wt.Branch, prefixes)
-			targets[i] = executor.Target{
-				Path:   wt.Path,
-				Branch: wt.Branch,
-				Task:   task,
-			}
-		}
-
+		targets := execBuildTargets(filtered, prefixes)
 		s.Update(fmt.Sprintf("Running in %d worktree(s)...", len(targets)))
 
 		results := executor.Run(cmd.Context(), executor.Config{
 			Targets:     targets,
 			Command:     args[0],
-			Concurrency: concurrency,
-			FailFast:    failFast,
+			Concurrency: opts.concurrency,
+			FailFast:    opts.failFast,
 			Runner:      executor.ShellRunner(),
 		})
 
 		s.Stop()
 
 		if isJSON(cmd) {
-			jsonResults := make([]output.ExecResult, len(results))
-			for i, r := range results {
-				jr := output.ExecResult{
-					Task:      r.Target.Task,
-					Branch:    r.Target.Branch,
-					Path:      r.Target.Path,
-					ExitCode:  r.ExitCode,
-					Stdout:    string(r.Stdout),
-					Stderr:    string(r.Stderr),
-					Cancelled: r.Cancelled,
-				}
-				if r.Err != nil {
-					jr.Error = r.Err.Error()
-				}
-				jsonResults[i] = jr
-			}
-			data := output.ExecData{
-				Command: args[0],
-				Results: jsonResults,
-				Success: !hasFailure(results),
-			}
-			_ = output.WriteJSON(cmd.OutOrStdout(), version, "exec", data)
-			if hasFailure(results) {
-				return &output.SilentError{ExitCode: 1}
-			}
-			return nil
+			return execRenderJSON(cmd, args[0], results)
 		}
-
-		noColor, _ := cmd.Flags().GetBool(flagNoColor)
-		p := termcolor.NewPainter(noColor)
-
-		printExecResults(cmd, p, results, prefixes)
-
-		if hasFailure(results) {
-			return errors.New("one or more commands failed")
-		}
-		return nil
+		return execRenderText(cmd, results, prefixes)
 	},
+}
+
+// execOpts holds parsed exec flags.
+type execOpts struct {
+	all         bool
+	typeFilter  string
+	dirty       bool
+	failFast    bool
+	concurrency int
+}
+
+func execReadFlags(cmd *cobra.Command) execOpts {
+	all, _ := cmd.Flags().GetBool(flagAll)
+	typeFilter, _ := cmd.Flags().GetString(flagType)
+	dirty, _ := cmd.Flags().GetBool(flagDirty)
+	failFast, _ := cmd.Flags().GetBool(flagFailFast)
+	concurrency, _ := cmd.Flags().GetInt(flagConcurrency)
+	return execOpts{
+		all:         all,
+		typeFilter:  typeFilter,
+		dirty:       dirty,
+		failFast:    failFast,
+		concurrency: concurrency,
+	}
+}
+
+func execValidateFlags(opts execOpts) error {
+	if !opts.all && opts.typeFilter == "" {
+		return errors.New("provide --all or --type to select worktrees")
+	}
+	if opts.typeFilter != "" && !resolver.ValidPrefixType(opts.typeFilter) {
+		valid := make([]string, 0, len(resolver.AllPrefixes()))
+		for _, p := range resolver.AllPrefixes() {
+			valid = append(valid, strings.TrimSuffix(p, "/"))
+		}
+		return fmt.Errorf("invalid type %q; valid types: %s", opts.typeFilter, strings.Join(valid, ", "))
+	}
+	return nil
+}
+
+func execShowHints(cmd *cobra.Command) {
+	if isJSON(cmd) {
+		return
+	}
+	hint.New(cmd, hintPainter(cmd)).
+		Add(flagAll, hintExecAll).
+		Add(flagType, hintExecType).
+		Add(flagDirty, hintExecDirty).
+		Add(flagFailFast, hintFailFast).
+		Add(flagConcurrency, hintConcurrency).
+		Show()
+}
+
+func execSelectWorktrees(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, opts execOpts, prefixes []string) ([]resolver.WorktreeInfo, error) {
+	cfg := config.FromContext(cmd.Context())
+	worktrees, err := listWorktreeInfos(r)
+	if err != nil {
+		return nil, err
+	}
+
+	var filtered []resolver.WorktreeInfo
+	if opts.typeFilter != "" {
+		filtered = operations.FilterByType(worktrees, prefixes, opts.typeFilter)
+	} else {
+		allTasks := operations.CollectTasks(worktrees, prefixes)
+		filtered = operations.FilterEligible(worktrees, prefixes, cfg.DefaultSource, allTasks, true)
+	}
+
+	if opts.dirty {
+		filtered = filterDirtyWorktrees(r, s, filtered)
+	}
+	return filtered, nil
+}
+
+func execBuildTargets(filtered []resolver.WorktreeInfo, prefixes []string) []executor.Target {
+	targets := make([]executor.Target, len(filtered))
+	for i, wt := range filtered {
+		task, _ := resolver.TaskFromBranch(wt.Branch, prefixes)
+		targets[i] = executor.Target{
+			Path:   wt.Path,
+			Branch: wt.Branch,
+			Task:   task,
+		}
+	}
+	return targets
+}
+
+func execRenderJSON(cmd *cobra.Command, command string, results []executor.Result) error {
+	jsonResults := make([]output.ExecResult, len(results))
+	for i, r := range results {
+		jr := output.ExecResult{
+			Task:      r.Target.Task,
+			Branch:    r.Target.Branch,
+			Path:      r.Target.Path,
+			ExitCode:  r.ExitCode,
+			Stdout:    string(r.Stdout),
+			Stderr:    string(r.Stderr),
+			Cancelled: r.Cancelled,
+		}
+		if r.Err != nil {
+			jr.Error = r.Err.Error()
+		}
+		jsonResults[i] = jr
+	}
+	data := output.ExecData{
+		Command: command,
+		Results: jsonResults,
+		Success: !hasFailure(results),
+	}
+	_ = output.WriteJSON(cmd.OutOrStdout(), version, "exec", data)
+	if hasFailure(results) {
+		return &output.SilentError{ExitCode: 1}
+	}
+	return nil
+}
+
+func execRenderText(cmd *cobra.Command, results []executor.Result, prefixes []string) error {
+	noColor, _ := cmd.Flags().GetBool(flagNoColor)
+	p := termcolor.NewPainter(noColor)
+	printExecResults(cmd, p, results, prefixes)
+	if hasFailure(results) {
+		return errors.New("one or more commands failed")
+	}
+	return nil
 }
 
 func init() {
