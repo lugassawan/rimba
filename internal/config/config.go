@@ -242,7 +242,10 @@ func appendIf(dst []error, src ...error) []error {
 // break resolution because worktree paths are joined against the repo root.
 func validateWorktreeDir(dir string) []error {
 	if dir != "" && filepath.IsAbs(dir) {
-		return []error{fmt.Errorf("config: worktree_dir must be relative, got %q", dir)}
+		return []error{errhint.WithFix(
+			fmt.Errorf("config: worktree_dir must be relative, got %q", dir),
+			"set worktree_dir to a path relative to the repo root in .rimba/settings.toml",
+		)}
 	}
 	return nil
 }
@@ -259,7 +262,10 @@ func validateDeps(deps *DepsConfig) []error {
 	for i, m := range deps.Modules {
 		errs = append(errs, validateModuleDir(i, m.Dir, seenDirs)...)
 		if strings.TrimSpace(m.Install) == "" {
-			errs = append(errs, fmt.Errorf("config: deps.modules[%q]: install command is empty", m.Dir))
+			errs = append(errs, errhint.WithFix(
+				fmt.Errorf("config: deps.modules[%q]: install command is empty", m.Dir),
+				"set install = \"<command>\" for the module in .rimba/settings.toml",
+			))
 		}
 	}
 	return errs
@@ -270,9 +276,15 @@ func validateDeps(deps *DepsConfig) []error {
 func validateModuleDir(index int, dir string, seen map[string]bool) []error {
 	switch {
 	case strings.TrimSpace(dir) == "":
-		return []error{fmt.Errorf("config: deps.modules[%d]: dir is empty", index)}
+		return []error{errhint.WithFix(
+			fmt.Errorf("config: deps.modules[%d]: dir is empty", index),
+			"set dir = \"<path>\" for the module in .rimba/settings.toml",
+		)}
 	case seen[dir]:
-		return []error{fmt.Errorf("config: deps.modules[%d]: duplicate dir %q", index, dir)}
+		return []error{errhint.WithFix(
+			fmt.Errorf("config: deps.modules[%d]: duplicate dir %q", index, dir),
+			"remove the duplicate [[deps.modules]] entry from .rimba/settings.toml",
+		)}
 	default:
 		seen[dir] = true
 		return nil
@@ -286,11 +298,17 @@ func validateOpen(open map[string]string) []error {
 	var errs []error
 	for name := range open {
 		if name == "" {
-			errs = append(errs, errors.New("config: open: shortcut name is empty"))
+			errs = append(errs, errhint.WithFix(
+				errors.New("config: open: shortcut name is empty"),
+				"remove the empty-keyed entry under [open] in .rimba/settings.toml",
+			))
 			continue
 		}
 		if strings.ContainsRune(name, '/') || strings.ContainsRune(name, filepath.Separator) {
-			errs = append(errs, fmt.Errorf("config: open[%q]: shortcut name must not contain path separators", name))
+			errs = append(errs, errhint.WithFix(
+				fmt.Errorf("config: open[%q]: shortcut name must not contain path separators", name),
+				"rename the shortcut in [open] to a name without '/' in .rimba/settings.toml",
+			))
 		}
 	}
 	return errs
