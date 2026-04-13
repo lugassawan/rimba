@@ -566,6 +566,142 @@ func TestResolveNeitherExists(t *testing.T) {
 	}
 }
 
+func TestConfigValidate(t *testing.T) {
+	tests := []struct {
+		name       string
+		cfg        *config.Config
+		wantErr    bool
+		wantSubstr []string
+	}{
+		{
+			name: "valid config",
+			cfg: &config.Config{
+				WorktreeDir:   "../myrepo-worktrees",
+				DefaultSource: testDefaultBranch,
+				CopyFiles:     []string{".env"},
+				Open:          map[string]string{"ide": "code .", "agent": "claude"},
+				Deps: &config.DepsConfig{
+					Modules: []config.ModuleConfig{
+						{Dir: "web", Lockfile: "package-lock.json", Install: "npm ci"},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "absolute worktree_dir",
+			cfg: &config.Config{
+				WorktreeDir:   "/abs/path/bad",
+				DefaultSource: testDefaultBranch,
+			},
+			wantErr:    true,
+			wantSubstr: []string{"worktree_dir", "/abs/path/bad"},
+		},
+		{
+			name: "deps module with empty install",
+			cfg: &config.Config{
+				WorktreeDir:   "../wt",
+				DefaultSource: testDefaultBranch,
+				Deps: &config.DepsConfig{
+					Modules: []config.ModuleConfig{
+						{Dir: "web", Install: ""},
+					},
+				},
+			},
+			wantErr:    true,
+			wantSubstr: []string{"deps", "web", "install"},
+		},
+		{
+			name: "deps module with empty dir",
+			cfg: &config.Config{
+				WorktreeDir:   "../wt",
+				DefaultSource: testDefaultBranch,
+				Deps: &config.DepsConfig{
+					Modules: []config.ModuleConfig{
+						{Dir: "", Install: "npm ci"},
+					},
+				},
+			},
+			wantErr:    true,
+			wantSubstr: []string{"deps", "dir is empty"},
+		},
+		{
+			name: "deps modules with duplicate dir",
+			cfg: &config.Config{
+				WorktreeDir:   "../wt",
+				DefaultSource: testDefaultBranch,
+				Deps: &config.DepsConfig{
+					Modules: []config.ModuleConfig{
+						{Dir: "web", Install: "npm ci"},
+						{Dir: "web", Install: "npm install"},
+					},
+				},
+			},
+			wantErr:    true,
+			wantSubstr: []string{"duplicate dir", "web"},
+		},
+		{
+			name: "open shortcut with slash",
+			cfg: &config.Config{
+				WorktreeDir:   "../wt",
+				DefaultSource: testDefaultBranch,
+				Open:          map[string]string{"bad/key": "echo hi"},
+			},
+			wantErr:    true,
+			wantSubstr: []string{"open", "bad/key"},
+		},
+		{
+			name: "open shortcut with empty name",
+			cfg: &config.Config{
+				WorktreeDir:   "../wt",
+				DefaultSource: testDefaultBranch,
+				Open:          map[string]string{"": "echo hi"},
+			},
+			wantErr:    true,
+			wantSubstr: []string{"open", "empty"},
+		},
+		{
+			name: "multiple issues aggregated",
+			cfg: &config.Config{
+				WorktreeDir:   "/abs/bad",
+				DefaultSource: testDefaultBranch,
+				Open:          map[string]string{"bad/key": "echo hi"},
+				Deps: &config.DepsConfig{
+					Modules: []config.ModuleConfig{
+						{Dir: "web", Install: ""},
+					},
+				},
+			},
+			wantErr:    true,
+			wantSubstr: []string{"worktree_dir", "/abs/bad", "bad/key", "web", "install"},
+		},
+		{
+			name:    "empty config passes",
+			cfg:     &config.Config{},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.cfg.Validate()
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("Validate() returned nil, want error containing %v", tt.wantSubstr)
+				}
+				msg := err.Error()
+				for _, sub := range tt.wantSubstr {
+					if !strings.Contains(msg, sub) {
+						t.Errorf("Validate() error = %q, want substring %q", msg, sub)
+					}
+				}
+			} else if err != nil {
+				t.Errorf("Validate() returned unexpected error: %v", err)
+			}
+		})
+	}
+}
+
 func TestIsAutoDetectDeps(t *testing.T) {
 	boolPtr := func(b bool) *bool { return &b }
 
