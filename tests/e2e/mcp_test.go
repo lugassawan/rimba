@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/resolver"
@@ -533,3 +534,247 @@ func TestMCPToolCallConflictCheck(t *testing.T) {
 // (defined in add_test.go as func loadConfig(t, repo) *config.Config)
 
 // setupCleanInitializedRepo is defined in merge_test.go — available in this package.
+
+// assertMCPToolError runs a single tool call and asserts the result is a tool-level
+// error whose text contains wantSubstr. It sends init + notification + tool call
+// and reads the response at index 1.
+func assertMCPToolError(t *testing.T, repo, tool string, args map[string]any, wantSubstr string) {
+	t.Helper()
+
+	responses := mcpSession(t, repo,
+		mcpInitRequest(),
+		mcpNotification(),
+		mcpToolCallRequest(tool, args),
+	)
+
+	if len(responses) < 2 {
+		t.Fatalf("expected at least 2 responses, got %d", len(responses))
+	}
+
+	text, isError := getToolResult(t, responses[1])
+	if !isError {
+		t.Fatalf("expected tool error containing %q, got success: %s", wantSubstr, text)
+	}
+	if !strings.Contains(text, wantSubstr) {
+		t.Errorf("error text = %q, want substring %q", text, wantSubstr)
+	}
+}
+
+func TestMCPToolCallAddMissingTask(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	assertMCPToolError(t, repo, "add", map[string]any{}, "task is required")
+}
+
+func TestMCPToolCallRemoveMissingTask(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	assertMCPToolError(t, repo, "remove", map[string]any{}, "task is required")
+}
+
+func TestMCPToolCallExecMissingCommand(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	assertMCPToolError(t, repo, "exec", map[string]any{"all": true}, "command is required")
+}
+
+func TestMCPToolCallExecMissingSelector(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	assertMCPToolError(t, repo, "exec",
+		map[string]any{"command": "echo hi"},
+		"all=true or type",
+	)
+}
+
+func TestMCPToolCallMergeMissingSource(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	assertMCPToolError(t, repo, "merge", map[string]any{}, "source is required")
+}
+
+func TestMCPToolCallMergeUnknownSource(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	assertMCPToolError(t, repo, "merge",
+		map[string]any{"source": "does-not-exist"},
+		"not found",
+	)
+}
+
+func TestMCPToolCallSyncRequiresSelector(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	assertMCPToolError(t, repo, "sync",
+		map[string]any{},
+		"task name or set all=true",
+	)
+}
+
+func TestMCPToolCallSyncAllEmpty(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+
+	responses := mcpSession(t, repo,
+		mcpInitRequest(),
+		mcpNotification(),
+		mcpToolCallRequest("sync", map[string]any{"all": true, "no_push": true}),
+	)
+
+	if len(responses) < 2 {
+		t.Fatalf("expected at least 2 responses, got %d", len(responses))
+	}
+
+	text, isError := getToolResult(t, responses[1])
+	if isError {
+		t.Fatalf("expected success, got error: %s", text)
+	}
+
+	var data map[string]any
+	if err := json.Unmarshal([]byte(text), &data); err != nil {
+		t.Fatalf("failed to parse sync result: %v", err)
+	}
+
+	// With no worktrees, results should be an empty/null slice.
+	results, _ := data["results"].([]any)
+	if len(results) != 0 {
+		t.Errorf("expected 0 results on empty repo, got %d: %v", len(results), results)
+	}
+}
+
+func TestMCPToolCallCleanMissingMode(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	assertMCPToolError(t, repo, "clean", map[string]any{}, "mode is required")
+}
+
+func TestMCPToolCallListInvalidType(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+
+	// The schema declares type as an enum, but the handler still re-validates
+	// for callers that bypass schema. Either layer surfacing the error is
+	// acceptable — we only require a clean error response (not a panic or
+	// success).
+	responses := mcpSession(t, repo,
+		mcpInitRequest(),
+		mcpNotification(),
+		mcpToolCallRequest("list", map[string]any{"type": "bogus"}),
+	)
+
+	if len(responses) < 2 {
+		t.Fatalf("expected at least 2 responses, got %d", len(responses))
+	}
+
+	resp := responses[1]
+	if _, hasErr := resp["error"]; hasErr {
+		return // protocol-level rejection is fine
+	}
+
+	text, isError := getToolResult(t, resp)
+	if !isError {
+		t.Fatalf("expected error for invalid type, got success: %s", text)
+	}
+	if !strings.Contains(text, "invalid type") {
+		t.Errorf("error text = %q, want substring 'invalid type'", text)
+	}
+}
+
+func TestMCPDispatchUnknownTool(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+
+	responses := mcpSession(t, repo,
+		mcpInitRequest(),
+		mcpNotification(),
+		mcpToolCallRequest("not-a-real-tool", map[string]any{}),
+	)
+
+	if len(responses) < 2 {
+		t.Fatalf("expected at least 2 responses, got %d", len(responses))
+	}
+
+	resp := responses[1]
+	// The mcp-go server returns a JSON-RPC error for unknown tool dispatches.
+	// Either an error object or a tool result with isError=true is acceptable —
+	// we just require the server did not silently succeed.
+	if _, hasErr := resp["error"]; hasErr {
+		return
+	}
+
+	text, isError := getToolResult(t, resp)
+	if !isError {
+		t.Fatalf("expected error for unknown tool, got success: %s", text)
+	}
+}
+
+func TestMCPToolCallStatusCustomStaleDays(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", "mcp-stale-task")
+
+	responses := mcpSession(t, repo,
+		mcpInitRequest(),
+		mcpNotification(),
+		mcpToolCallRequest("status", map[string]any{"stale_days": float64(1)}),
+	)
+
+	if len(responses) < 2 {
+		t.Fatalf("expected at least 2 responses, got %d", len(responses))
+	}
+
+	text, isError := getToolResult(t, responses[1])
+	if isError {
+		t.Fatalf("expected success, got error: %s", text)
+	}
+
+	var data map[string]any
+	if err := json.Unmarshal([]byte(text), &data); err != nil {
+		t.Fatalf("failed to parse status result: %v", err)
+	}
+
+	summary, ok := data["summary"].(map[string]any)
+	if !ok {
+		t.Fatal("missing summary")
+	}
+	total, _ := summary["total"].(float64)
+	if total < 1 {
+		t.Errorf("summary.total = %v, want >= 1", total)
+	}
+}
