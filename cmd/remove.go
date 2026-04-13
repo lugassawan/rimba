@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/spinner"
@@ -52,6 +53,9 @@ var removeCmd = &cobra.Command{
 			s.Update(msg)
 		})
 		if err != nil {
+			if !force {
+				return errhint.WithFix(err, "commit or stash changes, or use --force to discard")
+			}
 			return err
 		}
 

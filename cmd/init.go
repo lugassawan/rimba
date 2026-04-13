@@ -7,6 +7,7 @@ import (
 
 	"github.com/lugassawan/rimba/internal/agentfile"
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/fileutil"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/spf13/cobra"
@@ -57,7 +58,10 @@ directory is already personal.`,
 		case fileExists(legacyPath):
 			// Migrate from legacy .rimba.toml → .rimba/ directory
 			if err := os.MkdirAll(dirPath, 0750); err != nil {
-				return fmt.Errorf("failed to create config directory: %w", err)
+				return errhint.WithFix(
+					fmt.Errorf("failed to create config directory: %w", err),
+					"check directory permissions for .rimba/ in the repo root",
+				)
 			}
 
 			if err := os.Rename(legacyPath, filepath.Join(dirPath, config.TeamFile)); err != nil {
@@ -101,7 +105,10 @@ directory is already personal.`,
 			}
 
 			if err := os.MkdirAll(dirPath, 0750); err != nil {
-				return fmt.Errorf("failed to create config directory: %w", err)
+				return errhint.WithFix(
+					fmt.Errorf("failed to create config directory: %w", err),
+					"check directory permissions for .rimba/ in the repo root",
+				)
 			}
 
 			if err := config.Save(filepath.Join(dirPath, config.TeamFile), cfg); err != nil {

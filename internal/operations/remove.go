@@ -3,6 +3,7 @@ package operations
 import (
 	"fmt"
 
+	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/progress"
 	"github.com/lugassawan/rimba/internal/resolver"
@@ -35,7 +36,10 @@ func RemoveWorktree(r git.Runner, wt resolver.WorktreeInfo, task string, keepBra
 	if !keepBranch {
 		progress.Notify(onProgress, "Deleting branch...")
 		if err := git.DeleteBranch(r, wt.Branch, true); err != nil {
-			result.BranchError = fmt.Errorf("worktree removed but failed to delete branch: %w\nTo delete manually: git branch -D %s", err, wt.Branch)
+			result.BranchError = errhint.WithFix(
+				fmt.Errorf("worktree removed but failed to delete branch: %w", err),
+				"delete manually: git branch -D "+wt.Branch,
+			)
 			return result, nil
 		}
 		result.BranchDeleted = true

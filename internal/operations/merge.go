@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/progress"
 	"github.com/lugassawan/rimba/internal/resolver"
@@ -87,7 +88,10 @@ func MergeWorktree(r git.Runner, params MergeParams, onProgress progress.Func) (
 	// Execute merge
 	progress.Notify(onProgress, "Merging...")
 	if err := git.Merge(r, targetDir, source.Branch, params.NoFF); err != nil {
-		return result, fmt.Errorf("merge failed: %w\nTo resolve conflicts: cd %s", err, targetDir)
+		return result, errhint.WithFix(
+			fmt.Errorf("merge failed: %w", err),
+			fmt.Sprintf("resolve conflicts in %s, commit, then re-run rimba merge", targetDir),
+		)
 	}
 
 	// Auto-cleanup
@@ -125,7 +129,10 @@ func checkDirty(r git.Runner, sourcePath, targetDir, sourceTask, intoTask string
 		return srcCheck.err
 	}
 	if srcCheck.dirty {
-		return fmt.Errorf("source worktree %q has uncommitted changes\nCommit or stash changes before merging: cd %s", sourceTask, sourcePath)
+		return errhint.WithFix(
+			fmt.Errorf("source worktree %q has uncommitted changes", sourceTask),
+			"Commit or stash changes before merging: cd "+sourcePath,
+		)
 	}
 	if tgtCheck.err != nil {
 		return tgtCheck.err
@@ -135,7 +142,10 @@ func checkDirty(r git.Runner, sourcePath, targetDir, sourceTask, intoTask string
 		if !mergingToMain {
 			label = intoTask
 		}
-		return fmt.Errorf("target %q has uncommitted changes\nCommit or stash changes before merging: cd %s", label, targetDir)
+		return errhint.WithFix(
+			fmt.Errorf("target %q has uncommitted changes", label),
+			"Commit or stash changes before merging: cd "+targetDir,
+		)
 	}
 	return nil
 }

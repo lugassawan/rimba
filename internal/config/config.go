@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 
 	toml "github.com/pelletier/go-toml/v2"
+
+	"github.com/lugassawan/rimba/internal/errhint"
 )
 
 // FileName is the legacy config file name used by rimba.
@@ -97,12 +99,18 @@ func DefaultConfig(repoName, defaultBranch string) *Config {
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("config not found: %w (run 'rimba init' first)", err)
+		return nil, errhint.WithFix(
+			fmt.Errorf("config not found: %w", err),
+			"run 'rimba init' to create a default .rimba/settings.toml",
+		)
 	}
 
 	var cfg Config
 	if err := toml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("invalid config: %w", err)
+		return nil, errhint.WithFix(
+			fmt.Errorf("invalid config: %w", err),
+			"fix the TOML syntax in "+path,
+		)
 	}
 	return &cfg, nil
 }
@@ -154,7 +162,10 @@ func LoadDir(dirPath string) (*Config, error) {
 		return nil, fmt.Errorf("failed to read team config: %w", err)
 	}
 	if team == nil {
-		return nil, fmt.Errorf("config not found: %s does not exist (run 'rimba init' first)", filepath.Join(dirPath, TeamFile))
+		return nil, errhint.WithFix(
+			fmt.Errorf("config not found: %s does not exist", filepath.Join(dirPath, TeamFile)),
+			"run 'rimba init' to create a default .rimba/settings.toml",
+		)
 	}
 
 	local, err := loadRaw(filepath.Join(dirPath, LocalFile))
@@ -198,7 +209,10 @@ func loadRaw(path string) (*Config, error) {
 
 	var cfg Config
 	if err := toml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("invalid config %s: %w", filepath.Base(path), err)
+		return nil, errhint.WithFix(
+			fmt.Errorf("invalid config %s: %w", filepath.Base(path), err),
+			"fix the TOML syntax in "+path,
+		)
 	}
 	return &cfg, nil
 }
