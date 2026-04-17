@@ -25,6 +25,16 @@ type StatusData struct {
 	Summary   StatusSummary `json:"summary"`
 	Worktrees []StatusItem  `json:"worktrees"`
 	StaleDays int           `json:"stale_days"`
+	Disk      *DiskSummary  `json:"disk,omitempty"`
+}
+
+// DiskSummary holds the footprint breakdown emitted under --detail.
+// MainBytes is a pointer so consumers can distinguish "main repo size is
+// zero" from "main repo size could not be computed" (pointer is nil).
+type DiskSummary struct {
+	TotalBytes     int64  `json:"total_bytes"`
+	MainBytes      *int64 `json:"main_bytes,omitempty"`
+	WorktreesBytes int64  `json:"worktrees_bytes"`
 }
 
 // StatusSummary holds aggregate counts for the status command.
@@ -37,11 +47,13 @@ type StatusSummary struct {
 
 // StatusItem holds per-worktree status in JSON output.
 type StatusItem struct {
-	Task   string                  `json:"task"`
-	Type   string                  `json:"type"`
-	Branch string                  `json:"branch"`
-	Status resolver.WorktreeStatus `json:"status"`
-	Age    *StatusAge              `json:"age"`
+	Task      string                  `json:"task"`
+	Type      string                  `json:"type"`
+	Branch    string                  `json:"branch"`
+	Status    resolver.WorktreeStatus `json:"status"`
+	Age       *StatusAge              `json:"age"`
+	SizeBytes *int64                  `json:"size_bytes,omitempty"`
+	Recent7D  *int                    `json:"recent_7d,omitempty"`
 }
 
 // StatusAge holds last-commit age information.

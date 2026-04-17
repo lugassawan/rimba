@@ -3,10 +3,13 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/lugassawan/rimba/internal/fsutil"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/output"
@@ -17,11 +20,25 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const recentWindow = 7 * 24 * time.Hour
+
 type statusEntry struct {
 	entry      git.WorktreeEntry
 	status     resolver.WorktreeStatus
 	commitTime time.Time
 	hasTime    bool
+	sizeBytes  *int64
+	recent7D   *int
+}
+
+// diskFootprint captures sizes used for the Disk: summary line and JSON
+// DiskSummary. mainErr is non-nil when main-repo size could not be computed;
+// in that case MainBytes is treated as absent in the CLI summary line.
+type diskFootprint struct {
+	mainBytes      int64
+	mainErr        error
+	worktreesBytes int64
+	total          int64
 }
 
 var statusCmd = &cobra.Command{
@@ -42,9 +59,11 @@ var statusCmd = &cobra.Command{
 			return err
 		}
 
+		mainEntry := findMainEntry(entries, mainBranch)
 		candidates := git.FilterEntries(entries, mainBranch)
 
 		staleDays, _ := cmd.Flags().GetInt(flagStaleDays)
+		detail, _ := cmd.Flags().GetBool(flagDetail)
 
 		if len(candidates) == 0 {
 			if isJSON(cmd) {
@@ -62,28 +81,61 @@ var statusCmd = &cobra.Command{
 		defer s.Stop()
 		s.Start("Collecting worktree status...")
 
-		results := collectStatuses(r, candidates, s)
+		var mainSize int64
+		var mainErr error
+		var mainWG sync.WaitGroup
+		if detail && mainEntry != nil {
+			mainWG.Add(1)
+			go func(path string) {
+				defer mainWG.Done()
+				mainSize, mainErr = fsutil.DirSize(path)
+			}(mainEntry.Path)
+		}
+
+		results := collectStatuses(r, candidates, s, detail)
+		mainWG.Wait()
 		s.Stop()
 
+		var footprint *diskFootprint
+		if detail {
+			footprint = buildFootprint(results, mainEntry, mainSize, mainErr)
+			sortBySizeDesc(results)
+		}
+
 		if isJSON(cmd) {
-			return writeStatusJSON(cmd, results, staleDays)
+			return writeStatusJSON(cmd, results, staleDays, footprint)
 		}
 
 		noColor, _ := cmd.Flags().GetBool(flagNoColor)
 		p := termcolor.NewPainter(noColor)
 
-		renderStatusDashboard(cmd.OutOrStdout(), p, results, staleDays)
+		renderStatusDashboard(cmd.OutOrStdout(), p, results, staleDays, detail, footprint)
 		return nil
 	},
 }
 
 func init() {
 	statusCmd.Flags().Int(flagStaleDays, defaultStaleDays, "Number of days after which a worktree is considered stale")
+	statusCmd.Flags().Bool(flagDetail, false, "Show per-worktree disk size and 7-day commit velocity")
 	rootCmd.AddCommand(statusCmd)
 }
 
+// findMainEntry returns the unfiltered worktree entry matching mainBranch,
+// or nil if not present. Used to compute the main-repo footprint since
+// FilterEntries strips it from the candidate set.
+func findMainEntry(entries []git.WorktreeEntry, mainBranch string) *git.WorktreeEntry {
+	for i := range entries {
+		if entries[i].Branch == mainBranch {
+			return &entries[i]
+		}
+	}
+	return nil
+}
+
 // collectStatuses gathers dirty/ahead/behind state and last commit time for each candidate.
-func collectStatuses(r git.Runner, candidates []git.WorktreeEntry, s *spinner.Spinner) []statusEntry {
+// When detail is true, it also computes per-worktree disk size and 7-day commit count;
+// per-item errors leave the corresponding pointer nil (non-fatal).
+func collectStatuses(r git.Runner, candidates []git.WorktreeEntry, s *spinner.Spinner, detail bool) []statusEntry {
 	s.Update("Collecting status...")
 	return parallel.Collect(len(candidates), 8, func(i int) statusEntry {
 		e := candidates[i]
@@ -94,38 +146,106 @@ func collectStatuses(r git.Runner, candidates []git.WorktreeEntry, s *spinner.Sp
 			ct = t
 			hasTime = true
 		}
-		return statusEntry{entry: e, status: st, commitTime: ct, hasTime: hasTime}
+		se := statusEntry{entry: e, status: st, commitTime: ct, hasTime: hasTime}
+		if detail {
+			if n, err := fsutil.DirSize(e.Path); err == nil {
+				se.sizeBytes = &n
+			}
+			if c, err := git.CommitCountSince(r, e.Branch, recentWindow); err == nil {
+				se.recent7D = &c
+			}
+		}
+		return se
+	})
+}
+
+// buildFootprint aggregates per-worktree sizes + main-repo size into a
+// diskFootprint. Order-independent: only entries with non-nil sizeBytes
+// contribute.
+func buildFootprint(results []statusEntry, mainEntry *git.WorktreeEntry, mainSize int64, mainErr error) *diskFootprint {
+	fp := &diskFootprint{}
+	if mainEntry != nil && mainErr == nil {
+		fp.mainBytes = mainSize
+	}
+	fp.mainErr = mainErr
+	for _, r := range results {
+		if r.sizeBytes != nil {
+			fp.worktreesBytes += *r.sizeBytes
+		}
+	}
+	fp.total = fp.mainBytes + fp.worktreesBytes
+	return fp
+}
+
+// sortBySizeDesc sorts results by size (nil sizes sort last, preserving
+// input order among equal values).
+func sortBySizeDesc(results []statusEntry) {
+	sort.SliceStable(results, func(i, j int) bool {
+		a, b := results[i].sizeBytes, results[j].sizeBytes
+		switch {
+		case a == nil && b == nil:
+			return false
+		case a == nil:
+			return false
+		case b == nil:
+			return true
+		default:
+			return *a > *b
+		}
 	})
 }
 
 // renderStatusDashboard prints the summary header and per-worktree table.
-func renderStatusDashboard(out io.Writer, p *termcolor.Painter, results []statusEntry, staleDays int) {
+func renderStatusDashboard(out io.Writer, p *termcolor.Painter, results []statusEntry, staleDays int, detail bool, footprint *diskFootprint) {
 	staleThreshold := time.Now().Add(-time.Duration(staleDays) * 24 * time.Hour)
 	summary := buildCLIStatusSummary(results, staleThreshold)
 	prefixes := resolver.AllPrefixes()
 
-	fmt.Fprintf(out, "Worktrees: %s  Dirty: %s  Stale: %s  Behind: %s\n\n",
+	fmt.Fprintf(out, "Worktrees: %s  Dirty: %s  Stale: %s  Behind: %s\n",
 		p.Paint(strconv.Itoa(summary.total), termcolor.Bold),
 		colorCount(p, summary.dirty, termcolor.Yellow),
 		colorCount(p, summary.stale, termcolor.Red),
 		colorCount(p, summary.behind, termcolor.Red),
 	)
+	if detail && footprint != nil {
+		fmt.Fprintln(out, formatDiskLine(p, footprint))
+	}
+	fmt.Fprintln(out)
 
 	tbl := termcolor.NewTable(2)
-	tbl.AddRow(
+	header := []string{
 		p.Paint("TASK", termcolor.Bold),
 		p.Paint("TYPE", termcolor.Bold),
 		p.Paint("BRANCH", termcolor.Bold),
 		p.Paint("STATUS", termcolor.Bold),
 		p.Paint("AGE", termcolor.Bold),
-	)
+	}
+	if detail {
+		header = append(header,
+			p.Paint("SIZE", termcolor.Bold),
+			p.Paint("7D", termcolor.Bold),
+		)
+	}
+	tbl.AddRow(header...)
 
 	for _, r := range results {
-		tbl.AddRow(buildStatusRow(r, prefixes, staleThreshold, p)...)
+		tbl.AddRow(buildStatusRow(r, prefixes, staleThreshold, p, detail)...)
 	}
 
 	tbl.Render(out)
 	renderActionHints(out, p, summary)
+}
+
+// formatDiskLine builds the "Disk: total X  (main: Y, worktrees: Z)" summary.
+// When main-size computation failed, the "main:" fragment is omitted.
+func formatDiskLine(p *termcolor.Painter, fp *diskFootprint) string {
+	total := p.Paint(resolver.FormatBytes(fp.total), termcolor.Bold)
+	worktrees := resolver.FormatBytes(fp.worktreesBytes)
+	if fp.mainErr != nil {
+		return fmt.Sprintf("Disk: total %s  (worktrees: %s)", total, worktrees)
+	}
+	main := resolver.FormatBytes(fp.mainBytes)
+	return fmt.Sprintf("Disk: total %s  (main: %s, worktrees: %s)", total, main, worktrees)
 }
 
 // renderActionHints prints one-line next-step suggestions derived from the
@@ -182,7 +302,7 @@ func buildCLIStatusSummary(results []statusEntry, staleThreshold time.Time) cliS
 }
 
 // buildStatusRow formats a single worktree row for the status table.
-func buildStatusRow(r statusEntry, prefixes []string, staleThreshold time.Time, p *termcolor.Painter) []string {
+func buildStatusRow(r statusEntry, prefixes []string, staleThreshold time.Time, p *termcolor.Painter, detail bool) []string {
 	task, matchedPrefix := resolver.PureTaskFromBranch(r.entry.Branch, prefixes)
 	typeName := strings.TrimSuffix(matchedPrefix, "/")
 
@@ -192,7 +312,27 @@ func buildStatusRow(r statusEntry, prefixes []string, staleThreshold time.Time, 
 		typeCell = p.Paint(typeCell, c)
 	}
 
-	return []string{taskCell, typeCell, r.entry.Branch, colorStatus(p, r.status), formatAgeCell(r, staleThreshold, p)}
+	row := []string{taskCell, typeCell, r.entry.Branch, colorStatus(p, r.status), formatAgeCell(r, staleThreshold, p)}
+	if detail {
+		row = append(row, formatSizeCell(r, p), formatRecentCell(r, p))
+	}
+	return row
+}
+
+// formatSizeCell renders the SIZE column. Errors render as "?" in gray.
+func formatSizeCell(r statusEntry, p *termcolor.Painter) string {
+	if r.sizeBytes == nil {
+		return p.Paint("?", termcolor.Gray)
+	}
+	return resolver.FormatBytes(*r.sizeBytes)
+}
+
+// formatRecentCell renders the 7D column. Errors render as "?" in gray.
+func formatRecentCell(r statusEntry, p *termcolor.Painter) string {
+	if r.recent7D == nil {
+		return p.Paint("?", termcolor.Gray)
+	}
+	return strconv.Itoa(*r.recent7D)
 }
 
 // formatAgeCell formats the age cell with color and stale indicator.
@@ -208,7 +348,7 @@ func formatAgeCell(r statusEntry, staleThreshold time.Time, p *termcolor.Painter
 }
 
 // writeStatusJSON builds the JSON output for the status command.
-func writeStatusJSON(cmd *cobra.Command, results []statusEntry, staleDays int) error {
+func writeStatusJSON(cmd *cobra.Command, results []statusEntry, staleDays int, footprint *diskFootprint) error {
 	staleThreshold := time.Now().Add(-time.Duration(staleDays) * 24 * time.Hour)
 	prefixes := resolver.AllPrefixes()
 
@@ -228,10 +368,12 @@ func writeStatusJSON(cmd *cobra.Command, results []statusEntry, staleDays int) e
 		typeName := strings.TrimSuffix(matchedPrefix, "/")
 
 		item := output.StatusItem{
-			Task:   task,
-			Type:   typeName,
-			Branch: r.entry.Branch,
-			Status: r.status,
+			Task:      task,
+			Type:      typeName,
+			Branch:    r.entry.Branch,
+			Status:    r.status,
+			SizeBytes: r.sizeBytes,
+			Recent7D:  r.recent7D,
 		}
 
 		if r.hasTime {
@@ -252,6 +394,17 @@ func writeStatusJSON(cmd *cobra.Command, results []statusEntry, staleDays int) e
 		Summary:   summary,
 		Worktrees: items,
 		StaleDays: staleDays,
+	}
+	if footprint != nil {
+		disk := &output.DiskSummary{
+			TotalBytes:     footprint.total,
+			WorktreesBytes: footprint.worktreesBytes,
+		}
+		if footprint.mainErr == nil {
+			main := footprint.mainBytes
+			disk.MainBytes = &main
+		}
+		data.Disk = disk
 	}
 	return output.WriteJSON(cmd.OutOrStdout(), version, "status", data)
 }
