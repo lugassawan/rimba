@@ -31,16 +31,6 @@ type statusEntry struct {
 	recent7D   *int
 }
 
-// diskFootprint aggregates sizes for the Disk: summary line and JSON.
-// mainErr != nil means main-repo size was not computed; the CLI drops
-// the main: fragment and JSON omits MainBytes.
-type diskFootprint struct {
-	mainBytes      int64
-	mainErr        error
-	worktreesBytes int64
-	total          int64
-}
-
 var statusCmd = &cobra.Command{
 	Use:         "status",
 	Short:       "Show worktree dashboard with summary stats and age info",
@@ -96,9 +86,14 @@ var statusCmd = &cobra.Command{
 		mainWG.Wait()
 		s.Stop()
 
-		var footprint *diskFootprint
+		var footprint *operations.DiskFootprint
 		if detail {
-			footprint = buildFootprint(results, mainEntry, mainSize, mainErr)
+			sizes := make([]*int64, len(results))
+			for i, r := range results {
+				sizes[i] = r.sizeBytes
+			}
+			fp := operations.BuildDiskFootprint(sizes, mainSize, mainErr)
+			footprint = &fp
 			sortBySizeDesc(results)
 		}
 
@@ -158,23 +153,6 @@ func collectStatuses(r git.Runner, candidates []git.WorktreeEntry, s *spinner.Sp
 	})
 }
 
-// buildFootprint sums per-worktree sizes and the main-repo size.
-// Entries with nil sizeBytes (errored) are skipped.
-func buildFootprint(results []statusEntry, mainEntry *git.WorktreeEntry, mainSize int64, mainErr error) *diskFootprint {
-	fp := &diskFootprint{}
-	if mainEntry != nil && mainErr == nil {
-		fp.mainBytes = mainSize
-	}
-	fp.mainErr = mainErr
-	for _, r := range results {
-		if r.sizeBytes != nil {
-			fp.worktreesBytes += *r.sizeBytes
-		}
-	}
-	fp.total = fp.mainBytes + fp.worktreesBytes
-	return fp
-}
-
 // sortBySizeDesc sorts largest first, stable, nils last.
 func sortBySizeDesc(results []statusEntry) {
 	sort.SliceStable(results, func(i, j int) bool {
@@ -193,7 +171,7 @@ func sortBySizeDesc(results []statusEntry) {
 }
 
 // renderStatusDashboard prints the summary header and per-worktree table.
-func renderStatusDashboard(out io.Writer, p *termcolor.Painter, results []statusEntry, staleDays int, detail bool, footprint *diskFootprint) {
+func renderStatusDashboard(out io.Writer, p *termcolor.Painter, results []statusEntry, staleDays int, detail bool, footprint *operations.DiskFootprint) {
 	staleThreshold := time.Now().Add(-time.Duration(staleDays) * 24 * time.Hour)
 	summary := buildCLIStatusSummary(results, staleThreshold)
 	prefixes := resolver.AllPrefixes()
@@ -235,13 +213,13 @@ func renderStatusDashboard(out io.Writer, p *termcolor.Painter, results []status
 
 // formatDiskLine builds the "Disk: total X  (main: Y, worktrees: Z)"
 // summary. The main: fragment is dropped when main-size errored.
-func formatDiskLine(p *termcolor.Painter, fp *diskFootprint) string {
-	total := p.Paint(resolver.FormatBytes(fp.total), termcolor.Bold)
-	worktrees := resolver.FormatBytes(fp.worktreesBytes)
-	if fp.mainErr != nil {
+func formatDiskLine(p *termcolor.Painter, fp *operations.DiskFootprint) string {
+	total := p.Paint(resolver.FormatBytes(fp.TotalBytes), termcolor.Bold)
+	worktrees := resolver.FormatBytes(fp.WorktreesBytes)
+	if fp.MainErr != nil {
 		return fmt.Sprintf("Disk: total %s  (worktrees: %s)", total, worktrees)
 	}
-	main := resolver.FormatBytes(fp.mainBytes)
+	main := resolver.FormatBytes(fp.MainBytes)
 	return fmt.Sprintf("Disk: total %s  (main: %s, worktrees: %s)", total, main, worktrees)
 }
 
@@ -345,7 +323,7 @@ func formatAgeCell(r statusEntry, staleThreshold time.Time, p *termcolor.Painter
 }
 
 // writeStatusJSON builds the JSON output for the status command.
-func writeStatusJSON(cmd *cobra.Command, results []statusEntry, staleDays int, footprint *diskFootprint) error {
+func writeStatusJSON(cmd *cobra.Command, results []statusEntry, staleDays int, footprint *operations.DiskFootprint) error {
 	staleThreshold := time.Now().Add(-time.Duration(staleDays) * 24 * time.Hour)
 	prefixes := resolver.AllPrefixes()
 
@@ -394,11 +372,11 @@ func writeStatusJSON(cmd *cobra.Command, results []statusEntry, staleDays int, f
 	}
 	if footprint != nil {
 		disk := &output.DiskSummary{
-			TotalBytes:     footprint.total,
-			WorktreesBytes: footprint.worktreesBytes,
+			TotalBytes:     footprint.TotalBytes,
+			WorktreesBytes: footprint.WorktreesBytes,
 		}
-		if footprint.mainErr == nil {
-			main := footprint.mainBytes
+		if footprint.MainErr == nil {
+			main := footprint.MainBytes
 			disk.MainBytes = &main
 		}
 		data.Disk = disk

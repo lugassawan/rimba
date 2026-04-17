@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/termcolor"
 	"github.com/spf13/cobra"
@@ -33,49 +34,6 @@ func TestFindMainEntry(t *testing.T) {
 	}
 	if findMainEntry(nil, "main") != nil {
 		t.Error("findMainEntry on nil entries should return nil")
-	}
-}
-
-func TestBuildFootprint(t *testing.T) {
-	main := &git.WorktreeEntry{Branch: "main", Path: "/repo"}
-	results := []statusEntry{
-		{sizeBytes: ptr(int64(1000))},
-		{sizeBytes: ptr(int64(500))},
-		{sizeBytes: nil}, // errored worktree: excluded from sum
-	}
-
-	fp := buildFootprint(results, main, 10_000, nil)
-	if fp.mainBytes != 10_000 || fp.worktreesBytes != 1500 || fp.total != 11_500 {
-		t.Errorf("fp = %+v, want main=10000 wt=1500 total=11500", fp)
-	}
-	if fp.mainErr != nil {
-		t.Errorf("mainErr = %v, want nil", fp.mainErr)
-	}
-}
-
-func TestBuildFootprintMainError(t *testing.T) {
-	main := &git.WorktreeEntry{Branch: "main", Path: "/repo"}
-	want := errors.New("permission denied")
-	fp := buildFootprint([]statusEntry{{sizeBytes: ptr(int64(200))}}, main, 0, want)
-
-	if fp.mainBytes != 0 {
-		t.Errorf("mainBytes = %d, want 0 when mainErr != nil", fp.mainBytes)
-	}
-	if fp.worktreesBytes != 200 {
-		t.Errorf("worktreesBytes = %d, want 200", fp.worktreesBytes)
-	}
-	if fp.total != 200 {
-		t.Errorf("total = %d, want 200 (excludes errored main)", fp.total)
-	}
-	if !errors.Is(fp.mainErr, want) {
-		t.Errorf("mainErr = %v, want %v", fp.mainErr, want)
-	}
-}
-
-func TestBuildFootprintNoMain(t *testing.T) {
-	fp := buildFootprint([]statusEntry{{sizeBytes: ptr(int64(42))}}, nil, 0, nil)
-	if fp.mainBytes != 0 || fp.total != 42 {
-		t.Errorf("fp = %+v, want main=0 total=42", fp)
 	}
 }
 
@@ -112,14 +70,14 @@ func TestSortBySizeDescAllNil(t *testing.T) {
 func TestFormatDiskLine(t *testing.T) {
 	p := termcolor.NewPainter(true) // no color
 
-	fp := &diskFootprint{mainBytes: 1024 * 1024, worktreesBytes: 2048, total: 1024*1024 + 2048}
+	fp := &operations.DiskFootprint{MainBytes: 1024 * 1024, WorktreesBytes: 2048, TotalBytes: 1024*1024 + 2048}
 	got := formatDiskLine(p, fp)
 	if !strings.Contains(got, "Disk:") || !strings.Contains(got, "main:") || !strings.Contains(got, "worktrees:") {
 		t.Errorf("formatDiskLine = %q, missing required fragments", got)
 	}
 
 	// Error path: main: fragment must be omitted.
-	fpErr := &diskFootprint{mainErr: errors.New("boom"), worktreesBytes: 512, total: 512}
+	fpErr := &operations.DiskFootprint{MainErr: errors.New("boom"), WorktreesBytes: 512, TotalBytes: 512}
 	got = formatDiskLine(p, fpErr)
 	if strings.Contains(got, "main:") {
 		t.Errorf("formatDiskLine on mainErr = %q, expected no 'main:' fragment", got)
