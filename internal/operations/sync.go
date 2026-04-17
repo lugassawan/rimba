@@ -55,7 +55,7 @@ func PushBranch(r git.Runner, dir string, useMerge bool) (bool, bool, error) {
 func CollectTasks(worktrees []resolver.WorktreeInfo, prefixes []string) []string {
 	tasks := make([]string, 0, len(worktrees))
 	for _, wt := range worktrees {
-		task, _ := resolver.TaskFromBranch(wt.Branch, prefixes)
+		task, _ := resolver.PureTaskFromBranch(wt.Branch, prefixes)
 		tasks = append(tasks, task)
 	}
 	return tasks
@@ -69,7 +69,7 @@ func FilterEligible(worktrees []resolver.WorktreeInfo, prefixes []string, mainBr
 		if wt.Branch == mainBranch || wt.Branch == "" {
 			continue
 		}
-		task, _ := resolver.TaskFromBranch(wt.Branch, prefixes)
+		task, _ := resolver.PureTaskFromBranch(wt.Branch, prefixes)
 		if !includeInherited && resolver.IsInherited(task, allTasks) {
 			continue
 		}

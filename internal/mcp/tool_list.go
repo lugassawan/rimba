@@ -146,7 +146,7 @@ func handleListArchived(r git.Runner, hctx *HandlerContext) (*mcp.CallToolResult
 	prefixes := resolver.AllPrefixes()
 	items := make([]listArchivedItem, 0, len(archived))
 	for _, b := range archived {
-		task, matchedPrefix := resolver.TaskFromBranch(b, prefixes)
+		task, matchedPrefix := resolver.PureTaskFromBranch(b, prefixes)
 		typeName := strings.TrimSuffix(matchedPrefix, "/")
 		items = append(items, listArchivedItem{Task: task, Type: typeName, Branch: b})
 	}

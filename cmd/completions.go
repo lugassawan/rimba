@@ -25,7 +25,7 @@ func completeWorktreeTasks(_ *cobra.Command, toComplete string) []string {
 		if e.Bare || e.Branch == "" {
 			continue
 		}
-		task, _ := resolver.TaskFromBranch(e.Branch, prefixes)
+		task, _ := resolver.PureTaskFromBranch(e.Branch, prefixes)
 		if strings.HasPrefix(task, toComplete) {
 			tasks = append(tasks, task)
 		}
@@ -64,7 +64,7 @@ func completeArchivedTasks(_ *cobra.Command, toComplete string) []string {
 	prefixes := resolver.AllPrefixes()
 	var tasks []string
 	for _, b := range archived {
-		task, _ := resolver.TaskFromBranch(b, prefixes)
+		task, _ := resolver.PureTaskFromBranch(b, prefixes)
 		if strings.HasPrefix(task, toComplete) {
 			tasks = append(tasks, task)
 		}

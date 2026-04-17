@@ -140,7 +140,7 @@ func renderOverlapTable(cmd *cobra.Command, p *termcolor.Painter, result *confli
 	for _, o := range result.Overlaps {
 		branchLabels := make([]string, len(o.Branches))
 		for i, b := range o.Branches {
-			task, prefix := resolver.TaskFromBranch(b, prefixes)
+			task, prefix := resolver.PureTaskFromBranch(b, prefixes)
 			if prefix != "" {
 				branchLabels[i] = task
 			} else {
@@ -189,8 +189,8 @@ func renderDryMergeResults(cmd *cobra.Command, p *termcolor.Painter, results []c
 	)
 
 	for _, r := range conflicting {
-		task1, _ := resolver.TaskFromBranch(r.Branch1, prefixes)
-		task2, _ := resolver.TaskFromBranch(r.Branch2, prefixes)
+		task1, _ := resolver.PureTaskFromBranch(r.Branch1, prefixes)
+		task2, _ := resolver.PureTaskFromBranch(r.Branch2, prefixes)
 		files := p.Paint(strings.Join(r.ConflictFiles, ", "), termcolor.Red)
 		tbl.AddRow(task1, task2, files)
 	}
