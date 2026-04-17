@@ -49,7 +49,7 @@ var statusCmd = &cobra.Command{
 			return err
 		}
 
-		mainEntry := findMainEntry(entries, mainBranch)
+		mainEntry := git.FindEntry(entries, mainBranch)
 		candidates := git.FilterEntries(entries, mainBranch)
 
 		staleDays, _ := cmd.Flags().GetInt(flagStaleDays)
@@ -113,17 +113,6 @@ func init() {
 	statusCmd.Flags().Int(flagStaleDays, defaultStaleDays, "Number of days after which a worktree is considered stale")
 	statusCmd.Flags().Bool(flagDetail, false, "Show per-worktree disk size and 7-day commit velocity")
 	rootCmd.AddCommand(statusCmd)
-}
-
-// findMainEntry returns the worktree for mainBranch, or nil if absent.
-// FilterEntries drops main from the candidate set, so we look it up here.
-func findMainEntry(entries []git.WorktreeEntry, mainBranch string) *git.WorktreeEntry {
-	for i := range entries {
-		if entries[i].Branch == mainBranch {
-			return &entries[i]
-		}
-	}
-	return nil
 }
 
 // collectStatuses gathers dirty/ahead/behind state and last commit time

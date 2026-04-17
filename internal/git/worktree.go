@@ -105,6 +105,17 @@ func FilterEntries(entries []WorktreeEntry, mainBranch string) []WorktreeEntry {
 	return out
 }
 
+// FindEntry returns the first entry matching branch, or nil if none.
+// Counterpart to FilterEntries.
+func FindEntry(entries []WorktreeEntry, branch string) *WorktreeEntry {
+	for i := range entries {
+		if entries[i].Branch == branch {
+			return &entries[i]
+		}
+	}
+	return nil
+}
+
 // Prune runs `git worktree prune` to clean up stale worktree references.
 func Prune(r Runner, dryRun bool) (string, error) {
 	args := []string{cmdWorktree, "prune"}

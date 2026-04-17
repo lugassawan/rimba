@@ -19,24 +19,6 @@ import (
 
 func ptr[T any](v T) *T { return &v }
 
-func TestFindMainEntry(t *testing.T) {
-	entries := []git.WorktreeEntry{
-		{Branch: "feature/a", Path: "/wt/a"},
-		{Branch: "main", Path: "/repo"},
-		{Branch: "feature/b", Path: "/wt/b"},
-	}
-	got := findMainEntry(entries, "main")
-	if got == nil || got.Path != "/repo" {
-		t.Errorf("findMainEntry = %+v, want /repo", got)
-	}
-	if findMainEntry(entries, "nope") != nil {
-		t.Error("findMainEntry on missing branch should return nil")
-	}
-	if findMainEntry(nil, "main") != nil {
-		t.Error("findMainEntry on nil entries should return nil")
-	}
-}
-
 func TestSortBySizeDesc(t *testing.T) {
 	results := []statusEntry{
 		{entry: git.WorktreeEntry{Branch: "small"}, sizeBytes: ptr(int64(100))},
