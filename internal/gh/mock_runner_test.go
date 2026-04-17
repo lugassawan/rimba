@@ -8,9 +8,10 @@ import (
 	"testing"
 )
 
-// withFakeGhOnPath puts a dummy `gh` executable on PATH for the test's
-// lifetime so IsAvailable() returns true regardless of the host.
+// withFakeGhOnPath prepends a dummy `gh` executable to PATH for the
+// test's lifetime so IsAvailable() returns true regardless of the host.
 // The runner is always mocked, so the fake binary is never executed.
+// PATH is prepended (not replaced) so other tools stay resolvable.
 func withFakeGhOnPath(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
@@ -18,7 +19,7 @@ func withFakeGhOnPath(t *testing.T) {
 	if err := os.WriteFile(fake, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("PATH", dir)
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
 
 // mockRunner implements Runner with a configurable closure for testing.
