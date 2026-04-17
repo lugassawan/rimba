@@ -114,7 +114,7 @@ func runExecCommand(ctx context.Context, command string, filtered []resolver.Wor
 
 	targets := make([]executor.Target, len(filtered))
 	for i, wt := range filtered {
-		task, _ := resolver.TaskFromBranch(wt.Branch, prefixes)
+		task, _ := resolver.PureTaskFromBranch(wt.Branch, prefixes)
 		targets[i] = executor.Target{
 			Path:   wt.Path,
 			Branch: wt.Branch,

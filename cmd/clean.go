@@ -214,7 +214,7 @@ func printMergedCandidates(cmd *cobra.Command, candidates []operations.CleanCand
 	prefixes := resolver.AllPrefixes()
 	fmt.Fprintln(cmd.OutOrStdout(), "Merged worktrees:")
 	for _, c := range candidates {
-		task, _ := resolver.TaskFromBranch(c.Branch, prefixes)
+		task, _ := resolver.PureTaskFromBranch(c.Branch, prefixes)
 		fmt.Fprintf(cmd.OutOrStdout(), "  %s (%s)\n", task, c.Branch)
 	}
 }
@@ -223,7 +223,7 @@ func printStaleCandidates(cmd *cobra.Command, candidates []operations.StaleCandi
 	prefixes := resolver.AllPrefixes()
 	fmt.Fprintln(cmd.OutOrStdout(), "Stale worktrees:")
 	for _, c := range candidates {
-		task, _ := resolver.TaskFromBranch(c.Branch, prefixes)
+		task, _ := resolver.PureTaskFromBranch(c.Branch, prefixes)
 		age := resolver.FormatAge(c.LastCommit)
 		fmt.Fprintf(cmd.OutOrStdout(), "  %s (%s) — last commit: %s\n", task, c.Branch, age)
 	}

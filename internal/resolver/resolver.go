@@ -79,6 +79,17 @@ func TaskFromBranch(branch string, prefixes []string) (task, matchedPrefix strin
 	return branch, ""
 }
 
+// PureTaskFromBranch extracts the task name from a branch, stripping both
+// the service (monorepo) and the prefix.
+// "auth-api/feature/login" → ("login", "feature/")
+// "feature/my-task"        → ("my-task", "feature/")
+// "bare-branch"            → ("bare-branch", "")
+// Return signature matches TaskFromBranch so callers can swap in place.
+func PureTaskFromBranch(branch string, prefixes []string) (task, matchedPrefix string) {
+	_, t, p := ServiceFromBranch(branch, prefixes)
+	return t, p
+}
+
 // WorktreeInfo holds parsed information about a worktree.
 type WorktreeInfo struct {
 	Path    string

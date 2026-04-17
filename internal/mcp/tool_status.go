@@ -107,7 +107,7 @@ func buildStatusResult(results []statusCollectedEntry, staleThreshold time.Time,
 
 // buildStatusItem constructs a statusItem from a collected entry.
 func buildStatusItem(r statusCollectedEntry, staleThreshold time.Time, prefixes []string) statusItem {
-	task, matchedPrefix := resolver.TaskFromBranch(r.entry.Branch, prefixes)
+	task, matchedPrefix := resolver.PureTaskFromBranch(r.entry.Branch, prefixes)
 	typeName := strings.TrimSuffix(matchedPrefix, "/")
 
 	item := statusItem{

@@ -183,7 +183,7 @@ func buildCLIStatusSummary(results []statusEntry, staleThreshold time.Time) cliS
 
 // buildStatusRow formats a single worktree row for the status table.
 func buildStatusRow(r statusEntry, prefixes []string, staleThreshold time.Time, p *termcolor.Painter) []string {
-	task, matchedPrefix := resolver.TaskFromBranch(r.entry.Branch, prefixes)
+	task, matchedPrefix := resolver.PureTaskFromBranch(r.entry.Branch, prefixes)
 	typeName := strings.TrimSuffix(matchedPrefix, "/")
 
 	taskCell := "  " + task
@@ -224,7 +224,7 @@ func writeStatusJSON(cmd *cobra.Command, results []statusEntry, staleDays int) e
 			summary.Behind++
 		}
 
-		task, matchedPrefix := resolver.TaskFromBranch(r.entry.Branch, prefixes)
+		task, matchedPrefix := resolver.PureTaskFromBranch(r.entry.Branch, prefixes)
 		typeName := strings.TrimSuffix(matchedPrefix, "/")
 
 		item := output.StatusItem{

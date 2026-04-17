@@ -68,7 +68,7 @@ var mergePlanCmd = &cobra.Command{
 		)
 
 		for _, step := range steps {
-			task, prefix := resolver.TaskFromBranch(step.Branch, prefixes)
+			task, prefix := resolver.PureTaskFromBranch(step.Branch, prefixes)
 			typeName := strings.TrimSuffix(prefix, "/")
 
 			branchCell := task

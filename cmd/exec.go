@@ -155,7 +155,7 @@ func execSelectWorktrees(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, o
 func execBuildTargets(filtered []resolver.WorktreeInfo, prefixes []string) []executor.Target {
 	targets := make([]executor.Target, len(filtered))
 	for i, wt := range filtered {
-		task, _ := resolver.TaskFromBranch(wt.Branch, prefixes)
+		task, _ := resolver.PureTaskFromBranch(wt.Branch, prefixes)
 		targets[i] = executor.Target{
 			Path:   wt.Path,
 			Branch: wt.Branch,
@@ -260,7 +260,7 @@ func filterDirtyWorktrees(r git.Runner, s *spinner.Spinner, worktrees []resolver
 func printExecResults(cmd *cobra.Command, p *termcolor.Painter, results []executor.Result, prefixes []string) {
 	out := cmd.OutOrStdout()
 	for _, r := range results {
-		_, matchedPrefix := resolver.TaskFromBranch(r.Target.Branch, prefixes)
+		_, matchedPrefix := resolver.PureTaskFromBranch(r.Target.Branch, prefixes)
 		typeName := strings.TrimSuffix(matchedPrefix, "/")
 
 		taskLabel := r.Target.Task

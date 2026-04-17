@@ -94,6 +94,34 @@ func TestTaskFromBranch(t *testing.T) {
 	}
 }
 
+func TestPureTaskFromBranch(t *testing.T) {
+	prefixes := resolver.AllPrefixes()
+
+	const svcAuthAPI = "auth-api"
+
+	tests := []struct {
+		branch     string
+		wantTask   string
+		wantPrefix string
+	}{
+		{featurePrefix + taskMyTask, taskMyTask, featurePrefix},
+		{bugfixPrefix + taskLoginFix, taskLoginFix, bugfixPrefix},
+		{svcAuthAPI + "/" + featurePrefix + taskLogin, taskLogin, featurePrefix},
+		{svcAuthAPI + "/" + bugfixPrefix + taskCrash, taskCrash, bugfixPrefix},
+		{taskBare, taskBare, ""},
+		{"unknown/prefix", "unknown/prefix", ""},
+	}
+	for _, tt := range tests {
+		task, matched := resolver.PureTaskFromBranch(tt.branch, prefixes)
+		if task != tt.wantTask {
+			t.Errorf("PureTaskFromBranch(%q) task = %q, want %q", tt.branch, task, tt.wantTask)
+		}
+		if matched != tt.wantPrefix {
+			t.Errorf("PureTaskFromBranch(%q) prefix = %q, want %q", tt.branch, matched, tt.wantPrefix)
+		}
+	}
+}
+
 func TestFindBranchForTask(t *testing.T) {
 	worktrees := []resolver.WorktreeInfo{
 		{Path: "/wt/feature-login", Branch: featurePrefix + taskLogin},

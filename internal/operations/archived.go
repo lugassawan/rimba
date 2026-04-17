@@ -88,7 +88,7 @@ func searchByTaskExtraction(branches []string, active map[string]bool, prefixes 
 		if active[b] {
 			continue
 		}
-		t, _ := resolver.TaskFromBranch(b, prefixes)
+		t, _ := resolver.PureTaskFromBranch(b, prefixes)
 		if t == task {
 			return b, true
 		}
