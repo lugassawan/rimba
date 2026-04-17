@@ -7,12 +7,12 @@ import (
 	"strings"
 )
 
-// Runner abstracts `gh` command execution so callers can inject fakes in tests.
+// Runner runs `gh` commands. Tests inject a fake.
 type Runner interface {
 	Run(ctx context.Context, args ...string) ([]byte, error)
 }
 
-// Default returns a Runner that shells out to the real `gh` binary.
+// Default returns a Runner backed by the real `gh` binary.
 func Default() Runner {
 	return &execRunner{}
 }
