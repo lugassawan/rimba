@@ -138,6 +138,24 @@ func TestFilterEntriesEmpty(t *testing.T) {
 	}
 }
 
+func TestFindEntry(t *testing.T) {
+	entries := []git.WorktreeEntry{
+		{Branch: "feature/a", Path: "/wt/a"},
+		{Branch: "main", Path: "/repo"},
+		{Branch: "feature/b", Path: "/wt/b"},
+	}
+	got := git.FindEntry(entries, "main")
+	if got == nil || got.Path != "/repo" {
+		t.Errorf("FindEntry(main) = %+v, want /repo", got)
+	}
+	if git.FindEntry(entries, "nope") != nil {
+		t.Error("FindEntry on missing branch should return nil")
+	}
+	if git.FindEntry(nil, "main") != nil {
+		t.Error("FindEntry on nil entries should return nil")
+	}
+}
+
 func TestMoveWorktree(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipIntegration)

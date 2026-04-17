@@ -14,6 +14,7 @@ import (
 
 const (
 	flagDebug        = "debug"
+	flagDetail       = "detail"
 	flagForce        = "force"
 	flagJSON         = "json"
 	flagNoColor      = "no-color"
