@@ -31,9 +31,9 @@ type statusEntry struct {
 	recent7D   *int
 }
 
-// diskFootprint captures sizes used for the Disk: summary line and JSON
-// DiskSummary. mainErr is non-nil when main-repo size could not be computed;
-// in that case MainBytes is treated as absent in the CLI summary line.
+// diskFootprint aggregates sizes for the Disk: summary line and JSON.
+// mainErr != nil means main-repo size was not computed; the CLI drops
+// the main: fragment and JSON omits MainBytes.
 type diskFootprint struct {
 	mainBytes      int64
 	mainErr        error
@@ -120,9 +120,8 @@ func init() {
 	rootCmd.AddCommand(statusCmd)
 }
 
-// findMainEntry returns the unfiltered worktree entry matching mainBranch,
-// or nil if not present. Used to compute the main-repo footprint since
-// FilterEntries strips it from the candidate set.
+// findMainEntry returns the worktree for mainBranch, or nil if absent.
+// FilterEntries drops main from the candidate set, so we look it up here.
 func findMainEntry(entries []git.WorktreeEntry, mainBranch string) *git.WorktreeEntry {
 	for i := range entries {
 		if entries[i].Branch == mainBranch {
@@ -132,9 +131,9 @@ func findMainEntry(entries []git.WorktreeEntry, mainBranch string) *git.Worktree
 	return nil
 }
 
-// collectStatuses gathers dirty/ahead/behind state and last commit time for each candidate.
-// When detail is true, it also computes per-worktree disk size and 7-day commit count;
-// per-item errors leave the corresponding pointer nil (non-fatal).
+// collectStatuses gathers dirty/ahead/behind state and last commit time
+// per candidate. Under detail it also computes size and 7-day velocity;
+// per-item errors leave the pointer nil (non-fatal).
 func collectStatuses(r git.Runner, candidates []git.WorktreeEntry, s *spinner.Spinner, detail bool) []statusEntry {
 	s.Update("Collecting status...")
 	return parallel.Collect(len(candidates), 8, func(i int) statusEntry {
@@ -159,9 +158,8 @@ func collectStatuses(r git.Runner, candidates []git.WorktreeEntry, s *spinner.Sp
 	})
 }
 
-// buildFootprint aggregates per-worktree sizes + main-repo size into a
-// diskFootprint. Order-independent: only entries with non-nil sizeBytes
-// contribute.
+// buildFootprint sums per-worktree sizes and the main-repo size.
+// Entries with nil sizeBytes (errored) are skipped.
 func buildFootprint(results []statusEntry, mainEntry *git.WorktreeEntry, mainSize int64, mainErr error) *diskFootprint {
 	fp := &diskFootprint{}
 	if mainEntry != nil && mainErr == nil {
@@ -177,8 +175,7 @@ func buildFootprint(results []statusEntry, mainEntry *git.WorktreeEntry, mainSiz
 	return fp
 }
 
-// sortBySizeDesc sorts results by size (nil sizes sort last, preserving
-// input order among equal values).
+// sortBySizeDesc sorts largest first, stable, nils last.
 func sortBySizeDesc(results []statusEntry) {
 	sort.SliceStable(results, func(i, j int) bool {
 		a, b := results[i].sizeBytes, results[j].sizeBytes
@@ -236,8 +233,8 @@ func renderStatusDashboard(out io.Writer, p *termcolor.Painter, results []status
 	renderActionHints(out, p, summary)
 }
 
-// formatDiskLine builds the "Disk: total X  (main: Y, worktrees: Z)" summary.
-// When main-size computation failed, the "main:" fragment is omitted.
+// formatDiskLine builds the "Disk: total X  (main: Y, worktrees: Z)"
+// summary. The main: fragment is dropped when main-size errored.
 func formatDiskLine(p *termcolor.Painter, fp *diskFootprint) string {
 	total := p.Paint(resolver.FormatBytes(fp.total), termcolor.Bold)
 	worktrees := resolver.FormatBytes(fp.worktreesBytes)
@@ -319,7 +316,7 @@ func buildStatusRow(r statusEntry, prefixes []string, staleThreshold time.Time, 
 	return row
 }
 
-// formatSizeCell renders the SIZE column. Errors render as "?" in gray.
+// formatSizeCell renders the SIZE column. Nil (errored) renders as "?".
 func formatSizeCell(r statusEntry, p *termcolor.Painter) string {
 	if r.sizeBytes == nil {
 		return p.Paint("?", termcolor.Gray)
@@ -327,7 +324,7 @@ func formatSizeCell(r statusEntry, p *termcolor.Painter) string {
 	return resolver.FormatBytes(*r.sizeBytes)
 }
 
-// formatRecentCell renders the 7D column. Errors render as "?" in gray.
+// formatRecentCell renders the 7D column. Nil (errored) renders as "?".
 func formatRecentCell(r statusEntry, p *termcolor.Painter) string {
 	if r.recent7D == nil {
 		return p.Paint("?", termcolor.Gray)

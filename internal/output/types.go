@@ -28,9 +28,9 @@ type StatusData struct {
 	Disk      *DiskSummary  `json:"disk,omitempty"`
 }
 
-// DiskSummary holds the footprint breakdown emitted under --detail.
-// MainBytes is a pointer so consumers can distinguish "main repo size is
-// zero" from "main repo size could not be computed" (pointer is nil).
+// DiskSummary is the footprint breakdown emitted under --detail.
+// MainBytes is a pointer so nil (omitted in JSON) means "could not be
+// computed", distinct from a real zero.
 type DiskSummary struct {
 	TotalBytes     int64  `json:"total_bytes"`
 	MainBytes      *int64 `json:"main_bytes,omitempty"`

@@ -7,15 +7,12 @@ import (
 	"time"
 )
 
-// CommitCountSince returns the number of commits on branch with a committer
-// date newer than time.Now() - since. It wraps `git rev-list --count
-// --since=<unix-ts> <branch>`, using a unix timestamp to avoid locale/TZ
-// ambiguity in the --since parser.
+// CommitCountSince counts commits on branch within the last `since`
+// duration, via `git rev-list --count --since=<unix-ts>`.
 //
-// Note: git's --since stops walking the first-parent chain at the first
-// commit older than the cutoff, so a backdated ancestor hides newer
-// commits behind it. For the --detail "recent velocity" use case this is
-// the intended behavior: it measures how much the branch tip has moved.
+// git's --since stops at the first commit older than the cutoff, so an
+// older ancestor hides anything beyond it. That matches what we want
+// here: recent activity on the tip, not total commits in history.
 func CommitCountSince(r Runner, branch string, since time.Duration) (int, error) {
 	cutoff := time.Now().Add(-since).Unix()
 	out, err := r.Run(

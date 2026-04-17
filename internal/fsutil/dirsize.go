@@ -1,5 +1,4 @@
-// Package fsutil provides filesystem utilities that are shared across
-// rimba commands (directory sizing, path helpers, etc.).
+// Package fsutil holds filesystem helpers shared across commands.
 package fsutil
 
 import (
@@ -7,10 +6,9 @@ import (
 	"path/filepath"
 )
 
-// DirSize walks path and returns the total byte size of regular files
-// reachable without traversing symlinks. On per-entry errors (permission
-// denied, races) it accumulates a best-effort total and returns the first
-// error observed. The returned size is meaningful even when err is non-nil.
+// DirSize returns the total size of regular files under path.
+// Symlinks are not followed. On partial failure (permission denied,
+// races) it returns the best-effort total and the first error seen.
 func DirSize(path string) (int64, error) {
 	var total int64
 	var firstErr error

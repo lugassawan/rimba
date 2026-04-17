@@ -5,10 +5,9 @@ import (
 	"strconv"
 )
 
-// FormatBytes returns a human-readable size using 1024-base units (B, KB,
-// MB, GB, TB). One decimal place is shown for values under 10 in their unit
-// (e.g. "1.8GB"); whole numbers for larger values ("15MB"). Negative input
-// is clamped to zero.
+// FormatBytes renders n as a 1024-base size, e.g. "1.8GB" or "15MB".
+// Values under 10 in their unit get one decimal; larger values round to
+// whole numbers. n <= 0 returns "0B".
 func FormatBytes(n int64) string {
 	if n <= 0 {
 		return "0B"
