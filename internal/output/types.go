@@ -3,6 +3,8 @@ package output
 import "github.com/lugassawan/rimba/internal/resolver"
 
 // ListItem represents a worktree entry in JSON output.
+// PRNumber and CIStatus are set under --full when gh is available;
+// nil (omitted) means unknown.
 type ListItem struct {
 	Task      string                  `json:"task"`
 	Service   string                  `json:"service,omitempty"`
@@ -11,6 +13,8 @@ type ListItem struct {
 	Path      string                  `json:"path"`
 	IsCurrent bool                    `json:"is_current"`
 	Status    resolver.WorktreeStatus `json:"status"`
+	PRNumber  *int                    `json:"pr_number,omitempty"`
+	CIStatus  *string                 `json:"ci_status,omitempty"`
 }
 
 // ListArchivedItem represents an archived branch in JSON output.
