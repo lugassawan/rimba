@@ -21,7 +21,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const prQueryTimeout = 10 * time.Second
+const (
+	prQueryTimeout = 10 * time.Second
+
+	ciStatusSuccess = "SUCCESS"
+	ciStatusPending = "PENDING"
+	ciStatusFailure = "FAILURE"
+)
 
 // prInfo is the per-branch PR/CI summary. Nil fields mean unknown.
 type prInfo struct {
@@ -400,11 +406,11 @@ func formatCICell(status *string, p *termcolor.Painter) string {
 		return p.Paint("–", termcolor.Gray)
 	}
 	switch *status {
-	case "SUCCESS":
+	case ciStatusSuccess:
 		return p.Paint("✓", termcolor.Green)
-	case "PENDING":
+	case ciStatusPending:
 		return p.Paint("●", termcolor.Yellow)
-	case "FAILURE":
+	case ciStatusFailure:
 		return p.Paint("✗", termcolor.Red)
 	default:
 		return p.Paint("–", termcolor.Gray)
