@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/gh"
 	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/termcolor"
@@ -884,10 +885,10 @@ func TestFormatPRCell(t *testing.T) {
 
 func TestFormatCICell(t *testing.T) {
 	p := termcolor.NewPainter(true)
-	success, pending, failure, unknown := ciStatusSuccess, ciStatusPending, ciStatusFailure, "WHATEVER"
+	success, pending, failure, unknown := gh.CIStatusSuccess, gh.CIStatusPending, gh.CIStatusFailure, gh.CIStatus("WHATEVER")
 
 	cases := map[string]struct {
-		in   *string
+		in   *gh.CIStatus
 		want string
 	}{
 		"nil":     {nil, "–"},
@@ -909,7 +910,7 @@ func TestListRenderTableFullWithPRInfo(t *testing.T) {
 		{Task: "a", Branch: "feature/a", Type: "feature", Path: "/wt/a", Status: resolver.WorktreeStatus{}},
 	}
 	n := 777
-	s := "SUCCESS"
+	s := gh.CIStatusSuccess
 	info := prInfoMap{"feature/a": {number: &n, status: &s}}
 
 	listRenderTable(cmd, rows, true, info, "gh unavailable; PR/CI columns blank")
@@ -927,7 +928,7 @@ func TestListRenderJSONPopulatesPRInfo(t *testing.T) {
 		{Task: "a", Branch: "feature/a", Type: "feature", Path: "/wt/a"},
 	}
 	n := 9
-	s := "PENDING"
+	s := gh.CIStatusPending
 	info := prInfoMap{"feature/a": {number: &n, status: &s}}
 	if err := listRenderJSON(cmd, rows, info); err != nil {
 		t.Fatalf("listRenderJSON: %v", err)

@@ -21,18 +21,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const (
-	prQueryTimeout = 10 * time.Second
-
-	ciStatusSuccess = "SUCCESS"
-	ciStatusPending = "PENDING"
-	ciStatusFailure = "FAILURE"
-)
+const prQueryTimeout = 10 * time.Second
 
 // prInfo is the per-branch PR/CI summary. Nil fields mean unknown.
 type prInfo struct {
 	number *int
-	status *string
+	status *gh.CIStatus
 }
 
 // prInfoMap is keyed by branch. A nil map means gh was not queried.
@@ -296,7 +290,10 @@ func listRenderJSON(cmd *cobra.Command, rows []resolver.WorktreeDetail, prInfos 
 		}
 		if info, ok := prInfos[r.Branch]; ok {
 			items[i].PRNumber = info.number
-			items[i].CIStatus = info.status
+			if info.status != nil {
+				s := string(*info.status)
+				items[i].CIStatus = &s
+			}
 		}
 	}
 	return output.WriteJSON(cmd.OutOrStdout(), version, "list", items)
@@ -401,16 +398,16 @@ func formatPRCell(n *int, p *termcolor.Painter) string {
 	return fmt.Sprintf("#%d", *n)
 }
 
-func formatCICell(status *string, p *termcolor.Painter) string {
+func formatCICell(status *gh.CIStatus, p *termcolor.Painter) string {
 	if status == nil {
 		return p.Paint("–", termcolor.Gray)
 	}
 	switch *status {
-	case ciStatusSuccess:
+	case gh.CIStatusSuccess:
 		return p.Paint("✓", termcolor.Green)
-	case ciStatusPending:
+	case gh.CIStatusPending:
 		return p.Paint("●", termcolor.Yellow)
-	case ciStatusFailure:
+	case gh.CIStatusFailure:
 		return p.Paint("✗", termcolor.Red)
 	default:
 		return p.Paint("–", termcolor.Gray)
