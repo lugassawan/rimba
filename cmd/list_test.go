@@ -848,9 +848,9 @@ func TestListRenderTableWithFullAndService(t *testing.T) {
 		{Task: "foo", Branch: "feature/foo", Type: "feature", Path: "/wt/foo", Service: "web", IsCurrent: true, Status: resolver.WorktreeStatus{}},
 		{Task: "bar", Branch: "bugfix/bar", Type: "bugfix", Path: "/wt/bar", Status: resolver.WorktreeStatus{Dirty: true}},
 	}
-	listRenderTable(cmd, rows, true)
+	listRenderTable(cmd, rows, true, nil, "")
 	out := buf.String()
-	for _, want := range []string{"foo", "bar", "feature/foo", "bugfix/bar", "SERVICE", "BRANCH", "PATH"} {
+	for _, want := range []string{"foo", "bar", "feature/foo", "bugfix/bar", "SERVICE", "BRANCH", "PATH", "PR", "CI"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("want %q in output: %s", want, out)
 		}

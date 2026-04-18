@@ -1,12 +1,15 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/gh"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
@@ -17,6 +20,22 @@ import (
 	"github.com/lugassawan/rimba/internal/termcolor"
 	"github.com/spf13/cobra"
 )
+
+const prQueryTimeout = 10 * time.Second
+
+// prInfo is the per-branch PR/CI summary. Nil fields mean unknown.
+type prInfo struct {
+	number *int
+	status *string
+}
+
+// prInfoMap is keyed by branch. A nil map means gh was not queried.
+type prInfoMap map[string]prInfo
+
+type collectPair struct {
+	detail resolver.WorktreeDetail
+	info   prInfo
+}
 
 const (
 	flagType     = "type"
@@ -29,7 +48,7 @@ const (
 	hintType    = "Filter by prefix type (feature, bugfix, hotfix, etc.)"
 	hintDirty   = "Show only worktrees with uncommitted changes"
 	hintBehind  = "Show only worktrees behind upstream"
-	hintFull    = "Show all columns including branch and path"
+	hintFull    = "Show all columns (branch, path, PR/CI when gh is available)"
 	hintService = "Filter by service name (monorepo)"
 )
 
@@ -43,7 +62,7 @@ type candidate struct {
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all worktrees",
-	Long:  "Lists all git worktrees with task, type, and status. Use --full to show all columns including branch and path.",
+	Long:  "Lists all git worktrees with task, type, and status. Use --full to show branch, path, and (when gh is installed and authenticated) PR number and CI rollup.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		opts := listReadFlags(cmd)
 
@@ -78,7 +97,7 @@ var listCmd = &cobra.Command{
 
 		prefixes := resolver.AllPrefixes()
 		candidates := listBuildCandidates(entries, wtDir, prefixes, opts.typeFilter)
-		rows := listCollectRows(r, candidates, prefixes)
+		rows, prInfos, ghWarning := listCollectAll(cmd.Context(), r, candidates, prefixes, opts.full)
 		rows = operations.FilterDetailsByStatus(rows, opts.dirty, opts.behind)
 		rows = resolver.FilterByService(rows, opts.service)
 
@@ -91,9 +110,9 @@ var listCmd = &cobra.Command{
 		resolver.SortDetailsByTask(rows)
 
 		if isJSON(cmd) {
-			return listRenderJSON(cmd, rows)
+			return listRenderJSON(cmd, rows, prInfos)
 		}
-		listRenderTable(cmd, rows, opts.full)
+		listRenderTable(cmd, rows, opts.full, prInfos, ghWarning)
 		return nil
 	},
 }
@@ -203,15 +222,61 @@ func listBuildCandidates(entries []git.WorktreeEntry, wtDir string, prefixes []s
 	return candidates
 }
 
-func listCollectRows(r git.Runner, candidates []candidate, prefixes []string) []resolver.WorktreeDetail {
-	return parallel.Collect(len(candidates), 8, func(i int) resolver.WorktreeDetail {
+// listCollectAll gathers worktree details and, under --full, open PR/CI
+// rollup per branch in parallel. ghWarning is set when --full is requested
+// but gh is missing or unauthenticated.
+func listCollectAll(ctx context.Context, r git.Runner, candidates []candidate, prefixes []string, full bool) (rows []resolver.WorktreeDetail, prInfos prInfoMap, ghWarning string) {
+	var ghRunner gh.Runner
+	if full {
+		ghRunner = gh.Default()
+		if err := gh.CheckAuth(ctx, ghRunner); err != nil {
+			ghWarning = "gh unavailable; PR/CI columns blank"
+			ghRunner = nil
+		} else {
+			prInfos = make(prInfoMap, len(candidates))
+		}
+	}
+
+	results := parallel.Collect(len(candidates), 8, func(i int) collectPair {
 		c := candidates[i]
 		status := operations.CollectWorktreeStatus(r, c.entry.Path)
-		return resolver.NewWorktreeDetail(c.entry.Branch, prefixes, c.displayPath, status, c.isCurrent)
+		d := resolver.NewWorktreeDetail(c.entry.Branch, prefixes, c.displayPath, status, c.isCurrent)
+		var info prInfo
+		if ghRunner != nil {
+			info = queryPRInfo(ctx, ghRunner, c.entry.Branch)
+		}
+		return collectPair{detail: d, info: info}
 	})
+
+	rows = make([]resolver.WorktreeDetail, len(results))
+	for i, res := range results {
+		rows[i] = res.detail
+		if prInfos != nil {
+			prInfos[res.detail.Branch] = res.info
+		}
+	}
+	return rows, prInfos, ghWarning
 }
 
-func listRenderJSON(cmd *cobra.Command, rows []resolver.WorktreeDetail) error {
+// queryPRInfo runs one gh pr list under a timeout. Errors degrade silently
+// so one slow or broken query does not fail the whole table.
+func queryPRInfo(ctx context.Context, ghRunner gh.Runner, branch string) prInfo {
+	qctx, cancel := context.WithTimeout(ctx, prQueryTimeout)
+	defer cancel()
+	pr, err := gh.QueryPRStatus(qctx, ghRunner, branch)
+	if err != nil || pr.Number == 0 {
+		return prInfo{}
+	}
+	n := pr.Number
+	info := prInfo{number: &n}
+	if pr.CIStatus != "" {
+		s := pr.CIStatus
+		info.status = &s
+	}
+	return info
+}
+
+func listRenderJSON(cmd *cobra.Command, rows []resolver.WorktreeDetail, prInfos prInfoMap) error {
 	items := make([]output.ListItem, len(rows))
 	for i, r := range rows {
 		items[i] = output.ListItem{
@@ -223,14 +288,22 @@ func listRenderJSON(cmd *cobra.Command, rows []resolver.WorktreeDetail) error {
 			IsCurrent: r.IsCurrent,
 			Status:    r.Status,
 		}
+		if info, ok := prInfos[r.Branch]; ok {
+			items[i].PRNumber = info.number
+			items[i].CIStatus = info.status
+		}
 	}
 	return output.WriteJSON(cmd.OutOrStdout(), version, "list", items)
 }
 
-func listRenderTable(cmd *cobra.Command, rows []resolver.WorktreeDetail, full bool) {
+func listRenderTable(cmd *cobra.Command, rows []resolver.WorktreeDetail, full bool, prInfos prInfoMap, ghWarning string) {
 	hasService := resolver.HasService(rows)
 	noColor, _ := cmd.Flags().GetBool(flagNoColor)
 	p := termcolor.NewPainter(noColor)
+
+	if ghWarning != "" {
+		fmt.Fprintln(cmd.OutOrStdout(), p.Paint(ghWarning, termcolor.Yellow))
+	}
 
 	tbl := termcolor.NewTable(2)
 	tbl.AddRow(listHeader(p, hasService, full)...)
@@ -248,7 +321,12 @@ func listRenderTable(cmd *cobra.Command, rows []resolver.WorktreeDetail, full bo
 		}
 
 		statusCell := colorStatus(p, row.Status)
-		tbl.AddRow(listRow(taskCell, row, typeCell, statusCell, hasService, full)...)
+		cells := listRow(taskCell, row, typeCell, statusCell, hasService, full)
+		if full {
+			info := prInfos[row.Branch]
+			cells = append(cells, formatPRCell(info.number, p), formatCICell(info.status, p))
+		}
+		tbl.AddRow(cells...)
 	}
 
 	tbl.Render(cmd.OutOrStdout())
@@ -262,7 +340,7 @@ func init() {
 	listCmd.Flags().Bool(flagDirty, false, "show only dirty worktrees")
 	listCmd.Flags().Bool(flagBehind, false, "show only worktrees behind upstream")
 	listCmd.Flags().Bool(flagArchived, false, "show archived branches (not in any active worktree)")
-	listCmd.Flags().Bool(flagFull, false, "show all columns including branch and path")
+	listCmd.Flags().Bool(flagFull, false, "show all columns (branch, path, PR/CI when gh is available)")
 
 	listCmd.MarkFlagsMutuallyExclusive(flagArchived, flagType)
 	listCmd.MarkFlagsMutuallyExclusive(flagArchived, flagDirty)
@@ -281,7 +359,6 @@ func init() {
 	})
 }
 
-// listArchivedBranches shows branches not associated with any active worktree.
 func listHeader(p *termcolor.Painter, hasService, full bool) []string {
 	h := []string{p.Paint("TASK", termcolor.Bold)}
 	if hasService {
@@ -292,6 +369,9 @@ func listHeader(p *termcolor.Painter, hasService, full bool) []string {
 		h = append(h, p.Paint("BRANCH", termcolor.Bold), p.Paint("PATH", termcolor.Bold))
 	}
 	h = append(h, p.Paint("STATUS", termcolor.Bold))
+	if full {
+		h = append(h, p.Paint("PR", termcolor.Bold), p.Paint("CI", termcolor.Bold))
+	}
 	return h
 }
 
@@ -307,6 +387,31 @@ func listRow(taskCell string, row resolver.WorktreeDetail, typeCell, statusCell 
 	cells = append(cells, statusCell)
 	return cells
 }
+
+func formatPRCell(n *int, p *termcolor.Painter) string {
+	if n == nil {
+		return p.Paint("–", termcolor.Gray)
+	}
+	return fmt.Sprintf("#%d", *n)
+}
+
+func formatCICell(status *string, p *termcolor.Painter) string {
+	if status == nil {
+		return p.Paint("–", termcolor.Gray)
+	}
+	switch *status {
+	case "SUCCESS":
+		return p.Paint("✓", termcolor.Green)
+	case "PENDING":
+		return p.Paint("●", termcolor.Yellow)
+	case "FAILURE":
+		return p.Paint("✗", termcolor.Red)
+	default:
+		return p.Paint("–", termcolor.Gray)
+	}
+}
+
+// listArchivedBranches shows branches not associated with any active worktree.
 
 func listArchivedBranches(cmd *cobra.Command, r git.Runner, mainBranch string) error {
 	archived, err := operations.ListArchivedBranches(r, mainBranch)
