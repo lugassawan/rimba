@@ -26,8 +26,7 @@ const (
 	prListNoOpenPR     = `[]`
 )
 
-// threeWorktreeRunner returns a git runner preloaded with three worktrees
-// (feature/auth dirty+behind, bugfix/login clean, chore/logout clean).
+// threeWorktreeRunner preloads feature/auth (dirty+behind), bugfix/login, chore/logout.
 func threeWorktreeRunner() *mockRunner {
 	porcelain := porcelainEntries(
 		struct{ path, branch string }{pathWtFeatureAuth, branchFeatureAuth},
@@ -56,8 +55,7 @@ func threeWorktreeRunner() *mockRunner {
 	}
 }
 
-// mockGHRunner routes gh calls by args: "auth status" → auth check,
-// "pr list --head <branch>" → PR query.
+// mockGHRunner routes "auth status" to authErr and "pr list --head <branch>" to prByBranch.
 type mockGHRunner struct {
 	authErr    error
 	prByBranch map[string]string // branch → raw gh pr list JSON or "" for network err
@@ -114,7 +112,6 @@ func TestListWorktreesNoFiltersNoFull(t *testing.T) {
 	if res.GhWarning != "" {
 		t.Errorf("GhWarning = %q, want empty", res.GhWarning)
 	}
-	// Sorted alphabetically by task: auth, login, logout
 	wantOrder := []string{"auth", "login", "logout"}
 	for i, want := range wantOrder {
 		if res.Rows[i].Task != want {
@@ -281,9 +278,6 @@ func TestListWorktreesFullPRRollupStates(t *testing.T) {
 }
 
 func TestListWorktreesFullComposesWithDirtyFilter(t *testing.T) {
-	// Exercises the parallel collect + PR query path alongside a
-	// post-collect status filter, guarding against regressions where
-	// filtering accidentally drops rows whose PR info was populated.
 	withFakeGhOnPath(t)
 	gitR := threeWorktreeRunner()
 	ghR := &mockGHRunner{
@@ -301,8 +295,7 @@ func TestListWorktreesFullComposesWithDirtyFilter(t *testing.T) {
 	if len(res.Rows) != 1 || res.Rows[0].Branch != branchFeatureAuth {
 		t.Fatalf("want 1 dirty row (feature/auth), got %+v", res.Rows)
 	}
-	// PRInfos still carries entries for all three candidates queried
-	// before the post-collect status filter — this is the contract.
+	// PRInfos carries entries for all candidates queried before the status filter runs.
 	if got := res.PRInfos[branchFeatureAuth]; got.Number != 12 || got.CIStatus != gh.CIStatusSuccess {
 		t.Errorf("PRInfos[feature/auth] = %+v, want {12, SUCCESS}", got)
 	}
@@ -332,7 +325,6 @@ func TestListWorktreesFullPRQueryErrorDegradesSilently(t *testing.T) {
 }
 
 func TestListWorktreesFullWithNilGhRunnerSkipsQueries(t *testing.T) {
-	// When Full=true but ghR is nil, use case behaves as Full=false.
 	gitR := threeWorktreeRunner()
 	res, err := ListWorktrees(context.Background(), gitR, nil, ListWorktreesRequest{
 		Full:        true,
@@ -350,7 +342,7 @@ func TestListWorktreesFullWithNilGhRunnerSkipsQueries(t *testing.T) {
 }
 
 func TestListWorktreesCurrentPathMarksRow(t *testing.T) {
-	// Use a real tmp dir so EvalSymlinks returns the expected path.
+	// Real tmp dir needed so EvalSymlinks resolves to the path we compare against.
 	dir := t.TempDir()
 	wtPath := filepath.Join(dir, "feature-auth")
 	if err := os.Mkdir(wtPath, 0o755); err != nil {

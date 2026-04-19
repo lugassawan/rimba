@@ -56,8 +56,6 @@ func handleList(hctx *HandlerContext) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(fmt.Sprintf("invalid type %q; valid types: feature, bugfix, hotfix, docs, test, chore", typeFilter)), nil
 		}
 
-		// MCP does not expose --full or mark a current worktree, so ghR is
-		// nil and CurrentPath is empty. The use case owns the rest.
 		res, err := operations.ListWorktrees(ctx, r, nil, operations.ListWorktreesRequest{
 			TypeFilter:  typeFilter,
 			Dirty:       dirty,
@@ -72,7 +70,6 @@ func handleList(hctx *HandlerContext) server.ToolHandlerFunc {
 	}
 }
 
-// detailsToListItems converts worktree details to list items.
 func detailsToListItems(rows []resolver.WorktreeDetail) []listItem {
 	items := make([]listItem, len(rows))
 	for i, row := range rows {
@@ -110,7 +107,6 @@ func handleListArchived(r git.Runner, hctx *HandlerContext) (*mcp.CallToolResult
 	return marshalResult(items)
 }
 
-// configDefault returns the default_source from config, or "" if unset.
 func configDefault(hctx *HandlerContext) string {
 	if hctx.Config != nil {
 		return hctx.Config.DefaultSource
@@ -118,7 +114,6 @@ func configDefault(hctx *HandlerContext) string {
 	return ""
 }
 
-// marshalResult serializes data to JSON and wraps it in a tool result.
 func marshalResult(data any) (*mcp.CallToolResult, error) {
 	b, err := json.Marshal(data)
 	if err != nil {

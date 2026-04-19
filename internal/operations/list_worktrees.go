@@ -16,60 +16,43 @@ const (
 	listWorktreesConcurrency = 8
 	prQueryTimeout           = 10 * time.Second
 
-	// GhUnavailableWarning is surfaced when --full is requested but gh is
-	// missing or unauthenticated. Callers render it verbatim.
 	GhUnavailableWarning = "gh unavailable; PR/CI columns blank"
 )
 
 // ListWorktreesRequest configures ListWorktrees.
 type ListWorktreesRequest struct {
-	// Full enables PR/CI lookup. Requires a non-nil ghR; when Full is true
-	// and ghR is nil, the use case behaves as if Full were false.
-	Full bool
-	// TypeFilter keeps only worktrees whose branch prefix matches (e.g. "feature").
-	// Empty string means no filter. Caller validates before passing.
-	TypeFilter string
-	// Dirty keeps only worktrees with uncommitted changes.
-	Dirty bool
-	// Behind keeps only worktrees behind upstream.
-	Behind bool
-	// Service keeps only worktrees with matching service (monorepo).
-	Service string
-	// CurrentPath marks the worktree whose resolved path equals this value as
-	// IsCurrent. Empty string means no worktree is marked.
-	CurrentPath string
-	// WorktreeDir is the absolute directory holding worktrees; used to
-	// compute a relative display path when shorter than the absolute.
-	WorktreeDir string
+	Full        bool   // include PR/CI (requires non-nil ghR)
+	TypeFilter  string // branch prefix, e.g. "feature"
+	Dirty       bool
+	Behind      bool
+	Service     string // monorepo service filter
+	CurrentPath string // marks matching worktree as IsCurrent; "" to skip
+	WorktreeDir string // absolute; used to shorten display paths
 }
 
 // PRInfo is the per-branch PR/CI summary.
 //
-// Three states matter to consumers:
-//   - PRInfos map is nil         → gh not queried (Full off or auth failed)
-//   - PRInfos[branch].Number == 0 → queried, no open PR for this branch
-//   - PRInfos[branch].Number  > 0 → known PR; CIStatus may still be "" when
-//     the PR has no checks reported.
+// Encoding: the PRInfos map is nil when gh was not queried. Within the map,
+// Number == 0 means no open PR for that branch; Number > 0 means a known PR
+// where CIStatus may still be empty (no checks reported).
 type PRInfo struct {
 	Number   int
 	CIStatus gh.CIStatus
 }
 
-// ListWorktreesResult carries the shaped rows plus optional PR data and
-// a user-facing gh warning.
+// ListWorktreesResult carries the shaped rows with optional PR data and a gh warning.
 type ListWorktreesResult struct {
 	Rows      []resolver.WorktreeDetail
 	PRInfos   map[string]PRInfo
 	GhWarning string
 }
 
-// ListWorktrees is the shared pipeline used by `rimba list` and the MCP list
-// tool: candidate filter → optional gh auth check → parallel status (+PR)
-// collection → dirty/behind filter → service filter → sort.
+// ListWorktrees is the shared pipeline for `rimba list` and the MCP list tool:
+// candidate filter → optional gh auth check → parallel status (+PR) collection
+// → dirty/behind filter → service filter → sort.
 //
-// ghR is nil when the caller cannot or does not want to query gh. When
-// req.Full is true and ghR is non-nil but auth fails, the use case falls
-// back to the non-full path and populates GhWarning.
+// Pass ghR=nil to skip PR/CI lookup. When req.Full is true and auth fails, the
+// use case falls back silently and populates GhWarning.
 func ListWorktrees(
 	ctx context.Context,
 	gitR git.Runner,
@@ -98,10 +81,6 @@ func ListWorktrees(
 		}
 	}
 
-	// activeGhR is captured by value into each worker closure below —
-	// reassignment above happens-before goroutine start, but an explicit
-	// local makes the intent obvious and keeps the race detector happy
-	// if the sequence is ever reordered.
 	results := parallel.Collect(len(candidates), listWorktreesConcurrency, func(i int) listWorktreeResult {
 		c := candidates[i]
 		status := CollectWorktreeStatus(gitR, c.entry.Path)
@@ -128,16 +107,12 @@ func ListWorktrees(
 	return ListWorktreesResult{Rows: rows, PRInfos: prInfos, GhWarning: ghWarning}, nil
 }
 
-// listCandidate is a pre-filtered worktree entry paired with its display
-// path and current-worktree marker.
 type listCandidate struct {
 	entry       git.WorktreeEntry
 	displayPath string
 	isCurrent   bool
 }
 
-// listWorktreeResult pairs a resolved detail with its optional PR info
-// during the parallel collect stage.
 type listWorktreeResult struct {
 	detail resolver.WorktreeDetail
 	info   PRInfo

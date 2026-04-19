@@ -102,7 +102,6 @@ var listCmd = &cobra.Command{
 	},
 }
 
-// listOpts holds parsed list flags.
 type listOpts struct {
 	typeFilter string
 	dirty      bool
@@ -180,7 +179,6 @@ func init() {
 	})
 }
 
-// listArchivedBranches shows branches not associated with any active worktree.
 func listArchivedBranches(cmd *cobra.Command, r git.Runner, mainBranch string) error {
 	archived, err := operations.ListArchivedBranches(r, mainBranch)
 	if err != nil {

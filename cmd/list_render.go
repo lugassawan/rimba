@@ -110,7 +110,6 @@ func listRow(taskCell string, row resolver.WorktreeDetail, typeCell, statusCell 
 	return cells
 }
 
-// formatPRCell renders the PR column. n == 0 means no open PR (shown as dash).
 func formatPRCell(n int, p *termcolor.Painter) string {
 	if n == 0 {
 		return p.Paint("–", termcolor.Gray)
@@ -118,8 +117,6 @@ func formatPRCell(n int, p *termcolor.Painter) string {
 	return fmt.Sprintf("#%d", n)
 }
 
-// formatCICell renders the CI rollup column. Empty status means no checks
-// reported — distinct from "no PR" but rendered the same in the table.
 func formatCICell(status gh.CIStatus, p *termcolor.Painter) string {
 	switch status {
 	case gh.CIStatusSuccess:
