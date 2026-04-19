@@ -30,8 +30,8 @@ func TestCollectWorktreeStatusDirty(t *testing.T) {
 	r := &mockRunner{
 		run: func(_ ...string) (string, error) { return "", nil },
 		runInDir: func(_ string, args ...string) (string, error) {
-			if len(args) >= 1 && args[0] == "status" {
-				return "M file.go", nil
+			if len(args) >= 1 && args[0] == gitCmdStatus {
+				return dirtyStatusFixture, nil
 			}
 			return "", nil
 		},
