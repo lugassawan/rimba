@@ -1,12 +1,10 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/gh"
@@ -14,28 +12,11 @@ import (
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/output"
-	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/lugassawan/rimba/internal/termcolor"
 	"github.com/spf13/cobra"
 )
-
-const prQueryTimeout = 10 * time.Second
-
-// prInfo is the per-branch PR/CI summary. Nil fields mean unknown.
-type prInfo struct {
-	number *int
-	status *gh.CIStatus
-}
-
-// prInfoMap is keyed by branch. A nil map means gh was not queried.
-type prInfoMap map[string]prInfo
-
-type collectPair struct {
-	detail resolver.WorktreeDetail
-	info   prInfo
-}
 
 const (
 	flagType     = "type"
@@ -51,13 +32,6 @@ const (
 	hintFull    = "Show all columns (branch, path, PR/CI when gh is available)"
 	hintService = "Filter by service name (monorepo)"
 )
-
-// candidate holds a pre-filtered worktree entry before status collection.
-type candidate struct {
-	entry       git.WorktreeEntry
-	displayPath string
-	isCurrent   bool
-}
 
 var listCmd = &cobra.Command{
 	Use:   "list",
@@ -80,13 +54,16 @@ var listCmd = &cobra.Command{
 		}
 
 		r := newRunner()
-		entries, wtDir, err := listLoadEntries(r, cmd)
+		cfg := config.FromContext(cmd.Context())
+		repoRoot, err := git.MainRepoRoot(r)
 		if err != nil {
 			return err
 		}
+		cwd, _ := os.Getwd()
 
-		if len(entries) == 0 {
-			return listRenderEmpty(cmd, "No worktrees found.")
+		var ghR gh.Runner
+		if opts.full {
+			ghR = gh.Default()
 		}
 
 		listShowHints(cmd)
@@ -95,24 +72,32 @@ var listCmd = &cobra.Command{
 		defer s.Stop()
 		s.Start("Loading worktrees...")
 
-		prefixes := resolver.AllPrefixes()
-		candidates := listBuildCandidates(entries, wtDir, prefixes, opts.typeFilter)
-		rows, prInfos, ghWarning := listCollectAll(cmd.Context(), r, candidates, prefixes, opts.full)
-		rows = operations.FilterDetailsByStatus(rows, opts.dirty, opts.behind)
-		rows = resolver.FilterByService(rows, opts.service)
-
+		res, err := operations.ListWorktrees(cmd.Context(), r, ghR, operations.ListWorktreesRequest{
+			Full:        opts.full,
+			TypeFilter:  opts.typeFilter,
+			Dirty:       opts.dirty,
+			Behind:      opts.behind,
+			Service:     opts.service,
+			CurrentPath: cwd,
+			WorktreeDir: filepath.Join(repoRoot, cfg.WorktreeDir),
+		})
 		s.Stop()
-
-		if len(rows) == 0 {
-			return listRenderEmpty(cmd, "No worktrees match the given filters.")
+		if err != nil {
+			return err
 		}
 
-		resolver.SortDetailsByTask(rows)
+		if len(res.Rows) == 0 {
+			msg := "No worktrees found."
+			if opts.dirty || opts.behind || opts.typeFilter != "" || opts.service != "" {
+				msg = "No worktrees match the given filters."
+			}
+			return listRenderEmpty(cmd, msg)
+		}
 
 		if isJSON(cmd) {
-			return listRenderJSON(cmd, rows, prInfos)
+			return listRenderJSON(cmd, res.Rows, res.PRInfos)
 		}
-		listRenderTable(cmd, rows, opts.full, prInfos, ghWarning)
+		listRenderTable(cmd, res.Rows, opts.full, res.PRInfos, res.GhWarning)
 		return nil
 	},
 }
@@ -155,19 +140,6 @@ func listValidateType(typeFilter string) error {
 	return fmt.Errorf("invalid type %q; valid types: %s", typeFilter, strings.Join(valid, ", "))
 }
 
-func listLoadEntries(r git.Runner, cmd *cobra.Command) ([]git.WorktreeEntry, string, error) {
-	cfg := config.FromContext(cmd.Context())
-	repoRoot, err := git.MainRepoRoot(r)
-	if err != nil {
-		return nil, "", err
-	}
-	entries, err := git.ListWorktrees(r)
-	if err != nil {
-		return nil, "", err
-	}
-	return entries, filepath.Join(repoRoot, cfg.WorktreeDir), nil
-}
-
 func listShowHints(cmd *cobra.Command) {
 	if isJSON(cmd) {
 		return
@@ -179,93 +151,6 @@ func listShowHints(cmd *cobra.Command) {
 		Add(flagDirty, hintDirty).
 		Add(flagBehind, hintBehind).
 		Show()
-}
-
-func listBuildCandidates(entries []git.WorktreeEntry, wtDir string, prefixes []string, typeFilter string) []candidate {
-	cwd, _ := os.Getwd()
-	cwdResolved, _ := filepath.EvalSymlinks(cwd)
-	cwdResolved = filepath.Clean(cwdResolved)
-
-	var candidates []candidate
-	for _, e := range entries {
-		if e.Bare {
-			continue
-		}
-
-		if typeFilter != "" {
-			_, matchedPrefix := resolver.TaskFromBranch(e.Branch, prefixes)
-			entryType := strings.TrimSuffix(matchedPrefix, "/")
-			if entryType != typeFilter {
-				continue
-			}
-		}
-
-		displayPath := e.Path
-		if rel, err := filepath.Rel(wtDir, e.Path); err == nil && len(rel) < len(displayPath) {
-			displayPath = rel
-		}
-
-		entryResolved, _ := filepath.EvalSymlinks(e.Path)
-		entryResolved = filepath.Clean(entryResolved)
-		isCurrent := cwdResolved == entryResolved
-
-		candidates = append(candidates, candidate{entry: e, displayPath: displayPath, isCurrent: isCurrent})
-	}
-	return candidates
-}
-
-// listCollectAll gathers worktree details and, under --full, open PR/CI
-// rollup per branch in parallel. ghWarning is set when --full is requested
-// but gh is missing or unauthenticated.
-func listCollectAll(ctx context.Context, r git.Runner, candidates []candidate, prefixes []string, full bool) (rows []resolver.WorktreeDetail, prInfos prInfoMap, ghWarning string) {
-	var ghRunner gh.Runner
-	if full {
-		ghRunner = gh.Default()
-		if err := gh.CheckAuth(ctx, ghRunner); err != nil {
-			ghWarning = "gh unavailable; PR/CI columns blank"
-			ghRunner = nil
-		} else {
-			prInfos = make(prInfoMap, len(candidates))
-		}
-	}
-
-	results := parallel.Collect(len(candidates), 8, func(i int) collectPair {
-		c := candidates[i]
-		status := operations.CollectWorktreeStatus(r, c.entry.Path)
-		d := resolver.NewWorktreeDetail(c.entry.Branch, prefixes, c.displayPath, status, c.isCurrent)
-		var info prInfo
-		if ghRunner != nil {
-			info = queryPRInfo(ctx, ghRunner, c.entry.Branch)
-		}
-		return collectPair{detail: d, info: info}
-	})
-
-	rows = make([]resolver.WorktreeDetail, len(results))
-	for i, res := range results {
-		rows[i] = res.detail
-		if prInfos != nil {
-			prInfos[res.detail.Branch] = res.info
-		}
-	}
-	return rows, prInfos, ghWarning
-}
-
-// queryPRInfo runs one gh pr list under a timeout. Errors degrade silently
-// so one slow or broken query does not fail the whole table.
-func queryPRInfo(ctx context.Context, ghRunner gh.Runner, branch string) prInfo {
-	qctx, cancel := context.WithTimeout(ctx, prQueryTimeout)
-	defer cancel()
-	pr, err := gh.QueryPRStatus(qctx, ghRunner, branch)
-	if err != nil || pr.Number == 0 {
-		return prInfo{}
-	}
-	n := pr.Number
-	info := prInfo{number: &n}
-	if pr.CIStatus != "" {
-		s := pr.CIStatus
-		info.status = &s
-	}
-	return info
 }
 
 func init() {
@@ -296,7 +181,6 @@ func init() {
 }
 
 // listArchivedBranches shows branches not associated with any active worktree.
-
 func listArchivedBranches(cmd *cobra.Command, r git.Runner, mainBranch string) error {
 	archived, err := operations.ListArchivedBranches(r, mainBranch)
 	if err != nil {

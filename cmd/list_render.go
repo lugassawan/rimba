@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/lugassawan/rimba/internal/gh"
+	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/termcolor"
@@ -18,7 +19,7 @@ func listRenderEmpty(cmd *cobra.Command, msg string) error {
 	return nil
 }
 
-func listRenderJSON(cmd *cobra.Command, rows []resolver.WorktreeDetail, prInfos prInfoMap) error {
+func listRenderJSON(cmd *cobra.Command, rows []resolver.WorktreeDetail, prInfos map[string]operations.PRInfo) error {
 	items := make([]output.ListItem, len(rows))
 	for i, r := range rows {
 		items[i] = output.ListItem{
@@ -31,9 +32,12 @@ func listRenderJSON(cmd *cobra.Command, rows []resolver.WorktreeDetail, prInfos 
 			Status:    r.Status,
 		}
 		if info, ok := prInfos[r.Branch]; ok {
-			items[i].PRNumber = info.number
-			if info.status != nil {
-				s := string(*info.status)
+			if info.Number != 0 {
+				n := info.Number
+				items[i].PRNumber = &n
+			}
+			if info.CIStatus != "" {
+				s := string(info.CIStatus)
 				items[i].CIStatus = &s
 			}
 		}
@@ -41,7 +45,7 @@ func listRenderJSON(cmd *cobra.Command, rows []resolver.WorktreeDetail, prInfos 
 	return output.WriteJSON(cmd.OutOrStdout(), version, "list", items)
 }
 
-func listRenderTable(cmd *cobra.Command, rows []resolver.WorktreeDetail, full bool, prInfos prInfoMap, ghWarning string) {
+func listRenderTable(cmd *cobra.Command, rows []resolver.WorktreeDetail, full bool, prInfos map[string]operations.PRInfo, ghWarning string) {
 	hasService := resolver.HasService(rows)
 	noColor, _ := cmd.Flags().GetBool(flagNoColor)
 	p := termcolor.NewPainter(noColor)
@@ -69,7 +73,7 @@ func listRenderTable(cmd *cobra.Command, rows []resolver.WorktreeDetail, full bo
 		cells := listRow(taskCell, row, typeCell, statusCell, hasService, full)
 		if full {
 			info := prInfos[row.Branch]
-			cells = append(cells, formatPRCell(info.number, p), formatCICell(info.status, p))
+			cells = append(cells, formatPRCell(info.Number, p), formatCICell(info.CIStatus, p))
 		}
 		tbl.AddRow(cells...)
 	}
@@ -106,18 +110,18 @@ func listRow(taskCell string, row resolver.WorktreeDetail, typeCell, statusCell 
 	return cells
 }
 
-func formatPRCell(n *int, p *termcolor.Painter) string {
-	if n == nil {
+// formatPRCell renders the PR column. n == 0 means no open PR (shown as dash).
+func formatPRCell(n int, p *termcolor.Painter) string {
+	if n == 0 {
 		return p.Paint("–", termcolor.Gray)
 	}
-	return fmt.Sprintf("#%d", *n)
+	return fmt.Sprintf("#%d", n)
 }
 
-func formatCICell(status *gh.CIStatus, p *termcolor.Painter) string {
-	if status == nil {
-		return p.Paint("–", termcolor.Gray)
-	}
-	switch *status {
+// formatCICell renders the CI rollup column. Empty status means no checks
+// reported — distinct from "no PR" but rendered the same in the table.
+func formatCICell(status gh.CIStatus, p *termcolor.Painter) string {
+	switch status {
 	case gh.CIStatusSuccess:
 		return p.Paint("✓", termcolor.Green)
 	case gh.CIStatusPending:
