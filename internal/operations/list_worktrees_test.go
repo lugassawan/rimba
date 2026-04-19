@@ -280,6 +280,34 @@ func TestListWorktreesFullPRRollupStates(t *testing.T) {
 	}
 }
 
+func TestListWorktreesFullComposesWithDirtyFilter(t *testing.T) {
+	// Exercises the parallel collect + PR query path alongside a
+	// post-collect status filter, guarding against regressions where
+	// filtering accidentally drops rows whose PR info was populated.
+	withFakeGhOnPath(t)
+	gitR := threeWorktreeRunner()
+	ghR := &mockGHRunner{
+		prByBranch: map[string]string{branchFeatureAuth: prListEntrySuccess},
+	}
+
+	res, err := ListWorktrees(context.Background(), gitR, ghR, ListWorktreesRequest{
+		Full:        true,
+		Dirty:       true,
+		WorktreeDir: wtDirTest,
+	})
+	if err != nil {
+		t.Fatalf("ListWorktrees: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0].Branch != branchFeatureAuth {
+		t.Fatalf("want 1 dirty row (feature/auth), got %+v", res.Rows)
+	}
+	// PRInfos still carries entries for all three candidates queried
+	// before the post-collect status filter — this is the contract.
+	if got := res.PRInfos[branchFeatureAuth]; got.Number != 12 || got.CIStatus != gh.CIStatusSuccess {
+		t.Errorf("PRInfos[feature/auth] = %+v, want {12, SUCCESS}", got)
+	}
+}
+
 func TestListWorktreesFullPRQueryErrorDegradesSilently(t *testing.T) {
 	withFakeGhOnPath(t)
 	gitR := threeWorktreeRunner()

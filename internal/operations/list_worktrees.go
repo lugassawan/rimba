@@ -87,23 +87,28 @@ func ListWorktrees(
 	var (
 		prInfos   map[string]PRInfo
 		ghWarning string
+		activeGhR = ghR
 	)
-	if req.Full && ghR != nil {
-		if err := gh.CheckAuth(ctx, ghR); err != nil {
+	if req.Full && activeGhR != nil {
+		if err := gh.CheckAuth(ctx, activeGhR); err != nil {
 			ghWarning = GhUnavailableWarning
-			ghR = nil
+			activeGhR = nil
 		} else {
 			prInfos = make(map[string]PRInfo, len(candidates))
 		}
 	}
 
+	// activeGhR is captured by value into each worker closure below —
+	// reassignment above happens-before goroutine start, but an explicit
+	// local makes the intent obvious and keeps the race detector happy
+	// if the sequence is ever reordered.
 	results := parallel.Collect(len(candidates), listWorktreesConcurrency, func(i int) listWorktreeResult {
 		c := candidates[i]
 		status := CollectWorktreeStatus(gitR, c.entry.Path)
 		d := resolver.NewWorktreeDetail(c.entry.Branch, prefixes, c.displayPath, status, c.isCurrent)
 		var info PRInfo
-		if ghR != nil {
-			info = queryPRInfo(ctx, ghR, c.entry.Branch)
+		if activeGhR != nil {
+			info = queryPRInfo(ctx, activeGhR, c.entry.Branch)
 		}
 		return listWorktreeResult{detail: d, info: info}
 	})
