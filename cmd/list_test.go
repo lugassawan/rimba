@@ -4,29 +4,17 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"strings"
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/gh"
+	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/termcolor"
 	"github.com/spf13/cobra"
 )
-
-var errSentinel = errors.New("sentinel")
-
-// ghMockRunner implements gh.Runner for list tests.
-type ghMockRunner struct {
-	out []byte
-	err error
-}
-
-func (m *ghMockRunner) Run(_ context.Context, _ ...string) ([]byte, error) {
-	return m.out, m.err
-}
 
 func newListTestCmd() (*cobra.Command, *bytes.Buffer) {
 	cmd, buf := newTestCmd()
@@ -778,37 +766,6 @@ func TestListBehindFilterWithMatch(t *testing.T) {
 	}
 }
 
-func TestListLoadEntriesRepoRootError(t *testing.T) {
-	r := &mockRunner{
-		run:      func(_ ...string) (string, error) { return "", errGitFailed },
-		runInDir: noopRunInDir,
-	}
-	cmd, _ := newListTestCmd()
-	cmd.SetContext(config.WithConfig(context.Background(), &config.Config{WorktreeDir: "worktrees"}))
-	if _, _, err := listLoadEntries(r, cmd); err == nil {
-		t.Fatal("expected error")
-	}
-}
-
-func TestListLoadEntriesListError(t *testing.T) {
-	calls := 0
-	r := &mockRunner{
-		run: func(_ ...string) (string, error) {
-			calls++
-			if calls == 1 {
-				return "/repo", nil // MainRepoRoot succeeds
-			}
-			return "", errGitFailed
-		},
-		runInDir: noopRunInDir,
-	}
-	cmd, _ := newListTestCmd()
-	cmd.SetContext(config.WithConfig(context.Background(), &config.Config{WorktreeDir: "worktrees"}))
-	if _, _, err := listLoadEntries(r, cmd); err == nil {
-		t.Fatal("expected list error")
-	}
-}
-
 func TestListValidateTypeEmpty(t *testing.T) {
 	if err := listValidateType(""); err != nil {
 		t.Errorf("expected nil for empty type, got %v", err)
@@ -874,28 +831,26 @@ func TestListRenderTableWithFullAndService(t *testing.T) {
 
 func TestFormatPRCell(t *testing.T) {
 	p := termcolor.NewPainter(true)
-	if got := formatPRCell(nil, p); got != "–" {
-		t.Errorf("nil: got %q, want –", got)
+	if got := formatPRCell(0, p); got != "–" {
+		t.Errorf("0: got %q, want –", got)
 	}
-	n := 412
-	if got := formatPRCell(&n, p); got != "#412" {
+	if got := formatPRCell(412, p); got != "#412" {
 		t.Errorf("412: got %q, want #412", got)
 	}
 }
 
 func TestFormatCICell(t *testing.T) {
 	p := termcolor.NewPainter(true)
-	success, pending, failure, unknown := gh.CIStatusSuccess, gh.CIStatusPending, gh.CIStatusFailure, gh.CIStatus("WHATEVER")
 
 	cases := map[string]struct {
-		in   *gh.CIStatus
+		in   gh.CIStatus
 		want string
 	}{
-		"nil":     {nil, "–"},
-		"success": {&success, "✓"},
-		"pending": {&pending, "●"},
-		"failure": {&failure, "✗"},
-		"unknown": {&unknown, "–"},
+		"empty":   {"", "–"},
+		"success": {gh.CIStatusSuccess, "✓"},
+		"pending": {gh.CIStatusPending, "●"},
+		"failure": {gh.CIStatusFailure, "✗"},
+		"unknown": {gh.CIStatus("WHATEVER"), "–"},
 	}
 	for name, tc := range cases {
 		if got := formatCICell(tc.in, p); got != tc.want {
@@ -909,9 +864,9 @@ func TestListRenderTableFullWithPRInfo(t *testing.T) {
 	rows := []resolver.WorktreeDetail{
 		{Task: "a", Branch: "feature/a", Type: "feature", Path: "/wt/a", Status: resolver.WorktreeStatus{}},
 	}
-	n := 777
-	s := gh.CIStatusSuccess
-	info := prInfoMap{"feature/a": {number: &n, status: &s}}
+	info := map[string]operations.PRInfo{
+		"feature/a": {Number: 777, CIStatus: gh.CIStatusSuccess},
+	}
 
 	listRenderTable(cmd, rows, true, info, "gh unavailable; PR/CI columns blank")
 	out := buf.String()
@@ -927,9 +882,9 @@ func TestListRenderJSONPopulatesPRInfo(t *testing.T) {
 	rows := []resolver.WorktreeDetail{
 		{Task: "a", Branch: "feature/a", Type: "feature", Path: "/wt/a"},
 	}
-	n := 9
-	s := gh.CIStatusPending
-	info := prInfoMap{"feature/a": {number: &n, status: &s}}
+	info := map[string]operations.PRInfo{
+		"feature/a": {Number: 9, CIStatus: gh.CIStatusPending},
+	}
 	if err := listRenderJSON(cmd, rows, info); err != nil {
 		t.Fatalf("listRenderJSON: %v", err)
 	}
@@ -948,32 +903,5 @@ func TestListRenderJSONPopulatesPRInfo(t *testing.T) {
 	}
 	if got.CIStatus == nil || *got.CIStatus != "PENDING" {
 		t.Errorf("CIStatus = %v, want PENDING", got.CIStatus)
-	}
-}
-
-func TestQueryPRInfoNoOpenPR(t *testing.T) {
-	r := &ghMockRunner{out: []byte("[]"), err: nil}
-	got := queryPRInfo(context.Background(), r, "feature/x")
-	if got.number != nil || got.status != nil {
-		t.Errorf("expected zero prInfo, got %+v", got)
-	}
-}
-
-func TestQueryPRInfoPopulated(t *testing.T) {
-	r := &ghMockRunner{out: []byte(`[{"number":42,"statusCheckRollup":[{"conclusion":"SUCCESS"}]}]`), err: nil}
-	got := queryPRInfo(context.Background(), r, "feature/x")
-	if got.number == nil || *got.number != 42 {
-		t.Errorf("number = %v, want 42", got.number)
-	}
-	if got.status == nil || *got.status != "SUCCESS" {
-		t.Errorf("status = %v, want SUCCESS", got.status)
-	}
-}
-
-func TestQueryPRInfoErrorDegrades(t *testing.T) {
-	r := &ghMockRunner{err: errSentinel}
-	got := queryPRInfo(context.Background(), r, "feature/x")
-	if got.number != nil || got.status != nil {
-		t.Errorf("expected zero prInfo on error, got %+v", got)
 	}
 }

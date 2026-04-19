@@ -199,7 +199,7 @@ func TestAddWorktreeWithDeps(t *testing.T) {
 				return "", nil
 			}
 			// ListWorktrees for deps
-			if len(args) > 0 && args[0] == gitCmdWorktree && len(args) > 1 && args[1] == "list" {
+			if len(args) > 0 && args[0] == gitCmdWorktree && len(args) > 1 && args[1] == cmdList {
 				return "worktree " + tmpDir + "\nHEAD abc\nbranch refs/heads/main\n\n", nil
 			}
 			return "", nil

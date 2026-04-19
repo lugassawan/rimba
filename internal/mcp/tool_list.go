@@ -9,7 +9,6 @@ import (
 
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
-	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -35,12 +34,6 @@ func registerListTool(s *server.MCPServer, hctx *HandlerContext) {
 	s.AddTool(tool, handleList(hctx))
 }
 
-// listCandidate holds a worktree entry with its display path for list filtering.
-type listCandidate struct {
-	entry       git.WorktreeEntry
-	displayPath string
-}
-
 func handleList(hctx *HandlerContext) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		typeFilter := req.GetString("type", "")
@@ -63,34 +56,20 @@ func handleList(hctx *HandlerContext) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(fmt.Sprintf("invalid type %q; valid types: feature, bugfix, hotfix, docs, test, chore", typeFilter)), nil
 		}
 
-		entries, err := git.ListWorktrees(r)
+		res, err := operations.ListWorktrees(ctx, r, nil, operations.ListWorktreesRequest{
+			TypeFilter:  typeFilter,
+			Dirty:       dirty,
+			Behind:      behind,
+			WorktreeDir: filepath.Join(hctx.RepoRoot, cfg.WorktreeDir),
+		})
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		if len(entries) == 0 {
-			return marshalResult(make([]listItem, 0))
-		}
-
-		wtDir := filepath.Join(hctx.RepoRoot, cfg.WorktreeDir)
-		prefixes := resolver.AllPrefixes()
-
-		candidates := filterListCandidates(entries, wtDir, typeFilter, prefixes)
-
-		rows := parallel.Collect(len(candidates), 8, func(i int) resolver.WorktreeDetail {
-			c := candidates[i]
-			status := operations.CollectWorktreeStatus(r, c.entry.Path)
-			return resolver.NewWorktreeDetail(c.entry.Branch, prefixes, c.displayPath, status, false)
-		})
-
-		rows = operations.FilterDetailsByStatus(rows, dirty, behind)
-		resolver.SortDetailsByTask(rows)
-
-		return marshalResult(detailsToListItems(rows))
+		return marshalResult(detailsToListItems(res.Rows))
 	}
 }
 
-// detailsToListItems converts worktree details to list items.
 func detailsToListItems(rows []resolver.WorktreeDetail) []listItem {
 	items := make([]listItem, len(rows))
 	for i, row := range rows {
@@ -104,32 +83,6 @@ func detailsToListItems(rows []resolver.WorktreeDetail) []listItem {
 		}
 	}
 	return items
-}
-
-// filterListCandidates filters worktree entries by type and computes display paths.
-func filterListCandidates(entries []git.WorktreeEntry, wtDir, typeFilter string, prefixes []string) []listCandidate {
-	var candidates []listCandidate
-	for _, e := range entries {
-		if e.Bare {
-			continue
-		}
-
-		if typeFilter != "" {
-			_, matchedPrefix := resolver.TaskFromBranch(e.Branch, prefixes)
-			entryType := strings.TrimSuffix(matchedPrefix, "/")
-			if entryType != typeFilter {
-				continue
-			}
-		}
-
-		displayPath := e.Path
-		if rel, err := filepath.Rel(wtDir, e.Path); err == nil && len(rel) < len(displayPath) {
-			displayPath = rel
-		}
-
-		candidates = append(candidates, listCandidate{entry: e, displayPath: displayPath})
-	}
-	return candidates
 }
 
 func handleListArchived(r git.Runner, hctx *HandlerContext) (*mcp.CallToolResult, error) {
@@ -154,7 +107,6 @@ func handleListArchived(r git.Runner, hctx *HandlerContext) (*mcp.CallToolResult
 	return marshalResult(items)
 }
 
-// configDefault returns the default_source from config, or "" if unset.
 func configDefault(hctx *HandlerContext) string {
 	if hctx.Config != nil {
 		return hctx.Config.DefaultSource
@@ -162,7 +114,6 @@ func configDefault(hctx *HandlerContext) string {
 	return ""
 }
 
-// marshalResult serializes data to JSON and wraps it in a tool result.
 func marshalResult(data any) (*mcp.CallToolResult, error) {
 	b, err := json.Marshal(data)
 	if err != nil {
