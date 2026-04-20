@@ -40,8 +40,7 @@ func GlobalMCPSpecs() []MCPSpec {
 }
 
 // ProjectMCPSpecs returns the MCP config files patched at project level (repo root).
-// .cursor/mcp.json here is repo-root-relative (Cursor workspace MCP), distinct from
-// the global ~/.cursor/mcp.json patched by GlobalMCPSpecs.
+// .cursor/mcp.json is repo-root-relative (workspace MCP), distinct from ~/.cursor/mcp.json.
 func ProjectMCPSpecs() []MCPSpec {
 	return []MCPSpec{
 		{RelPath: ".mcp.json", Format: mcpJSON, ContainerKey: "mcpServers"},
@@ -50,7 +49,6 @@ func ProjectMCPSpecs() []MCPSpec {
 }
 
 // RegisterMCPGlobal patches all user-level MCP config files to add the rimba server entry.
-// Files that do not exist are skipped with actionSkippedNoConfig.
 func RegisterMCPGlobal(homeDir string) ([]Result, error) {
 	return registerMCPSpecs(homeDir, GlobalMCPSpecs())
 }
@@ -117,8 +115,6 @@ func desiredEntry() map[string]any {
 	}
 }
 
-// patchJSON reads path, merges or removes the rimba entry under containerKey, and writes back.
-// remove=false registers, remove=true unregisters.
 func patchJSON(path, containerKey string, remove bool) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -164,7 +160,6 @@ func removeFromJSON(path, containerKey string, cfg map[string]any) (string, erro
 	return actionUnregistered, writeJSON(path, cfg)
 }
 
-// patchTOML reads path, merges or removes the rimba entry under containerKey, and writes back.
 func patchTOML(path, containerKey string, remove bool) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
