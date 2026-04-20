@@ -249,6 +249,7 @@ func TestInitGlobalOutsideRepo(t *testing.T) {
 	assertContains(t, r.Stdout, "Installed rimba agent files (user)")
 	assertFileExists(t, filepath.Join(home, ".claude", "skills", "rimba", "SKILL.md"))
 	assertFileExists(t, filepath.Join(home, ".cursor", "rules", "rimba.mdc"))
+	assertFileExists(t, filepath.Join(home, ".github", "copilot-instructions.md"))
 	assertFileExists(t, filepath.Join(home, ".codex", "AGENTS.md"))
 	assertFileExists(t, filepath.Join(home, ".gemini", "GEMINI.md"))
 	assertFileExists(t, filepath.Join(home, ".codeium", "windsurf", "memories", "global_rules.md"))

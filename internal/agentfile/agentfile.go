@@ -112,11 +112,12 @@ func StatusProject(repoRoot string) []FileStatus {
 
 // InstallLocal creates or updates all project-local agent instruction files and adds them to .gitignore.
 func InstallLocal(repoRoot string) ([]Result, error) {
-	results, err := installSpecs(repoRoot, ProjectSpecs())
+	specs := ProjectSpecs()
+	results, err := installSpecs(repoRoot, specs)
 	if err != nil {
 		return results, err
 	}
-	for _, spec := range ProjectSpecs() {
+	for _, spec := range specs {
 		if _, gitErr := fileutil.EnsureGitignore(repoRoot, spec.RelPath); gitErr != nil {
 			return results, fmt.Errorf("gitignore %s: %w", spec.RelPath, gitErr)
 		}
@@ -126,11 +127,12 @@ func InstallLocal(repoRoot string) ([]Result, error) {
 
 // UninstallLocal removes project-local agent instruction files and their .gitignore entries.
 func UninstallLocal(repoRoot string) ([]Result, error) {
-	results, err := uninstallSpecs(repoRoot, ProjectSpecs())
+	specs := ProjectSpecs()
+	results, err := uninstallSpecs(repoRoot, specs)
 	if err != nil {
 		return results, err
 	}
-	for _, spec := range ProjectSpecs() {
+	for _, spec := range specs {
 		if _, gitErr := fileutil.RemoveGitignoreEntry(repoRoot, spec.RelPath); gitErr != nil {
 			return results, fmt.Errorf("gitignore %s: %w", spec.RelPath, gitErr)
 		}

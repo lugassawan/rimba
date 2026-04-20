@@ -32,6 +32,8 @@ If a legacy .rimba.toml file exists, it is migrated into the new directory layou
 Use --agents to also install AI agent instruction files at project level (committed).
 Use --agents --local to install them gitignored (personal overrides).
 Use -g to install agent files at user level (~/) — works outside a git repository.
+Use -g --uninstall to remove user-level files, --agents --uninstall for project-team files,
+or --agents --local --uninstall for project-local files.
 Use --personal to gitignore the entire .rimba/ directory instead of just the local
 config file. In personal mode, settings.local.toml is not created since the whole
 directory is already personal.`,
@@ -221,7 +223,7 @@ func init() {
 	initCmd.Flags().BoolP(flagGlobal, "g", false, "Install rimba agent files at user level (~/)")
 	initCmd.Flags().Bool(flagAgents, false, "Install rimba agent files in this project (committed to repo)")
 	initCmd.Flags().Bool(flagLocal, false, "With --agents, install as project-local (gitignored)")
-	initCmd.Flags().Bool(flagUninstall, false, "Remove installed agent files (requires -g, --agents, or --agents --local)")
+	initCmd.Flags().Bool(flagUninstall, false, "Remove agent files: use with -g, --agents, or --agents --local")
 	initCmd.MarkFlagsMutuallyExclusive(flagGlobal, flagAgents)
 }
 
