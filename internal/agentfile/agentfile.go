@@ -14,10 +14,14 @@ const (
 	BeginMarker = "<!-- BEGIN RIMBA -->"
 	EndMarker   = "<!-- END RIMBA -->"
 
-	actionCreated = "created"
-	actionUpdated = "updated"
-	actionRemoved = "removed"
-	actionSkipped = "skipped"
+	actionCreated         = "created"
+	actionUpdated         = "updated"
+	actionRemoved         = "removed"
+	actionSkipped         = "skipped"
+	actionRegistered      = "registered"
+	actionUnregistered    = "unregistered"
+	actionUnchanged       = "unchanged"
+	actionSkippedNoConfig = "skipped — no config"
 )
 
 // FileKind distinguishes installation strategies.
