@@ -1,6 +1,7 @@
 package e2e_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -197,7 +198,7 @@ func TestInitWithAgentsFlag(t *testing.T) {
 	repo := setupRepo(t)
 	r := rimbaSuccess(t, repo, "init", "--agents")
 
-	assertContains(t, r.Stdout, "Installed rimba agent files")
+	assertContains(t, r.Stdout, "Installed rimba (project)")
 	assertFileExists(t, filepath.Join(repo, "AGENTS.md"))
 	assertFileExists(t, filepath.Join(repo, ".github", "copilot-instructions.md"))
 	assertFileExists(t, filepath.Join(repo, ".cursor", "rules", "rimba.mdc"))
@@ -230,7 +231,7 @@ func TestInitAgentsUninstall(t *testing.T) {
 	rimbaSuccess(t, repo, "init", "--agents")
 	r := rimbaSuccess(t, repo, "init", "--agents", "--uninstall")
 
-	assertContains(t, r.Stdout, "Removed rimba agent files")
+	assertContains(t, r.Stdout, "Removed rimba (project)")
 	assertFileNotExists(t, filepath.Join(repo, ".cursor", "rules", "rimba.mdc"))
 }
 
@@ -246,7 +247,7 @@ func TestInitGlobalOutsideRepo(t *testing.T) {
 	dir := t.TempDir()
 	r := rimbaSuccess(t, dir, "init", "-g")
 
-	assertContains(t, r.Stdout, "Installed rimba agent files (user)")
+	assertContains(t, r.Stdout, "Installed rimba (user)")
 	assertFileExists(t, filepath.Join(home, ".claude", "skills", "rimba", "SKILL.md"))
 	assertFileExists(t, filepath.Join(home, ".cursor", "rules", "rimba.mdc"))
 	assertFileExists(t, filepath.Join(home, ".github", "copilot-instructions.md"))
@@ -268,7 +269,7 @@ func TestInitGlobalUninstall(t *testing.T) {
 	rimbaSuccess(t, dir, "init", "-g")
 	r := rimbaSuccess(t, dir, "init", "-g", "--uninstall")
 
-	assertContains(t, r.Stdout, "Removed rimba agent files (user)")
+	assertContains(t, r.Stdout, "Removed rimba (user)")
 	assertFileNotExists(t, filepath.Join(home, ".claude", "skills", "rimba", "SKILL.md"))
 }
 
@@ -389,6 +390,93 @@ func assertGitignoreNotContains(t *testing.T, repo, entry string) {
 		if strings.TrimSpace(line) == entry {
 			t.Errorf("expected .gitignore NOT to contain %q, got:\n%s", entry, string(data))
 			return
+		}
+	}
+}
+
+// --- MCP registration e2e tests ---
+
+func TestInitGlobalWithMCPConfigs(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	// Pre-seed .claude/settings.json and .cursor/mcp.json
+	claudeDir := filepath.Join(home, ".claude")
+	if err := os.MkdirAll(claudeDir, 0750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(claudeDir, "settings.json"), []byte(`{"theme":"dark"}`+"\n"), 0600); err != nil {
+		t.Fatalf("write settings.json: %v", err)
+	}
+
+	dir := t.TempDir()
+	r := rimbaSuccess(t, dir, "init", "-g")
+
+	assertContains(t, r.Stdout, "MCP server:")
+	assertContains(t, r.Stdout, "registered")
+
+	// Verify settings.json was patched and existing key preserved
+	data, err := os.ReadFile(filepath.Join(claudeDir, "settings.json"))
+	if err != nil {
+		t.Fatalf("read settings.json: %v", err)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("parse settings.json: %v", err)
+	}
+	if cfg["theme"] != "dark" {
+		t.Error("existing 'theme' key was not preserved")
+	}
+	servers, ok := cfg["mcpServers"].(map[string]any)
+	if !ok {
+		t.Fatal("mcpServers missing in settings.json after init -g")
+	}
+	entry, ok := servers["rimba"].(map[string]any)
+	if !ok {
+		t.Fatal("mcpServers.rimba missing")
+	}
+	if entry["command"] != "rimba" {
+		t.Errorf("command = %v, want rimba", entry["command"])
+	}
+}
+
+func TestInitGlobalUninstallWithMCP(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	claudeDir := filepath.Join(home, ".claude")
+	if err := os.MkdirAll(claudeDir, 0750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(claudeDir, "settings.json"), []byte("{}\n"), 0600); err != nil {
+		t.Fatalf("write settings.json: %v", err)
+	}
+
+	dir := t.TempDir()
+	rimbaSuccess(t, dir, "init", "-g")
+	r := rimbaSuccess(t, dir, "init", "-g", "--uninstall")
+
+	assertContains(t, r.Stdout, "unregistered")
+
+	data, err := os.ReadFile(filepath.Join(claudeDir, "settings.json"))
+	if err != nil {
+		t.Fatalf("read settings.json: %v", err)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("parse settings.json: %v", err)
+	}
+	if servers, ok := cfg["mcpServers"].(map[string]any); ok {
+		if _, found := servers["rimba"]; found {
+			t.Error("rimba key should be removed after uninstall")
 		}
 	}
 }
