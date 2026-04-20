@@ -65,9 +65,9 @@ directory is already personal.`,
 				return fmt.Errorf("resolve home directory: %w", err)
 			}
 			if uninstall {
-				return runAgentOp(cmd, home, "user", agentfile.UninstallGlobal, "Removed")
+				return runInstall(cmd, home, "user", "Removed", agentfile.UninstallGlobal, agentfile.UnregisterMCPGlobal)
 			}
-			return runAgentOp(cmd, home, "user", agentfile.InstallGlobal, "Installed")
+			return runInstall(cmd, home, "user", "Installed", agentfile.InstallGlobal, agentfile.RegisterMCPGlobal)
 		}
 
 		r := newRunner()
@@ -186,35 +186,56 @@ directory is already personal.`,
 		if agents {
 			if uninstall {
 				if local {
-					return runAgentOp(cmd, repoRoot, "project-local", agentfile.UninstallLocal, "Removed")
+					return runInstall(cmd, repoRoot, "project-local", "Removed", agentfile.UninstallLocal, nil)
 				}
-				return runAgentOp(cmd, repoRoot, "project", agentfile.UninstallProject, "Removed")
+				return runInstall(cmd, repoRoot, "project", "Removed", agentfile.UninstallProject, agentfile.UnregisterMCPProject)
 			}
 			if local {
-				return runAgentOp(cmd, repoRoot, "project-local", agentfile.InstallLocal, "Installed")
+				return runInstall(cmd, repoRoot, "project-local", "Installed", agentfile.InstallLocal, nil)
 			}
-			return runAgentOp(cmd, repoRoot, "project", agentfile.InstallProject, "Installed")
+			return runInstall(cmd, repoRoot, "project", "Installed", agentfile.InstallProject, agentfile.RegisterMCPProject)
 		}
 
 		return nil
 	},
 }
 
-// runAgentOp runs fn(dir) and prints results to cmd output.
-func runAgentOp(cmd *cobra.Command, dir, tier string, fn func(string) ([]agentfile.Result, error), verb string) error {
-	results, err := fn(dir)
+// runInstall runs installFn(dir) and optionally mcpFn(dir), then prints results.
+// mcpFn may be nil (local tier skips MCP registration).
+func runInstall(
+	cmd *cobra.Command,
+	dir, tier, verb string,
+	installFn func(string) ([]agentfile.Result, error),
+	mcpFn func(string) ([]agentfile.Result, error),
+) error {
+	files, err := installFn(dir)
 	if err != nil {
 		return fmt.Errorf("agent files: %w", err)
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "%s rimba agent files (%s):\n", verb, tier)
-	for _, res := range results {
-		relPath := res.RelPath
-		if tier == "user" {
-			relPath = "~/" + relPath
+	var mcps []agentfile.Result
+	if mcpFn != nil {
+		mcps, err = mcpFn(dir)
+		if err != nil {
+			return fmt.Errorf("mcp servers: %w", err)
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "  %s (%s)\n", relPath, res.Action)
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "%s rimba (%s):\n", verb, tier)
+	printSection(cmd, "Agent files", tier, files)
+	if len(mcps) > 0 {
+		printSection(cmd, "MCP server", tier, mcps)
 	}
 	return nil
+}
+
+func printSection(cmd *cobra.Command, title, tier string, results []agentfile.Result) {
+	fmt.Fprintf(cmd.OutOrStdout(), "  %s:\n", title)
+	for _, r := range results {
+		p := r.RelPath
+		if tier == "user" {
+			p = "~/" + p
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "    %s (%s)\n", p, r.Action)
+	}
 }
 
 func init() {
