@@ -137,6 +137,16 @@ func TestRegisterMCPGlobalTOMLCodex(t *testing.T) {
 	if entry["command"] != mcpServerName {
 		t.Errorf("command = %v, want %s", entry["command"], mcpServerName)
 	}
+
+	// Idempotency: second registration must return actionUnchanged for TOML
+	results2, err := RegisterMCPGlobal(home)
+	if err != nil {
+		t.Fatalf("second RegisterMCPGlobal: %v", err)
+	}
+	codexResult2 := findResult(t, results2, filepath.Join(".codex", "config.toml"))
+	if codexResult2.Action != actionUnchanged {
+		t.Errorf("second register (TOML): action = %q, want %q", codexResult2.Action, actionUnchanged)
+	}
 }
 
 // --- UnregisterMCPGlobal tests ---

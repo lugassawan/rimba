@@ -40,6 +40,8 @@ func GlobalMCPSpecs() []MCPSpec {
 }
 
 // ProjectMCPSpecs returns the MCP config files patched at project level (repo root).
+// .cursor/mcp.json here is repo-root-relative (Cursor workspace MCP), distinct from
+// the global ~/.cursor/mcp.json patched by GlobalMCPSpecs.
 func ProjectMCPSpecs() []MCPSpec {
 	return []MCPSpec{
 		{RelPath: ".mcp.json", Format: mcpJSON, ContainerKey: "mcpServers"},

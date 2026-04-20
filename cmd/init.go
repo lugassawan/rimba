@@ -186,11 +186,13 @@ directory is already personal.`,
 		if agents {
 			if uninstall {
 				if local {
+					// local tier installs gitignored personal files; MCP registration skipped
 					return runInstall(cmd, repoRoot, "project-local", "Removed", agentfile.UninstallLocal, nil)
 				}
 				return runInstall(cmd, repoRoot, "project", "Removed", agentfile.UninstallProject, agentfile.UnregisterMCPProject)
 			}
 			if local {
+				// local tier installs gitignored personal files; MCP registration skipped
 				return runInstall(cmd, repoRoot, "project-local", "Installed", agentfile.InstallLocal, nil)
 			}
 			return runInstall(cmd, repoRoot, "project", "Installed", agentfile.InstallProject, agentfile.RegisterMCPProject)
@@ -220,7 +222,9 @@ func runInstall(
 		}
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "%s rimba (%s):\n", verb, tier)
-	printSection(cmd, "Agent files", tier, files)
+	if len(files) > 0 {
+		printSection(cmd, "Agent files", tier, files)
+	}
 	if len(mcps) > 0 {
 		printSection(cmd, "MCP server", tier, mcps)
 	}
