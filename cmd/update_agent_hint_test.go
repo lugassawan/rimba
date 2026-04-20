@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -140,5 +141,43 @@ func TestAgentRefreshTipsEmptyPaths(t *testing.T) {
 
 	if buf.Len() != 0 {
 		t.Errorf("expected empty output for empty paths, got %q", buf.String())
+	}
+}
+
+func TestResolvePostUpdateTipPathsOutsideRepo(t *testing.T) {
+	restore := overrideNewRunner(&mockRunner{
+		run:      func(_ ...string) (string, error) { return "", errors.New("not a git repo") },
+		runInDir: noopRunInDir,
+	})
+	defer restore()
+
+	home, repoRoot := resolvePostUpdateTipPaths()
+	if home == "" {
+		t.Error("expected non-empty home dir")
+	}
+	if repoRoot != "" {
+		t.Errorf("expected empty repoRoot outside git repo, got %q", repoRoot)
+	}
+}
+
+func TestResolvePostUpdateTipPathsInsideRepo(t *testing.T) {
+	dir := t.TempDir()
+	restore := overrideNewRunner(&mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return dir, nil
+			}
+			return "", errors.New("unexpected git call")
+		},
+		runInDir: noopRunInDir,
+	})
+	defer restore()
+
+	home, repoRoot := resolvePostUpdateTipPaths()
+	if home == "" {
+		t.Error("expected non-empty home dir")
+	}
+	if repoRoot != dir {
+		t.Errorf("repoRoot = %q, want %q", repoRoot, dir)
 	}
 }
