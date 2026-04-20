@@ -116,6 +116,9 @@ var updateCmd = &cobra.Command{
 
 		fmt.Fprintf(cmd.OutOrStdout(), "Updated successfully: %s\n", strings.TrimSpace(string(out)))
 
+		home, repoRoot := resolvePostUpdateTipPaths()
+		printAgentRefreshTips(cmd, home, repoRoot)
+
 		// Print migration guidance if installed to a different location
 		if installedBinary != currentBinary {
 			fmt.Fprintf(cmd.OutOrStdout(), "\nTo complete migration, remove the old binary:\n  sudo rm %s\n", currentBinary)
