@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/lugassawan/rimba/internal/fileutil"
 )
 
 const (
@@ -47,22 +49,114 @@ type FileStatus struct {
 	Installed bool
 }
 
-// Specs returns the specifications for all agent instruction files.
-func Specs() []Spec {
+// GlobalSpecs returns the specifications for all agent instruction files installed at user level (~/).
+func GlobalSpecs() []Spec {
 	return []Spec{
-		{RelPath: "AGENTS.md", Kind: KindBlock, Content: agentsBlock},
-		{RelPath: filepath.Join(".github", "copilot-instructions.md"), Kind: KindBlock, Content: copilotBlock},
-		{RelPath: filepath.Join(".cursor", "rules", "rimba.mdc"), Kind: KindWhole, Content: cursorContent},
+		{RelPath: filepath.Join(".claude", "skills", "rimba", "SKILL.md"), Kind: KindWhole, Content: globalClaudeSkillContent},
+		{RelPath: filepath.Join(".cursor", "rules", "rimba.mdc"), Kind: KindWhole, Content: globalCursorContent},
+		{RelPath: filepath.Join(".github", "copilot-instructions.md"), Kind: KindBlock, Content: globalCopilotBlock},
+		{RelPath: filepath.Join(".codex", "AGENTS.md"), Kind: KindBlock, Content: globalCodexBlock},
+		{RelPath: filepath.Join(".gemini", "GEMINI.md"), Kind: KindBlock, Content: globalGeminiBlock},
+		{RelPath: filepath.Join(".codeium", "windsurf", "memories", "global_rules.md"), Kind: KindBlock, Content: globalWindsurfBlock},
+		{RelPath: filepath.Join(".roo", "rules", "rimba.md"), Kind: KindWhole, Content: globalRooContent},
+	}
+}
+
+// ProjectSpecs returns the specifications for all agent instruction files installed at project level.
+func ProjectSpecs() []Spec {
+	return []Spec{
 		{RelPath: filepath.Join(".claude", "skills", "rimba", "SKILL.md"), Kind: KindWhole, Content: claudeSkillContent},
+		{RelPath: filepath.Join(".cursor", "rules", "rimba.mdc"), Kind: KindWhole, Content: cursorContent},
+		{RelPath: filepath.Join(".github", "copilot-instructions.md"), Kind: KindBlock, Content: copilotBlock},
+		{RelPath: "AGENTS.md", Kind: KindBlock, Content: agentsBlock},
+		{RelPath: "GEMINI.md", Kind: KindBlock, Content: geminiBlock},
+		{RelPath: filepath.Join(".windsurf", "rules", "rimba.md"), Kind: KindWhole, Content: windsurfContent},
+		{RelPath: filepath.Join(".clinerules", "rimba.md"), Kind: KindWhole, Content: rooContent},
 	}
 }
 
-// Install creates or updates all agent instruction files under repoRoot.
-// It is idempotent: re-running replaces existing content.
-func Install(repoRoot string) ([]Result, error) {
-	var results []Result
-	for _, spec := range Specs() {
-		r, err := installOne(repoRoot, spec)
+// Specs returns the project-level agent instruction files.
+//
+// Deprecated: use ProjectSpecs.
+func Specs() []Spec { return ProjectSpecs() }
+
+// InstallGlobal creates or updates all agent instruction files under homeDir.
+func InstallGlobal(homeDir string) ([]Result, error) {
+	return installSpecs(homeDir, GlobalSpecs())
+}
+
+// UninstallGlobal removes rimba content from all user-level agent instruction files.
+func UninstallGlobal(homeDir string) ([]Result, error) {
+	return uninstallSpecs(homeDir, GlobalSpecs())
+}
+
+// StatusGlobal checks the installation state of all user-level agent instruction files.
+func StatusGlobal(homeDir string) []FileStatus {
+	return checkSpecs(homeDir, GlobalSpecs())
+}
+
+// InstallProject creates or updates all project-team agent instruction files under repoRoot.
+func InstallProject(repoRoot string) ([]Result, error) {
+	return installSpecs(repoRoot, ProjectSpecs())
+}
+
+// UninstallProject removes rimba content from all project-team agent instruction files.
+func UninstallProject(repoRoot string) ([]Result, error) {
+	return uninstallSpecs(repoRoot, ProjectSpecs())
+}
+
+// StatusProject checks the installation state of all project-team agent instruction files.
+func StatusProject(repoRoot string) []FileStatus {
+	return checkSpecs(repoRoot, ProjectSpecs())
+}
+
+// InstallLocal creates or updates all project-local agent instruction files and adds them to .gitignore.
+func InstallLocal(repoRoot string) ([]Result, error) {
+	results, err := installSpecs(repoRoot, ProjectSpecs())
+	if err != nil {
+		return results, err
+	}
+	for _, spec := range ProjectSpecs() {
+		if _, gitErr := fileutil.EnsureGitignore(repoRoot, spec.RelPath); gitErr != nil {
+			return results, fmt.Errorf("gitignore %s: %w", spec.RelPath, gitErr)
+		}
+	}
+	return results, nil
+}
+
+// UninstallLocal removes project-local agent instruction files and their .gitignore entries.
+func UninstallLocal(repoRoot string) ([]Result, error) {
+	results, err := uninstallSpecs(repoRoot, ProjectSpecs())
+	if err != nil {
+		return results, err
+	}
+	for _, spec := range ProjectSpecs() {
+		if _, gitErr := fileutil.RemoveGitignoreEntry(repoRoot, spec.RelPath); gitErr != nil {
+			return results, fmt.Errorf("gitignore %s: %w", spec.RelPath, gitErr)
+		}
+	}
+	return results, nil
+}
+
+// Install creates or updates all project-level agent instruction files under repoRoot.
+//
+// Deprecated: use InstallProject.
+func Install(repoRoot string) ([]Result, error) { return InstallProject(repoRoot) }
+
+// Uninstall removes rimba content from all project-level agent instruction files under repoRoot.
+//
+// Deprecated: use UninstallProject.
+func Uninstall(repoRoot string) ([]Result, error) { return UninstallProject(repoRoot) }
+
+// Status checks the installation state of all project-level agent instruction files.
+//
+// Deprecated: use StatusProject.
+func Status(repoRoot string) []FileStatus { return StatusProject(repoRoot) }
+
+func installSpecs(baseDir string, specs []Spec) ([]Result, error) {
+	results := make([]Result, 0, len(specs))
+	for _, spec := range specs {
+		r, err := installOne(baseDir, spec)
 		if err != nil {
 			return results, fmt.Errorf("%s: %w", spec.RelPath, err)
 		}
@@ -71,11 +165,10 @@ func Install(repoRoot string) ([]Result, error) {
 	return results, nil
 }
 
-// Uninstall removes rimba content from all agent instruction files under repoRoot.
-func Uninstall(repoRoot string) ([]Result, error) {
-	var results []Result
-	for _, spec := range Specs() {
-		r, err := uninstallOne(repoRoot, spec)
+func uninstallSpecs(baseDir string, specs []Spec) ([]Result, error) {
+	results := make([]Result, 0, len(specs))
+	for _, spec := range specs {
+		r, err := uninstallOne(baseDir, spec)
 		if err != nil {
 			return results, fmt.Errorf("%s: %w", spec.RelPath, err)
 		}
@@ -84,12 +177,10 @@ func Uninstall(repoRoot string) ([]Result, error) {
 	return results, nil
 }
 
-// Status checks the installation state of all agent instruction files.
-func Status(repoRoot string) []FileStatus {
-	specs := Specs()
+func checkSpecs(baseDir string, specs []Spec) []FileStatus {
 	statuses := make([]FileStatus, 0, len(specs))
 	for _, spec := range specs {
-		statuses = append(statuses, checkOne(repoRoot, spec))
+		statuses = append(statuses, checkOne(baseDir, spec))
 	}
 	return statuses
 }

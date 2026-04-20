@@ -146,7 +146,7 @@ directory is already personal.`,
 		// Install agent instruction files if requested
 		installAgentFiles, _ := cmd.Flags().GetBool(flagAgentFiles)
 		if installAgentFiles {
-			results, err := agentfile.Install(repoRoot)
+			results, err := agentfile.InstallProject(repoRoot)
 			if err != nil {
 				return fmt.Errorf("install agent files: %w", err)
 			}
