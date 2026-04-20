@@ -15,10 +15,9 @@ const (
 
 // --- Specs tests ---
 
-func TestSpecsReturnsFourFiles(t *testing.T) {
-	specs := Specs()
-	if len(specs) != 4 {
-		t.Fatalf("Specs() returned %d items, want 4", len(specs))
+func TestSpecsReturnsSeven(t *testing.T) {
+	if got := len(Specs()); got != 7 {
+		t.Fatalf("Specs() returned %d items, want 7", got)
 	}
 }
 
@@ -41,8 +40,8 @@ func TestInstallCreatesAllFiles(t *testing.T) {
 		t.Fatalf(fatalInstall, err)
 	}
 
-	if len(results) != 4 {
-		t.Fatalf("Install returned %d results, want 4", len(results))
+	if len(results) != 7 {
+		t.Fatalf("Install returned %d results, want 7", len(results))
 	}
 
 	for _, r := range results {
@@ -223,8 +222,8 @@ func TestUninstallRemovesBlock(t *testing.T) {
 		t.Fatalf(fatalUninstall, err)
 	}
 
-	if len(results) != 4 {
-		t.Fatalf("Uninstall returned %d results, want 4", len(results))
+	if len(results) != 7 {
+		t.Fatalf("Uninstall returned %d results, want 7", len(results))
 	}
 
 	// AGENTS.md should still exist with user content
@@ -303,8 +302,8 @@ func TestStatusNotInstalled(t *testing.T) {
 	dir := t.TempDir()
 
 	statuses := Status(dir)
-	if len(statuses) != 4 {
-		t.Fatalf("Status returned %d items, want 4", len(statuses))
+	if len(statuses) != 7 {
+		t.Fatalf("Status returned %d items, want 7", len(statuses))
 	}
 
 	for _, s := range statuses {
@@ -468,6 +467,365 @@ func TestClaudeSkillContentHasFrontmatter(t *testing.T) {
 	}
 	if !strings.Contains(content, "description:") {
 		t.Error("claude skill content should have description field")
+	}
+}
+
+// --- New project-tier content tests ---
+
+func TestGeminiBlockHasMarkers(t *testing.T) {
+	content := geminiBlock()
+	if !strings.HasPrefix(content, BeginMarker) {
+		t.Error("gemini block should start with BEGIN marker")
+	}
+	if !strings.HasSuffix(content, EndMarker) {
+		t.Error("gemini block should end with END marker")
+	}
+	if !strings.Contains(content, "rimba") {
+		t.Error("gemini block should mention rimba")
+	}
+}
+
+func TestWindsurfContentNotEmpty(t *testing.T) {
+	content := windsurfContent()
+	if content == "" {
+		t.Error("windsurf content should not be empty")
+	}
+	if !strings.Contains(content, "rimba") {
+		t.Error("windsurf content should mention rimba")
+	}
+}
+
+func TestRooContentNotEmpty(t *testing.T) {
+	content := rooContent()
+	if content == "" {
+		t.Error("roo content should not be empty")
+	}
+	if !strings.Contains(content, "rimba") {
+		t.Error("roo content should mention rimba")
+	}
+}
+
+// --- Global (user-tier) content tests ---
+
+func TestGlobalClaudeSkillContentHasFrontmatter(t *testing.T) {
+	content := globalClaudeSkillContent()
+	if !strings.HasPrefix(content, "---\n") {
+		t.Error("global claude skill content should start with YAML frontmatter")
+	}
+	if !strings.Contains(content, "name: rimba") {
+		t.Error("global claude skill content should have name field")
+	}
+	if !strings.Contains(content, "description:") {
+		t.Error("global claude skill content should have description field")
+	}
+}
+
+func TestGlobalCursorContentHasFrontmatterNoGlobs(t *testing.T) {
+	content := globalCursorContent()
+	if !strings.HasPrefix(content, "---\n") {
+		t.Error("global cursor content should start with YAML frontmatter")
+	}
+	if !strings.Contains(content, "alwaysApply: true") {
+		t.Error("global cursor content should have alwaysApply: true")
+	}
+	if strings.Contains(content, "globs:") {
+		t.Error("global cursor content should not have globs field")
+	}
+}
+
+func TestGlobalCopilotBlockHasMarkers(t *testing.T) {
+	content := globalCopilotBlock()
+	if !strings.HasPrefix(content, BeginMarker) {
+		t.Error("global copilot block should start with BEGIN marker")
+	}
+	if !strings.HasSuffix(content, EndMarker) {
+		t.Error("global copilot block should end with END marker")
+	}
+}
+
+func TestGlobalCodexBlockHasMarkers(t *testing.T) {
+	content := globalCodexBlock()
+	if !strings.HasPrefix(content, BeginMarker) {
+		t.Error("global codex block should start with BEGIN marker")
+	}
+	if !strings.HasSuffix(content, EndMarker) {
+		t.Error("global codex block should end with END marker")
+	}
+}
+
+func TestGlobalGeminiBlockHasMarkers(t *testing.T) {
+	content := globalGeminiBlock()
+	if !strings.HasPrefix(content, BeginMarker) {
+		t.Error("global gemini block should start with BEGIN marker")
+	}
+	if !strings.HasSuffix(content, EndMarker) {
+		t.Error("global gemini block should end with END marker")
+	}
+}
+
+func TestGlobalWindsurfBlockHasMarkers(t *testing.T) {
+	content := globalWindsurfBlock()
+	if !strings.HasPrefix(content, BeginMarker) {
+		t.Error("global windsurf block should start with BEGIN marker")
+	}
+	if !strings.HasSuffix(content, EndMarker) {
+		t.Error("global windsurf block should end with END marker")
+	}
+}
+
+func TestGlobalRooContentNotEmpty(t *testing.T) {
+	content := globalRooContent()
+	if content == "" {
+		t.Error("global roo content should not be empty")
+	}
+	if !strings.Contains(content, "rimba") {
+		t.Error("global roo content should mention rimba")
+	}
+}
+
+// --- GlobalSpecs / ProjectSpecs tests ---
+
+func TestGlobalSpecsCountIsSeven(t *testing.T) {
+	if got := len(GlobalSpecs()); got != 7 {
+		t.Fatalf("GlobalSpecs() returned %d items, want 7", got)
+	}
+}
+
+func TestProjectSpecsCountIsSeven(t *testing.T) {
+	if got := len(ProjectSpecs()); got != 7 {
+		t.Fatalf("ProjectSpecs() returned %d items, want 7", got)
+	}
+}
+
+func TestGlobalSpecsContentNotEmpty(t *testing.T) {
+	for _, spec := range GlobalSpecs() {
+		if spec.Content() == "" {
+			t.Errorf("GlobalSpec %q returned empty content", spec.RelPath)
+		}
+	}
+}
+
+func TestProjectSpecsContentNotEmpty(t *testing.T) {
+	for _, spec := range ProjectSpecs() {
+		if spec.Content() == "" {
+			t.Errorf("ProjectSpec %q returned empty content", spec.RelPath)
+		}
+	}
+}
+
+// --- InstallGlobal / UninstallGlobal tests ---
+
+func TestInstallGlobalCreatesAllFiles(t *testing.T) {
+	home := t.TempDir()
+
+	results, err := InstallGlobal(home)
+	if err != nil {
+		t.Fatalf("InstallGlobal: %v", err)
+	}
+
+	if len(results) != 7 {
+		t.Fatalf("InstallGlobal returned %d results, want 7", len(results))
+	}
+	for _, r := range results {
+		if r.Action != actionCreated {
+			t.Errorf("%s: action = %q, want %q", r.RelPath, r.Action, actionCreated)
+		}
+		path := filepath.Join(home, r.RelPath)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			t.Errorf("%s: file not created at %s", r.RelPath, path)
+		}
+	}
+}
+
+func TestInstallGlobalIdempotent(t *testing.T) {
+	home := t.TempDir()
+
+	if _, err := InstallGlobal(home); err != nil {
+		t.Fatalf("first InstallGlobal: %v", err)
+	}
+	results, err := InstallGlobal(home)
+	if err != nil {
+		t.Fatalf("second InstallGlobal: %v", err)
+	}
+	for _, r := range results {
+		if r.Action != actionUpdated {
+			t.Errorf("%s: action = %q, want %q on re-install", r.RelPath, r.Action, actionUpdated)
+		}
+	}
+
+	// Block files must have exactly one marker pair.
+	for _, spec := range GlobalSpecs() {
+		if spec.Kind != KindBlock {
+			continue
+		}
+		path := filepath.Join(home, spec.RelPath)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", spec.RelPath, err)
+		}
+		s := string(data)
+		if strings.Count(s, BeginMarker) != 1 {
+			t.Errorf("%s: %d BEGIN markers, want 1", spec.RelPath, strings.Count(s, BeginMarker))
+		}
+	}
+}
+
+func TestGlobalBlockPreservesExistingUserContent(t *testing.T) {
+	home := t.TempDir()
+
+	// Pre-seed ~/.codex/AGENTS.md with user content.
+	codexDir := filepath.Join(home, ".codex")
+	if err := os.MkdirAll(codexDir, 0750); err != nil {
+		t.Fatal(err)
+	}
+	userContent := "# My Codex Config\n\nPersonal instructions.\n"
+	if err := os.WriteFile(filepath.Join(codexDir, "AGENTS.md"), []byte(userContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := InstallGlobal(home); err != nil {
+		t.Fatalf("InstallGlobal: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(codexDir, "AGENTS.md"))
+	if err != nil {
+		t.Fatalf("read AGENTS.md: %v", err)
+	}
+	s := string(data)
+	if !strings.Contains(s, "My Codex Config") {
+		t.Error("user content should be preserved")
+	}
+	if !strings.Contains(s, BeginMarker) {
+		t.Error("rimba block should be appended")
+	}
+}
+
+func TestUninstallGlobalRemovesAllFiles(t *testing.T) {
+	home := t.TempDir()
+
+	if _, err := InstallGlobal(home); err != nil {
+		t.Fatalf("InstallGlobal: %v", err)
+	}
+	results, err := UninstallGlobal(home)
+	if err != nil {
+		t.Fatalf("UninstallGlobal: %v", err)
+	}
+	if len(results) != 7 {
+		t.Fatalf("UninstallGlobal returned %d results, want 7", len(results))
+	}
+	for _, r := range results {
+		if r.Action != actionRemoved {
+			t.Errorf("%s: action = %q, want %q", r.RelPath, r.Action, actionRemoved)
+		}
+	}
+}
+
+func TestStatusGlobalReflectsInstall(t *testing.T) {
+	home := t.TempDir()
+
+	before := StatusGlobal(home)
+	for _, s := range before {
+		if s.Installed {
+			t.Errorf("%s: expected not installed before install", s.RelPath)
+		}
+	}
+
+	if _, err := InstallGlobal(home); err != nil {
+		t.Fatalf("InstallGlobal: %v", err)
+	}
+
+	after := StatusGlobal(home)
+	for _, s := range after {
+		if !s.Installed {
+			t.Errorf("%s: expected installed after install", s.RelPath)
+		}
+	}
+}
+
+// --- InstallProject / UninstallProject tests ---
+
+func TestInstallProjectCreatesAllFiles(t *testing.T) {
+	dir := t.TempDir()
+
+	results, err := InstallProject(dir)
+	if err != nil {
+		t.Fatalf("InstallProject: %v", err)
+	}
+	if len(results) != 7 {
+		t.Fatalf("InstallProject returned %d results, want 7", len(results))
+	}
+	for _, r := range results {
+		if r.Action != actionCreated {
+			t.Errorf("%s: action = %q, want %q", r.RelPath, r.Action, actionCreated)
+		}
+	}
+}
+
+func TestUninstallProjectRemovesFiles(t *testing.T) {
+	dir := t.TempDir()
+
+	if _, err := InstallProject(dir); err != nil {
+		t.Fatalf("InstallProject: %v", err)
+	}
+	if _, err := UninstallProject(dir); err != nil {
+		t.Fatalf("UninstallProject: %v", err)
+	}
+
+	// Whole-file types should be deleted.
+	for _, spec := range ProjectSpecs() {
+		if spec.Kind != KindWhole {
+			continue
+		}
+		path := filepath.Join(dir, spec.RelPath)
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("%s: should be deleted after uninstall", spec.RelPath)
+		}
+	}
+}
+
+// --- InstallLocal / UninstallLocal tests ---
+
+func TestInstallLocalAddsGitignoreEntries(t *testing.T) {
+	dir := t.TempDir()
+
+	// Need a git repo-like directory; EnsureGitignore just needs the directory.
+	if _, err := InstallLocal(dir); err != nil {
+		t.Fatalf("InstallLocal: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".gitignore"))
+	if err != nil {
+		t.Fatalf("read .gitignore: %v", err)
+	}
+	gitignore := string(data)
+
+	for _, spec := range ProjectSpecs() {
+		if !strings.Contains(gitignore, spec.RelPath) {
+			t.Errorf(".gitignore missing entry for %s", spec.RelPath)
+		}
+	}
+}
+
+func TestUninstallLocalRemovesGitignoreEntries(t *testing.T) {
+	dir := t.TempDir()
+
+	if _, err := InstallLocal(dir); err != nil {
+		t.Fatalf("InstallLocal: %v", err)
+	}
+	if _, err := UninstallLocal(dir); err != nil {
+		t.Fatalf("UninstallLocal: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".gitignore"))
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatalf("read .gitignore: %v", err)
+	}
+	gitignore := string(data)
+
+	for _, spec := range ProjectSpecs() {
+		if strings.Contains(gitignore, spec.RelPath) {
+			t.Errorf(".gitignore still has entry for %s after uninstall", spec.RelPath)
+		}
 	}
 }
 

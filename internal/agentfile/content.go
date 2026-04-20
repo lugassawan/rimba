@@ -168,6 +168,256 @@ Envelope: ` + "`" + `{"version", "command", "data"}` + "`" + ` or ` + "`" + `{"v
 `
 }
 
+// geminiBlock returns the rimba block for GEMINI.md (shared file, block-based).
+func geminiBlock() string {
+	return `<!-- BEGIN RIMBA -->
+<!-- Managed by rimba — do not edit this block manually -->
+
+# rimba — Git Worktree Manager
+
+rimba manages parallel git worktrees so you can work on multiple tasks simultaneously.
+It is optional and detected via ` + "`" + `.rimba/settings.toml` + "`" + ` in the repo root.
+
+## Prerequisites
+
+Run ` + "`" + `rimba version` + "`" + ` to check if rimba is installed.
+If not found, **ask the user** before installing. Never install automatically.
+
+## Command Reference
+
+| Concern | Commands |
+|---------|----------|
+| Create & navigate | ` + "`" + `rimba add <task>` + "`" + `, ` + "`" + `rimba open <task>` + "`" + ` |
+| Inspect | ` + "`" + `rimba list` + "`" + `, ` + "`" + `rimba status` + "`" + ` |
+| Sync & merge | ` + "`" + `rimba sync [task]` + "`" + `, ` + "`" + `rimba merge <task>` + "`" + ` |
+| Clean up | ` + "`" + `rimba clean --merged` + "`" + `, ` + "`" + `rimba archive <task>` + "`" + `, ` + "`" + `rimba remove <task>` + "`" + ` |
+| Cross-cutting | ` + "`" + `rimba exec <cmd>` + "`" + `, ` + "`" + `rimba conflict-check` + "`" + ` |
+| AI integration | ` + "`" + `rimba mcp` + "`" + ` (MCP server for AI coding agents) |
+
+<!-- END RIMBA -->`
+}
+
+// windsurfContent returns the full content for .windsurf/rules/rimba.md (whole-file, project-level).
+func windsurfContent() string {
+	return `# rimba — Git Worktree Manager
+
+rimba manages parallel git worktrees so you can work on multiple tasks simultaneously.
+It is optional and detected via ` + "`" + `.rimba/settings.toml` + "`" + ` in the repo root.
+
+## Prerequisites
+
+Run ` + "`" + `rimba version` + "`" + ` to check if rimba is installed.
+If not found, **ask the user** before installing. Never install automatically.
+
+## Top Commands
+
+1. ` + "`" + `rimba add <task>` + "`" + ` — create worktree + branch
+2. ` + "`" + `rimba list` + "`" + ` — list all worktrees
+3. ` + "`" + `rimba status` + "`" + ` — health overview
+4. ` + "`" + `rimba merge <task>` + "`" + ` — merge into main and auto-clean up
+5. ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
+6. ` + "`" + `rimba sync [task]` + "`" + ` — rebase onto main
+7. ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
+`
+}
+
+// rooContent returns the full content for .clinerules/rimba.md (whole-file, project-level).
+func rooContent() string {
+	return `# rimba — Git Worktree Manager
+
+rimba manages parallel git worktrees so you can work on multiple tasks simultaneously.
+It is optional and detected via ` + "`" + `.rimba/settings.toml` + "`" + ` in the repo root.
+
+## Prerequisites
+
+Run ` + "`" + `rimba version` + "`" + ` to check if rimba is installed.
+If not found, **ask the user** before installing. Never install automatically.
+
+## Top Commands
+
+1. ` + "`" + `rimba add <task>` + "`" + ` — create worktree + branch
+2. ` + "`" + `rimba list` + "`" + ` — list all worktrees
+3. ` + "`" + `rimba status` + "`" + ` — health overview
+4. ` + "`" + `rimba merge <task>` + "`" + ` — merge into main and auto-clean up
+5. ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
+6. ` + "`" + `rimba sync [task]` + "`" + ` — rebase onto main
+7. ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
+`
+}
+
+// globalClaudeSkillContent returns the user-level content for ~/.claude/skills/rimba/SKILL.md.
+func globalClaudeSkillContent() string {
+	return `---
+name: rimba
+description: Use when user wants to manage git worktrees — creating, listing, syncing, merging, or cleaning up parallel working directories
+---
+
+# rimba — Git Worktree Manager
+
+## Prerequisite
+
+Run ` + "`" + `rimba version` + "`" + ` to check if rimba is installed.
+If not found, **ask the user** if they want to install it. Never install automatically.
+
+` + "```" + `sh
+curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/install.sh | bash
+` + "```" + `
+
+Check for ` + "`" + `.rimba/settings.toml` + "`" + ` in the current repo to confirm rimba is configured for this project.
+
+## Decision Logic
+
+| User wants to... | Run |
+|-------------------|-----|
+| Start a new task | ` + "`" + `rimba add <task>` + "`" + ` |
+| Start a task in a monorepo service | ` + "`" + `rimba add service/task` + "`" + ` |
+| See all worktrees | ` + "`" + `rimba list` + "`" + ` |
+| Check worktree health | ` + "`" + `rimba status` + "`" + ` |
+| Navigate to a worktree | ` + "`" + `cd $(rimba open <task>)` + "`" + ` |
+| Update from source branch | ` + "`" + `rimba sync <task>` + "`" + ` |
+| Finish a feature | ` + "`" + `rimba merge <task>` + "`" + ` |
+| Clean up merged work | ` + "`" + `rimba clean --merged` + "`" + ` |
+| Use MCP server | ` + "`" + `rimba mcp` + "`" + ` |
+`
+}
+
+// globalCursorContent returns the user-level content for ~/.cursor/rules/rimba.mdc.
+func globalCursorContent() string {
+	return `---
+description: rimba git worktree manager commands and workflows
+alwaysApply: true
+---
+
+# rimba — Git Worktree Manager
+
+Check for ` + "`" + `.rimba/settings.toml` + "`" + ` in the current repo to confirm rimba is configured.
+
+## Top Commands
+
+1. ` + "`" + `rimba add <task>` + "`" + ` — create worktree + branch
+2. ` + "`" + `rimba list` + "`" + ` — list all worktrees
+3. ` + "`" + `rimba status` + "`" + ` — health overview
+4. ` + "`" + `rimba merge <task>` + "`" + ` — merge into main and auto-clean up
+5. ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
+6. ` + "`" + `rimba sync [task]` + "`" + ` — rebase onto main
+7. ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
+`
+}
+
+// globalCopilotBlock returns the user-level rimba block for ~/.github/copilot-instructions.md.
+func globalCopilotBlock() string {
+	return `<!-- BEGIN RIMBA -->
+<!-- Managed by rimba — do not edit this block manually -->
+
+## rimba (Git Worktree Manager)
+
+rimba manages parallel git worktrees. Check for ` + "`" + `.rimba/settings.toml` + "`" + ` to confirm it is configured in the current project.
+
+### Key Commands
+
+- ` + "`" + `rimba add <task>` + "`" + ` — create worktree + branch
+- ` + "`" + `rimba list` + "`" + ` / ` + "`" + `rimba status` + "`" + ` — inspect worktrees
+- ` + "`" + `rimba merge <task>` + "`" + ` — merge into main and auto-clean up
+- ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
+- ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
+
+<!-- END RIMBA -->`
+}
+
+// globalCodexBlock returns the user-level rimba block for ~/.codex/AGENTS.md.
+func globalCodexBlock() string {
+	return `<!-- BEGIN RIMBA -->
+<!-- Managed by rimba — do not edit this block manually -->
+
+# rimba — Git Worktree Manager
+
+rimba manages parallel git worktrees so you can work on multiple tasks simultaneously.
+Check for ` + "`" + `.rimba/settings.toml` + "`" + ` in the current repo to confirm it is configured.
+
+Run ` + "`" + `rimba version` + "`" + ` to check if rimba is installed.
+If not found, **ask the user** before installing. Never install automatically.
+
+## Command Reference
+
+| Concern | Commands |
+|---------|----------|
+| Create & navigate | ` + "`" + `rimba add <task>` + "`" + `, ` + "`" + `rimba open <task>` + "`" + ` |
+| Inspect | ` + "`" + `rimba list` + "`" + `, ` + "`" + `rimba status` + "`" + ` |
+| Sync & merge | ` + "`" + `rimba sync [task]` + "`" + `, ` + "`" + `rimba merge <task>` + "`" + ` |
+| Clean up | ` + "`" + `rimba clean --merged` + "`" + `, ` + "`" + `rimba archive <task>` + "`" + ` |
+| AI integration | ` + "`" + `rimba mcp` + "`" + ` (MCP server for AI coding agents) |
+
+<!-- END RIMBA -->`
+}
+
+// globalGeminiBlock returns the user-level rimba block for ~/.gemini/GEMINI.md.
+func globalGeminiBlock() string {
+	return `<!-- BEGIN RIMBA -->
+<!-- Managed by rimba — do not edit this block manually -->
+
+# rimba — Git Worktree Manager
+
+rimba manages parallel git worktrees so you can work on multiple tasks simultaneously.
+Check for ` + "`" + `.rimba/settings.toml` + "`" + ` in the current repo to confirm it is configured.
+
+Run ` + "`" + `rimba version` + "`" + ` to check if rimba is installed.
+If not found, **ask the user** before installing. Never install automatically.
+
+## Command Reference
+
+| Concern | Commands |
+|---------|----------|
+| Create & navigate | ` + "`" + `rimba add <task>` + "`" + `, ` + "`" + `rimba open <task>` + "`" + ` |
+| Inspect | ` + "`" + `rimba list` + "`" + `, ` + "`" + `rimba status` + "`" + ` |
+| Sync & merge | ` + "`" + `rimba sync [task]` + "`" + `, ` + "`" + `rimba merge <task>` + "`" + ` |
+| Clean up | ` + "`" + `rimba clean --merged` + "`" + `, ` + "`" + `rimba archive <task>` + "`" + ` |
+| AI integration | ` + "`" + `rimba mcp` + "`" + ` (MCP server for AI coding agents) |
+
+<!-- END RIMBA -->`
+}
+
+// globalWindsurfBlock returns the user-level rimba block for ~/.codeium/windsurf/memories/global_rules.md.
+func globalWindsurfBlock() string {
+	return `<!-- BEGIN RIMBA -->
+<!-- Managed by rimba — do not edit this block manually -->
+
+## rimba (Git Worktree Manager)
+
+rimba manages parallel git worktrees. Check for ` + "`" + `.rimba/settings.toml` + "`" + ` to confirm it is configured in the current project.
+
+### Key Commands
+
+- ` + "`" + `rimba add <task>` + "`" + ` — create worktree + branch
+- ` + "`" + `rimba list` + "`" + ` / ` + "`" + `rimba status` + "`" + ` — inspect worktrees
+- ` + "`" + `rimba merge <task>` + "`" + ` — merge into main and auto-clean up
+- ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
+- ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
+
+<!-- END RIMBA -->`
+}
+
+// globalRooContent returns the user-level content for ~/.roo/rules/rimba.md.
+func globalRooContent() string {
+	return `# rimba — Git Worktree Manager
+
+rimba manages parallel git worktrees so you can work on multiple tasks simultaneously.
+Check for ` + "`" + `.rimba/settings.toml` + "`" + ` in the current repo to confirm it is configured.
+
+Run ` + "`" + `rimba version` + "`" + ` to check if rimba is installed.
+If not found, ask the user before installing. Never install automatically.
+
+## Top Commands
+
+1. ` + "`" + `rimba add <task>` + "`" + ` — create worktree + branch
+2. ` + "`" + `rimba list` + "`" + ` — list all worktrees
+3. ` + "`" + `rimba status` + "`" + ` — health overview
+4. ` + "`" + `rimba merge <task>` + "`" + ` — merge into main and auto-clean up
+5. ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
+6. ` + "`" + `rimba sync [task]` + "`" + ` — rebase onto main
+7. ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
+`
+}
+
 // claudeSkillContent returns the full content for .claude/skills/rimba/SKILL.md (whole-file, rimba-owned).
 func claudeSkillContent() string {
 	return `---
