@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/spf13/cobra"
 )
 
 func TestInitSuccess(t *testing.T) {
@@ -184,7 +185,7 @@ func TestInitCreatesAgentFiles(t *testing.T) {
 	defer restore()
 
 	cmd, buf := newTestCmd()
-	cmd.Flags().Bool(flagAgentFiles, true, "")
+	cmd.Flags().Bool(flagAgents, true, "")
 
 	if err := initCmd.RunE(cmd, nil); err != nil {
 		t.Fatalf("initCmd.RunE: %v", err)
@@ -192,7 +193,7 @@ func TestInitCreatesAgentFiles(t *testing.T) {
 
 	out := buf.String()
 
-	// Verify agent file output lines
+	// Verify agent file output lines for all 7 project specs
 	agentFiles := []string{
 		"AGENTS.md",
 		filepath.Join(".github", "copilot-instructions.md"),
@@ -236,7 +237,7 @@ func TestInitExistingConfigInstallsAgentFiles(t *testing.T) {
 	defer restore()
 
 	cmd, buf := newTestCmd()
-	cmd.Flags().Bool(flagAgentFiles, true, "")
+	cmd.Flags().Bool(flagAgents, true, "")
 
 	// Should succeed (not error) when .rimba/ already exists
 	err := initCmd.RunE(cmd, nil)
@@ -275,14 +276,14 @@ func TestInitAgentFilesIdempotent(t *testing.T) {
 
 	// First init
 	cmd1, _ := newTestCmd()
-	cmd1.Flags().Bool(flagAgentFiles, true, "")
+	cmd1.Flags().Bool(flagAgents, true, "")
 	if err := initCmd.RunE(cmd1, nil); err != nil {
 		t.Fatalf("first initCmd.RunE: %v", err)
 	}
 
 	// Second init (config exists now)
 	cmd2, buf2 := newTestCmd()
-	cmd2.Flags().Bool(flagAgentFiles, true, "")
+	cmd2.Flags().Bool(flagAgents, true, "")
 	if err := initCmd.RunE(cmd2, nil); err != nil {
 		t.Fatalf("second initCmd.RunE: %v", err)
 	}
@@ -328,11 +329,194 @@ func TestInitWithoutFlagSkipsAgentFiles(t *testing.T) {
 
 	out := buf.String()
 	if strings.Contains(out, "Agent:") {
-		t.Errorf("output should not mention agent files without --agent-files flag, got:\n%s", out)
+		t.Errorf("output should not mention agent files without agent flag, got:\n%s", out)
 	}
 
 	if _, err := os.Stat(filepath.Join(repoDir, "AGENTS.md")); err == nil {
-		t.Error("AGENTS.md should not be created without --agent-files flag")
+		t.Error("AGENTS.md should not be created without --agents flag")
+	}
+}
+
+// --- Tests for new 3-tier flag surface ---
+
+func TestInitGlobalInstall(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	// -g does not need a git repo
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			return "", errors.New("not a git repository")
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().Bool(flagGlobal, true, "")
+
+	if err := initCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("initCmd.RunE: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "user") {
+		t.Errorf("output should mention 'user', got:\n%s", out)
+	}
+
+	// Verify Claude skill was created
+	claudePath := filepath.Join(home, ".claude", "skills", "rimba", "SKILL.md")
+	if _, err := os.Stat(claudePath); os.IsNotExist(err) {
+		t.Errorf("global claude skill not created at %s", claudePath)
+	}
+}
+
+func TestInitGlobalNoRepoRequired(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	// Simulate git.RepoRoot failing (not in a repo)
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			return "", errors.New("not a git repository")
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, _ := newTestCmd()
+	cmd.Flags().Bool(flagGlobal, true, "")
+
+	if err := initCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("-g should succeed outside a git repo, got: %v", err)
+	}
+}
+
+func TestInitGlobalUninstall(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	// Install first
+	r := &mockRunner{
+		run:      func(...string) (string, error) { return "", errors.New("not a git repo") },
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd1, _ := newTestCmd()
+	cmd1.Flags().Bool(flagGlobal, true, "")
+	if err := initCmd.RunE(cmd1, nil); err != nil {
+		t.Fatalf("install: %v", err)
+	}
+
+	// Uninstall
+	cmd2, buf := newTestCmd()
+	cmd2.Flags().Bool(flagGlobal, true, "")
+	cmd2.Flags().Bool(flagUninstall, true, "")
+	if err := initCmd.RunE(cmd2, nil); err != nil {
+		t.Fatalf("uninstall: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "Removed") {
+		t.Errorf("output should say 'Removed', got:\n%s", out)
+	}
+
+	// Claude skill should be gone
+	claudePath := filepath.Join(home, ".claude", "skills", "rimba", "SKILL.md")
+	if _, err := os.Stat(claudePath); err == nil {
+		t.Error("claude skill should be removed after uninstall")
+	}
+}
+
+func TestInitAgentsLocalAddsGitignore(t *testing.T) {
+	repoDir := t.TempDir()
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			if len(args) >= 1 && args[0] == cmdSymbolicRef {
+				return refsRemotesOriginMain, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, _ := newTestCmd()
+	cmd.Flags().Bool(flagAgents, true, "")
+	cmd.Flags().Bool(flagLocal, true, "")
+
+	if err := initCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("initCmd.RunE: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(repoDir, ".gitignore"))
+	if err != nil {
+		t.Fatalf("read .gitignore: %v", err)
+	}
+	gitignore := string(data)
+	// AGENTS.md should be in .gitignore (local tier)
+	if !strings.Contains(gitignore, "AGENTS.md") {
+		t.Errorf(".gitignore should contain AGENTS.md, got:\n%s", gitignore)
+	}
+}
+
+func TestInitFlagValidationErrors(t *testing.T) {
+	repoDir := t.TempDir()
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	tests := []struct {
+		name    string
+		setup   func(*cobra.Command)
+		wantErr string
+	}{
+		{
+			name: "--local without --agents",
+			setup: func(cmd *cobra.Command) {
+				cmd.Flags().Bool(flagLocal, true, "")
+			},
+			wantErr: "--local requires --agents",
+		},
+		{
+			name: "--uninstall without target",
+			setup: func(cmd *cobra.Command) {
+				cmd.Flags().Bool(flagUninstall, true, "")
+			},
+			wantErr: "--uninstall requires",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd, _ := newTestCmd()
+			tt.setup(cmd)
+			err := initCmd.RunE(cmd, nil)
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("error = %q, want to contain %q", err.Error(), tt.wantErr)
+			}
+		})
 	}
 }
 

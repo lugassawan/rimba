@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,8 +15,11 @@ import (
 )
 
 const (
-	flagAgentFiles = "agent-files"
-	flagPersonal   = "personal"
+	flagPersonal  = "personal"
+	flagGlobal    = "global"
+	flagAgents    = "agents"
+	flagLocal     = "local"
+	flagUninstall = "uninstall"
 )
 
 var initCmd = &cobra.Command{
@@ -25,12 +29,45 @@ var initCmd = &cobra.Command{
 settings.toml (team-shared) and settings.local.toml (personal overrides).
 
 If a legacy .rimba.toml file exists, it is migrated into the new directory layout.
-Use --agent-files to also install AI agent instruction files.
+Use --agents to also install AI agent instruction files at project level (committed).
+Use --agents --local to install them gitignored (personal overrides).
+Use -g to install agent files at user level (~/) — works outside a git repository.
 Use --personal to gitignore the entire .rimba/ directory instead of just the local
 config file. In personal mode, settings.local.toml is not created since the whole
 directory is already personal.`,
 	Annotations: map[string]string{"skipConfig": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		global, _ := cmd.Flags().GetBool(flagGlobal)
+		agents, _ := cmd.Flags().GetBool(flagAgents)
+		local, _ := cmd.Flags().GetBool(flagLocal)
+		uninstall, _ := cmd.Flags().GetBool(flagUninstall)
+
+		// Flag validation
+		if local && !agents {
+			return errhint.WithFix(
+				errors.New("--local requires --agents"),
+				"run: rimba init --agents --local",
+			)
+		}
+		if uninstall && !global && !agents {
+			return errhint.WithFix(
+				errors.New("--uninstall requires -g or --agents"),
+				"run: rimba init -g --uninstall  OR  rimba init --agents --uninstall",
+			)
+		}
+
+		// Global (-g) branch: no repo required.
+		if global {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return fmt.Errorf("resolve home directory: %w", err)
+			}
+			if uninstall {
+				return runAgentOp(cmd, home, "user", agentfile.UninstallGlobal, "Removed")
+			}
+			return runAgentOp(cmd, home, "user", agentfile.InstallGlobal, "Installed")
+		}
+
 		r := newRunner()
 
 		repoRoot, err := git.RepoRoot(r)
@@ -143,26 +180,49 @@ directory is already personal.`,
 			}
 		}
 
-		// Install agent instruction files if requested
-		installAgentFiles, _ := cmd.Flags().GetBool(flagAgentFiles)
-		if installAgentFiles {
-			results, err := agentfile.InstallProject(repoRoot)
-			if err != nil {
-				return fmt.Errorf("install agent files: %w", err)
+		// Project-level agent files
+		if agents {
+			if uninstall {
+				if local {
+					return runAgentOp(cmd, repoRoot, "project-local", agentfile.UninstallLocal, "Removed")
+				}
+				return runAgentOp(cmd, repoRoot, "project", agentfile.UninstallProject, "Removed")
 			}
-			for _, res := range results {
-				fmt.Fprintf(cmd.OutOrStdout(), "  Agent:        %s (%s)\n", res.RelPath, res.Action)
+			if local {
+				return runAgentOp(cmd, repoRoot, "project-local", agentfile.InstallLocal, "Installed")
 			}
+			return runAgentOp(cmd, repoRoot, "project", agentfile.InstallProject, "Installed")
 		}
 
 		return nil
 	},
 }
 
+// runAgentOp runs fn(dir) and prints results to cmd output.
+func runAgentOp(cmd *cobra.Command, dir, tier string, fn func(string) ([]agentfile.Result, error), verb string) error {
+	results, err := fn(dir)
+	if err != nil {
+		return fmt.Errorf("agent files: %w", err)
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "%s rimba agent files (%s):\n", verb, tier)
+	for _, res := range results {
+		relPath := res.RelPath
+		if tier == "user" {
+			relPath = "~/" + relPath
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "  %s (%s)\n", relPath, res.Action)
+	}
+	return nil
+}
+
 func init() {
 	rootCmd.AddCommand(initCmd)
-	initCmd.Flags().Bool(flagAgentFiles, false, "Install AI agent instruction files (AGENTS.md, copilot, cursor, claude)")
 	initCmd.Flags().Bool(flagPersonal, false, "Gitignore the .rimba/ directory (for solo developers)")
+	initCmd.Flags().BoolP(flagGlobal, "g", false, "Install rimba agent files at user level (~/)")
+	initCmd.Flags().Bool(flagAgents, false, "Install rimba agent files in this project (committed to repo)")
+	initCmd.Flags().Bool(flagLocal, false, "With --agents, install as project-local (gitignored)")
+	initCmd.Flags().Bool(flagUninstall, false, "Remove installed agent files (requires -g, --agents, or --agents --local)")
+	initCmd.MarkFlagsMutuallyExclusive(flagGlobal, flagAgents)
 }
 
 // dirExists returns true if path exists and is a directory.
