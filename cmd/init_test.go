@@ -748,6 +748,37 @@ func TestInitAgentsLocalSkipsMCP(t *testing.T) {
 	}
 }
 
+func TestInitGlobalMCPErrorPropagated(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	// Write malformed JSON to settings.json — triggers patchJSON error
+	claudeDir := filepath.Join(home, ".claude")
+	if err := os.MkdirAll(claudeDir, 0750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(claudeDir, "settings.json"), []byte("not json"), 0600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	r := &mockRunner{
+		run:      func(...string) (string, error) { return "", errors.New("not a git repo") },
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, _ := newTestCmd()
+	cmd.Flags().Bool(flagGlobal, true, "")
+	err := initCmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error for malformed MCP config, got nil")
+	}
+	if !strings.Contains(err.Error(), "mcp servers") {
+		t.Errorf("error should mention 'mcp servers', got: %v", err)
+	}
+}
+
 func TestInitPersonalFreshInit(t *testing.T) {
 	repoDir := t.TempDir()
 
