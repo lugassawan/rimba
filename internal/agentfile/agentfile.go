@@ -100,8 +100,8 @@ func ensureDir(dir string) bool {
 	return os.MkdirAll(dir, 0750) == nil //nolint:gosec // dir needs to be accessible
 }
 
-func installOne(repoRoot string, spec Spec) (Result, error) {
-	path := filepath.Join(repoRoot, spec.RelPath)
+func installOne(baseDir string, spec Spec) (Result, error) {
+	path := filepath.Join(baseDir, spec.RelPath)
 
 	if spec.Kind == KindWhole {
 		return installWhole(path, spec)
@@ -164,8 +164,8 @@ func installBlock(path string, spec Spec) (Result, error) {
 	return Result{RelPath: spec.RelPath, Action: action}, nil
 }
 
-func uninstallOne(repoRoot string, spec Spec) (Result, error) {
-	path := filepath.Join(repoRoot, spec.RelPath)
+func uninstallOne(baseDir string, spec Spec) (Result, error) {
+	path := filepath.Join(baseDir, spec.RelPath)
 
 	if spec.Kind == KindWhole {
 		return uninstallWhole(path, spec)
@@ -212,8 +212,8 @@ func uninstallBlock(path string, spec Spec) (Result, error) {
 	return Result{RelPath: spec.RelPath, Action: actionRemoved}, nil
 }
 
-func checkOne(repoRoot string, spec Spec) FileStatus {
-	path := filepath.Join(repoRoot, spec.RelPath)
+func checkOne(baseDir string, spec Spec) FileStatus {
+	path := filepath.Join(baseDir, spec.RelPath)
 
 	if spec.Kind == KindWhole {
 		_, err := os.Stat(path)
