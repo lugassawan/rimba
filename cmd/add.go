@@ -41,21 +41,21 @@ var addCmd = &cobra.Command{
 			return err
 		}
 
+		skipDeps, _ := cmd.Flags().GetBool(flagSkipDeps)
+		skipHooks, _ := cmd.Flags().GetBool(flagSkipHooks)
+
+		var configModules []config.ModuleConfig
+		if cfg.Deps != nil {
+			configModules = cfg.Deps.Modules
+		}
+
+		s := spinner.New(spinnerOpts(cmd))
+		defer s.Stop()
+
 		// pr:<num> shorthand — create worktree from a GitHub PR.
 		if m := prArgRe.FindStringSubmatch(args[0]); m != nil {
 			prNum, _ := strconv.Atoi(m[1])
 			taskOverride, _ := cmd.Flags().GetString(flagTask)
-
-			s := spinner.New(spinnerOpts(cmd))
-			defer s.Stop()
-
-			var configModules []config.ModuleConfig
-			if cfg.Deps != nil {
-				configModules = cfg.Deps.Modules
-			}
-
-			skipDeps, _ := cmd.Flags().GetBool(flagSkipDeps)
-			skipHooks, _ := cmd.Flags().GetBool(flagSkipHooks)
 
 			result, err := operations.AddPRWorktree(cmd.Context(), r, gh.Default(), operations.AddPRParams{
 				PRNumber:      prNum,
@@ -107,22 +107,11 @@ var addCmd = &cobra.Command{
 			source = cfg.DefaultSource
 		}
 
-		skipDeps, _ := cmd.Flags().GetBool(flagSkipDeps)
-		skipHooks, _ := cmd.Flags().GetBool(flagSkipHooks)
-
 		hint.New(cmd, hintPainter(cmd)).
 			Add(flagSkipDeps, hintSkipDeps).
 			Add(flagSkipHooks, hintSkipHooks).
 			Add(flagSource, hintSource).
 			Show()
-
-		s := spinner.New(spinnerOpts(cmd))
-		defer s.Stop()
-
-		var configModules []config.ModuleConfig
-		if cfg.Deps != nil {
-			configModules = cfg.Deps.Modules
-		}
 
 		s.Start("Creating worktree...")
 		result, err := operations.AddWorktree(r, operations.AddParams{
