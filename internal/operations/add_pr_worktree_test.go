@@ -12,7 +12,10 @@ import (
 )
 
 const (
-	ghArgAuth = "auth"
+	ghArgAuth       = "auth"
+	gitCmdFetch     = "fetch"
+	gitCmdRemote    = "remote"
+	gitSubcmdGetURL = "get-url"
 
 	sameRepoPRJSON = `{
   "number": 42,
@@ -59,21 +62,21 @@ func makePRGitRunner(_ string, crossFork bool) *mockRunner {
 	return &mockRunner{
 		run: func(args ...string) (string, error) {
 			switch {
-			case len(args) > 0 && args[0] == "fetch":
+			case len(args) > 0 && args[0] == gitCmdFetch:
 				return "", nil
-			case len(args) > 0 && args[0] == "remote":
-				if args[1] == "get-url" {
+			case len(args) > 0 && args[0] == gitCmdRemote:
+				if args[1] == gitSubcmdGetURL {
 					if crossFork {
 						return "", errors.New("no such remote") // remote doesn't exist yet
 					}
 					return "https://github.com/owner/repo.git", nil
 				}
-				if args[1] == "add" {
+				if args[1] == gitSubcmdAdd {
 					return "", nil
 				}
-			case len(args) > 0 && args[0] == "rev-parse":
+			case len(args) > 0 && args[0] == cmdRevParse:
 				return "", errors.New("not found") // branch doesn't exist
-			case len(args) > 0 && args[0] == "worktree" && len(args) > 1 && args[1] == "add":
+			case len(args) > 0 && args[0] == gitCmdWorktree && len(args) > 1 && args[1] == gitSubcmdAdd:
 				_ = os.MkdirAll(args[2], 0o755)
 				return "", nil
 			}
@@ -178,6 +181,168 @@ func TestAddPRWorktreeAuthFailure(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "gh auth login") {
 		t.Errorf("expected auth hint, got: %v", err)
+	}
+}
+
+func TestAddPRWorktreeFetchPRMetaFailure(t *testing.T) {
+	ghR := &mockGhRunner{
+		run: func(_ context.Context, args ...string) ([]byte, error) {
+			if len(args) > 0 && args[0] == ghArgAuth {
+				return []byte("Logged in"), nil
+			}
+			return nil, errors.New("PR not found")
+		},
+	}
+	gitR := &mockRunner{
+		run:      func(_ ...string) (string, error) { return "", nil },
+		runInDir: noopRunInDir,
+	}
+
+	_, err := AddPRWorktree(context.Background(), gitR, ghR, AddPRParams{PRNumber: 999}, nil)
+	if err == nil {
+		t.Fatal("expected error from FetchPRMeta failure")
+	}
+	if !strings.Contains(err.Error(), "verify PR number") {
+		t.Errorf("expected 'verify PR number' hint, got: %v", err)
+	}
+}
+
+func TestAddPRWorktreeSameRepoFetchFails(t *testing.T) {
+	tmpDir := t.TempDir()
+	wtDir := filepath.Join(tmpDir, ".worktrees")
+
+	ghR := newGhAuthOK(sameRepoPRJSON)
+	gitR := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == gitCmdFetch {
+				return "", errors.New("network unreachable")
+			}
+			if len(args) > 0 && args[0] == cmdRevParse {
+				return "", errors.New("not found")
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	_, err := AddPRWorktree(context.Background(), gitR, ghR, AddPRParams{
+		PRNumber:    42,
+		RepoRoot:    tmpDir,
+		WorktreeDir: wtDir,
+		SkipDeps:    true,
+		SkipHooks:   true,
+	}, nil)
+	if err == nil {
+		t.Fatal("expected error from fetch failure")
+	}
+	if !strings.Contains(err.Error(), "network connectivity") {
+		t.Errorf("expected 'network connectivity' hint, got: %v", err)
+	}
+}
+
+func TestAddPRWorktreeCrossForkAddRemoteFails(t *testing.T) {
+	tmpDir := t.TempDir()
+	wtDir := filepath.Join(tmpDir, ".worktrees")
+
+	ghR := newGhAuthOK(crossForkPRJSON)
+	gitR := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == gitCmdRemote {
+				if args[1] == gitSubcmdGetURL {
+					return "", errors.New("no such remote")
+				}
+				if args[1] == gitSubcmdAdd {
+					return "", errors.New("remote add failed")
+				}
+			}
+			if len(args) > 0 && args[0] == cmdRevParse {
+				return "", errors.New("not found")
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	_, err := AddPRWorktree(context.Background(), gitR, ghR, AddPRParams{
+		PRNumber:    99,
+		RepoRoot:    tmpDir,
+		WorktreeDir: wtDir,
+		SkipDeps:    true,
+		SkipHooks:   true,
+	}, nil)
+	if err == nil {
+		t.Fatal("expected error from AddRemote failure")
+	}
+	if !strings.Contains(err.Error(), "fork visibility") {
+		t.Errorf("expected 'fork visibility' hint, got: %v", err)
+	}
+}
+
+func TestAddPRWorktreeCrossForkFetchFails(t *testing.T) {
+	tmpDir := t.TempDir()
+	wtDir := filepath.Join(tmpDir, ".worktrees")
+
+	ghR := newGhAuthOK(crossForkPRJSON)
+	gitR := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == gitCmdRemote {
+				if args[1] == gitSubcmdGetURL {
+					return "", errors.New("no such remote")
+				}
+				if args[1] == gitSubcmdAdd {
+					return "", nil
+				}
+			}
+			if len(args) > 0 && args[0] == gitCmdFetch {
+				return "", errors.New("network unreachable")
+			}
+			if len(args) > 0 && args[0] == cmdRevParse {
+				return "", errors.New("not found")
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	_, err := AddPRWorktree(context.Background(), gitR, ghR, AddPRParams{
+		PRNumber:    99,
+		RepoRoot:    tmpDir,
+		WorktreeDir: wtDir,
+		SkipDeps:    true,
+		SkipHooks:   true,
+	}, nil)
+	if err == nil {
+		t.Fatal("expected error from fork fetch failure")
+	}
+	if !strings.Contains(err.Error(), "fork visibility") {
+		t.Errorf("expected 'fork visibility' hint, got: %v", err)
+	}
+}
+
+func TestAddPRWorktreeResolveSourceFailure(t *testing.T) {
+	tmpDir := t.TempDir()
+	wtDir := filepath.Join(tmpDir, ".worktrees")
+
+	ghR := newGhAuthOK(sameRepoPRJSON)
+	gitR := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == gitCmdFetch {
+				return "", errors.New("fetch error")
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	_, err := AddPRWorktree(context.Background(), gitR, ghR, AddPRParams{
+		PRNumber:    42,
+		RepoRoot:    tmpDir,
+		WorktreeDir: wtDir,
+		SkipDeps:    true,
+		SkipHooks:   true,
+	}, nil)
+	if err == nil {
+		t.Fatal("expected error from resolveSource failure")
 	}
 }
 
