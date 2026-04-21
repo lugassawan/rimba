@@ -16,8 +16,8 @@ func Slugify(s string) string {
 	if slug == "" {
 		return "pr"
 	}
-	if len(slug) > 50 {
-		slug = strings.TrimRight(slug[:50], "-")
+	if runes := []rune(slug); len(runes) > 50 {
+		slug = strings.TrimRight(string(runes[:50]), "-")
 	}
 	return slug
 }

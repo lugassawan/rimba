@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -55,23 +56,10 @@ func stubGhPRView(t *testing.T) (dir string, env []string) {
 // writeStubPRView writes canned JSON for a specific PR number.
 func writeStubPRView(t *testing.T, stubDir string, num int, content string) {
 	t.Helper()
-	p := filepath.Join(stubDir, "pr_view_"+itoa(num)+".json")
+	p := filepath.Join(stubDir, "pr_view_"+strconv.Itoa(num)+".json")
 	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
 		t.Fatalf("write pr_view stub: %v", err)
 	}
-}
-
-// itoa converts an int to a string without importing strconv at file scope.
-func itoa(n int) string {
-	s := ""
-	if n == 0 {
-		return "0"
-	}
-	for n > 0 {
-		s = string(rune('0'+n%10)) + s
-		n /= 10
-	}
-	return s
 }
 
 // setupRepoWithRemoteAndBranch creates a bare origin, a clone with rimba

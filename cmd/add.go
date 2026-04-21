@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -47,7 +48,6 @@ var addCmd = &cobra.Command{
 
 			s := spinner.New(spinnerOpts(cmd))
 			defer s.Stop()
-			s.Start("Fetching PR metadata...")
 
 			var configModules []config.ModuleConfig
 			if cfg.Deps != nil {
@@ -85,6 +85,10 @@ var addCmd = &cobra.Command{
 			printInstallResults(out, result.DepsResults)
 			printHookResultsList(out, result.HookResults)
 			return nil
+		}
+
+		if cmd.Flags().Changed(flagTask) {
+			return errors.New("--task requires a pr:<num> argument")
 		}
 
 		service, task := operations.ResolveTaskInput(args[0], repoRoot)

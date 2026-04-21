@@ -20,6 +20,8 @@ func TestSlugify(t *testing.T) {
 		{"---", "pr"},
 		// Long title capped at 50 chars, no trailing dash
 		{"This is a very long pull request title that should be trimmed at fifty chars exactly", "this-is-a-very-long-pull-request-title-that-should"},
+		// 60-char ASCII slug truncated to 50 runes
+		{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
 	}
 
 	for _, tt := range tests {

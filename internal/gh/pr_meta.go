@@ -4,8 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
 )
+
+// safeNameRe matches strings safe to embed in git remote names and URLs.
+var safeNameRe = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 
 // PRMeta holds the metadata needed to check out a PR's head branch.
 type PRMeta struct {
@@ -42,12 +46,29 @@ func FetchPRMeta(ctx context.Context, r Runner, num int) (PRMeta, error) {
 	if err := json.Unmarshal(out, &resp); err != nil {
 		return PRMeta{}, fmt.Errorf("parse PR #%d metadata: %w", num, err)
 	}
+	if resp.HeadRefName == "" {
+		return PRMeta{}, fmt.Errorf("PR #%d: missing headRefName in response", num)
+	}
+	owner := resp.HeadRepositoryOwner.Login
+	repoName := resp.HeadRepository.Name
+	if owner == "" {
+		return PRMeta{}, fmt.Errorf("PR #%d: missing headRepositoryOwner in response", num)
+	}
+	if repoName == "" {
+		return PRMeta{}, fmt.Errorf("PR #%d: missing headRepository in response", num)
+	}
+	if !safeNameRe.MatchString(owner) {
+		return PRMeta{}, fmt.Errorf("PR #%d: unsafe headRepositoryOwner %q", num, owner)
+	}
+	if !safeNameRe.MatchString(repoName) {
+		return PRMeta{}, fmt.Errorf("PR #%d: unsafe headRepository.name %q", num, repoName)
+	}
 	return PRMeta{
 		Number:            resp.Number,
 		Title:             resp.Title,
 		HeadRefName:       resp.HeadRefName,
-		HeadRepoOwner:     resp.HeadRepositoryOwner.Login,
-		HeadRepoName:      resp.HeadRepository.Name,
+		HeadRepoOwner:     owner,
+		HeadRepoName:      repoName,
 		IsCrossRepository: resp.IsCrossRepository,
 	}, nil
 }

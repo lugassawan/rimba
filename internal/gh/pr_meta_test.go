@@ -98,6 +98,54 @@ func TestFetchPRMetaInvalidJSON(t *testing.T) {
 	assertContains(t, err, "parse PR #1")
 }
 
+func TestFetchPRMetaEmptyFields(t *testing.T) {
+	tests := []struct {
+		name    string
+		json    string
+		wantErr string
+	}{
+		{
+			name:    "empty response",
+			json:    `{}`,
+			wantErr: "missing headRefName",
+		},
+		{
+			name:    "missing owner",
+			json:    `{"headRefName":"main","headRepository":{"name":"repo"},"headRepositoryOwner":{"login":""}}`,
+			wantErr: "missing headRepositoryOwner",
+		},
+		{
+			name:    "missing repo name",
+			json:    `{"headRefName":"main","headRepository":{"name":""},"headRepositoryOwner":{"login":"alice"}}`,
+			wantErr: "missing headRepository",
+		},
+		{
+			name:    "unsafe owner characters",
+			json:    `{"headRefName":"main","headRepository":{"name":"repo"},"headRepositoryOwner":{"login":"alice;rm -rf /"}}`,
+			wantErr: "unsafe headRepositoryOwner",
+		},
+		{
+			name:    "unsafe repo name characters",
+			json:    `{"headRefName":"main","headRepository":{"name":"repo$(whoami)"},"headRepositoryOwner":{"login":"alice"}}`,
+			wantErr: "unsafe headRepository.name",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &mockRunner{
+				run: func(_ context.Context, _ ...string) ([]byte, error) {
+					return []byte(tt.json), nil
+				},
+			}
+			_, err := FetchPRMeta(context.Background(), r, 1)
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			assertContains(t, err, tt.wantErr)
+		})
+	}
+}
+
 func TestFetchPRMetaArgsIncludeNumber(t *testing.T) {
 	var capturedArgs []string
 	r := &mockRunner{
