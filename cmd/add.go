@@ -75,15 +75,7 @@ var addCmd = &cobra.Command{
 			}
 
 			s.Stop()
-			out := cmd.OutOrStdout()
-			fmt.Fprintf(out, "Created worktree for PR #%d\n", prNum)
-			fmt.Fprintf(out, "  Branch: %s\n", result.Branch)
-			fmt.Fprintf(out, "  Path:   %s\n", result.Path)
-			if len(result.Copied) > 0 {
-				fmt.Fprintf(out, "  Copied: %v\n", result.Copied)
-			}
-			printInstallResults(out, result.DepsResults)
-			printHookResultsList(out, result.HookResults)
+			printWorktreeResult(cmd, fmt.Sprintf("Created worktree for PR #%d", prNum), result)
 			return nil
 		}
 
@@ -135,26 +127,29 @@ var addCmd = &cobra.Command{
 
 		s.Stop()
 
-		out := cmd.OutOrStdout()
+		header := fmt.Sprintf("Created worktree for task %q", task)
 		if result.Service != "" {
-			fmt.Fprintf(out, "Created worktree for task %q (service: %s)\n", task, result.Service)
-		} else {
-			fmt.Fprintf(out, "Created worktree for task %q\n", task)
+			header = fmt.Sprintf("Created worktree for task %q (service: %s)", task, result.Service)
 		}
-		fmt.Fprintf(out, "  Branch: %s\n", result.Branch)
-		fmt.Fprintf(out, "  Path:   %s\n", result.Path)
-		if len(result.Copied) > 0 {
-			fmt.Fprintf(out, "  Copied: %v\n", result.Copied)
-		}
-		if len(result.Skipped) > 0 {
-			fmt.Fprintf(out, "  Skipped (not found): %v\n", result.Skipped)
-		}
-
-		printInstallResults(out, result.DepsResults)
-		printHookResultsList(out, result.HookResults)
+		printWorktreeResult(cmd, header, result)
 
 		return nil
 	},
+}
+
+func printWorktreeResult(cmd *cobra.Command, header string, result operations.AddResult) {
+	out := cmd.OutOrStdout()
+	fmt.Fprintln(out, header)
+	fmt.Fprintf(out, "  Branch: %s\n", result.Branch)
+	fmt.Fprintf(out, "  Path:   %s\n", result.Path)
+	if len(result.Copied) > 0 {
+		fmt.Fprintf(out, "  Copied: %v\n", result.Copied)
+	}
+	if len(result.Skipped) > 0 {
+		fmt.Fprintf(out, "  Skipped (not found): %v\n", result.Skipped)
+	}
+	printInstallResults(out, result.DepsResults)
+	printHookResultsList(out, result.HookResults)
 }
 
 func init() {
