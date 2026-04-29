@@ -43,11 +43,7 @@ var addCmd = &cobra.Command{
 
 		skipDeps, _ := cmd.Flags().GetBool(flagSkipDeps)
 		skipHooks, _ := cmd.Flags().GetBool(flagSkipHooks)
-
-		var configModules []config.ModuleConfig
-		if cfg.Deps != nil {
-			configModules = cfg.Deps.Modules
-		}
+		postOpts := buildPostCreateOptions(cfg, repoRoot, skipDeps, skipHooks)
 
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
@@ -58,19 +54,9 @@ var addCmd = &cobra.Command{
 			taskOverride, _ := cmd.Flags().GetString(flagTask)
 
 			result, err := operations.AddPRWorktree(cmd.Context(), r, gh.Default(), operations.AddPRParams{
-				PRNumber:     prNum,
-				TaskOverride: taskOverride,
-				PostCreateOptions: operations.PostCreateOptions{
-					RepoRoot:      repoRoot,
-					WorktreeDir:   filepath.Join(repoRoot, cfg.WorktreeDir),
-					CopyFiles:     cfg.CopyFiles,
-					SkipDeps:      skipDeps,
-					AutoDetect:    cfg.IsAutoDetectDeps(),
-					ConfigModules: configModules,
-					SkipHooks:     skipHooks,
-					PostCreate:    cfg.PostCreate,
-					Concurrency:   cfg.DepsConcurrency(),
-				},
+				PRNumber:          prNum,
+				TaskOverride:      taskOverride,
+				PostCreateOptions: postOpts,
 			}, func(msg string) { s.Update(msg) })
 			if err != nil {
 				return err
@@ -109,21 +95,11 @@ var addCmd = &cobra.Command{
 
 		s.Start("Creating worktree...")
 		result, err := operations.AddWorktree(r, operations.AddParams{
-			Task:    task,
-			Service: service,
-			Prefix:  prefix,
-			Source:  source,
-			PostCreateOptions: operations.PostCreateOptions{
-				RepoRoot:      repoRoot,
-				WorktreeDir:   filepath.Join(repoRoot, cfg.WorktreeDir),
-				CopyFiles:     cfg.CopyFiles,
-				SkipDeps:      skipDeps,
-				AutoDetect:    cfg.IsAutoDetectDeps(),
-				ConfigModules: configModules,
-				SkipHooks:     skipHooks,
-				PostCreate:    cfg.PostCreate,
-				Concurrency:   cfg.DepsConcurrency(),
-			},
+			Task:              task,
+			Service:           service,
+			Prefix:            prefix,
+			Source:            source,
+			PostCreateOptions: postOpts,
 		}, func(msg string) { s.Update(msg) })
 		if err != nil {
 			return err
@@ -154,6 +130,24 @@ func printWorktreeResult(cmd *cobra.Command, header string, result operations.Ad
 	}
 	printInstallResults(out, result.DepsResults)
 	printHookResultsList(out, result.HookResults)
+}
+
+func buildPostCreateOptions(cfg *config.Config, repoRoot string, skipDeps, skipHooks bool) operations.PostCreateOptions {
+	var configModules []config.ModuleConfig
+	if cfg.Deps != nil {
+		configModules = cfg.Deps.Modules
+	}
+	return operations.PostCreateOptions{
+		RepoRoot:      repoRoot,
+		WorktreeDir:   filepath.Join(repoRoot, cfg.WorktreeDir),
+		CopyFiles:     cfg.CopyFiles,
+		SkipDeps:      skipDeps,
+		AutoDetect:    cfg.IsAutoDetectDeps(),
+		ConfigModules: configModules,
+		SkipHooks:     skipHooks,
+		PostCreate:    cfg.PostCreate,
+		Concurrency:   cfg.DepsConcurrency(),
+	}
 }
 
 func init() {
