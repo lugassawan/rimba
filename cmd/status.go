@@ -5,7 +5,6 @@ import (
 	"io"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -267,8 +266,7 @@ func buildCLIStatusSummary(results []statusEntry, staleThreshold time.Time) cliS
 
 // buildStatusRow formats a single worktree row for the status table.
 func buildStatusRow(r statusEntry, prefixes []string, staleThreshold time.Time, p *termcolor.Painter, detail bool) []string {
-	task, matchedPrefix := resolver.PureTaskFromBranch(r.entry.Branch, prefixes)
-	typeName := strings.TrimSuffix(matchedPrefix, "/")
+	task, typeName := resolver.TaskAndType(r.entry.Branch, prefixes)
 
 	taskCell := "  " + task
 	typeCell := typeName
@@ -328,8 +326,7 @@ func writeStatusJSON(cmd *cobra.Command, results []statusEntry, staleDays int, f
 			summary.Behind++
 		}
 
-		task, matchedPrefix := resolver.PureTaskFromBranch(r.entry.Branch, prefixes)
-		typeName := strings.TrimSuffix(matchedPrefix, "/")
+		task, typeName := resolver.TaskAndType(r.entry.Branch, prefixes)
 
 		item := output.StatusItem{
 			Task:      task,

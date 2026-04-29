@@ -260,8 +260,7 @@ func filterDirtyWorktrees(r git.Runner, s *spinner.Spinner, worktrees []resolver
 func printExecResults(cmd *cobra.Command, p *termcolor.Painter, results []executor.Result, prefixes []string) {
 	out := cmd.OutOrStdout()
 	for _, r := range results {
-		_, matchedPrefix := resolver.PureTaskFromBranch(r.Target.Branch, prefixes)
-		typeName := strings.TrimSuffix(matchedPrefix, "/")
+		_, typeName := resolver.TaskAndType(r.Target.Branch, prefixes)
 
 		taskLabel := r.Target.Task
 		if c := typeColor(typeName); c != "" {

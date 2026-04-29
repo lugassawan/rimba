@@ -190,8 +190,7 @@ func listArchivedBranches(cmd *cobra.Command, r git.Runner, mainBranch string) e
 	if isJSON(cmd) {
 		items := make([]output.ListArchivedItem, 0, len(archived))
 		for _, b := range archived {
-			task, matchedPrefix := resolver.PureTaskFromBranch(b, prefixes)
-			typeName := strings.TrimSuffix(matchedPrefix, "/")
+			task, typeName := resolver.TaskAndType(b, prefixes)
 			items = append(items, output.ListArchivedItem{Task: task, Type: typeName, Branch: b})
 		}
 		return output.WriteJSON(cmd.OutOrStdout(), version, "list", items)
@@ -213,8 +212,7 @@ func listArchivedBranches(cmd *cobra.Command, r git.Runner, mainBranch string) e
 	)
 
 	for _, b := range archived {
-		task, matchedPrefix := resolver.PureTaskFromBranch(b, prefixes)
-		typeName := strings.TrimSuffix(matchedPrefix, "/")
+		task, typeName := resolver.TaskAndType(b, prefixes)
 
 		typeCell := typeName
 		if c := typeColor(typeName); c != "" {
