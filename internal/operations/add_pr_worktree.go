@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/gh"
 	"github.com/lugassawan/rimba/internal/git"
@@ -17,16 +16,7 @@ import (
 type AddPRParams struct {
 	PRNumber     int
 	TaskOverride string // empty = derive from PR title
-
-	RepoRoot      string
-	WorktreeDir   string
-	CopyFiles     []string
-	SkipDeps      bool
-	AutoDetect    bool
-	ConfigModules []config.ModuleConfig
-	SkipHooks     bool
-	PostCreate    []string
-	Concurrency   int
+	PostCreateOptions
 }
 
 // AddPRWorktree creates a worktree from a GitHub PR's head branch.
@@ -60,17 +50,9 @@ func AddPRWorktree(
 	}
 
 	return AddWorktree(gitR, AddParams{
-		Task:          task,
-		Source:        source,
-		RepoRoot:      params.RepoRoot,
-		WorktreeDir:   params.WorktreeDir,
-		CopyFiles:     params.CopyFiles,
-		SkipDeps:      params.SkipDeps,
-		AutoDetect:    params.AutoDetect,
-		ConfigModules: params.ConfigModules,
-		SkipHooks:     params.SkipHooks,
-		PostCreate:    params.PostCreate,
-		Concurrency:   params.Concurrency,
+		Task:              task,
+		Source:            source,
+		PostCreateOptions: params.PostCreateOptions,
 	}, onProgress)
 }
 
