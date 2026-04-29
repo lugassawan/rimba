@@ -16,13 +16,13 @@ const (
 // --- Specs tests ---
 
 func TestSpecsReturnsSeven(t *testing.T) {
-	if got := len(Specs()); got != 7 {
+	if got := len(ProjectSpecs()); got != 7 {
 		t.Fatalf("Specs() returned %d items, want 7", got)
 	}
 }
 
 func TestSpecsContentNotEmpty(t *testing.T) {
-	for _, spec := range Specs() {
+	for _, spec := range ProjectSpecs() {
 		content := spec.Content()
 		if content == "" {
 			t.Errorf("Spec %q returned empty content", spec.RelPath)
@@ -35,7 +35,7 @@ func TestSpecsContentNotEmpty(t *testing.T) {
 func TestInstallCreatesAllFiles(t *testing.T) {
 	dir := t.TempDir()
 
-	results, err := Install(dir)
+	results, err := InstallProject(dir)
 	if err != nil {
 		t.Fatalf(fatalInstall, err)
 	}
@@ -58,7 +58,7 @@ func TestInstallCreatesAllFiles(t *testing.T) {
 func TestInstallBlockBased(t *testing.T) {
 	dir := t.TempDir()
 
-	if _, err := Install(dir); err != nil {
+	if _, err := InstallProject(dir); err != nil {
 		t.Fatalf(fatalInstall, err)
 	}
 
@@ -89,7 +89,7 @@ func TestInstallAppendToExisting(t *testing.T) {
 		t.Fatalf("write existing file: %v", err)
 	}
 
-	results, err := Install(dir)
+	results, err := InstallProject(dir)
 	if err != nil {
 		t.Fatalf(fatalInstall, err)
 	}
@@ -118,12 +118,12 @@ func TestInstallAppendToExisting(t *testing.T) {
 func TestInstallAlreadyInstalled(t *testing.T) {
 	dir := t.TempDir()
 
-	if _, err := Install(dir); err != nil {
+	if _, err := InstallProject(dir); err != nil {
 		t.Fatalf("first Install: %v", err)
 	}
 
 	// Second install should succeed (idempotent)
-	results, err := Install(dir)
+	results, err := InstallProject(dir)
 	if err != nil {
 		t.Fatalf("second Install: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestInstallAlreadyInstalled(t *testing.T) {
 func TestInstallCreatesDirectories(t *testing.T) {
 	dir := t.TempDir()
 
-	if _, err := Install(dir); err != nil {
+	if _, err := InstallProject(dir); err != nil {
 		t.Fatalf(fatalInstall, err)
 	}
 
@@ -176,7 +176,7 @@ func TestInstallPreservesExistingContentWithBlock(t *testing.T) {
 		t.Fatalf("write existing file: %v", err)
 	}
 
-	if _, err := Install(dir); err != nil {
+	if _, err := InstallProject(dir); err != nil {
 		t.Fatalf(fatalInstall, err)
 	}
 
@@ -213,11 +213,11 @@ func TestUninstallRemovesBlock(t *testing.T) {
 	}
 
 	// Also install whole-file types
-	if _, err := Install(dir); err != nil {
+	if _, err := InstallProject(dir); err != nil {
 		t.Fatalf(fatalInstall, err)
 	}
 
-	results, err := Uninstall(dir)
+	results, err := UninstallProject(dir)
 	if err != nil {
 		t.Fatalf(fatalUninstall, err)
 	}
@@ -243,11 +243,11 @@ func TestUninstallRemovesBlock(t *testing.T) {
 func TestUninstallRemovesWholeFile(t *testing.T) {
 	dir := t.TempDir()
 
-	if _, err := Install(dir); err != nil {
+	if _, err := InstallProject(dir); err != nil {
 		t.Fatalf(fatalInstall, err)
 	}
 
-	if _, err := Uninstall(dir); err != nil {
+	if _, err := UninstallProject(dir); err != nil {
 		t.Fatalf(fatalUninstall, err)
 	}
 
@@ -267,11 +267,11 @@ func TestUninstallRemovesEmptyBlockFile(t *testing.T) {
 	dir := t.TempDir()
 
 	// Install creates AGENTS.md with only rimba content
-	if _, err := Install(dir); err != nil {
+	if _, err := InstallProject(dir); err != nil {
 		t.Fatalf(fatalInstall, err)
 	}
 
-	if _, err := Uninstall(dir); err != nil {
+	if _, err := UninstallProject(dir); err != nil {
 		t.Fatalf(fatalUninstall, err)
 	}
 
@@ -284,7 +284,7 @@ func TestUninstallRemovesEmptyBlockFile(t *testing.T) {
 func TestUninstallNotInstalled(t *testing.T) {
 	dir := t.TempDir()
 
-	results, err := Uninstall(dir)
+	results, err := UninstallProject(dir)
 	if err != nil {
 		t.Fatalf(fatalUninstall, err)
 	}
@@ -301,7 +301,7 @@ func TestUninstallNotInstalled(t *testing.T) {
 func TestStatusNotInstalled(t *testing.T) {
 	dir := t.TempDir()
 
-	statuses := Status(dir)
+	statuses := StatusProject(dir)
 	if len(statuses) != 7 {
 		t.Fatalf("Status returned %d items, want 7", len(statuses))
 	}
@@ -316,11 +316,11 @@ func TestStatusNotInstalled(t *testing.T) {
 func TestStatusInstalled(t *testing.T) {
 	dir := t.TempDir()
 
-	if _, err := Install(dir); err != nil {
+	if _, err := InstallProject(dir); err != nil {
 		t.Fatalf(fatalInstall, err)
 	}
 
-	statuses := Status(dir)
+	statuses := StatusProject(dir)
 	for _, s := range statuses {
 		if !s.Installed {
 			t.Errorf("%s: expected Installed = true", s.RelPath)
@@ -337,7 +337,7 @@ func TestStatusPartialInstall(t *testing.T) {
 		t.Fatalf("write file: %v", err)
 	}
 
-	statuses := Status(dir)
+	statuses := StatusProject(dir)
 	foundAgents := false
 	for _, s := range statuses {
 		if s.RelPath == "AGENTS.md" {
@@ -840,7 +840,7 @@ func TestInstallReadError(t *testing.T) {
 		t.Fatalf("create directory: %v", err)
 	}
 
-	_, err := Install(dir)
+	_, err := InstallProject(dir)
 	if err == nil {
 		t.Fatal("expected error when AGENTS.md is a directory")
 	}
@@ -859,7 +859,7 @@ func TestInstallSkipsOnPathConflict(t *testing.T) {
 	}
 
 	// Install should succeed but skip .cursor/rules/rimba.mdc
-	results, err := Install(dir)
+	results, err := InstallProject(dir)
 	if err != nil {
 		t.Fatalf("Install should succeed with path conflict, got: %v", err)
 	}
@@ -882,7 +882,7 @@ func TestUninstallReadError(t *testing.T) {
 		t.Fatalf("create directory: %v", err)
 	}
 
-	_, err := Uninstall(dir)
+	_, err := UninstallProject(dir)
 	if err == nil {
 		t.Fatal("expected error when AGENTS.md is a directory")
 	}
@@ -900,7 +900,7 @@ func TestInstallBlockSkipsOnPathConflict(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	results, err := Install(dir)
+	results, err := InstallProject(dir)
 	if err != nil {
 		t.Fatalf("Install should succeed with block path conflict, got: %v", err)
 	}
