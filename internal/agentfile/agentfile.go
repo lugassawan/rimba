@@ -79,11 +79,6 @@ func ProjectSpecs() []Spec {
 	}
 }
 
-// Specs returns the project-level agent instruction files.
-//
-// Deprecated: use ProjectSpecs.
-func Specs() []Spec { return ProjectSpecs() }
-
 // InstallGlobal creates or updates all agent instruction files under homeDir.
 func InstallGlobal(homeDir string) ([]Result, error) {
 	return installSpecs(homeDir, GlobalSpecs())
@@ -143,21 +138,6 @@ func UninstallLocal(repoRoot string) ([]Result, error) {
 	}
 	return results, nil
 }
-
-// Install creates or updates all project-level agent instruction files under repoRoot.
-//
-// Deprecated: use InstallProject.
-func Install(repoRoot string) ([]Result, error) { return InstallProject(repoRoot) }
-
-// Uninstall removes rimba content from all project-level agent instruction files under repoRoot.
-//
-// Deprecated: use UninstallProject.
-func Uninstall(repoRoot string) ([]Result, error) { return UninstallProject(repoRoot) }
-
-// Status checks the installation state of all project-level agent instruction files.
-//
-// Deprecated: use StatusProject.
-func Status(repoRoot string) []FileStatus { return StatusProject(repoRoot) }
 
 func installSpecs(baseDir string, specs []Spec) ([]Result, error) {
 	results := make([]Result, 0, len(specs))
@@ -238,12 +218,9 @@ func installBlock(path string, spec Spec) (Result, error) {
 
 	if content != "" {
 		if containsBlock(content) {
-			// Replace existing block
 			content = removeBlock(content)
-			action = actionUpdated
-		} else {
-			action = actionUpdated
 		}
+		action = actionUpdated
 		// Append block to existing content (with removed old block if any)
 		content = strings.TrimRight(content, "\n")
 		if content != "" {
