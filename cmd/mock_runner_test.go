@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"errors"
 
+	"github.com/lugassawan/rimba/internal/gh"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/spf13/cobra"
 )
@@ -47,6 +49,7 @@ const (
 	cmdDiff               = "diff"
 	cmdFetch              = "fetch"
 	cmdRemove             = "remove"
+	gitSubcmdWorktreeAdd  = "add"
 	cmdSymbolicRef        = "symbolic-ref"
 	cmdStatus             = "status"
 	refsRemotesOriginMain = "refs/remotes/origin/main"
@@ -109,4 +112,20 @@ func overrideNewRunner(r git.Runner) func() {
 	orig := newRunner
 	newRunner = func() git.Runner { return r }
 	return func() { newRunner = orig }
+}
+
+// mockGhRunner implements gh.Runner with a configurable closure for testing.
+type mockGhRunner struct {
+	run func(ctx context.Context, args ...string) ([]byte, error)
+}
+
+func (m *mockGhRunner) Run(ctx context.Context, args ...string) ([]byte, error) {
+	return m.run(ctx, args...)
+}
+
+// overrideGHRunner temporarily replaces the newGHRunner function for testing.
+func overrideGHRunner(r gh.Runner) func() {
+	orig := newGHRunner
+	newGHRunner = func() gh.Runner { return r }
+	return func() { newGHRunner = orig }
 }

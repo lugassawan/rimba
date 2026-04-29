@@ -26,6 +26,8 @@ const (
 
 var prArgRe = regexp.MustCompile(`^pr:(\d+)$`)
 
+var newGHRunner = gh.Default
+
 var addCmd = &cobra.Command{
 	Use:   "add <task|pr:<num>> or add <service>/<task>",
 	Short: "Create a new worktree for a task or GitHub PR",
@@ -50,7 +52,7 @@ var addCmd = &cobra.Command{
 
 		if m := prArgRe.FindStringSubmatch(args[0]); m != nil {
 			prNum, _ := strconv.Atoi(m[1])
-			return runAddPR(cmd, r, prNum, postOpts, s)
+			return runAddPR(cmd, r, newGHRunner(), prNum, postOpts, s)
 		}
 
 		if cmd.Flags().Changed(flagTask) {
@@ -61,10 +63,10 @@ var addCmd = &cobra.Command{
 	},
 }
 
-func runAddPR(cmd *cobra.Command, r git.Runner, prNum int, postOpts operations.PostCreateOptions, s *spinner.Spinner) error {
+func runAddPR(cmd *cobra.Command, r git.Runner, ghR gh.Runner, prNum int, postOpts operations.PostCreateOptions, s *spinner.Spinner) error {
 	taskOverride, _ := cmd.Flags().GetString(flagTask)
 
-	result, err := operations.AddPRWorktree(cmd.Context(), r, gh.Default(), operations.AddPRParams{
+	result, err := operations.AddPRWorktree(cmd.Context(), r, ghR, operations.AddPRParams{
 		PRNumber:          prNum,
 		TaskOverride:      taskOverride,
 		PostCreateOptions: postOpts,
