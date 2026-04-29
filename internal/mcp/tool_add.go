@@ -69,19 +69,21 @@ func handleAdd(hctx *HandlerContext) server.ToolHandlerFunc {
 		}
 
 		result, err := operations.AddWorktree(hctx.Runner, operations.AddParams{
-			Task:          task,
-			Service:       service,
-			Prefix:        prefix,
-			Source:        source,
-			RepoRoot:      hctx.RepoRoot,
-			WorktreeDir:   filepath.Join(hctx.RepoRoot, cfg.WorktreeDir),
-			CopyFiles:     cfg.CopyFiles,
-			SkipDeps:      req.GetBool("skip_deps", false),
-			AutoDetect:    cfg.IsAutoDetectDeps(),
-			ConfigModules: configModules,
-			SkipHooks:     req.GetBool("skip_hooks", false),
-			PostCreate:    cfg.PostCreate,
-			Concurrency:   cfg.DepsConcurrency(),
+			Task:    task,
+			Service: service,
+			Prefix:  prefix,
+			Source:  source,
+			PostCreateOptions: operations.PostCreateOptions{
+				RepoRoot:      hctx.RepoRoot,
+				WorktreeDir:   filepath.Join(hctx.RepoRoot, cfg.WorktreeDir),
+				CopyFiles:     cfg.CopyFiles,
+				SkipDeps:      req.GetBool("skip_deps", false),
+				AutoDetect:    cfg.IsAutoDetectDeps(),
+				ConfigModules: configModules,
+				SkipHooks:     req.GetBool("skip_hooks", false),
+				PostCreate:    cfg.PostCreate,
+				Concurrency:   cfg.DepsConcurrency(),
+			},
 		}, nil)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
