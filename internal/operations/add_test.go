@@ -31,13 +31,15 @@ func TestAddWorktreeSuccess(t *testing.T) {
 	}
 
 	result, err := AddWorktree(r, AddParams{
-		Task:        "login",
-		Prefix:      "feature/",
-		Source:      branchMain,
-		RepoRoot:    tmpDir,
-		WorktreeDir: wtDir,
-		SkipDeps:    true,
-		SkipHooks:   true,
+		Task:   "login",
+		Prefix: "feature/",
+		Source: branchMain,
+		PostCreateOptions: PostCreateOptions{
+			RepoRoot:    tmpDir,
+			WorktreeDir: wtDir,
+			SkipDeps:    true,
+			SkipHooks:   true,
+		},
 	}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -69,12 +71,14 @@ func TestAddWorktreeBranchExists(t *testing.T) {
 	}
 
 	_, err := AddWorktree(r, AddParams{
-		Task:        "login",
-		Prefix:      "feature/",
-		Source:      branchMain,
-		WorktreeDir: "/tmp/wt",
-		SkipDeps:    true,
-		SkipHooks:   true,
+		Task:   "login",
+		Prefix: "feature/",
+		Source: branchMain,
+		PostCreateOptions: PostCreateOptions{
+			WorktreeDir: "/tmp/wt",
+			SkipDeps:    true,
+			SkipHooks:   true,
+		},
 	}, nil)
 	if err == nil {
 		t.Fatal("expected error for existing branch")
@@ -101,13 +105,15 @@ func TestAddWorktreePathExists(t *testing.T) {
 	}
 
 	_, err := AddWorktree(r, AddParams{
-		Task:        "login",
-		Prefix:      "feature/",
-		Source:      branchMain,
-		RepoRoot:    tmpDir,
-		WorktreeDir: wtDir,
-		SkipDeps:    true,
-		SkipHooks:   true,
+		Task:   "login",
+		Prefix: "feature/",
+		Source: branchMain,
+		PostCreateOptions: PostCreateOptions{
+			RepoRoot:    tmpDir,
+			WorktreeDir: wtDir,
+			SkipDeps:    true,
+			SkipHooks:   true,
+		},
 	}, nil)
 	if err == nil {
 		t.Fatal("expected error for existing path")
@@ -132,12 +138,14 @@ func TestAddWorktreeCreateFails(t *testing.T) {
 	}
 
 	_, err := AddWorktree(r, AddParams{
-		Task:        "login",
-		Prefix:      "feature/",
-		Source:      branchMain,
-		WorktreeDir: "/tmp/nonexistent-wt",
-		SkipDeps:    true,
-		SkipHooks:   true,
+		Task:   "login",
+		Prefix: "feature/",
+		Source: branchMain,
+		PostCreateOptions: PostCreateOptions{
+			WorktreeDir: "/tmp/nonexistent-wt",
+			SkipDeps:    true,
+			SkipHooks:   true,
+		},
 	}, nil)
 	if err == nil {
 		t.Fatal("expected error")
@@ -169,13 +177,15 @@ func TestAddWorktreeProgressCallbacks(t *testing.T) {
 	onProgress := progress.Func(func(msg string) { messages = append(messages, msg) })
 
 	_, err := AddWorktree(r, AddParams{
-		Task:        "login",
-		Prefix:      "feature/",
-		Source:      branchMain,
-		RepoRoot:    tmpDir,
-		WorktreeDir: wtDir,
-		SkipDeps:    true,
-		SkipHooks:   true,
+		Task:   "login",
+		Prefix: "feature/",
+		Source: branchMain,
+		PostCreateOptions: PostCreateOptions{
+			RepoRoot:    tmpDir,
+			WorktreeDir: wtDir,
+			SkipDeps:    true,
+			SkipHooks:   true,
+		},
 	}, onProgress)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -208,14 +218,16 @@ func TestAddWorktreeWithDeps(t *testing.T) {
 	}
 
 	result, err := AddWorktree(r, AddParams{
-		Task:        "login",
-		Prefix:      "feature/",
-		Source:      branchMain,
-		RepoRoot:    tmpDir,
-		WorktreeDir: wtDir,
-		SkipDeps:    false, // exercise deps path
-		AutoDetect:  false,
-		SkipHooks:   true,
+		Task:   "login",
+		Prefix: "feature/",
+		Source: branchMain,
+		PostCreateOptions: PostCreateOptions{
+			RepoRoot:    tmpDir,
+			WorktreeDir: wtDir,
+			SkipDeps:    false,
+			AutoDetect:  false,
+			SkipHooks:   true,
+		},
 	}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -245,14 +257,16 @@ func TestAddWorktreeWithHooks(t *testing.T) {
 	}
 
 	result, err := AddWorktree(r, AddParams{
-		Task:        "login",
-		Prefix:      "feature/",
-		Source:      branchMain,
-		RepoRoot:    tmpDir,
-		WorktreeDir: wtDir,
-		SkipDeps:    true,
-		SkipHooks:   false, // exercise hooks path
-		PostCreate:  []string{"echo hello"},
+		Task:   "login",
+		Prefix: "feature/",
+		Source: branchMain,
+		PostCreateOptions: PostCreateOptions{
+			RepoRoot:    tmpDir,
+			WorktreeDir: wtDir,
+			SkipDeps:    true,
+			SkipHooks:   false,
+			PostCreate:  []string{"echo hello"},
+		},
 	}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

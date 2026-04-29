@@ -26,6 +26,8 @@ const (
 
 var prArgRe = regexp.MustCompile(`^pr:(\d+)$`)
 
+var newGHRunner = gh.Default
+
 var addCmd = &cobra.Command{
 	Use:   "add <task|pr:<num>> or add <service>/<task>",
 	Short: "Create a new worktree for a task or GitHub PR",
@@ -43,98 +45,85 @@ var addCmd = &cobra.Command{
 
 		skipDeps, _ := cmd.Flags().GetBool(flagSkipDeps)
 		skipHooks, _ := cmd.Flags().GetBool(flagSkipHooks)
-
-		var configModules []config.ModuleConfig
-		if cfg.Deps != nil {
-			configModules = cfg.Deps.Modules
-		}
+		postOpts := buildPostCreateOptions(cfg, repoRoot, skipDeps, skipHooks)
 
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
 
-		// pr:<num> shorthand — create worktree from a GitHub PR.
 		if m := prArgRe.FindStringSubmatch(args[0]); m != nil {
 			prNum, _ := strconv.Atoi(m[1])
-			taskOverride, _ := cmd.Flags().GetString(flagTask)
-
-			result, err := operations.AddPRWorktree(cmd.Context(), r, gh.Default(), operations.AddPRParams{
-				PRNumber:      prNum,
-				TaskOverride:  taskOverride,
-				RepoRoot:      repoRoot,
-				WorktreeDir:   filepath.Join(repoRoot, cfg.WorktreeDir),
-				CopyFiles:     cfg.CopyFiles,
-				SkipDeps:      skipDeps,
-				AutoDetect:    cfg.IsAutoDetectDeps(),
-				ConfigModules: configModules,
-				SkipHooks:     skipHooks,
-				PostCreate:    cfg.PostCreate,
-				Concurrency:   cfg.DepsConcurrency(),
-			}, func(msg string) { s.Update(msg) })
-			if err != nil {
-				return err
-			}
-
-			s.Stop()
-			printWorktreeResult(cmd, fmt.Sprintf("Created worktree for PR #%d", prNum), result)
-			return nil
+			return runAddPR(cmd, r, newGHRunner(), prNum, postOpts, s)
 		}
 
 		if cmd.Flags().Changed(flagTask) {
 			return errors.New("--task requires a pr:<num> argument")
 		}
 
-		service, task := operations.ResolveTaskInput(args[0], repoRoot)
-		prefix := resolvedPrefixString(cmd)
+		return runAddTask(cmd, r, args[0], cfg, repoRoot, postOpts, s)
+	},
+}
 
-		if !hasExplicitPrefixFlag(cmd) {
-			if candidate, _ := resolver.SplitServiceInput(args[0]); resolver.ValidPrefixType(candidate) {
-				if p, ok := resolver.PrefixString(resolver.PrefixType(candidate)); ok {
-					prefix = p
-				}
+func runAddPR(cmd *cobra.Command, r git.Runner, ghR gh.Runner, prNum int, postOpts operations.PostCreateOptions, s *spinner.Spinner) error {
+	taskOverride, _ := cmd.Flags().GetString(flagTask)
+
+	result, err := operations.AddPRWorktree(cmd.Context(), r, ghR, operations.AddPRParams{
+		PRNumber:          prNum,
+		TaskOverride:      taskOverride,
+		PostCreateOptions: postOpts,
+	}, func(msg string) { s.Update(msg) })
+	if err != nil {
+		return err
+	}
+
+	s.Stop()
+	printWorktreeResult(cmd, fmt.Sprintf("Created worktree for PR #%d", prNum), result)
+	return nil
+}
+
+func runAddTask(cmd *cobra.Command, r git.Runner, arg string, cfg *config.Config, repoRoot string, postOpts operations.PostCreateOptions, s *spinner.Spinner) error {
+	service, task := operations.ResolveTaskInput(arg, repoRoot)
+	prefix := resolvedPrefixString(cmd)
+
+	if !hasExplicitPrefixFlag(cmd) {
+		if candidate, _ := resolver.SplitServiceInput(arg); resolver.ValidPrefixType(candidate) {
+			if p, ok := resolver.PrefixString(resolver.PrefixType(candidate)); ok {
+				prefix = p
 			}
 		}
+	}
 
-		source, _ := cmd.Flags().GetString(flagSource)
-		if source == "" {
-			source = cfg.DefaultSource
-		}
+	source, _ := cmd.Flags().GetString(flagSource)
+	if source == "" {
+		source = cfg.DefaultSource
+	}
 
-		hint.New(cmd, hintPainter(cmd)).
-			Add(flagSkipDeps, hintSkipDeps).
-			Add(flagSkipHooks, hintSkipHooks).
-			Add(flagSource, hintSource).
-			Show()
+	hint.New(cmd, hintPainter(cmd)).
+		Add(flagSkipDeps, hintSkipDeps).
+		Add(flagSkipHooks, hintSkipHooks).
+		Add(flagSource, hintSource).
+		Show()
 
-		s.Start("Creating worktree...")
-		result, err := operations.AddWorktree(r, operations.AddParams{
-			Task:          task,
-			Service:       service,
-			Prefix:        prefix,
-			Source:        source,
-			RepoRoot:      repoRoot,
-			WorktreeDir:   filepath.Join(repoRoot, cfg.WorktreeDir),
-			CopyFiles:     cfg.CopyFiles,
-			SkipDeps:      skipDeps,
-			AutoDetect:    cfg.IsAutoDetectDeps(),
-			ConfigModules: configModules,
-			SkipHooks:     skipHooks,
-			PostCreate:    cfg.PostCreate,
-			Concurrency:   cfg.DepsConcurrency(),
-		}, func(msg string) { s.Update(msg) })
-		if err != nil {
-			return err
-		}
+	s.Start("Creating worktree...")
+	result, err := operations.AddWorktree(r, operations.AddParams{
+		Task:              task,
+		Service:           service,
+		Prefix:            prefix,
+		Source:            source,
+		PostCreateOptions: postOpts,
+	}, func(msg string) { s.Update(msg) })
+	if err != nil {
+		return err
+	}
 
-		s.Stop()
+	s.Stop()
 
-		header := fmt.Sprintf("Created worktree for task %q", task)
-		if result.Service != "" {
-			header = fmt.Sprintf("Created worktree for task %q (service: %s)", task, result.Service)
-		}
-		printWorktreeResult(cmd, header, result)
+	header := fmt.Sprintf("Created worktree for task %q", task)
+	if result.Service != "" {
+		header = fmt.Sprintf("Created worktree for task %q (service: %s)", task, result.Service)
+	}
+	printWorktreeResult(cmd, header, result)
 
-		return nil
-	},
+	return nil
 }
 
 func printWorktreeResult(cmd *cobra.Command, header string, result operations.AddResult) {
@@ -150,6 +139,24 @@ func printWorktreeResult(cmd *cobra.Command, header string, result operations.Ad
 	}
 	printInstallResults(out, result.DepsResults)
 	printHookResultsList(out, result.HookResults)
+}
+
+func buildPostCreateOptions(cfg *config.Config, repoRoot string, skipDeps, skipHooks bool) operations.PostCreateOptions {
+	var configModules []config.ModuleConfig
+	if cfg.Deps != nil {
+		configModules = cfg.Deps.Modules
+	}
+	return operations.PostCreateOptions{
+		RepoRoot:      repoRoot,
+		WorktreeDir:   filepath.Join(repoRoot, cfg.WorktreeDir),
+		CopyFiles:     cfg.CopyFiles,
+		SkipDeps:      skipDeps,
+		AutoDetect:    cfg.IsAutoDetectDeps(),
+		ConfigModules: configModules,
+		SkipHooks:     skipHooks,
+		PostCreate:    cfg.PostCreate,
+		Concurrency:   cfg.DepsConcurrency(),
+	}
 }
 
 func init() {

@@ -20,7 +20,7 @@ func TestRestoreSuccess(t *testing.T) {
 				return "main\nfeature/restored-task", nil
 			case args[0] == cmdWorktreeTest && args[1] == cmdList:
 				return wtRepo + headMainBlock, nil
-			case args[0] == cmdWorktreeTest && args[1] == "add":
+			case args[0] == cmdWorktreeTest && args[1] == gitSubcmdWorktreeAdd:
 				return "", nil
 			}
 			return "", nil

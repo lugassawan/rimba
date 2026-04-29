@@ -12,12 +12,8 @@ import (
 	"github.com/lugassawan/rimba/internal/resolver"
 )
 
-// AddParams holds the inputs for creating a new worktree.
-type AddParams struct {
-	Task          string
-	Service       string
-	Prefix        string // e.g. "feature/"
-	Source        string // source branch
+// PostCreateOptions holds the post-create knobs shared by AddParams and AddPRParams.
+type PostCreateOptions struct {
 	RepoRoot      string
 	WorktreeDir   string // absolute path to worktree directory
 	CopyFiles     []string
@@ -27,6 +23,15 @@ type AddParams struct {
 	SkipHooks     bool
 	PostCreate    []string // hook commands
 	Concurrency   int      // max parallel module installs; 0 = Manager default
+}
+
+// AddParams holds the inputs for creating a new worktree.
+type AddParams struct {
+	Task    string
+	Service string
+	Prefix  string // e.g. "feature/"
+	Source  string // source branch
+	PostCreateOptions
 }
 
 // AddResult holds the outcome of creating a worktree.
