@@ -2,7 +2,6 @@ package mcp
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/lugassawan/rimba/internal/git"
@@ -107,8 +106,7 @@ func buildStatusResult(results []statusCollectedEntry, staleThreshold time.Time,
 
 // buildStatusItem constructs a statusItem from a collected entry.
 func buildStatusItem(r statusCollectedEntry, staleThreshold time.Time, prefixes []string) statusItem {
-	task, matchedPrefix := resolver.PureTaskFromBranch(r.entry.Branch, prefixes)
-	typeName := strings.TrimSuffix(matchedPrefix, "/")
+	task, typeName := resolver.TaskAndType(r.entry.Branch, prefixes)
 
 	item := statusItem{
 		Task:   task,
