@@ -58,17 +58,19 @@ var addCmd = &cobra.Command{
 			taskOverride, _ := cmd.Flags().GetString(flagTask)
 
 			result, err := operations.AddPRWorktree(cmd.Context(), r, gh.Default(), operations.AddPRParams{
-				PRNumber:      prNum,
-				TaskOverride:  taskOverride,
-				RepoRoot:      repoRoot,
-				WorktreeDir:   filepath.Join(repoRoot, cfg.WorktreeDir),
-				CopyFiles:     cfg.CopyFiles,
-				SkipDeps:      skipDeps,
-				AutoDetect:    cfg.IsAutoDetectDeps(),
-				ConfigModules: configModules,
-				SkipHooks:     skipHooks,
-				PostCreate:    cfg.PostCreate,
-				Concurrency:   cfg.DepsConcurrency(),
+				PRNumber:     prNum,
+				TaskOverride: taskOverride,
+				PostCreateOptions: operations.PostCreateOptions{
+					RepoRoot:      repoRoot,
+					WorktreeDir:   filepath.Join(repoRoot, cfg.WorktreeDir),
+					CopyFiles:     cfg.CopyFiles,
+					SkipDeps:      skipDeps,
+					AutoDetect:    cfg.IsAutoDetectDeps(),
+					ConfigModules: configModules,
+					SkipHooks:     skipHooks,
+					PostCreate:    cfg.PostCreate,
+					Concurrency:   cfg.DepsConcurrency(),
+				},
 			}, func(msg string) { s.Update(msg) })
 			if err != nil {
 				return err
@@ -107,19 +109,21 @@ var addCmd = &cobra.Command{
 
 		s.Start("Creating worktree...")
 		result, err := operations.AddWorktree(r, operations.AddParams{
-			Task:          task,
-			Service:       service,
-			Prefix:        prefix,
-			Source:        source,
-			RepoRoot:      repoRoot,
-			WorktreeDir:   filepath.Join(repoRoot, cfg.WorktreeDir),
-			CopyFiles:     cfg.CopyFiles,
-			SkipDeps:      skipDeps,
-			AutoDetect:    cfg.IsAutoDetectDeps(),
-			ConfigModules: configModules,
-			SkipHooks:     skipHooks,
-			PostCreate:    cfg.PostCreate,
-			Concurrency:   cfg.DepsConcurrency(),
+			Task:    task,
+			Service: service,
+			Prefix:  prefix,
+			Source:  source,
+			PostCreateOptions: operations.PostCreateOptions{
+				RepoRoot:      repoRoot,
+				WorktreeDir:   filepath.Join(repoRoot, cfg.WorktreeDir),
+				CopyFiles:     cfg.CopyFiles,
+				SkipDeps:      skipDeps,
+				AutoDetect:    cfg.IsAutoDetectDeps(),
+				ConfigModules: configModules,
+				SkipHooks:     skipHooks,
+				PostCreate:    cfg.PostCreate,
+				Concurrency:   cfg.DepsConcurrency(),
+			},
 		}, func(msg string) { s.Update(msg) })
 		if err != nil {
 			return err
