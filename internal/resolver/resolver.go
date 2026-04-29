@@ -90,6 +90,15 @@ func PureTaskFromBranch(branch string, prefixes []string) (task, matchedPrefix s
 	return t, p
 }
 
+// TaskAndType extracts the task and a display-friendly type name (matched
+// prefix without the trailing "/"). Use this for display/serialization
+// callers; use PureTaskFromBranch when you need the raw prefix token
+// (e.g. for branch reconstruction or emptiness checks).
+func TaskAndType(branch string, prefixes []string) (task, typeName string) {
+	t, p := PureTaskFromBranch(branch, prefixes)
+	return t, strings.TrimSuffix(p, "/")
+}
+
 // WorktreeInfo holds parsed information about a worktree.
 type WorktreeInfo struct {
 	Path    string
