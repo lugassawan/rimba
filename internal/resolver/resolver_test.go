@@ -334,6 +334,33 @@ func TestFindAllBranchesForTask(t *testing.T) {
 	}
 }
 
+func TestTaskAndType(t *testing.T) {
+	prefixes := resolver.AllPrefixes()
+
+	const svcAuthAPI = "auth-api"
+
+	tests := []struct {
+		branch       string
+		wantTask     string
+		wantTypeName string
+	}{
+		{"foo", "foo", ""},
+		{featurePrefix + "foo", "foo", "feature"},
+		{bugfixPrefix + "login-fix", "login-fix", "bugfix"},
+		{svcAuthAPI + "/" + featurePrefix + taskLogin, taskLogin, "feature"},
+		{"", "", ""},
+	}
+	for _, tt := range tests {
+		task, typeName := resolver.TaskAndType(tt.branch, prefixes)
+		if task != tt.wantTask {
+			t.Errorf("TaskAndType(%q) task = %q, want %q", tt.branch, task, tt.wantTask)
+		}
+		if typeName != tt.wantTypeName {
+			t.Errorf("TaskAndType(%q) typeName = %q, want %q", tt.branch, typeName, tt.wantTypeName)
+		}
+	}
+}
+
 func TestAllPrefixes(t *testing.T) {
 	prefixes := resolver.AllPrefixes()
 	if len(prefixes) != 6 {

@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/conflict"
@@ -68,8 +67,7 @@ var mergePlanCmd = &cobra.Command{
 		)
 
 		for _, step := range steps {
-			task, prefix := resolver.PureTaskFromBranch(step.Branch, prefixes)
-			typeName := strings.TrimSuffix(prefix, "/")
+			task, typeName := resolver.TaskAndType(step.Branch, prefixes)
 
 			branchCell := task
 			if c := typeColor(typeName); c != "" {

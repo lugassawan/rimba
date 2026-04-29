@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
@@ -99,8 +98,7 @@ func handleListArchived(r git.Runner, hctx *HandlerContext) (*mcp.CallToolResult
 	prefixes := resolver.AllPrefixes()
 	items := make([]listArchivedItem, 0, len(archived))
 	for _, b := range archived {
-		task, matchedPrefix := resolver.PureTaskFromBranch(b, prefixes)
-		typeName := strings.TrimSuffix(matchedPrefix, "/")
+		task, typeName := resolver.TaskAndType(b, prefixes)
 		items = append(items, listArchivedItem{Task: task, Type: typeName, Branch: b})
 	}
 
