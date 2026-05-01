@@ -338,6 +338,331 @@ func TestInitWithoutFlagSkipsAgentFiles(t *testing.T) {
 	}
 }
 
+func TestInitAgentsErrors(t *testing.T) {
+	tests := []struct {
+		name        string
+		blockPath   string // relative path to pre-create as a directory to trigger the error
+		wantErrFrag string // substring expected in the error
+	}{
+		{
+			name:        "install error (AGENTS.md is a directory)",
+			blockPath:   "AGENTS.md",
+			wantErrFrag: "agent files",
+		},
+		{
+			// Pre-create .mcp.json as a directory so os.ReadFile returns EISDIR (not ErrNotExist),
+			// causing RegisterMCPProject to fail after InstallProject succeeds.
+			name:        "MCP register error (.mcp.json is a directory)",
+			blockPath:   ".mcp.json",
+			wantErrFrag: "mcp servers",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repoDir := t.TempDir()
+			if err := os.MkdirAll(filepath.Join(repoDir, tt.blockPath), 0750); err != nil {
+				t.Fatal(err)
+			}
+
+			repoName := filepath.Base(repoDir)
+			wtPath := filepath.Join(filepath.Dir(repoDir), repoName+"-worktrees")
+			t.Cleanup(func() { os.RemoveAll(wtPath) })
+
+			r := &mockRunner{
+				run: func(args ...string) (string, error) {
+					if len(args) >= 2 && args[1] == cmdShowToplevel {
+						return repoDir, nil
+					}
+					if len(args) >= 1 && args[0] == cmdSymbolicRef {
+						return refsRemotesOriginMain, nil
+					}
+					return "", nil
+				},
+				runInDir: noopRunInDir,
+			}
+			restore := overrideNewRunner(r)
+			defer restore()
+
+			cmd, _ := newTestCmd()
+			cmd.Flags().Bool(flagAgents, true, "")
+			err := initCmd.RunE(cmd, nil)
+			if err == nil {
+				t.Fatalf("expected error containing %q, got nil", tt.wantErrFrag)
+			}
+			if !strings.Contains(err.Error(), tt.wantErrFrag) {
+				t.Errorf("error = %q, want %q", err.Error(), tt.wantErrFrag)
+			}
+		})
+	}
+}
+
+func TestInitMigrateGitignoreWriteError(t *testing.T) {
+	repoDir := t.TempDir()
+
+	// Pre-create legacy .rimba.toml so migration case triggers.
+	if err := os.WriteFile(filepath.Join(repoDir, config.FileName), []byte("[rimba]\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	// Read-only .gitignore: RemoveGitignoreEntry fails silently; EnsureGitignore fails loudly.
+	gitignorePath := filepath.Join(repoDir, ".gitignore")
+	if err := os.WriteFile(gitignorePath, []byte("# existing\n"), 0444); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, _ := newTestCmd()
+	err := initCmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when .gitignore is read-only during migration, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to update .gitignore") {
+		t.Errorf("error = %q, want 'failed to update .gitignore'", err.Error())
+	}
+}
+
+func TestInitFreshWorktreeDirConflict(t *testing.T) {
+	repoDir := t.TempDir()
+
+	// Pre-create a FILE at the worktree path so os.MkdirAll(wtDir) fails.
+	// wtDir = filepath.Join(repoDir, "../repoName-worktrees")
+	repoName := filepath.Base(repoDir)
+	wtPath := filepath.Join(filepath.Dir(repoDir), repoName+"-worktrees")
+	if err := os.WriteFile(wtPath, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Remove(wtPath) })
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			if len(args) >= 1 && args[0] == cmdSymbolicRef {
+				return refsRemotesOriginMain, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, _ := newTestCmd()
+	err := initCmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when worktree dir is a file, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to create worktree directory") {
+		t.Errorf("error = %q, want 'failed to create worktree directory'", err.Error())
+	}
+}
+
+func TestInitFreshGitignoreWriteError(t *testing.T) {
+	repoDir := t.TempDir()
+
+	// Remove the worktree dir created outside repoDir (../repoName-worktrees).
+	repoName := filepath.Base(repoDir)
+	wtDir := filepath.Join(repoDir, "..", repoName+"-worktrees")
+	t.Cleanup(func() { os.RemoveAll(wtDir) })
+
+	// Pre-create .gitignore as read-only without the rimba entry.
+	gitignorePath := filepath.Join(repoDir, ".gitignore")
+	if err := os.WriteFile(gitignorePath, []byte("# existing\n"), 0444); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			if len(args) >= 1 && args[0] == cmdSymbolicRef {
+				return refsRemotesOriginMain, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, _ := newTestCmd()
+	err := initCmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when .gitignore is read-only, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to update .gitignore") {
+		t.Errorf("error = %q, want 'failed to update .gitignore'", err.Error())
+	}
+}
+
+func TestInitFreshConflictingFile(t *testing.T) {
+	repoDir := t.TempDir()
+
+	// Pre-create a file at dirPath so os.MkdirAll fails in runInitFresh.
+	dirPath := filepath.Join(repoDir, config.DirName)
+	if err := os.WriteFile(dirPath, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			if len(args) >= 1 && args[0] == cmdSymbolicRef {
+				return refsRemotesOriginMain, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, _ := newTestCmd()
+	err := initCmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when dirPath is a file, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to create config directory") {
+		t.Errorf("error = %q, want 'failed to create config directory'", err.Error())
+	}
+}
+
+func TestInitFreshRepoNameError(t *testing.T) {
+	repoDir := t.TempDir()
+
+	// First --show-toplevel call succeeds (RepoRoot in RunE); second fails (RepoName in runInitFresh).
+	callCount := 0
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				callCount++
+				if callCount == 1 {
+					return repoDir, nil
+				}
+				return "", errors.New("repo name lookup failed")
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, _ := newTestCmd()
+	if err := initCmd.RunE(cmd, nil); err == nil {
+		t.Fatal("expected error when RepoName fails, got nil")
+	}
+}
+
+func TestInitFreshDefaultBranchError(t *testing.T) {
+	repoDir := t.TempDir()
+
+	// Return repo root for --show-toplevel; fail everything else so DefaultBranch errors.
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			return "", errors.New("command not found")
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, _ := newTestCmd()
+	err := initCmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when DefaultBranch fails, got nil")
+	}
+}
+
+func TestInitMigrateConflictingDir(t *testing.T) {
+	repoDir := t.TempDir()
+
+	// Pre-create legacy .rimba.toml so migration case triggers.
+	legacyPath := filepath.Join(repoDir, config.FileName)
+	if err := os.WriteFile(legacyPath, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	// Pre-create a FILE at dirPath so os.MkdirAll fails.
+	dirPath := filepath.Join(repoDir, config.DirName)
+	if err := os.WriteFile(dirPath, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, _ := newTestCmd()
+	err := initCmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when dirPath is a file, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to create config directory") {
+		t.Errorf("error = %q, want to contain 'failed to create config directory'", err.Error())
+	}
+}
+
+func TestInitFreshGitignoreAlreadyPresent(t *testing.T) {
+	repoDir := t.TempDir()
+
+	// Pre-seed .gitignore with the entry that rimba would add
+	gitignoreEntry := filepath.Join(config.DirName, config.LocalFile)
+	if err := os.WriteFile(filepath.Join(repoDir, ".gitignore"), []byte(gitignoreEntry+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			if len(args) >= 1 && args[0] == cmdSymbolicRef {
+				return refsRemotesOriginMain, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	if err := initCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("initCmd.RunE: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "already in .gitignore") {
+		t.Errorf("output should say 'already in .gitignore', got:\n%s", out)
+	}
+}
+
 // --- Tests for new 3-tier flag surface ---
 
 func TestInitGlobalInstall(t *testing.T) {
@@ -467,6 +792,96 @@ func TestInitAgentsLocalAddsGitignore(t *testing.T) {
 	// AGENTS.md should be in .gitignore (local tier)
 	if !strings.Contains(gitignore, "AGENTS.md") {
 		t.Errorf(".gitignore should contain AGENTS.md, got:\n%s", gitignore)
+	}
+}
+
+func TestInitAgentsUninstall(t *testing.T) {
+	repoDir := t.TempDir()
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			if len(args) >= 1 && args[0] == cmdSymbolicRef {
+				return refsRemotesOriginMain, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	// Install
+	cmd1, _ := newTestCmd()
+	cmd1.Flags().Bool(flagAgents, true, "")
+	if err := initCmd.RunE(cmd1, nil); err != nil {
+		t.Fatalf("install: %v", err)
+	}
+	agentsPath := filepath.Join(repoDir, "AGENTS.md")
+	if _, err := os.Stat(agentsPath); os.IsNotExist(err) {
+		t.Fatal("AGENTS.md should exist after install")
+	}
+
+	// Uninstall
+	cmd2, buf := newTestCmd()
+	cmd2.Flags().Bool(flagAgents, true, "")
+	cmd2.Flags().Bool(flagUninstall, true, "")
+	if err := initCmd.RunE(cmd2, nil); err != nil {
+		t.Fatalf("uninstall: %v", err)
+	}
+	if !strings.Contains(buf.String(), "Removed") {
+		t.Errorf("output should say 'Removed', got:\n%s", buf.String())
+	}
+	if _, err := os.Stat(agentsPath); err == nil {
+		t.Error("AGENTS.md should be removed after uninstall")
+	}
+}
+
+func TestInitAgentsLocalUninstall(t *testing.T) {
+	repoDir := t.TempDir()
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			if len(args) >= 1 && args[0] == cmdSymbolicRef {
+				return refsRemotesOriginMain, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	// Install local
+	cmd1, _ := newTestCmd()
+	cmd1.Flags().Bool(flagAgents, true, "")
+	cmd1.Flags().Bool(flagLocal, true, "")
+	if err := initCmd.RunE(cmd1, nil); err != nil {
+		t.Fatalf("install: %v", err)
+	}
+	agentsPath := filepath.Join(repoDir, "AGENTS.md")
+	if _, err := os.Stat(agentsPath); os.IsNotExist(err) {
+		t.Fatal("AGENTS.md should exist after local install")
+	}
+
+	// Uninstall local
+	cmd2, buf := newTestCmd()
+	cmd2.Flags().Bool(flagAgents, true, "")
+	cmd2.Flags().Bool(flagLocal, true, "")
+	cmd2.Flags().Bool(flagUninstall, true, "")
+	if err := initCmd.RunE(cmd2, nil); err != nil {
+		t.Fatalf("uninstall: %v", err)
+	}
+	if !strings.Contains(buf.String(), "Removed") {
+		t.Errorf("output should say 'Removed', got:\n%s", buf.String())
+	}
+	if _, err := os.Stat(agentsPath); err == nil {
+		t.Error("AGENTS.md should be removed after local uninstall")
 	}
 }
 
