@@ -21,6 +21,14 @@ const (
 	flagUninstall = "uninstall"
 )
 
+type installTier string
+
+const (
+	tierUser         installTier = "user"
+	tierProject      installTier = "project"
+	tierProjectLocal installTier = "project-local"
+)
+
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize rimba in the current repository",
@@ -182,14 +190,14 @@ func runInitMigrate(cmd *cobra.Command, repoRoot, dirPath, legacyPath, gitignore
 func runInitAgents(cmd *cobra.Command, repoRoot string, local, uninstall bool) error {
 	if uninstall {
 		if local {
-			return runInstall(cmd, repoRoot, "project-local", "Removed", agentfile.UninstallLocal, nil)
+			return runInstall(cmd, repoRoot, tierProjectLocal, "Removed", agentfile.UninstallLocal, nil)
 		}
-		return runInstall(cmd, repoRoot, "project", "Removed", agentfile.UninstallProject, agentfile.UnregisterMCPProject)
+		return runInstall(cmd, repoRoot, tierProject, "Removed", agentfile.UninstallProject, agentfile.UnregisterMCPProject)
 	}
 	if local {
-		return runInstall(cmd, repoRoot, "project-local", "Installed", agentfile.InstallLocal, nil)
+		return runInstall(cmd, repoRoot, tierProjectLocal, "Installed", agentfile.InstallLocal, nil)
 	}
-	return runInstall(cmd, repoRoot, "project", "Installed", agentfile.InstallProject, agentfile.RegisterMCPProject)
+	return runInstall(cmd, repoRoot, tierProject, "Installed", agentfile.InstallProject, agentfile.RegisterMCPProject)
 }
 
 func runInitGlobal(cmd *cobra.Command, uninstall bool) error {
@@ -198,16 +206,18 @@ func runInitGlobal(cmd *cobra.Command, uninstall bool) error {
 		return fmt.Errorf("resolve home directory: %w", err)
 	}
 	if uninstall {
-		return runInstall(cmd, home, "user", "Removed", agentfile.UninstallGlobal, agentfile.UnregisterMCPGlobal)
+		return runInstall(cmd, home, tierUser, "Removed", agentfile.UninstallGlobal, agentfile.UnregisterMCPGlobal)
 	}
-	return runInstall(cmd, home, "user", "Installed", agentfile.InstallGlobal, agentfile.RegisterMCPGlobal)
+	return runInstall(cmd, home, tierUser, "Installed", agentfile.InstallGlobal, agentfile.RegisterMCPGlobal)
 }
 
 // runInstall runs installFn(dir) and optionally mcpFn(dir), then prints results.
 // mcpFn may be nil (local tier skips MCP registration).
 func runInstall(
 	cmd *cobra.Command,
-	dir, tier, verb string,
+	dir string,
+	tier installTier,
+	verb string,
 	installFn func(string) ([]agentfile.Result, error),
 	mcpFn func(string) ([]agentfile.Result, error),
 ) error {
@@ -232,11 +242,11 @@ func runInstall(
 	return nil
 }
 
-func printSection(cmd *cobra.Command, title, tier string, results []agentfile.Result) {
+func printSection(cmd *cobra.Command, title string, tier installTier, results []agentfile.Result) {
 	fmt.Fprintf(cmd.OutOrStdout(), "  %s:\n", title)
 	for _, r := range results {
 		p := r.RelPath
-		if tier == "user" {
+		if tier == tierUser {
 			p = "~/" + p
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "    %s (%s)\n", p, r.Action)
