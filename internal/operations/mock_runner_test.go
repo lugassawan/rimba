@@ -3,13 +3,14 @@ package operations
 import "errors"
 
 const (
-	branchMain         = "main"
-	branchFeature      = "feature/login"
-	branchBugfixTypo   = "bugfix/typo"
-	pathWtFeatureLogin = "/wt/feature-login"
-	errNotARepo        = "not a git repo"
-	gitCmdRevList      = "rev-list"
-	pathMainRepo       = "/repo"
+	branchMain            = "main"
+	branchFeature         = "feature/login"
+	branchBugfixTypo      = "bugfix/typo"
+	pathWtFeatureLogin    = "/wt/feature-login"
+	errNotARepo           = "not a git repo"
+	gitCmdRevList         = "rev-list"
+	pathMainRepo          = "/repo"
+	refsRemotesOriginMain = "refs/remotes/origin/main"
 )
 
 var errGitFailed = errors.New("git failed")

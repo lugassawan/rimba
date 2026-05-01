@@ -54,7 +54,7 @@ func (r *statusDashboardRunner) run(args ...string) (string, error) {
 	case len(args) >= 2 && args[0] == gitCmdRevList && args[1] == "--count":
 		return r.handleRevListCount(args)
 	case len(args) >= 1 && args[0] == "symbolic-ref":
-		return "refs/remotes/origin/main", nil
+		return refsRemotesOriginMain, nil
 	}
 	return "", nil
 }
@@ -266,6 +266,76 @@ func TestStatusDashboardLastCommitTimeErrorIsNonFatal(t *testing.T) {
 		if e.Entry.Branch == branchBugfixLogin && e.HasTime {
 			t.Errorf("bugfix/login: expected HasTime=false on commit-time error")
 		}
+	}
+}
+
+func TestStatusDashboardGitListError(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == "symbolic-ref" {
+				return refsRemotesOriginMain, nil
+			}
+			return "", errGitFailed
+		},
+		runInDir: noopRunInDir,
+	}
+	_, err := StatusDashboard(context.Background(), r, StatusDashboardRequest{})
+	if err == nil {
+		t.Fatal("expected error when git.ListWorktrees fails")
+	}
+}
+
+func TestStatusDashboardDetailNilMainEntry(t *testing.T) {
+	// Candidates exist but no main-branch worktree → mainEntry == nil,
+	// so the main-size goroutine must not be launched.
+	branchFeat := "feature/y"
+	porcelain := porcelainEntries(
+		struct{ path, branch string }{pathWtFeatureAuth, branchFeat},
+	)
+	r := (&statusDashboardRunner{
+		porcelain:   porcelain,
+		commitTimes: map[string]string{branchFeat: "1700000000"},
+	}).build()
+
+	res, err := StatusDashboard(context.Background(), r, StatusDashboardRequest{Detail: true})
+	if err != nil {
+		t.Fatalf("StatusDashboard: %v", err)
+	}
+	if len(res.Entries) != 1 {
+		t.Fatalf("Entries = %d, want 1", len(res.Entries))
+	}
+	if res.Footprint == nil {
+		t.Fatal("Footprint should be non-nil with Detail=true")
+	}
+}
+
+func TestSortEntriesBySizeDesc(t *testing.T) {
+	ptr := func(v int64) *int64 { return &v }
+
+	entries := []StatusEntry{
+		{Entry: git.WorktreeEntry{Branch: "small"}, SizeBytes: ptr(100)},
+		{Entry: git.WorktreeEntry{Branch: "errored"}, SizeBytes: nil},
+		{Entry: git.WorktreeEntry{Branch: "big"}, SizeBytes: ptr(5000)},
+		{Entry: git.WorktreeEntry{Branch: "medium"}, SizeBytes: ptr(1000)},
+		{Entry: git.WorktreeEntry{Branch: "errored2"}, SizeBytes: nil},
+	}
+	sortEntriesBySizeDesc(entries)
+	wantOrder := []string{"big", "medium", "small", "errored", "errored2"}
+	for i, w := range wantOrder {
+		if entries[i].Entry.Branch != w {
+			t.Errorf("index %d: got %q, want %q", i, entries[i].Entry.Branch, w)
+		}
+	}
+}
+
+func TestSortEntriesBySizeDescAllNil(t *testing.T) {
+	entries := []StatusEntry{
+		{Entry: git.WorktreeEntry{Branch: "a"}},
+		{Entry: git.WorktreeEntry{Branch: "b"}},
+	}
+	sortEntriesBySizeDesc(entries)
+	if entries[0].Entry.Branch != "a" || entries[1].Entry.Branch != "b" {
+		t.Errorf("expected stable order [a, b], got [%s, %s]", entries[0].Entry.Branch, entries[1].Entry.Branch)
 	}
 }
 
