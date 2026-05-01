@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -254,37 +255,37 @@ func TestRenderActionHints(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		summary    cliStatusSummary
+		summary    operations.StatusSummary
 		wantEmpty  bool
 		wantSubstr []string
 		notSubstr  []string
 	}{
 		{
 			name:      "all zero emits nothing",
-			summary:   cliStatusSummary{total: 3},
+			summary:   operations.StatusSummary{Total: 3},
 			wantEmpty: true,
 		},
 		{
 			name:       "behind only emits sync hint",
-			summary:    cliStatusSummary{total: 3, behind: 2},
+			summary:    operations.StatusSummary{Total: 3, Behind: 2},
 			wantSubstr: []string{"2 behind main", "rimba sync --all"},
 			notSubstr:  []string{"stale", "dirty", "Review"},
 		},
 		{
 			name:       "stale only emits clean hint",
-			summary:    cliStatusSummary{total: 3, stale: 1},
+			summary:    operations.StatusSummary{Total: 3, Stale: 1},
 			wantSubstr: []string{"1 stale", "rimba clean --stale"},
 			notSubstr:  []string{"behind main", "dirty", "Review"},
 		},
 		{
 			name:       "dirty only emits review hint",
-			summary:    cliStatusSummary{total: 3, dirty: 4},
+			summary:    operations.StatusSummary{Total: 3, Dirty: 4},
 			wantSubstr: []string{"4 dirty", "Review uncommitted changes"},
 			notSubstr:  []string{"behind main", "stale", "rimba sync", "rimba clean"},
 		},
 		{
 			name:    "multiple non-zero emits all applicable hints",
-			summary: cliStatusSummary{total: 5, behind: 2, stale: 1, dirty: 3},
+			summary: operations.StatusSummary{Total: 5, Behind: 2, Stale: 1, Dirty: 3},
 			wantSubstr: []string{
 				"2 behind main", "rimba sync --all",
 				"1 stale", "rimba clean --stale",

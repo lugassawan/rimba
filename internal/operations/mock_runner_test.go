@@ -8,6 +8,8 @@ const (
 	branchBugfixTypo   = "bugfix/typo"
 	pathWtFeatureLogin = "/wt/feature-login"
 	errNotARepo        = "not a git repo"
+	gitCmdRevList      = "rev-list"
+	pathMainRepo       = "/repo"
 )
 
 var errGitFailed = errors.New("git failed")

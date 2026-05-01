@@ -1,34 +1,19 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
-	"sort"
 	"strconv"
-	"sync"
 	"time"
 
-	"github.com/lugassawan/rimba/internal/fsutil"
-	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/output"
-	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/lugassawan/rimba/internal/termcolor"
 	"github.com/spf13/cobra"
 )
-
-const recentWindow = 7 * 24 * time.Hour
-
-type statusEntry struct {
-	entry      git.WorktreeEntry
-	status     resolver.WorktreeStatus
-	commitTime time.Time
-	hasTime    bool
-	sizeBytes  *int64
-	recent7D   *int
-}
 
 var statusCmd = &cobra.Command{
 	Use:         "status",
@@ -37,24 +22,18 @@ var statusCmd = &cobra.Command{
 	Annotations: map[string]string{"skipConfig": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		r := newRunner()
-
-		mainBranch, err := resolveMainBranch(r)
-		if err != nil {
-			return err
-		}
-
-		entries, err := git.ListWorktrees(r)
-		if err != nil {
-			return err
-		}
-
-		mainEntry := git.FindEntry(entries, mainBranch)
-		candidates := git.FilterEntries(entries, mainBranch)
-
 		staleDays, _ := cmd.Flags().GetInt(flagStaleDays)
 		detail, _ := cmd.Flags().GetBool(flagDetail)
 
-		if len(candidates) == 0 {
+		s := spinner.New(spinnerOpts(cmd))
+		s.Start("Collecting worktree status...")
+		res, err := operations.StatusDashboard(context.Background(), r, operations.StatusDashboardRequest{Detail: detail})
+		s.Stop()
+		if err != nil {
+			return err
+		}
+
+		if len(res.Entries) == 0 {
 			if isJSON(cmd) {
 				return output.WriteJSON(cmd.OutOrStdout(), version, "status", output.StatusData{
 					Summary:   output.StatusSummary{},
@@ -66,44 +45,18 @@ var statusCmd = &cobra.Command{
 			return nil
 		}
 
-		s := spinner.New(spinnerOpts(cmd))
-		defer s.Stop()
-		s.Start("Collecting worktree status...")
-
-		var mainSize int64
-		var mainErr error
-		var mainWG sync.WaitGroup
-		if detail && mainEntry != nil {
-			mainWG.Add(1)
-			go func(path string) {
-				defer mainWG.Done()
-				mainSize, mainErr = fsutil.DirSize(path)
-			}(mainEntry.Path)
-		}
-
-		results := collectStatuses(r, candidates, s, detail)
-		mainWG.Wait()
-		s.Stop()
-
-		var footprint *operations.DiskFootprint
-		if detail {
-			sizes := make([]*int64, len(results))
-			for i, r := range results {
-				sizes[i] = r.sizeBytes
-			}
-			fp := operations.BuildDiskFootprint(sizes, mainSize, mainErr)
-			footprint = &fp
-			sortBySizeDesc(results)
-		}
-
 		if isJSON(cmd) {
-			return writeStatusJSON(cmd, results, staleDays, footprint)
+			return writeStatusJSON(cmd, res.Entries, staleDays, res.Footprint)
 		}
 
 		noColor, _ := cmd.Flags().GetBool(flagNoColor)
 		p := termcolor.NewPainter(noColor)
-
-		renderStatusDashboard(cmd.OutOrStdout(), p, results, staleDays, detail, footprint)
+		renderStatusDashboard(cmd.OutOrStdout(), p, statusRender{
+			results:   res.Entries,
+			staleDays: staleDays,
+			detail:    detail,
+			footprint: res.Footprint,
+		})
 		return nil
 	},
 }
@@ -114,64 +67,27 @@ func init() {
 	rootCmd.AddCommand(statusCmd)
 }
 
-// collectStatuses gathers dirty/ahead/behind state and last commit time
-// per candidate. Under detail it also computes size and 7-day velocity;
-// per-item errors leave the pointer nil (non-fatal).
-func collectStatuses(r git.Runner, candidates []git.WorktreeEntry, s *spinner.Spinner, detail bool) []statusEntry {
-	s.Update("Collecting status...")
-	return parallel.Collect(len(candidates), 8, func(i int) statusEntry {
-		e := candidates[i]
-		st := operations.CollectWorktreeStatus(r, e.Path)
-		var ct time.Time
-		var hasTime bool
-		if t, err := git.LastCommitTime(r, e.Branch); err == nil {
-			ct = t
-			hasTime = true
-		}
-		se := statusEntry{entry: e, status: st, commitTime: ct, hasTime: hasTime}
-		if detail {
-			if n, err := fsutil.DirSize(e.Path); err == nil {
-				se.sizeBytes = &n
-			}
-			if c, err := git.CommitCountSince(r, e.Branch, recentWindow); err == nil {
-				se.recent7D = &c
-			}
-		}
-		return se
-	})
-}
-
-// sortBySizeDesc sorts largest first, stable, nils last.
-func sortBySizeDesc(results []statusEntry) {
-	sort.SliceStable(results, func(i, j int) bool {
-		a, b := results[i].sizeBytes, results[j].sizeBytes
-		switch {
-		case a == nil && b == nil:
-			return false
-		case a == nil:
-			return false
-		case b == nil:
-			return true
-		default:
-			return *a > *b
-		}
-	})
+type statusRender struct {
+	results   []operations.StatusEntry
+	staleDays int
+	detail    bool
+	footprint *operations.DiskFootprint
 }
 
 // renderStatusDashboard prints the summary header and per-worktree table.
-func renderStatusDashboard(out io.Writer, p *termcolor.Painter, results []statusEntry, staleDays int, detail bool, footprint *operations.DiskFootprint) {
-	staleThreshold := time.Now().Add(-time.Duration(staleDays) * 24 * time.Hour)
-	summary := buildCLIStatusSummary(results, staleThreshold)
+func renderStatusDashboard(out io.Writer, p *termcolor.Painter, r statusRender) {
+	staleThreshold := time.Now().Add(-time.Duration(r.staleDays) * 24 * time.Hour)
+	summary := operations.SummarizeStatus(r.results, staleThreshold)
 	prefixes := resolver.AllPrefixes()
 
 	fmt.Fprintf(out, "Worktrees: %s  Dirty: %s  Stale: %s  Behind: %s\n",
-		p.Paint(strconv.Itoa(summary.total), termcolor.Bold),
-		colorCount(p, summary.dirty, termcolor.Yellow),
-		colorCount(p, summary.stale, termcolor.Red),
-		colorCount(p, summary.behind, termcolor.Red),
+		p.Paint(strconv.Itoa(summary.Total), termcolor.Bold),
+		colorCount(p, summary.Dirty, termcolor.Yellow),
+		colorCount(p, summary.Stale, termcolor.Red),
+		colorCount(p, summary.Behind, termcolor.Red),
 	)
-	if detail && footprint != nil {
-		fmt.Fprintln(out, formatDiskLine(p, footprint))
+	if r.detail && r.footprint != nil {
+		fmt.Fprintln(out, formatDiskLine(p, r.footprint))
 	}
 	fmt.Fprintln(out)
 
@@ -183,7 +99,7 @@ func renderStatusDashboard(out io.Writer, p *termcolor.Painter, results []status
 		p.Paint("STATUS", termcolor.Bold),
 		p.Paint("AGE", termcolor.Bold),
 	}
-	if detail {
+	if r.detail {
 		header = append(header,
 			p.Paint("SIZE", termcolor.Bold),
 			p.Paint("7D", termcolor.Bold),
@@ -191,8 +107,8 @@ func renderStatusDashboard(out io.Writer, p *termcolor.Painter, results []status
 	}
 	tbl.AddRow(header...)
 
-	for _, r := range results {
-		tbl.AddRow(buildStatusRow(r, prefixes, staleThreshold, p, detail)...)
+	for _, e := range r.results {
+		tbl.AddRow(buildStatusRow(e, prefixes, staleThreshold, p, r.detail)...)
 	}
 
 	tbl.Render(out)
@@ -214,59 +130,38 @@ func formatDiskLine(p *termcolor.Painter, fp *operations.DiskFootprint) string {
 // renderActionHints prints one-line next-step suggestions derived from the
 // summary counts. Emits nothing when all counts are zero. The hints are
 // CLI-only and never appear in the JSON output.
-func renderActionHints(out io.Writer, p *termcolor.Painter, summary cliStatusSummary) {
-	if summary.behind == 0 && summary.stale == 0 && summary.dirty == 0 {
+func renderActionHints(out io.Writer, p *termcolor.Painter, summary operations.StatusSummary) {
+	if summary.Behind == 0 && summary.Stale == 0 && summary.Dirty == 0 {
 		return
 	}
 
 	fmt.Fprintln(out)
 
-	if summary.behind > 0 {
+	if summary.Behind > 0 {
 		fmt.Fprintf(out, "%s %d behind main. Run: %s\n",
 			p.Paint("→", termcolor.Yellow),
-			summary.behind,
+			summary.Behind,
 			p.Paint("rimba sync --all", termcolor.Bold),
 		)
 	}
-	if summary.stale > 0 {
+	if summary.Stale > 0 {
 		fmt.Fprintf(out, "%s %d stale. Run: %s\n",
 			p.Paint("→", termcolor.Yellow),
-			summary.stale,
+			summary.Stale,
 			p.Paint("rimba clean --stale", termcolor.Bold),
 		)
 	}
-	if summary.dirty > 0 {
+	if summary.Dirty > 0 {
 		fmt.Fprintf(out, "%s %d dirty. Review uncommitted changes before merging.\n",
 			p.Paint("→", termcolor.Yellow),
-			summary.dirty,
+			summary.Dirty,
 		)
 	}
 }
 
-type cliStatusSummary struct {
-	total, dirty, stale, behind int
-}
-
-// buildCLIStatusSummary counts summary stats from results.
-func buildCLIStatusSummary(results []statusEntry, staleThreshold time.Time) cliStatusSummary {
-	s := cliStatusSummary{total: len(results)}
-	for _, r := range results {
-		if r.status.Dirty {
-			s.dirty++
-		}
-		if r.status.Behind > 0 {
-			s.behind++
-		}
-		if r.hasTime && r.commitTime.Before(staleThreshold) {
-			s.stale++
-		}
-	}
-	return s
-}
-
 // buildStatusRow formats a single worktree row for the status table.
-func buildStatusRow(r statusEntry, prefixes []string, staleThreshold time.Time, p *termcolor.Painter, detail bool) []string {
-	task, typeName := resolver.TaskAndType(r.entry.Branch, prefixes)
+func buildStatusRow(r operations.StatusEntry, prefixes []string, staleThreshold time.Time, p *termcolor.Painter, detail bool) []string {
+	task, typeName := resolver.TaskAndType(r.Entry.Branch, prefixes)
 
 	taskCell := "  " + task
 	typeCell := typeName
@@ -274,7 +169,7 @@ func buildStatusRow(r statusEntry, prefixes []string, staleThreshold time.Time, 
 		typeCell = p.Paint(typeCell, c)
 	}
 
-	row := []string{taskCell, typeCell, r.entry.Branch, colorStatus(p, r.status), formatAgeCell(r, staleThreshold, p)}
+	row := []string{taskCell, typeCell, r.Entry.Branch, colorStatus(p, r.Status), formatAgeCell(r, staleThreshold, p)}
 	if detail {
 		row = append(row, formatSizeCell(r, p), formatRecentCell(r, p))
 	}
@@ -282,68 +177,63 @@ func buildStatusRow(r statusEntry, prefixes []string, staleThreshold time.Time, 
 }
 
 // formatSizeCell renders the SIZE column. Nil (errored) renders as "?".
-func formatSizeCell(r statusEntry, p *termcolor.Painter) string {
-	if r.sizeBytes == nil {
+func formatSizeCell(r operations.StatusEntry, p *termcolor.Painter) string {
+	if r.SizeBytes == nil {
 		return p.Paint("?", termcolor.Gray)
 	}
-	return resolver.FormatBytes(*r.sizeBytes)
+	return resolver.FormatBytes(*r.SizeBytes)
 }
 
 // formatRecentCell renders the 7D column. Nil (errored) renders as "?".
-func formatRecentCell(r statusEntry, p *termcolor.Painter) string {
-	if r.recent7D == nil {
+func formatRecentCell(r operations.StatusEntry, p *termcolor.Painter) string {
+	if r.Recent7D == nil {
 		return p.Paint("?", termcolor.Gray)
 	}
-	return strconv.Itoa(*r.recent7D)
+	return strconv.Itoa(*r.Recent7D)
 }
 
 // formatAgeCell formats the age cell with color and stale indicator.
-func formatAgeCell(r statusEntry, staleThreshold time.Time, p *termcolor.Painter) string {
-	if !r.hasTime {
+func formatAgeCell(r operations.StatusEntry, staleThreshold time.Time, p *termcolor.Painter) string {
+	if !r.HasTime {
 		return p.Paint("unknown", termcolor.Gray)
 	}
-	ageStr := resolver.FormatAge(r.commitTime)
-	if r.commitTime.Before(staleThreshold) {
+	ageStr := resolver.FormatAge(r.CommitTime)
+	if r.CommitTime.Before(staleThreshold) {
 		return p.Paint(ageStr, termcolor.Red) + " " + p.Paint("⚠ stale", termcolor.Red)
 	}
-	return p.Paint(ageStr, resolver.AgeColor(r.commitTime))
+	return p.Paint(ageStr, resolver.AgeColor(r.CommitTime))
 }
 
 // writeStatusJSON builds the JSON output for the status command.
-func writeStatusJSON(cmd *cobra.Command, results []statusEntry, staleDays int, footprint *operations.DiskFootprint) error {
+func writeStatusJSON(cmd *cobra.Command, results []operations.StatusEntry, staleDays int, footprint *operations.DiskFootprint) error {
 	staleThreshold := time.Now().Add(-time.Duration(staleDays) * 24 * time.Hour)
 	prefixes := resolver.AllPrefixes()
 
-	var summary output.StatusSummary
-	summary.Total = len(results)
+	opsSummary := operations.SummarizeStatus(results, staleThreshold)
+	summary := output.StatusSummary{
+		Total:  opsSummary.Total,
+		Dirty:  opsSummary.Dirty,
+		Stale:  opsSummary.Stale,
+		Behind: opsSummary.Behind,
+	}
 
 	items := make([]output.StatusItem, 0, len(results))
 	for _, r := range results {
-		if r.status.Dirty {
-			summary.Dirty++
-		}
-		if r.status.Behind > 0 {
-			summary.Behind++
-		}
-
-		task, typeName := resolver.TaskAndType(r.entry.Branch, prefixes)
+		task, typeName := resolver.TaskAndType(r.Entry.Branch, prefixes)
 
 		item := output.StatusItem{
 			Task:      task,
 			Type:      typeName,
-			Branch:    r.entry.Branch,
-			Status:    r.status,
-			SizeBytes: r.sizeBytes,
-			Recent7D:  r.recent7D,
+			Branch:    r.Entry.Branch,
+			Status:    r.Status,
+			SizeBytes: r.SizeBytes,
+			Recent7D:  r.Recent7D,
 		}
 
-		if r.hasTime {
-			stale := r.commitTime.Before(staleThreshold)
-			if stale {
-				summary.Stale++
-			}
+		if r.HasTime {
+			stale := r.CommitTime.Before(staleThreshold)
 			item.Age = &output.StatusAge{
-				LastCommit: r.commitTime.UTC().Format(time.RFC3339),
+				LastCommit: r.CommitTime.UTC().Format(time.RFC3339),
 				Stale:      stale,
 			}
 		}
