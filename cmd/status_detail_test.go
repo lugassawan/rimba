@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/termcolor"
@@ -18,36 +17,6 @@ import (
 )
 
 func ptr[T any](v T) *T { return &v }
-
-func TestSortBySizeDesc(t *testing.T) {
-	results := []statusEntry{
-		{entry: git.WorktreeEntry{Branch: "small"}, sizeBytes: ptr(int64(100))},
-		{entry: git.WorktreeEntry{Branch: "errored"}, sizeBytes: nil},
-		{entry: git.WorktreeEntry{Branch: "big"}, sizeBytes: ptr(int64(5000))},
-		{entry: git.WorktreeEntry{Branch: "medium"}, sizeBytes: ptr(int64(1000))},
-		{entry: git.WorktreeEntry{Branch: "errored2"}, sizeBytes: nil},
-	}
-	sortBySizeDesc(results)
-	wantOrder := []string{"big", "medium", "small", "errored", "errored2"}
-	for i, w := range wantOrder {
-		if results[i].entry.Branch != w {
-			t.Errorf("index %d: got %q, want %q (full: %+v)", i, results[i].entry.Branch, w, results)
-		}
-	}
-}
-
-func TestSortBySizeDescAllNil(t *testing.T) {
-	// Two nil-sized entries: order is preserved (stable).
-	results := []statusEntry{
-		{entry: git.WorktreeEntry{Branch: "a"}},
-		{entry: git.WorktreeEntry{Branch: "b"}},
-	}
-	sortBySizeDesc(results)
-	if results[0].entry.Branch != "a" || results[1].entry.Branch != "b" {
-		t.Errorf("expected stable order [a, b], got [%s, %s]",
-			results[0].entry.Branch, results[1].entry.Branch)
-	}
-}
 
 func TestFormatDiskLine(t *testing.T) {
 	p := termcolor.NewPainter(true) // no color
@@ -72,10 +41,10 @@ func TestFormatDiskLine(t *testing.T) {
 func TestFormatSizeCell(t *testing.T) {
 	p := termcolor.NewPainter(true)
 
-	if got := formatSizeCell(statusEntry{sizeBytes: nil}, p); got != "?" {
+	if got := formatSizeCell(operations.StatusEntry{SizeBytes: nil}, p); got != "?" {
 		t.Errorf("nil sizeBytes cell = %q, want '?'", got)
 	}
-	if got := formatSizeCell(statusEntry{sizeBytes: ptr(int64(2048))}, p); got != "2.0KB" {
+	if got := formatSizeCell(operations.StatusEntry{SizeBytes: ptr(int64(2048))}, p); got != "2.0KB" {
 		t.Errorf("2048-byte cell = %q, want '2.0KB'", got)
 	}
 }
@@ -83,10 +52,10 @@ func TestFormatSizeCell(t *testing.T) {
 func TestFormatRecentCell(t *testing.T) {
 	p := termcolor.NewPainter(true)
 
-	if got := formatRecentCell(statusEntry{recent7D: nil}, p); got != "?" {
+	if got := formatRecentCell(operations.StatusEntry{Recent7D: nil}, p); got != "?" {
 		t.Errorf("nil recent7D cell = %q, want '?'", got)
 	}
-	if got := formatRecentCell(statusEntry{recent7D: ptr(42)}, p); got != "42" {
+	if got := formatRecentCell(operations.StatusEntry{Recent7D: ptr(42)}, p); got != "42" {
 		t.Errorf("recent7D=42 cell = %q, want '42'", got)
 	}
 }
