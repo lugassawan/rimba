@@ -1,0 +1,8 @@
+{
+  "number": 42,
+  "title": "Fix login redirect",
+  "headRefName": "fix-login-redirect",
+  "headRepository": {"name": "rimba"},
+  "headRepositoryOwner": {"login": "lugassawan"},
+  "isCrossRepository": false
+}

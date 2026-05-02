@@ -1,0 +1,8 @@
+{
+  "number": 99,
+  "title": "Add OAuth support",
+  "headRefName": "feat-oauth",
+  "headRepository": {"name": "rimba"},
+  "headRepositoryOwner": {"login": "contributor"},
+  "isCrossRepository": true
+}

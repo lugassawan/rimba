@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/progress"
+	"github.com/lugassawan/rimba/testutil"
 )
 
 const (
@@ -16,24 +17,6 @@ const (
 	gitCmdFetch     = "fetch"
 	gitCmdRemote    = "remote"
 	gitSubcmdGetURL = "get-url"
-
-	sameRepoPRJSON = `{
-  "number": 42,
-  "title": "Fix login redirect",
-  "headRefName": "fix-login-redirect",
-  "headRepository": {"name": "rimba"},
-  "headRepositoryOwner": {"login": "lugassawan"},
-  "isCrossRepository": false
-}`
-
-	crossForkPRJSON = `{
-  "number": 99,
-  "title": "Add OAuth support",
-  "headRefName": "feat-oauth",
-  "headRepository": {"name": "rimba"},
-  "headRepositoryOwner": {"login": "contributor"},
-  "isCrossRepository": true
-}`
 )
 
 // mockGhRunner implements gh.Runner for testing.
@@ -87,6 +70,7 @@ func makePRGitRunner(_ string, crossFork bool) *mockRunner {
 }
 
 func TestAddPRWorktreeSameRepo(t *testing.T) {
+	sameRepoPRJSON := testutil.LoadFixture(t, "../gh/testdata/same_repo_pr.json")
 	tmpDir := t.TempDir()
 	wtDir := filepath.Join(tmpDir, ".worktrees")
 
@@ -114,6 +98,7 @@ func TestAddPRWorktreeSameRepo(t *testing.T) {
 }
 
 func TestAddPRWorktreeCrossFork(t *testing.T) {
+	crossForkPRJSON := testutil.LoadFixture(t, "../gh/testdata/cross_fork_pr.json")
 	tmpDir := t.TempDir()
 	wtDir := filepath.Join(tmpDir, ".worktrees")
 
@@ -141,6 +126,7 @@ func TestAddPRWorktreeCrossFork(t *testing.T) {
 }
 
 func TestAddPRWorktreeTaskOverride(t *testing.T) {
+	sameRepoPRJSON := testutil.LoadFixture(t, "../gh/testdata/same_repo_pr.json")
 	tmpDir := t.TempDir()
 	wtDir := filepath.Join(tmpDir, ".worktrees")
 
@@ -214,6 +200,7 @@ func TestAddPRWorktreeFetchPRMetaFailure(t *testing.T) {
 }
 
 func TestAddPRWorktreeSameRepoFetchFails(t *testing.T) {
+	sameRepoPRJSON := testutil.LoadFixture(t, "../gh/testdata/same_repo_pr.json")
 	tmpDir := t.TempDir()
 	wtDir := filepath.Join(tmpDir, ".worktrees")
 
@@ -249,6 +236,7 @@ func TestAddPRWorktreeSameRepoFetchFails(t *testing.T) {
 }
 
 func TestAddPRWorktreeCrossForkAddRemoteFails(t *testing.T) {
+	crossForkPRJSON := testutil.LoadFixture(t, "../gh/testdata/cross_fork_pr.json")
 	tmpDir := t.TempDir()
 	wtDir := filepath.Join(tmpDir, ".worktrees")
 
@@ -289,6 +277,7 @@ func TestAddPRWorktreeCrossForkAddRemoteFails(t *testing.T) {
 }
 
 func TestAddPRWorktreeCrossForkFetchFails(t *testing.T) {
+	crossForkPRJSON := testutil.LoadFixture(t, "../gh/testdata/cross_fork_pr.json")
 	tmpDir := t.TempDir()
 	wtDir := filepath.Join(tmpDir, ".worktrees")
 
@@ -332,6 +321,7 @@ func TestAddPRWorktreeCrossForkFetchFails(t *testing.T) {
 }
 
 func TestAddPRWorktreeResolveSourceFailure(t *testing.T) {
+	sameRepoPRJSON := testutil.LoadFixture(t, "../gh/testdata/same_repo_pr.json")
 	tmpDir := t.TempDir()
 	wtDir := filepath.Join(tmpDir, ".worktrees")
 
@@ -361,6 +351,7 @@ func TestAddPRWorktreeResolveSourceFailure(t *testing.T) {
 }
 
 func TestAddPRWorktreeProgressCallbacks(t *testing.T) {
+	sameRepoPRJSON := testutil.LoadFixture(t, "../gh/testdata/same_repo_pr.json")
 	tmpDir := t.TempDir()
 	wtDir := filepath.Join(tmpDir, ".worktrees")
 
