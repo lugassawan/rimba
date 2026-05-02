@@ -574,12 +574,7 @@ func TestInitFreshGitignoreAlreadyPresent(t *testing.T) {
 // --- Tests for new 3-tier flag surface ---
 
 func TestInitGlobalInstall(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-
-	// -g does not need a git repo
-	r := notGitRepoRunner()
-	restore := overrideNewRunner(r)
+	home, restore := setupGlobalInit(t)
 	defer restore()
 
 	cmd, buf := newTestCmd()
@@ -602,12 +597,7 @@ func TestInitGlobalInstall(t *testing.T) {
 }
 
 func TestInitGlobalNoRepoRequired(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-
-	// Simulate git.RepoRoot failing (not in a repo)
-	r := notGitRepoRunner()
-	restore := overrideNewRunner(r)
+	_, restore := setupGlobalInit(t)
 	defer restore()
 
 	cmd, _ := newTestCmd()
@@ -619,12 +609,7 @@ func TestInitGlobalNoRepoRequired(t *testing.T) {
 }
 
 func TestInitGlobalUninstall(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-
-	// Install first
-	r := notGitRepoRunner()
-	restore := overrideNewRunner(r)
+	home, restore := setupGlobalInit(t)
 	defer restore()
 
 	cmd1, _ := newTestCmd()
@@ -808,8 +793,8 @@ func TestInitFlagValidationErrors(t *testing.T) {
 // --- MCP registration tests ---
 
 func TestInitGlobalRegistersMCP(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home, restore := setupGlobalInit(t)
+	defer restore()
 
 	// Pre-seed .claude/settings.json so MCP registration doesn't skip it
 	claudeDir := filepath.Join(home, ".claude")
@@ -819,10 +804,6 @@ func TestInitGlobalRegistersMCP(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(claudeDir, "settings.json"), []byte("{}\n"), 0600); err != nil {
 		t.Fatalf("write settings.json: %v", err)
 	}
-
-	r := notGitRepoRunner()
-	restore := overrideNewRunner(r)
-	defer restore()
 
 	cmd, buf := newTestCmd()
 	cmd.Flags().Bool(flagGlobal, true, "")
@@ -867,11 +848,7 @@ func TestInitGlobalRegistersMCP(t *testing.T) {
 }
 
 func TestInitGlobalMCPSkippedWhenNoConfig(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-
-	r := notGitRepoRunner()
-	restore := overrideNewRunner(r)
+	_, restore := setupGlobalInit(t)
 	defer restore()
 
 	cmd, buf := newTestCmd()
@@ -887,8 +864,8 @@ func TestInitGlobalMCPSkippedWhenNoConfig(t *testing.T) {
 }
 
 func TestInitGlobalUninstallRemovesMCP(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home, restore := setupGlobalInit(t)
+	defer restore()
 
 	claudeDir := filepath.Join(home, ".claude")
 	if err := os.MkdirAll(claudeDir, 0750); err != nil {
@@ -897,10 +874,6 @@ func TestInitGlobalUninstallRemovesMCP(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(claudeDir, "settings.json"), []byte("{}\n"), 0600); err != nil {
 		t.Fatalf("write settings.json: %v", err)
 	}
-
-	r := notGitRepoRunner()
-	restore := overrideNewRunner(r)
-	defer restore()
 
 	// Install
 	cmd1, _ := newTestCmd()
@@ -1012,8 +985,8 @@ func TestInitAgentsLocalSkipsMCP(t *testing.T) {
 }
 
 func TestInitGlobalMCPErrorPropagated(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home, restore := setupGlobalInit(t)
+	defer restore()
 
 	// Write malformed JSON to settings.json — triggers patchJSON error
 	claudeDir := filepath.Join(home, ".claude")
@@ -1023,10 +996,6 @@ func TestInitGlobalMCPErrorPropagated(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(claudeDir, "settings.json"), []byte("not json"), 0600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-
-	r := notGitRepoRunner()
-	restore := overrideNewRunner(r)
-	defer restore()
 
 	cmd, _ := newTestCmd()
 	cmd.Flags().Bool(flagGlobal, true, "")

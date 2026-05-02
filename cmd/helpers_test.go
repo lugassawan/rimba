@@ -18,6 +18,16 @@ func notGitRepoRunner() *mockRunner {
 	}
 }
 
+// setupGlobalInit wires the HOME env to a temp dir and installs a notGitRepoRunner.
+// Returns the home path and the restore func from overrideNewRunner.
+func setupGlobalInit(t *testing.T) (home string, restore func()) {
+	t.Helper()
+	home = t.TempDir()
+	t.Setenv("HOME", home)
+	restore = overrideNewRunner(notGitRepoRunner())
+	return
+}
+
 // repoRootRunner returns a mockRunner whose RepoRoot/MainRepoRoot resolves to dir.
 func repoRootRunner(dir string, extra func(args ...string) (string, error)) *mockRunner {
 	return &mockRunner{
