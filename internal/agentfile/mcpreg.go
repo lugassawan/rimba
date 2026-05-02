@@ -50,22 +50,22 @@ func ProjectMCPSpecs() []MCPSpec {
 
 // RegisterMCPGlobal patches all user-level MCP config files to add the rimba server entry.
 func RegisterMCPGlobal(homeDir string) ([]Result, error) {
-	return registerMCPSpecs(homeDir, GlobalMCPSpecs())
+	return applyMCPSpecs(homeDir, GlobalMCPSpecs(), false)
 }
 
 // UnregisterMCPGlobal removes the rimba server entry from all user-level MCP config files.
 func UnregisterMCPGlobal(homeDir string) ([]Result, error) {
-	return unregisterMCPSpecs(homeDir, GlobalMCPSpecs())
+	return applyMCPSpecs(homeDir, GlobalMCPSpecs(), true)
 }
 
 // RegisterMCPProject patches project-level MCP config files to add the rimba server entry.
 func RegisterMCPProject(repoRoot string) ([]Result, error) {
-	return registerMCPSpecs(repoRoot, ProjectMCPSpecs())
+	return applyMCPSpecs(repoRoot, ProjectMCPSpecs(), false)
 }
 
 // UnregisterMCPProject removes the rimba server entry from project-level MCP config files.
 func UnregisterMCPProject(repoRoot string) ([]Result, error) {
-	return unregisterMCPSpecs(repoRoot, ProjectMCPSpecs())
+	return applyMCPSpecs(repoRoot, ProjectMCPSpecs(), true)
 }
 
 func applyMCPSpecs(baseDir string, specs []MCPSpec, remove bool) ([]Result, error) {
@@ -86,14 +86,6 @@ func applyMCPSpecs(baseDir string, specs []MCPSpec, remove bool) ([]Result, erro
 		results = append(results, Result{RelPath: spec.RelPath, Action: action})
 	}
 	return results, nil
-}
-
-func registerMCPSpecs(baseDir string, specs []MCPSpec) ([]Result, error) {
-	return applyMCPSpecs(baseDir, specs, false)
-}
-
-func unregisterMCPSpecs(baseDir string, specs []MCPSpec) ([]Result, error) {
-	return applyMCPSpecs(baseDir, specs, true)
 }
 
 func desiredEntry() map[string]any {
