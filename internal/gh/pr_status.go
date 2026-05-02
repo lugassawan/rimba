@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	"github.com/lugassawan/rimba/internal/errhint"
 )
 
 // CIStatus is the aggregated CI rollup state for a PR.
@@ -59,7 +61,10 @@ func QueryPRStatus(ctx context.Context, r Runner, branch string) (PRStatus, erro
 	}
 	var entries []prListEntry
 	if err := json.Unmarshal(out, &entries); err != nil {
-		return PRStatus{}, fmt.Errorf("parse gh pr list: %w", err)
+		return PRStatus{}, errhint.WithFix(
+			fmt.Errorf("parse gh pr list: %w", err),
+			"check gh CLI version: gh --version, and update if older than 2.40",
+		)
 	}
 	if len(entries) == 0 {
 		return PRStatus{}, nil
