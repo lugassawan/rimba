@@ -128,6 +128,8 @@ func addToContainer(cfg map[string]any, containerKey string) string {
 	if servers == nil {
 		servers = map[string]any{}
 	}
+	// desiredEntry uses []any; go-toml/v2 also decodes TOML arrays as []any,
+	// so reflect.DeepEqual works correctly for TOML idempotency.
 	desired := desiredEntry()
 	if reflect.DeepEqual(servers[mcpServerName], desired) {
 		return actionUnchanged
