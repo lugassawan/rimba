@@ -95,7 +95,7 @@ rimba remove my-feature
 
 | Command | Description |
 |---------|-------------|
-| `rimba init` | Initialize rimba in the current repo; with `--agents` / `-g` also installs agent files and registers MCP server |
+| `rimba init` | Initialize rimba in the current repo; with `--agents` / `-g` also installs agent files at the chosen tier (`--user`/`--team`/`--local`) and registers the MCP server |
 | `rimba add <task>` | Create a new worktree with auto-prefixed branch (`service/task` for monorepos), or `pr:<num>` to create one from a GitHub PR |
 | `rimba remove <task>` | Remove a worktree and delete its branch |
 | `rimba rename <old> <new>` | Rename a worktree's task, branch, and directory |
@@ -117,7 +117,7 @@ rimba remove my-feature
 | `rimba deps status` | Show detected dependency modules for all worktrees |
 | `rimba deps install <task>` | Detect and install dependencies for a worktree |
 | `rimba clean` | Prune stale references or remove merged/stale worktrees |
-| `rimba update` | Check for updates and replace the binary in place |
+| `rimba update` | Check for updates and replace the binary in place; reminds you to refresh agent files after a successful update |
 | `rimba version` | Print version, commit, and build date |
 | `rimba mcp` | Start MCP server for AI tool integration |
 | `rimba completion` | Generate shell completion scripts (bash, zsh, fish, powershell) |
