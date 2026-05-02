@@ -5,7 +5,11 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/lugassawan/rimba/internal/errhint"
 )
+
+const notInRepoHint = "run from inside a git repository, or run: git init"
 
 const (
 	refsHeadsPrefix = "refs/heads/"
@@ -22,7 +26,7 @@ const (
 func RepoRoot(r Runner) (string, error) {
 	out, err := r.Run(cmdRevParse, "--show-toplevel")
 	if err != nil {
-		return "", fmt.Errorf("not a git repository: %w", err)
+		return "", errhint.WithFix(fmt.Errorf("not a git repository: %w", err), notInRepoHint)
 	}
 	return out, nil
 }
@@ -93,7 +97,10 @@ func DefaultBranch(r Runner) (string, error) {
 		return "master", nil
 	}
 
-	return "", errors.New("could not detect default branch (no main or master found)")
+	return "", errhint.WithFix(
+		errors.New("could not detect default branch (no main or master found)"),
+		"set the default branch: git branch -M main",
+	)
 }
 
 // resolveCommonDir returns the absolute path to the git common directory.
@@ -101,7 +108,7 @@ func DefaultBranch(r Runner) (string, error) {
 func resolveCommonDir(r Runner) (string, error) {
 	commonDir, err := r.Run(cmdRevParse, "--git-common-dir")
 	if err != nil {
-		return "", fmt.Errorf("not a git repository: %w", err)
+		return "", errhint.WithFix(fmt.Errorf("not a git repository: %w", err), notInRepoHint)
 	}
 
 	if !filepath.IsAbs(commonDir) {

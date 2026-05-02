@@ -3,6 +3,8 @@ package git
 import (
 	"fmt"
 	"strings"
+
+	"github.com/lugassawan/rimba/internal/errhint"
 )
 
 const (
@@ -124,7 +126,10 @@ func Prune(r Runner, dryRun bool) (string, error) {
 	}
 	out, err := r.Run(args...)
 	if err != nil {
-		return "", fmt.Errorf("prune: %w", err)
+		return "", errhint.WithFix(
+			fmt.Errorf("prune: %w", err),
+			"check repo permissions, then run: git worktree list",
+		)
 	}
 	return out, nil
 }
