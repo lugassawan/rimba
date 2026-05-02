@@ -115,11 +115,13 @@ type cleanStrategy struct {
 	spinnerMsg string
 	emptyMsg   string
 	summaryFmt string
-	// preFind is called before find with the spinner already created; nil for stale.
-	// It manages spinner start/stop internally (e.g., fetch step for merged).
+	// preFind, if non-nil, is called before find and owns spinner start/stop.
+	// When nil, runClean starts the spinner with spinnerMsg immediately before find.
 	preFind func(*cobra.Command, git.Runner, *spinner.Spinner) error
-	find    func(*cobra.Command, git.Runner) ([]operations.CleanCandidate, []string, error)
-	// printRows displays candidates; may ignore the passed slice and use a captured typed slice.
+	// find returns candidates and warnings; cmd output is not permitted here.
+	find func(git.Runner) ([]operations.CleanCandidate, []string, error)
+	// printRows displays candidates; may ignore the passed slice and use a captured typed slice
+	// (e.g., stale path captures []StaleCandidate for age rendering).
 	printRows func([]operations.CleanCandidate)
 }
 
@@ -141,7 +143,7 @@ func runClean(cmd *cobra.Command, r git.Runner, s cleanStrategy) error {
 		sp.Start(s.spinnerMsg)
 	}
 
-	candidates, warnings, err := s.find(cmd, r)
+	candidates, warnings, err := s.find(r)
 	if err != nil {
 		return err
 	}
@@ -186,7 +188,7 @@ func cleanMerged(cmd *cobra.Command, r git.Runner) error {
 			mergeRef = cleanFetchMergeRef(c, rr, sp, mainBranch)
 			return nil
 		},
-		find: func(_ *cobra.Command, rr git.Runner) ([]operations.CleanCandidate, []string, error) {
+		find: func(rr git.Runner) ([]operations.CleanCandidate, []string, error) {
 			result, err := operations.FindMergedCandidates(rr, mergeRef, mainBranch)
 			if err != nil {
 				return nil, nil, err
@@ -216,7 +218,7 @@ func cleanStale(cmd *cobra.Command, r git.Runner) error {
 		spinnerMsg: "Analyzing worktree activity...",
 		emptyMsg:   "No stale worktrees found.",
 		summaryFmt: "Cleaned %d stale worktree(s).\n",
-		find: func(_ *cobra.Command, rr git.Runner) ([]operations.CleanCandidate, []string, error) {
+		find: func(rr git.Runner) ([]operations.CleanCandidate, []string, error) {
 			result, err := operations.FindStaleCandidates(rr, mainBranch, staleDays)
 			if err != nil {
 				return nil, nil, err
@@ -232,6 +234,7 @@ func cleanStale(cmd *cobra.Command, r git.Runner) error {
 
 // cleanFetchMergeRef fetches from origin and returns the ref to diff against.
 // Falls back to local mainBranch (with a warning) when fetch fails.
+// Postcondition: spinner is stopped on error path; still running on success path.
 func cleanFetchMergeRef(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, mainBranch string) string {
 	s.Start("Fetching from origin...")
 	if err := git.Fetch(r, "origin"); err != nil {
