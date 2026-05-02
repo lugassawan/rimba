@@ -95,15 +95,15 @@ rimba remove my-feature
 
 | Command | Description |
 |---------|-------------|
-| `rimba init` | Initialize rimba in the current repository |
-| `rimba add <task>` | Create a new worktree with auto-prefixed branch (`service/task` for monorepos) |
+| `rimba init` | Initialize rimba in the current repo; with `--agents` / `-g` also installs agent files and registers MCP server |
+| `rimba add <task>` | Create a new worktree with auto-prefixed branch (`service/task` for monorepos), or `pr:<num>` to create one from a GitHub PR |
 | `rimba remove <task>` | Remove a worktree and delete its branch |
 | `rimba rename <old> <new>` | Rename a worktree's task, branch, and directory |
 | `rimba duplicate <task>` | Create a copy of an existing worktree |
 | `rimba archive <task>` | Archive a worktree (remove directory, keep branch) |
 | `rimba restore <task>` | Restore an archived worktree from its preserved branch |
 | `rimba list` | List worktrees (compact by default; `--full` for all columns) |
-| `rimba status` | Show worktree dashboard with summary stats and age info |
+| `rimba status` | Show worktree dashboard; `--detail` adds disk size, 7-day commit velocity, and disk-footprint summary |
 | `rimba log` | Show last commit from each worktree, sorted by recency |
 | `rimba open <task>` | Open a worktree or run a command inside it |
 | `rimba merge <task>` | Merge a worktree branch into main or another worktree |
@@ -138,6 +138,16 @@ agent = 'claude'
 ```
 
 > See [docs/configuration.md](docs/configuration.md) for the full field reference, dependency management, and environment variables.
+
+Running `rimba init --agents` or `rimba init -g` additionally creates or patches MCP server config files in client tools (`.mcp.json`, `.cursor/mcp.json`, `~/.claude/settings.json`, and others). See [docs/configuration.md#mcp-server-registration](docs/configuration.md#mcp-server-registration) for the full list of patched files and entry format.
+
+## Global flags
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output in JSON (where supported: `list`, `status`, `deps status`, `conflict-check`, `exec`) |
+| `--no-color` | Disable colored output (also respects `NO_COLOR`) |
+| `--debug` | Log git commands and timings to stderr (also respects `RIMBA_DEBUG=1`) |
 
 ## Troubleshooting
 

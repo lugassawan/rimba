@@ -31,8 +31,15 @@ const (
 var commandName string
 
 var rootCmd = &cobra.Command{
-	Use:           "rimba",
-	Short:         "Manage git worktrees — create, sync, merge, and organize branches",
+	Use:   "rimba",
+	Short: "Manage git worktrees — create, sync, merge, and organize branches",
+	Long: `rimba is a git worktree manager. It creates, syncs, merges, and organizes
+branches as isolated worktrees so you can work on multiple tasks in parallel.
+
+Persistent flags (available on every command):
+  --json      Output in JSON format (where supported)
+  --no-color  Disable colored output (also respects NO_COLOR)
+  --debug     Log git commands and timings to stderr (also respects RIMBA_DEBUG=1)`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
@@ -86,6 +93,8 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
+	rootCmd.CompletionOptions.DisableDefaultCmd = true
+
 	rootCmd.PersistentFlags().Bool(flagJSON, false, "output in JSON format")
 	rootCmd.PersistentFlags().Bool(flagNoColor, false, "disable colored output")
 	rootCmd.PersistentFlags().Bool(flagDebug, false, "Log git commands and timings to stderr")

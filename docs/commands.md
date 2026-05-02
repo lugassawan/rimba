@@ -12,6 +12,7 @@ These flags are available on every command via the root `rimba` command:
 |------|-------------|
 | `--json` | Output in JSON format (supported by `list`, `status`, `deps status`, `conflict-check`, `exec`) |
 | `--no-color` | Disable colored output (also respects `NO_COLOR` env var) |
+| `--debug` | Log git commands and timings to stderr (also respects `RIMBA_DEBUG=1`) |
 
 ---
 
@@ -19,19 +20,40 @@ These flags are available on every command via the root `rimba` command:
 
 ### rimba init
 
-Initialize rimba in the current repository. Detects the repo root, creates the `.rimba/` config directory with `settings.toml` (team-shared) and `settings.local.toml` (personal overrides), and sets up the worktree directory. Use `--agent-files` to also install AI agent instruction files (`AGENTS.md`, `.github/copilot-instructions.md`, `.cursor/rules/rimba.mdc`, `.claude/skills/rimba/SKILL.md`).
+Initialize rimba in the current repository. Detects the repo root, creates the `.rimba/` config directory with `settings.toml` (team-shared) and `settings.local.toml` (personal overrides), and sets up the worktree directory.
 
-If `.rimba/` already exists, config creation is skipped but agent files are still installed or updated when `--agent-files` is passed. If a legacy `.rimba.toml` exists, it is migrated into the new directory layout.
+Agent files (`AGENTS.md`, `.github/copilot-instructions.md`, `.cursor/rules/rimba.mdc`, `.claude/skills/rimba/SKILL.md`) are installed at three tiers:
+
+- `--agents` — project-team level (committed to git)
+- `--agents --local` — project-personal level (gitignored)
+- `-g` / `--global` — user level (`~/`) — works outside a git repository
+
+When agent files are installed (`--agents` or `-g`), rimba also registers itself as an MCP server (server name: `rimba`, command: `rimba mcp`) in the corresponding client config files (`.mcp.json`, `.cursor/mcp.json`, `~/.claude/settings.json`, `~/.codex/config.toml`, `~/.gemini/settings.json`, `~/.codeium/windsurf/mcp_config.json`, `~/.roo/mcp.json`). Use `--uninstall` with the same flags to remove.
+
+If `.rimba/` already exists, config creation is skipped but agent files are still installed or updated. If a legacy `.rimba.toml` exists, it is migrated into the new directory layout.
 
 ```sh
-rimba init                  # Initialize config and worktree directory
-rimba init --agent-files    # Also install AI agent instruction files
+rimba init                        # Initialize config and worktree directory
+rimba init --agents               # Also install agent files at project level (committed)
+rimba init --agents --local       # Install agent files gitignored (personal)
+rimba init -g                     # Install agent files at user level (~/)
+rimba init -g --uninstall         # Remove user-level agent files and MCP registration
+rimba init --agents --uninstall   # Remove project-team agent files and MCP registration
 ```
+
+> **Notes:**
+> - `--local` is not allowed with `-g`.
+> - `--local` without `--agents` errors with: `--local requires --agents`.
+> - `--uninstall` requires `-g` or `--agents`.
+> - `-g` / `--global` and `--agents` are mutually exclusive.
 
 | Flag | Description |
 |------|-------------|
-| `--agent-files` | Install AI agent instruction files (AGENTS.md, copilot, cursor, claude) |
-| `--personal` | Gitignore the entire `.rimba/` directory instead of just the local config file (for solo developers) |
+| `--agents` | Install AI agent instruction files at project level |
+| `-g`, `--global` | Install agent files at user level (`~/`) — works outside a git repo |
+| `--local` | Install agent files gitignored (personal overrides; requires `--agents`) |
+| `--uninstall` | Remove agent files and MCP registration (requires `-g` or `--agents`) |
+| `--personal` | Gitignore the entire `.rimba/` directory instead of just the local config file |
 
 ---
 
@@ -39,7 +61,7 @@ rimba init --agent-files    # Also install AI agent instruction files
 
 ### rimba add
 
-Create a new worktree with a branch named `<prefix><task>` and copy dotfiles from the repo root. In monorepos, prefix the task with a service directory name to create service-scoped branches.
+Create a new worktree with a branch named `<prefix><task>` and copy dotfiles from the repo root. In monorepos, prefix the task with a service directory name to create service-scoped branches. Use `pr:<num>` to create a worktree from a GitHub PR's head branch.
 
 ```sh
 rimba add my-feature
@@ -47,9 +69,13 @@ rimba add my-feature --bugfix        # Use bugfix/ prefix instead of feature/
 rimba add my-feature -s develop      # Branch from a different source
 rimba add auth-api/my-feature        # Monorepo: branch auth-api/feature/my-feature
 rimba add auth-api/my-feature --bugfix  # Monorepo: branch auth-api/bugfix/my-feature
+rimba add pr:123                     # Create worktree from PR #123's head branch
+rimba add pr:123 --task review/auth-tweak  # Override auto-derived task name
 ```
 
 > **Monorepo:** If the first segment before `/` matches a directory in the repo root, rimba treats it as a service scope. The branch uses a 3-segment pattern: `<service>/<prefix>/<task>`. No configuration needed — detection is automatic.
+
+> **PR mode:** `pr:<num>` requires `gh` to be installed and authenticated. For cross-fork PRs, rimba adds a `gh-fork-<owner>` remote automatically. Without `--task`, the task name is derived as `review/<num>-<slug>`.
 
 | Flag | Description |
 |------|-------------|
@@ -59,6 +85,7 @@ rimba add auth-api/my-feature --bugfix  # Monorepo: branch auth-api/bugfix/my-fe
 | `--test` | Use `test/` branch prefix |
 | `--chore` | Use `chore/` branch prefix |
 | `-s`, `--source` | Source branch to create worktree from (default from config) |
+| `--task` | Override auto-derived task name (`pr:<num>` mode only) |
 | `--skip-deps` | Skip dependency detection and installation |
 | `--skip-hooks` | Skip post-create hooks |
 
@@ -141,11 +168,11 @@ rimba restore my-feature
 
 ### rimba list
 
-List all worktrees with task, type, and status. Use `--full` to show all columns including branch and path. The current worktree is marked with `*`.
+List all worktrees with task, type, and status. Use `--full` to show all columns including branch, path, and (when `gh` is installed and authenticated) PR number and CI rollup. The current worktree is marked with `*`.
 
 ```sh
 rimba list
-rimba list --full               # Show all columns (branch, path)
+rimba list --full               # Show all columns (branch, path, PR, CI)
 rimba list --type bugfix        # Show only bugfix worktrees
 rimba list --dirty              # Show only dirty worktrees
 rimba list --behind             # Show only worktrees behind upstream
@@ -166,15 +193,19 @@ TASK            TYPE     STATUS
 Example output with `--full`:
 
 ```
-TASK            TYPE     BRANCH              PATH              STATUS
-* auth-flow     feature  feature/auth-flow   feature-auth-flow [dirty]
-  fix-login     bugfix   bugfix/fix-login    bugfix-fix-login  ↑2 ↓1
-  ui-cleanup    chore    chore/ui-cleanup    chore-ui-cleanup  ✓
+TASK            TYPE     BRANCH              PATH               STATUS    PR     CI
+* auth-flow     feature  feature/auth-flow   feature-auth-flow  [dirty]   #142   ✓
+  fix-login     bugfix   bugfix/fix-login    bugfix-fix-login   ↑2 ↓1     #138   ●
+  ui-cleanup    chore    chore/ui-cleanup    chore-ui-cleanup   ✓         –      –
 ```
+
+> **PR/CI columns:** Require `gh` installed and authenticated; otherwise a yellow warning is printed and those cells render as `–`. CI symbols: ✓ success · ● pending · ✗ failure · – unknown.
+
+> **Note:** `--archived` is mutually exclusive with `--type`, `--dirty`, `--behind`, and `--full`.
 
 | Flag | Description |
 |------|-------------|
-| `--full` | Show all columns including branch and path |
+| `--full` | Show all columns including branch, path, and PR/CI (when `gh` is available) |
 | `--type` | Filter by prefix type (e.g. `feature`, `bugfix`, `hotfix`, `docs`, `test`, `chore`) |
 | `--dirty` | Show only worktrees with uncommitted changes |
 | `--behind` | Show only worktrees behind their upstream branch |
@@ -183,10 +214,11 @@ TASK            TYPE     BRANCH              PATH              STATUS
 
 ### rimba status
 
-Show a worktree dashboard with summary stats (total, dirty, stale, behind) and per-worktree age information.
+Show a worktree dashboard with summary stats (total, dirty, stale, behind) and per-worktree age information. Use `--detail` to also show disk size, 7-day commit velocity, and a disk-footprint summary line.
 
 ```sh
 rimba status
+rimba status --detail           # Add SIZE and 7D columns; sort by disk size (largest first)
 rimba status --stale-days 7     # Consider worktrees stale after 7 days
 rimba status --json             # Output as JSON
 ```
@@ -203,8 +235,24 @@ TASK          TYPE     BRANCH              STATUS    AGE
   payments    feature  feature/payments    ✓         3d
 ```
 
+Example output with `--detail`:
+
+```
+Worktrees: 4  Dirty: 1  Stale: 1  Behind: 0
+Disk: total 1.2 GB  (main: 480 MB, worktrees: 720 MB)
+
+TASK          TYPE     BRANCH              STATUS    AGE   SIZE    7D
+  auth-flow   feature  feature/auth-flow   [dirty]   2d    310 MB  4
+  payments    feature  feature/payments    ✓         3d    220 MB  1
+  fix-login   bugfix   bugfix/fix-login    ✓         5h    140 MB  6
+  ui-cleanup  chore    chore/ui-cleanup    ✓         21d   50 MB   0  ⚠ stale
+```
+
+> **Columns:** `SIZE` is the on-disk footprint of the worktree directory. `7D` is the number of commits on the worktree's branch in the last 7 days. `--detail` sorts rows largest-first.
+
 | Flag | Description |
 |------|-------------|
+| `--detail` | Add SIZE and 7D columns; print disk-footprint summary; sort by disk size |
 | `--stale-days` | Number of days after which a worktree is considered stale (default: 14) |
 
 ### rimba log
@@ -532,6 +580,8 @@ rimba update --force     # Also works on dev builds
 | `--force` | Update even if running a development build |
 
 > **Note:** If the binary cannot be replaced due to file permissions, rimba installs to `~/.local/bin` instead.
+
+> **Post-update tips:** After a successful update, rimba prints a one-line tip if agent files are installed at user level (`rimba init -g` to refresh) or in this repo (`rimba init --agents` to refresh). Set `RIMBA_QUIET=1` to suppress.
 
 ---
 

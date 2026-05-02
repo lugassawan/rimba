@@ -31,7 +31,20 @@ const (
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all worktrees",
-	Long:  "Lists all git worktrees with task, type, and status. Use --full to show branch, path, and (when gh is installed and authenticated) PR number and CI rollup.",
+	Long: `Lists all git worktrees with task, type, and status.
+
+Use --full to show branch, path, and (when gh is installed and authenticated) PR number
+and CI rollup. CI symbols: ✓ success · ● pending · ✗ failure · – unknown.
+
+  rimba list                     # Compact view
+  rimba list --full              # All columns including PR/CI
+  rimba list --type bugfix       # Filter by prefix type
+  rimba list --service auth-api  # Filter by service (monorepo)
+  rimba list --dirty             # Only worktrees with uncommitted changes
+  rimba list --behind            # Only worktrees behind upstream
+  rimba list --archived          # Archived branches (no active worktree)
+
+--archived is mutually exclusive with --type, --dirty, --behind, and --full.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		opts := listReadFlags(cmd)
 

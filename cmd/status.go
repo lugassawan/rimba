@@ -16,9 +16,18 @@ import (
 )
 
 var statusCmd = &cobra.Command{
-	Use:         "status",
-	Short:       "Show worktree dashboard with summary stats and age info",
-	Long:        "Displays a summary of all worktrees including total count, dirty, stale, and behind counts, plus per-worktree age information.",
+	Use:   "status",
+	Short: "Show worktree dashboard with summary stats and age info",
+	Long: `Displays a summary of all worktrees including total count, dirty, stale, and behind counts,
+plus per-worktree age information.
+
+Use --detail to add SIZE and 7D columns and a disk-footprint summary line. SIZE is the
+on-disk footprint of the worktree directory; 7D is the number of commits on the branch
+in the last 7 days. With --detail, rows are sorted largest-first.
+
+  rimba status
+  rimba status --detail          # Add SIZE/7D columns and disk summary
+  rimba status --stale-days 7    # Consider worktrees stale after 7 days`,
 	Annotations: map[string]string{"skipConfig": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		r := newRunner()

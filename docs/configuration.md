@@ -101,3 +101,43 @@ When `auto_detect` is enabled (default), rimba recognizes these lockfiles automa
 | `RIMBA_DEBUG` | Log git command timing to stderr (set to any value, e.g. `RIMBA_DEBUG=1`). The `--debug` flag on any command has the same effect. |
 | `RIMBA_QUIET` | Suppress pre-execution hints (set to any value, e.g. `RIMBA_QUIET=1`) |
 | `NO_COLOR` | Disable colored output globally (per [no-color.org](https://no-color.org)) |
+
+## MCP server registration
+
+When `rimba init --agents` or `rimba init -g` is run, rimba registers itself as an MCP server (server name: `rimba`, command: `rimba mcp`) in client config files alongside the agent instruction files. The registration is idempotent — running the command again updates the entry without duplicating it. `--agents --local` updates agent files only and does **not** register MCP.
+
+### User-level (`rimba init -g`)
+
+Patches the following files in your home directory:
+
+| File | Format |
+|------|--------|
+| `~/.claude/settings.json` | JSON (`mcpServers` object) |
+| `~/.codex/config.toml` | TOML (`[[mcp_servers]]` array) |
+| `~/.gemini/settings.json` | JSON (`mcpServers` object) |
+| `~/.codeium/windsurf/mcp_config.json` | JSON (`mcpServers` object) |
+| `~/.roo/mcp.json` | JSON (`mcpServers` object) |
+
+### Project-level (`rimba init --agents`)
+
+Patches the following files in the repo root:
+
+| File | Format |
+|------|--------|
+| `.mcp.json` | JSON (`mcpServers` object) |
+| `.cursor/mcp.json` | JSON (`mcpServers` object) |
+
+Use `rimba init -g --uninstall` or `rimba init --agents --uninstall` to remove the registration from the corresponding files.
+
+## Validation
+
+Configuration is validated on every command invocation; errors are surfaced together with a `To fix:` hint.
+
+| Field | Error | Fix hint |
+|-------|-------|----------|
+| `worktree_dir` | `worktree_dir must be relative, got "<dir>"` | Set a path relative to the repo root in `.rimba/settings.toml` |
+| `deps.modules[].dir` | `deps.modules[<i>]: dir is empty` | Set `dir = "<path>"` for the module |
+| `deps.modules[].dir` (duplicate) | `deps.modules[<i>]: duplicate dir "<dir>"` | Remove the duplicate `[[deps.modules]]` entry |
+| `deps.modules[].install` | `deps.modules["<dir>"]: install command is empty` | Set `install = "<command>"` for the module |
+| `open.<name>` (empty key) | `open: shortcut name is empty` | Remove the empty-keyed entry under `[open]` |
+| `open.<name>` (path separator) | `open["<name>"]: shortcut name must not contain path separators` | Rename the shortcut to a name without `/` |

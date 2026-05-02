@@ -367,6 +367,32 @@ func TestCompleteArchivedTasks(t *testing.T) {
 	})
 }
 
+func TestCompletionCmd(t *testing.T) {
+	shells := []string{"bash", "zsh", "fish", "powershell"}
+	for _, shell := range shells {
+		t.Run(shell, func(t *testing.T) {
+			cmd, out := newTestCmd()
+			cmd.AddCommand(completionCmd)
+			cmd.SetArgs([]string{"completion", shell})
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("completion %s: unexpected error: %v", shell, err)
+			}
+			if out.Len() == 0 {
+				t.Errorf("completion %s: expected non-empty output", shell)
+			}
+		})
+	}
+
+	t.Run("invalid shell", func(t *testing.T) {
+		cmd, _ := newTestCmd()
+		cmd.AddCommand(completionCmd)
+		cmd.SetArgs([]string{"completion", "fish2"})
+		if err := cmd.Execute(); err == nil {
+			t.Fatal("expected error for unsupported shell, got nil")
+		}
+	})
+}
+
 func TestCompleteArchivedTasksError(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
