@@ -145,150 +145,118 @@ func TestInitExistingDirConfig(t *testing.T) {
 	}
 }
 
-func TestInitCreatesAgentFiles(t *testing.T) {
-	repoDir := t.TempDir()
+type agentFilesWant struct {
+	output   []string
+	noOutput []string
+	files    []string
+	noFiles  []string
+	marker   bool
+}
 
-	r := repoRootRunner(repoDir, func(args ...string) (string, error) {
-		if args[0] == cmdSymbolicRef {
-			return refsRemotesOriginMain, nil
+func assertAgentFilesResult(t *testing.T, repoDir, out string, want agentFilesWant) {
+	t.Helper()
+	for _, s := range want.output {
+		if !strings.Contains(out, s) {
+			t.Errorf("output missing %q", s)
 		}
-		return "", nil
-	})
-	restore := overrideNewRunner(r)
-	defer restore()
-
-	cmd, buf := newTestCmd()
-	cmd.Flags().Bool(flagAgents, true, "")
-
-	if err := initCmd.RunE(cmd, nil); err != nil {
-		t.Fatalf("initCmd.RunE: %v", err)
 	}
+	for _, s := range want.noOutput {
+		if strings.Contains(out, s) {
+			t.Errorf("output should not contain %q", s)
+		}
+	}
+	for _, f := range want.files {
+		if _, err := os.Stat(filepath.Join(repoDir, f)); os.IsNotExist(err) {
+			t.Errorf("file not created: %s", f)
+		}
+	}
+	for _, f := range want.noFiles {
+		if _, err := os.Stat(filepath.Join(repoDir, f)); err == nil {
+			t.Errorf("file should not exist: %s", f)
+		}
+	}
+	if want.marker {
+		content, err := os.ReadFile(filepath.Join(repoDir, "AGENTS.md"))
+		if err != nil {
+			t.Fatalf("read AGENTS.md: %v", err)
+		}
+		if strings.Count(string(content), "<!-- BEGIN RIMBA -->") != 1 {
+			t.Error("AGENTS.md should have exactly one BEGIN RIMBA marker after re-init")
+		}
+	}
+}
 
-	out := buf.String()
-
-	// Verify agent file output lines for all 7 project specs
-	agentFiles := []string{
+func TestInitAgentFiles(t *testing.T) {
+	agentFilePaths := []string{
 		"AGENTS.md",
 		filepath.Join(".github", "copilot-instructions.md"),
 		filepath.Join(".cursor", "rules", "rimba.mdc"),
 		filepath.Join(".claude", "skills", "rimba", "SKILL.md"),
 	}
 
-	for _, f := range agentFiles {
-		if !strings.Contains(out, f) {
-			t.Errorf("output should mention %q", f)
-		}
-		path := filepath.Join(repoDir, f)
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			t.Errorf("agent file not created: %s", f)
-		}
-	}
-}
-
-func TestInitExistingConfigInstallsAgentFiles(t *testing.T) {
-	repoDir := t.TempDir()
-
-	// Create .rimba/ directory to simulate existing config
-	rimbaDir := filepath.Join(repoDir, config.DirName)
-	if err := os.MkdirAll(rimbaDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-
-	r := repoRootRunner(repoDir, func(args ...string) (string, error) {
-		if args[0] == cmdSymbolicRef {
-			return refsRemotesOriginMain, nil
-		}
-		return "", nil
-	})
-	restore := overrideNewRunner(r)
-	defer restore()
-
-	cmd, buf := newTestCmd()
-	cmd.Flags().Bool(flagAgents, true, "")
-
-	// Should succeed (not error) when .rimba/ already exists
-	err := initCmd.RunE(cmd, nil)
-	if err != nil {
-		t.Fatalf("initCmd.RunE should succeed with existing config, got: %v", err)
+	tests := []struct {
+		name        string
+		withFlag    bool
+		preExisting bool
+		runTwice    bool
+		want        agentFilesWant
+	}{
+		{
+			name:     "creates agent files",
+			withFlag: true,
+			want:     agentFilesWant{output: agentFilePaths, files: agentFilePaths},
+		},
+		{
+			name:        "installs into existing config",
+			withFlag:    true,
+			preExisting: true,
+			want:        agentFilesWant{output: []string{"already exists"}, files: []string{"AGENTS.md"}},
+		},
+		{
+			name:     "idempotent on second run",
+			withFlag: true,
+			runTwice: true,
+			want:     agentFilesWant{output: []string{"already exists"}, marker: true},
+		},
+		{
+			name: "skips agent files without flag",
+			want: agentFilesWant{noOutput: []string{"Agent:"}, noFiles: []string{"AGENTS.md"}},
+		},
 	}
 
-	out := buf.String()
-	if !strings.Contains(out, "already exists") {
-		t.Error("output should note config already exists")
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repoDir := t.TempDir()
+			restore := overrideNewRunner(repoRootRunner(repoDir, func(args ...string) (string, error) {
+				if args[0] == cmdSymbolicRef {
+					return refsRemotesOriginMain, nil
+				}
+				return "", nil
+			}))
+			defer restore()
 
-	// Agent files should still be created
-	if _, err := os.Stat(filepath.Join(repoDir, "AGENTS.md")); os.IsNotExist(err) {
-		t.Error("AGENTS.md should be created even when config exists")
-	}
-}
+			if tt.preExisting {
+				if err := os.MkdirAll(filepath.Join(repoDir, config.DirName), 0755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tt.runTwice {
+				cmd1, _ := newTestCmd()
+				cmd1.Flags().Bool(flagAgents, true, "")
+				if err := initCmd.RunE(cmd1, nil); err != nil {
+					t.Fatalf("first initCmd.RunE: %v", err)
+				}
+			}
 
-func TestInitAgentFilesIdempotent(t *testing.T) {
-	repoDir := t.TempDir()
-
-	r := repoRootRunner(repoDir, func(args ...string) (string, error) {
-		if args[0] == cmdSymbolicRef {
-			return refsRemotesOriginMain, nil
-		}
-		return "", nil
-	})
-	restore := overrideNewRunner(r)
-	defer restore()
-
-	// First init
-	cmd1, _ := newTestCmd()
-	cmd1.Flags().Bool(flagAgents, true, "")
-	if err := initCmd.RunE(cmd1, nil); err != nil {
-		t.Fatalf("first initCmd.RunE: %v", err)
-	}
-
-	// Second init (config exists now)
-	cmd2, buf2 := newTestCmd()
-	cmd2.Flags().Bool(flagAgents, true, "")
-	if err := initCmd.RunE(cmd2, nil); err != nil {
-		t.Fatalf("second initCmd.RunE: %v", err)
-	}
-
-	out := buf2.String()
-	if !strings.Contains(out, "already exists") {
-		t.Error("second init should note config already exists")
-	}
-
-	// AGENTS.md should not have duplicated markers
-	content, err := os.ReadFile(filepath.Join(repoDir, "AGENTS.md"))
-	if err != nil {
-		t.Fatalf("read AGENTS.md: %v", err)
-	}
-	if strings.Count(string(content), "<!-- BEGIN RIMBA -->") != 1 {
-		t.Error("AGENTS.md should have exactly one BEGIN RIMBA marker after re-init")
-	}
-}
-
-func TestInitWithoutFlagSkipsAgentFiles(t *testing.T) {
-	repoDir := t.TempDir()
-
-	r := repoRootRunner(repoDir, func(args ...string) (string, error) {
-		if args[0] == cmdSymbolicRef {
-			return refsRemotesOriginMain, nil
-		}
-		return "", nil
-	})
-	restore := overrideNewRunner(r)
-	defer restore()
-
-	cmd, buf := newTestCmd()
-
-	if err := initCmd.RunE(cmd, nil); err != nil {
-		t.Fatalf("initCmd.RunE: %v", err)
-	}
-
-	out := buf.String()
-	if strings.Contains(out, "Agent:") {
-		t.Errorf("output should not mention agent files without agent flag, got:\n%s", out)
-	}
-
-	if _, err := os.Stat(filepath.Join(repoDir, "AGENTS.md")); err == nil {
-		t.Error("AGENTS.md should not be created without --agents flag")
+			cmd, buf := newTestCmd()
+			if tt.withFlag {
+				cmd.Flags().Bool(flagAgents, true, "")
+			}
+			if err := initCmd.RunE(cmd, nil); err != nil {
+				t.Fatalf("initCmd.RunE: %v", err)
+			}
+			assertAgentFilesResult(t, repoDir, buf.String(), tt.want)
+		})
 	}
 }
 
