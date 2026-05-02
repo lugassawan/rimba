@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/lugassawan/rimba/internal/errhint"
 )
 
 // CommitCountSince counts commits on branch within the last `since`
@@ -21,12 +23,18 @@ func CommitCountSince(r Runner, branch string, since time.Duration) (int, error)
 		branch,
 	)
 	if err != nil {
-		return 0, fmt.Errorf("commit count since for %s: %w", branch, err)
+		return 0, errhint.WithFix(
+			fmt.Errorf("commit count since for %s: %w", branch, err),
+			"verify the branch exists: git branch --list <branch>",
+		)
 	}
 
 	n, err := strconv.Atoi(strings.TrimSpace(out))
 	if err != nil {
-		return 0, fmt.Errorf("parse commit count %q: %w", out, err)
+		return 0, errhint.WithFix(
+			fmt.Errorf("parse commit count %q: %w", out, err),
+			internalGitInvariantHint,
+		)
 	}
 	return n, nil
 }

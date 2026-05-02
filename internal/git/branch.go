@@ -5,7 +5,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/lugassawan/rimba/internal/errhint"
 )
+
+const internalGitInvariantHint = "report this — git output unexpectedly malformed"
 
 // BranchExists checks whether a local branch exists.
 func BranchExists(r Runner, branch string) bool {
@@ -118,21 +122,33 @@ func LastCommitTime(r Runner, branch string) (time.Time, error) {
 func LastCommitInfo(r Runner, branch string) (time.Time, string, error) {
 	out, err := r.Run("log", "-1", "--format=%ct\t%s", branch)
 	if err != nil {
-		return time.Time{}, "", fmt.Errorf("last commit info for %s: %w", branch, err)
+		return time.Time{}, "", errhint.WithFix(
+			fmt.Errorf("last commit info for %s: %w", branch, err),
+			"verify the branch exists: git branch --list <branch>",
+		)
 	}
 	out = strings.TrimSpace(out)
 	if out == "" {
-		return time.Time{}, "", fmt.Errorf("no commits on branch %s", branch)
+		return time.Time{}, "", errhint.WithFix(
+			fmt.Errorf("no commits on branch %s", branch),
+			"add a commit on the branch before running this",
+		)
 	}
 
 	tsStr, subject, found := strings.Cut(out, "\t")
 	if !found {
-		return time.Time{}, "", fmt.Errorf("malformed commit info %q", out)
+		return time.Time{}, "", errhint.WithFix(
+			fmt.Errorf("malformed commit info %q", out),
+			internalGitInvariantHint,
+		)
 	}
 
 	ts, err := strconv.ParseInt(tsStr, 10, 64)
 	if err != nil {
-		return time.Time{}, "", fmt.Errorf("parse commit timestamp %q: %w", tsStr, err)
+		return time.Time{}, "", errhint.WithFix(
+			fmt.Errorf("parse commit timestamp %q: %w", tsStr, err),
+			internalGitInvariantHint,
+		)
 	}
 	return time.Unix(ts, 0), subject, nil
 }
