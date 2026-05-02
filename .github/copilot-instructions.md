@@ -8,7 +8,8 @@ See AGENTS.md at the repo root for full rimba documentation.
 ### Key Commands
 
 - `rimba add <task>` — create worktree (`rimba add service/task` for monorepos)
-- `rimba list` / `rimba status` — inspect worktrees (`--service <svc>` to filter)
+- `rimba add pr:<num>` — create worktree from a GitHub PR
+- `rimba list` (`--full` adds PR/CI columns) / `rimba status` (`--detail` adds disk/velocity) — inspect worktrees (`--service <svc>` to filter)
 - `rimba merge <task>` — merge into main and auto-clean up
 - `rimba clean --merged` — remove merged worktrees
 - `rimba exec <cmd>` — run command across all worktrees

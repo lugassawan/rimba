@@ -20,8 +20,8 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 
 | Concern | Commands |
 |---------|----------|
-| Create & navigate | `rimba add <task>` (or `rimba add service/task` for monorepos), `rimba open <task>` |
-| Inspect | `rimba list`, `rimba status`, `rimba log` |
+| Create & navigate | `rimba add <task>` (or `rimba add service/task` for monorepos), `rimba add pr:<num>` (from a GitHub PR), `rimba open <task>` |
+| Inspect | `rimba list` (`--full` adds PR/CI columns), `rimba status` (`--detail` adds disk/velocity), `rimba log` |
 | Sync & merge | `rimba sync [task]`, `rimba merge <task>` |
 | Clean up | `rimba clean --merged`, `rimba archive <task>`, `rimba remove <task>` |
 | Cross-cutting | `rimba exec <cmd>`, `rimba conflict-check`, `rimba deps status` |
