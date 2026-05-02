@@ -578,12 +578,7 @@ func TestInitGlobalInstall(t *testing.T) {
 	t.Setenv("HOME", home)
 
 	// -g does not need a git repo
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			return "", errors.New("not a git repository")
-		},
-		runInDir: noopRunInDir,
-	}
+	r := notGitRepoRunner()
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -611,12 +606,7 @@ func TestInitGlobalNoRepoRequired(t *testing.T) {
 	t.Setenv("HOME", home)
 
 	// Simulate git.RepoRoot failing (not in a repo)
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			return "", errors.New("not a git repository")
-		},
-		runInDir: noopRunInDir,
-	}
+	r := notGitRepoRunner()
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -633,10 +623,7 @@ func TestInitGlobalUninstall(t *testing.T) {
 	t.Setenv("HOME", home)
 
 	// Install first
-	r := &mockRunner{
-		run:      func(...string) (string, error) { return "", errors.New("not a git repo") },
-		runInDir: noopRunInDir,
-	}
+	r := notGitRepoRunner()
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -833,10 +820,7 @@ func TestInitGlobalRegistersMCP(t *testing.T) {
 		t.Fatalf("write settings.json: %v", err)
 	}
 
-	r := &mockRunner{
-		run:      func(...string) (string, error) { return "", errors.New("not a git repo") },
-		runInDir: noopRunInDir,
-	}
+	r := notGitRepoRunner()
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -886,10 +870,7 @@ func TestInitGlobalMCPSkippedWhenNoConfig(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	r := &mockRunner{
-		run:      func(...string) (string, error) { return "", errors.New("not a git repo") },
-		runInDir: noopRunInDir,
-	}
+	r := notGitRepoRunner()
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -917,10 +898,7 @@ func TestInitGlobalUninstallRemovesMCP(t *testing.T) {
 		t.Fatalf("write settings.json: %v", err)
 	}
 
-	r := &mockRunner{
-		run:      func(...string) (string, error) { return "", errors.New("not a git repo") },
-		runInDir: noopRunInDir,
-	}
+	r := notGitRepoRunner()
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -1046,10 +1024,7 @@ func TestInitGlobalMCPErrorPropagated(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	r := &mockRunner{
-		run:      func(...string) (string, error) { return "", errors.New("not a git repo") },
-		runInDir: noopRunInDir,
-	}
+	r := notGitRepoRunner()
 	restore := overrideNewRunner(r)
 	defer restore()
 

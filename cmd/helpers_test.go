@@ -10,6 +10,14 @@ import (
 	"github.com/lugassawan/rimba/internal/config"
 )
 
+// notGitRepoRunner returns a mockRunner that simulates running outside a git repository.
+func notGitRepoRunner() *mockRunner {
+	return &mockRunner{
+		run:      func(_ ...string) (string, error) { return "", errors.New("not a git repository") },
+		runInDir: noopRunInDir,
+	}
+}
+
 // repoRootRunner returns a mockRunner whose RepoRoot/MainRepoRoot resolves to dir.
 func repoRootRunner(dir string, extra func(args ...string) (string, error)) *mockRunner {
 	return &mockRunner{
