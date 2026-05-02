@@ -9,20 +9,12 @@ import (
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/testutil"
 )
 
 const (
 	prCmdAuth = "auth"
 	prCmdPR   = "pr"
-
-	sameRepoPRJSON = `{
-  "number": 42,
-  "title": "Fix login redirect",
-  "headRefName": "fix-login-redirect",
-  "headRepository": {"name": "rimba"},
-  "headRepositoryOwner": {"login": "lugassawan"},
-  "isCrossRepository": false
-}`
 )
 
 // makeWorktreeGitRunner builds a mockRunner that simulates a successful worktree creation.
@@ -210,6 +202,7 @@ func TestAddPRCmd(t *testing.T) {
 	_ = os.WriteFile(fakeGh, []byte("#!/bin/sh\nexit 0\n"), 0o755)
 	t.Setenv("PATH", fakeGhDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
+	sameRepoPRJSON := testutil.LoadFixture(t, "../internal/gh/testdata/same_repo_pr.json")
 	restoreGH := overrideGHRunner(makeOKGhRunner(sameRepoPRJSON))
 	defer restoreGH()
 	restoreRunner := overrideNewRunner(makeWorktreeGitRunner(repoDir))

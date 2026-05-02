@@ -120,45 +120,39 @@ func TestListWorktreesNoFiltersNoFull(t *testing.T) {
 	}
 }
 
-func TestListWorktreesTypeFilter(t *testing.T) {
-	gitR := threeWorktreeRunner()
-	res, err := ListWorktrees(context.Background(), gitR, nil, ListWorktreesRequest{
-		TypeFilter:  "bugfix",
-		WorktreeDir: wtDirTest,
-	})
-	if err != nil {
-		t.Fatalf("ListWorktrees: %v", err)
+func TestListWorktreesFilter(t *testing.T) {
+	tests := []struct {
+		name       string
+		req        ListWorktreesRequest
+		wantBranch string
+	}{
+		{
+			name:       "type filter",
+			req:        ListWorktreesRequest{TypeFilter: "bugfix", WorktreeDir: wtDirTest},
+			wantBranch: branchBugfixLogin,
+		},
+		{
+			name:       "dirty filter",
+			req:        ListWorktreesRequest{Dirty: true, WorktreeDir: wtDirTest},
+			wantBranch: branchFeatureAuth,
+		},
+		{
+			name:       "behind filter",
+			req:        ListWorktreesRequest{Behind: true, WorktreeDir: wtDirTest},
+			wantBranch: branchFeatureAuth,
+		},
 	}
-	if len(res.Rows) != 1 || res.Rows[0].Branch != branchBugfixLogin {
-		t.Fatalf("want 1 bugfix row, got %+v", res.Rows)
-	}
-}
 
-func TestListWorktreesDirtyFilter(t *testing.T) {
-	gitR := threeWorktreeRunner()
-	res, err := ListWorktrees(context.Background(), gitR, nil, ListWorktreesRequest{
-		Dirty:       true,
-		WorktreeDir: wtDirTest,
-	})
-	if err != nil {
-		t.Fatalf("ListWorktrees: %v", err)
-	}
-	if len(res.Rows) != 1 || res.Rows[0].Branch != branchFeatureAuth {
-		t.Fatalf("want 1 dirty row, got %+v", res.Rows)
-	}
-}
-
-func TestListWorktreesBehindFilter(t *testing.T) {
-	gitR := threeWorktreeRunner()
-	res, err := ListWorktrees(context.Background(), gitR, nil, ListWorktreesRequest{
-		Behind:      true,
-		WorktreeDir: wtDirTest,
-	})
-	if err != nil {
-		t.Fatalf("ListWorktrees: %v", err)
-	}
-	if len(res.Rows) != 1 || res.Rows[0].Branch != branchFeatureAuth {
-		t.Fatalf("want 1 behind row, got %+v", res.Rows)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, err := ListWorktrees(context.Background(), threeWorktreeRunner(), nil, tt.req)
+			if err != nil {
+				t.Fatalf("ListWorktrees: %v", err)
+			}
+			if len(res.Rows) != 1 || res.Rows[0].Branch != tt.wantBranch {
+				t.Fatalf("want 1 row with branch %q, got %+v", tt.wantBranch, res.Rows)
+			}
+		})
 	}
 }
 

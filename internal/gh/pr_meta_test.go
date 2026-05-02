@@ -4,27 +4,12 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/lugassawan/rimba/testutil"
 )
 
-const sameRepoPRJSON = `{
-  "number": 42,
-  "title": "Fix login redirect",
-  "headRefName": "fix-login-redirect",
-  "headRepository": {"name": "rimba"},
-  "headRepositoryOwner": {"login": "lugassawan"},
-  "isCrossRepository": false
-}`
-
-const crossForkPRJSON = `{
-  "number": 99,
-  "title": "Add OAuth support",
-  "headRefName": "feat-oauth",
-  "headRepository": {"name": "rimba"},
-  "headRepositoryOwner": {"login": "contributor"},
-  "isCrossRepository": true
-}`
-
 func TestFetchPRMetaSameRepo(t *testing.T) {
+	sameRepoPRJSON := testutil.LoadFixture(t, "testdata/same_repo_pr.json")
 	r := &mockRunner{
 		run: func(_ context.Context, args ...string) ([]byte, error) {
 			return []byte(sameRepoPRJSON), nil
@@ -52,6 +37,7 @@ func TestFetchPRMetaSameRepo(t *testing.T) {
 }
 
 func TestFetchPRMetaCrossFork(t *testing.T) {
+	crossForkPRJSON := testutil.LoadFixture(t, "testdata/cross_fork_pr.json")
 	r := &mockRunner{
 		run: func(_ context.Context, args ...string) ([]byte, error) {
 			return []byte(crossForkPRJSON), nil
@@ -219,6 +205,7 @@ func TestFetchPRMetaEmptyFields(t *testing.T) {
 }
 
 func TestFetchPRMetaArgsIncludeNumber(t *testing.T) {
+	sameRepoPRJSON := testutil.LoadFixture(t, "testdata/same_repo_pr.json")
 	var capturedArgs []string
 	r := &mockRunner{
 		run: func(_ context.Context, args ...string) ([]byte, error) {

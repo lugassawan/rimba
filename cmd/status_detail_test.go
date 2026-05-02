@@ -13,10 +13,9 @@ import (
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/termcolor"
+	"github.com/lugassawan/rimba/testutil"
 	"github.com/spf13/cobra"
 )
-
-func ptr[T any](v T) *T { return &v }
 
 func TestFormatDiskLine(t *testing.T) {
 	p := termcolor.NewPainter(true) // no color
@@ -44,7 +43,7 @@ func TestFormatSizeCell(t *testing.T) {
 	if got := formatSizeCell(operations.StatusEntry{SizeBytes: nil}, p); got != "?" {
 		t.Errorf("nil sizeBytes cell = %q, want '?'", got)
 	}
-	if got := formatSizeCell(operations.StatusEntry{SizeBytes: ptr(int64(2048))}, p); got != "2.0KB" {
+	if got := formatSizeCell(operations.StatusEntry{SizeBytes: testutil.Ptr(int64(2048))}, p); got != "2.0KB" {
 		t.Errorf("2048-byte cell = %q, want '2.0KB'", got)
 	}
 }
@@ -55,7 +54,7 @@ func TestFormatRecentCell(t *testing.T) {
 	if got := formatRecentCell(operations.StatusEntry{Recent7D: nil}, p); got != "?" {
 		t.Errorf("nil recent7D cell = %q, want '?'", got)
 	}
-	if got := formatRecentCell(operations.StatusEntry{Recent7D: ptr(42)}, p); got != "42" {
+	if got := formatRecentCell(operations.StatusEntry{Recent7D: testutil.Ptr(42)}, p); got != "42" {
 		t.Errorf("recent7D=42 cell = %q, want '42'", got)
 	}
 }
