@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/executor"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
@@ -106,7 +107,10 @@ func execReadFlags(cmd *cobra.Command) execOpts {
 
 func execValidateFlags(opts execOpts) error {
 	if !opts.all && opts.typeFilter == "" {
-		return errors.New("provide --all or --type to select worktrees")
+		return errhint.WithFix(
+			errors.New("provide --all or --type to select worktrees"),
+			"run: rimba exec --all <cmd>  OR  rimba exec --type <prefix> <cmd>",
+		)
 	}
 	if err := validateTypeFilter(opts.typeFilter); err != nil {
 		return err

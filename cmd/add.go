@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/gh"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
@@ -56,7 +57,10 @@ var addCmd = &cobra.Command{
 		}
 
 		if cmd.Flags().Changed(flagTask) {
-			return errors.New("--task requires a pr:<num> argument")
+			return errhint.WithFix(
+				errors.New("--task requires a pr:<num> argument"),
+				"pass a PR argument: rimba add pr:<num> --task <name>",
+			)
 		}
 
 		return runAddTask(cmd, r, args[0], cfg, repoRoot, postOpts, s)
