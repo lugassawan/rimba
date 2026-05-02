@@ -87,13 +87,13 @@ func cleanPrune(cmd *cobra.Command, r git.Runner) error {
 	return nil
 }
 
-// hintEntry pairs a flag name with its hint message.
+// hintEntry is a flag name + hint message pair.
 type hintEntry struct {
 	flag string
 	msg  string
 }
 
-// cleanResolveAndHint resolves the main branch and shows usage hints, returning the branch name.
+// cleanResolveAndHint resolves the main branch and shows relevant flag hints.
 func cleanResolveAndHint(cmd *cobra.Command, r git.Runner, entries []hintEntry) (string, error) {
 	mainBranch, err := resolveMainBranch(r)
 	if err != nil {
@@ -109,23 +109,21 @@ func cleanResolveAndHint(cmd *cobra.Command, r git.Runner, entries []hintEntry) 
 	return mainBranch, nil
 }
 
-// cleanStrategy holds the variation points for the cleanMerged and cleanStale pipelines.
+// cleanStrategy describes what differs between the merged and stale clean modes.
 type cleanStrategy struct {
 	label      string
 	spinnerMsg string
 	emptyMsg   string
 	summaryFmt string
-	// preFind, if non-nil, is called before find and owns spinner start/stop.
-	// When nil, runClean starts the spinner with spinnerMsg immediately before find.
+	// preFind runs before find and owns the spinner; nil means runClean starts it.
 	preFind func(*cobra.Command, git.Runner, *spinner.Spinner) error
-	// find returns candidates and warnings; cmd output is not permitted here.
-	find func(git.Runner) ([]operations.CleanCandidate, []string, error)
-	// printRows displays candidates; may ignore the passed slice and use a captured typed slice
-	// (e.g., stale path captures []StaleCandidate for age rendering).
+	find    func(git.Runner) ([]operations.CleanCandidate, []string, error)
+	// printRows may ignore the passed slice and use a captured typed one
+	// (stale needs []StaleCandidate for age rendering).
 	printRows func([]operations.CleanCandidate)
 }
 
-// runClean executes the common clean pipeline: spinner → find → warn → list → confirm → remove → summary.
+// runClean runs the shared clean pipeline using the given strategy.
 func runClean(cmd *cobra.Command, r git.Runner, s cleanStrategy) error {
 	dryRun, _ := cmd.Flags().GetBool(flagDryRun)
 	force, _ := cmd.Flags().GetBool(flagForce)
@@ -137,8 +135,7 @@ func runClean(cmd *cobra.Command, r git.Runner, s cleanStrategy) error {
 		if err := s.preFind(cmd, r, sp); err != nil {
 			return err
 		}
-		// preFind owns spinner start; Update changes message or is a no-op if preFind stopped it.
-		sp.Update(s.spinnerMsg)
+		sp.Update(s.spinnerMsg) // no-op if preFind already stopped the spinner (fetch-fail path)
 	} else {
 		sp.Start(s.spinnerMsg)
 	}
@@ -233,8 +230,7 @@ func cleanStale(cmd *cobra.Command, r git.Runner) error {
 }
 
 // cleanFetchMergeRef fetches from origin and returns the ref to diff against.
-// Falls back to local mainBranch (with a warning) when fetch fails.
-// Postcondition: spinner is stopped on error path; still running on success path.
+// Falls back to mainBranch with a warning if fetch fails.
 func cleanFetchMergeRef(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, mainBranch string) string {
 	s.Start("Fetching from origin...")
 	if err := git.Fetch(r, "origin"); err != nil {
