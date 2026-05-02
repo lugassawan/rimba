@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -10,6 +11,61 @@ import (
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/spf13/cobra"
 )
+
+var completionCmd = &cobra.Command{
+	Use:         "completion <bash|zsh|fish|powershell>",
+	Short:       "Generate shell completion scripts",
+	ValidArgs:   []string{"bash", "zsh", "fish", "powershell"},
+	Args:        cobra.ExactArgs(1),
+	Annotations: map[string]string{"skipConfig": "true"},
+	Long: `Generate shell completion scripts for rimba.
+
+Bash:
+  # Load for the current session:
+  source <(rimba completion bash)
+
+  # Install permanently (Linux):
+  rimba completion bash > /etc/bash_completion.d/rimba
+
+  # Install permanently (macOS with Homebrew bash-completion@2):
+  rimba completion bash > "$(brew --prefix)/etc/bash_completion.d/rimba"
+
+Zsh:
+  # Load for the current session:
+  source <(rimba completion zsh)
+
+  # Install permanently:
+  rimba completion zsh > "${fpath[1]}/_rimba"
+
+Fish:
+  rimba completion fish > ~/.config/fish/completions/rimba.fish
+
+PowerShell:
+  rimba completion powershell | Out-String | Invoke-Expression
+
+  # To load completions for every new session:
+  rimba completion powershell > rimba.ps1
+  # then source rimba.ps1 from your PowerShell profile`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		out := cmd.OutOrStdout()
+		switch args[0] {
+		case "bash":
+			return cmd.Root().GenBashCompletionV2(out, true)
+		case "zsh":
+			return cmd.Root().GenZshCompletion(out)
+		case "fish":
+			return cmd.Root().GenFishCompletion(out, true)
+		case "powershell":
+			return cmd.Root().GenPowerShellCompletionWithDesc(out)
+		default:
+			return fmt.Errorf("unsupported shell %q: choose bash, zsh, fish, or powershell", args[0])
+		}
+	},
+}
+
+func init() {
+	rootCmd.AddCommand(completionCmd)
+}
 
 // completeWorktreeTasks returns task names for shell completion.
 func completeWorktreeTasks(_ *cobra.Command, toComplete string) []string {

@@ -32,8 +32,20 @@ var newGHRunner = gh.Default
 var addCmd = &cobra.Command{
 	Use:   "add <task|pr:<num>> or add <service>/<task>",
 	Short: "Create a new worktree for a task or GitHub PR",
-	Long:  "Create a worktree, copy files, install dependencies, and run hooks.\nUse <service>/<task> to scope to a specific service in a monorepo.\nUse pr:<num> to create a worktree from a GitHub PR's head branch.",
-	Args:  cobra.ExactArgs(1),
+	Long: `Create a worktree, copy files, install dependencies, and run hooks.
+Use <service>/<task> to scope to a specific service in a monorepo.
+Use pr:<num> to create a worktree from a GitHub PR's head branch.
+
+  rimba add my-feature
+  rimba add my-feature --bugfix          # Use bugfix/ prefix
+  rimba add auth-api/my-feature          # Monorepo service scope
+  rimba add pr:123                       # Create worktree from PR #123
+  rimba add pr:123 --task review/auth    # Override auto-derived task name
+
+pr:<num> requires gh installed and authenticated. For cross-fork PRs, rimba adds a
+gh-fork-<owner> remote automatically. Without --task, the task name is derived as
+review/<num>-<slug>. The --task flag is only valid in pr:<num> mode.`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.FromContext(cmd.Context())
 

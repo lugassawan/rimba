@@ -43,7 +43,13 @@ Use -g --uninstall to remove user-level files, --agents --uninstall for project-
 or --agents --local --uninstall for project-local files.
 Use --personal to gitignore the entire .rimba/ directory instead of just the local
 config file. In personal mode, settings.local.toml is not created since the whole
-directory is already personal.`,
+directory is already personal.
+
+When --agents or -g is used, rimba also registers itself as an MCP server (server name:
+rimba, command: rimba mcp) in client config files (.mcp.json, .cursor/mcp.json,
+~/.claude/settings.json, ~/.codex/config.toml, ~/.gemini/settings.json,
+~/.codeium/windsurf/mcp_config.json, ~/.roo/mcp.json). --agents --local does not
+register MCP — it only updates agent files. Registration is idempotent.`,
 	Annotations: map[string]string{"skipConfig": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		m := initModeFromFlags(cmd)

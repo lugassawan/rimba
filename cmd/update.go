@@ -13,9 +13,16 @@ import (
 )
 
 var updateCmd = &cobra.Command{
-	Use:         "update",
-	Short:       "Update rimba to the latest version",
-	Long:        "Check for the latest release on GitHub and update the binary in place.",
+	Use:   "update",
+	Short: "Update rimba to the latest version",
+	Long: `Check for the latest release on GitHub and update the binary in place.
+
+If the current binary cannot be replaced due to file permissions, rimba installs the
+new version to ~/.local/bin instead and prints the path.
+
+After a successful update, rimba prints a one-line tip if agent files are installed at
+user level (run rimba init -g to refresh) or in this repo (run rimba init --agents to
+refresh). Set RIMBA_QUIET=1 to suppress the tip.`,
 	Annotations: map[string]string{"skipConfig": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		force, _ := cmd.Flags().GetBool("force")
