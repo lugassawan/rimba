@@ -103,12 +103,14 @@ func installWhole(path string, spec Spec) (Result, error) {
 		return Result{RelPath: spec.RelPath, Action: actionSkipped}, nil
 	}
 
+	mode := os.FileMode(0644)
 	action := actionCreated
-	if _, err := os.Stat(path); err == nil {
+	if info, err := os.Stat(path); err == nil {
 		action = actionUpdated
+		mode = info.Mode()
 	}
 
-	if err := os.WriteFile(path, []byte(spec.Content()), 0644); err != nil { //nolint:gosec // config file, not executable
+	if err := os.WriteFile(path, []byte(spec.Content()), mode); err != nil {
 		return Result{RelPath: spec.RelPath}, fmt.Errorf("write file: %w", err)
 	}
 	return Result{RelPath: spec.RelPath, Action: action}, nil
@@ -117,6 +119,11 @@ func installWhole(path string, spec Spec) (Result, error) {
 func installBlock(path string, spec Spec) (Result, error) {
 	if !ensureDir(filepath.Dir(path)) {
 		return Result{RelPath: spec.RelPath, Action: actionSkipped}, nil
+	}
+
+	mode := os.FileMode(0644)
+	if info, err := os.Stat(path); err == nil {
+		mode = info.Mode()
 	}
 
 	existing, err := os.ReadFile(path)
@@ -144,7 +151,7 @@ func installBlock(path string, spec Spec) (Result, error) {
 		content = block + "\n"
 	}
 
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil { //nolint:gosec // config file, not executable
+	if err := os.WriteFile(path, []byte(content), mode); err != nil {
 		return Result{RelPath: spec.RelPath}, fmt.Errorf("write file: %w", err)
 	}
 	return Result{RelPath: spec.RelPath, Action: action}, nil
@@ -171,11 +178,16 @@ func uninstallWhole(path string, spec Spec) (Result, error) {
 }
 
 func uninstallBlock(path string, spec Spec) (Result, error) {
-	existing, err := os.ReadFile(path)
+	info, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return Result{RelPath: spec.RelPath, Action: actionSkipped}, nil
 		}
+		return Result{RelPath: spec.RelPath}, fmt.Errorf("stat file: %w", err)
+	}
+
+	existing, err := os.ReadFile(path)
+	if err != nil {
 		return Result{RelPath: spec.RelPath}, fmt.Errorf("read file: %w", err)
 	}
 
@@ -192,7 +204,7 @@ func uninstallBlock(path string, spec Spec) (Result, error) {
 		return Result{RelPath: spec.RelPath, Action: actionRemoved}, nil
 	}
 
-	if err := os.WriteFile(path, []byte(cleaned), 0644); err != nil { //nolint:gosec // config file, not executable
+	if err := os.WriteFile(path, []byte(cleaned), info.Mode()); err != nil {
 		return Result{RelPath: spec.RelPath}, fmt.Errorf("write file: %w", err)
 	}
 	return Result{RelPath: spec.RelPath, Action: actionRemoved}, nil
