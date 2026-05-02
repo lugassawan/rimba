@@ -233,16 +233,8 @@ func TestListBehindFilter(t *testing.T) {
 	testListFilterNoMatch(t, false, true)
 }
 
-func TestValidPrefixType(t *testing.T) {
-	if !resolver.ValidPrefixType("feature") {
-		t.Error("expected 'feature' to be valid")
-	}
-	if resolver.ValidPrefixType("nonexistent") {
-		t.Error("expected 'nonexistent' to be invalid")
-	}
-}
-
-func TestListDirtyFilterWithMatch(t *testing.T) {
+func testListFilterMatch(t *testing.T, dirty, behind bool, statusOut, revListOut string) {
+	t.Helper()
 	repoDir := t.TempDir()
 	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: "worktrees"}
 
@@ -264,13 +256,12 @@ func TestListDirtyFilterWithMatch(t *testing.T) {
 			}
 			return worktreeOut, nil
 		},
-		runInDir: func(dir string, args ...string) (string, error) {
+		runInDir: func(_ string, args ...string) (string, error) {
 			if len(args) >= 1 && args[0] == cmdStatus {
-				// feature-login is dirty
-				return dirtyOutput, nil
+				return statusOut, nil
 			}
 			if len(args) >= 1 && args[0] == cmdRevList {
-				return aheadBehindZero, nil
+				return revListOut, nil
 			}
 			return "", nil
 		},
@@ -279,20 +270,37 @@ func TestListDirtyFilterWithMatch(t *testing.T) {
 	defer restore()
 
 	cmd, buf := newListTestCmd()
-	_ = cmd.Flags().Set(flagDirty, "true")
+	if dirty {
+		_ = cmd.Flags().Set(flagDirty, "true")
+	}
+	if behind {
+		_ = cmd.Flags().Set(flagBehind, "true")
+	}
 	cmd.SetContext(config.WithConfig(context.Background(), cfg))
 
-	err := listCmd.RunE(cmd, nil)
-	if err != nil {
+	if err := listCmd.RunE(cmd, nil); err != nil {
 		t.Fatalf(fatalListRunE, err)
 	}
 	out := buf.String()
 	if strings.Contains(out, "No worktrees match") {
-		t.Errorf("output = %q, should NOT contain 'No worktrees match' when dirty worktrees exist", out)
+		t.Errorf("output should not contain 'No worktrees match', got: %q", out)
 	}
 	if !strings.Contains(out, "login") {
 		t.Errorf("output = %q, want 'login' in filtered table", out)
 	}
+}
+
+func TestValidPrefixType(t *testing.T) {
+	if !resolver.ValidPrefixType("feature") {
+		t.Error("expected 'feature' to be valid")
+	}
+	if resolver.ValidPrefixType("nonexistent") {
+		t.Error("expected 'nonexistent' to be invalid")
+	}
+}
+
+func TestListDirtyFilterWithMatch(t *testing.T) {
+	testListFilterMatch(t, true, false, dirtyOutput, aheadBehindZero)
 }
 
 func TestListArchivedBranches(t *testing.T) {
@@ -712,58 +720,7 @@ func TestListWithServiceColumnFull(t *testing.T) {
 }
 
 func TestListBehindFilterWithMatch(t *testing.T) {
-	repoDir := t.TempDir()
-	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: "worktrees"}
-
-	worktreeOut := strings.Join([]string{
-		wtPrefix + repoDir,
-		headABC123,
-		branchRefMain,
-		"",
-		wtPrefix + repoDir + pathWorktreesFeatureLogin,
-		headDEF456,
-		branchRefFeatureLogin,
-		"",
-	}, "\n")
-
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return repoDir, nil
-			}
-			return worktreeOut, nil
-		},
-		runInDir: func(dir string, args ...string) (string, error) {
-			if len(args) >= 1 && args[0] == cmdStatus {
-				return "", nil
-			}
-			if len(args) >= 1 && args[0] == cmdRevList {
-				// rev-list --left-right --count @{upstream}...HEAD
-				// first field = upstream (behind), second field = HEAD (ahead)
-				// 3 behind, 0 ahead
-				return "3\t0", nil
-			}
-			return "", nil
-		},
-	}
-	restore := overrideNewRunner(r)
-	defer restore()
-
-	cmd, buf := newListTestCmd()
-	_ = cmd.Flags().Set(flagBehind, "true")
-	cmd.SetContext(config.WithConfig(context.Background(), cfg))
-
-	err := listCmd.RunE(cmd, nil)
-	if err != nil {
-		t.Fatalf(fatalListRunE, err)
-	}
-	out := buf.String()
-	if strings.Contains(out, "No worktrees match") {
-		t.Errorf("output = %q, should NOT contain 'No worktrees match' when behind worktrees exist", out)
-	}
-	if !strings.Contains(out, "login") {
-		t.Errorf("output = %q, want 'login' in filtered table", out)
-	}
+	testListFilterMatch(t, false, true, "", "3\t0")
 }
 
 func TestListValidateTypeEmpty(t *testing.T) {
