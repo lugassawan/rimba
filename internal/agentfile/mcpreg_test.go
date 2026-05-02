@@ -94,58 +94,82 @@ func TestRegisterMCPGlobalIdempotent(t *testing.T) {
 	}
 }
 
-func TestRegisterMCPGlobalTOMLCodex(t *testing.T) {
-	home := t.TempDir()
-	codexDir := filepath.Join(home, ".codex")
-	if err := os.MkdirAll(codexDir, 0750); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	existing := "[mcp_servers.other]\ncommand = \"x\"\nargs = []\n"
-	if err := os.WriteFile(filepath.Join(codexDir, "config.toml"), []byte(existing), 0600); err != nil {
-		t.Fatalf("write: %v", err)
+func TestMCPGlobalTOML(t *testing.T) {
+	tomlPath := filepath.Join(".codex", "config.toml")
+
+	tests := []struct {
+		name       string
+		seed       string
+		op         func(home string) ([]Result, error)
+		wantAction string
+		want       tomlWant
+	}{
+		{
+			name:       "register adds rimba alongside existing entry",
+			seed:       "[mcp_servers.other]\ncommand = \"x\"\nargs = []\n",
+			op:         RegisterMCPGlobal,
+			wantAction: actionRegistered,
+			want:       tomlWant{section: true, rimba: true, other: true},
+		},
+		{
+			name:       "register unchanged when rimba already present",
+			seed:       "[mcp_servers.rimba]\ncommand = \"rimba\"\nargs = [\"mcp\"]\n[mcp_servers.other]\ncommand = \"x\"\nargs = []\n",
+			op:         RegisterMCPGlobal,
+			wantAction: actionUnchanged,
+			want:       tomlWant{section: true, rimba: true, other: true},
+		},
+		{
+			name:       "register creates mcp_servers when section absent",
+			seed:       "[settings]\nfoo = \"bar\"\n",
+			op:         RegisterMCPGlobal,
+			wantAction: actionRegistered,
+			want:       tomlWant{section: true, rimba: true},
+		},
+		{
+			name:       "unregister removes only rimba",
+			seed:       "[mcp_servers.rimba]\ncommand = \"rimba\"\nargs = [\"mcp\"]\n[mcp_servers.other]\ncommand = \"x\"\nargs = []\n",
+			op:         UnregisterMCPGlobal,
+			wantAction: actionUnregistered,
+			want:       tomlWant{section: true, rimba: false, other: true},
+		},
+		{
+			name:       "unregister unchanged when no mcp_servers section",
+			seed:       "[settings]\nfoo = \"bar\"\n",
+			op:         UnregisterMCPGlobal,
+			wantAction: actionUnchanged,
+			want:       tomlWant{section: false},
+		},
+		{
+			name:       "unregister unchanged when rimba key absent",
+			seed:       "[mcp_servers.other]\ncommand = \"x\"\nargs = []\n",
+			op:         UnregisterMCPGlobal,
+			wantAction: actionUnchanged,
+			want:       tomlWant{section: true, rimba: false, other: true},
+		},
 	}
 
-	results, err := RegisterMCPGlobal(home)
-	if err != nil {
-		t.Fatalf("RegisterMCPGlobal: %v", err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			codexDir := filepath.Join(home, ".codex")
+			if err := os.MkdirAll(codexDir, 0750); err != nil {
+				t.Fatalf("mkdir: %v", err)
+			}
+			if err := os.WriteFile(filepath.Join(codexDir, "config.toml"), []byte(tt.seed), 0600); err != nil {
+				t.Fatalf("write: %v", err)
+			}
 
-	codexResult := findResult(t, results, filepath.Join(".codex", "config.toml"))
-	if codexResult.Action != actionRegistered {
-		t.Errorf("action = %q, want %q", codexResult.Action, actionRegistered)
-	}
+			results, err := tt.op(home)
+			if err != nil {
+				t.Fatalf("op: %v", err)
+			}
 
-	data, err := os.ReadFile(filepath.Join(codexDir, "config.toml"))
-	if err != nil {
-		t.Fatalf("read: %v", err)
-	}
-	var cfg map[string]any
-	if err := toml.Unmarshal(data, &cfg); err != nil {
-		t.Fatalf("toml unmarshal: %v", err)
-	}
-	servers, ok := cfg["mcp_servers"].(map[string]any)
-	if !ok {
-		t.Fatal("mcp_servers missing or wrong type")
-	}
-	if _, ok := servers["other"]; !ok {
-		t.Error("existing 'other' entry was removed")
-	}
-	entry, ok := servers[mcpServerName].(map[string]any)
-	if !ok {
-		t.Fatal("mcp_servers.rimba missing or wrong type")
-	}
-	if entry["command"] != mcpServerName {
-		t.Errorf("command = %v, want %s", entry["command"], mcpServerName)
-	}
-
-	// Idempotency: second registration must return actionUnchanged for TOML
-	results2, err := RegisterMCPGlobal(home)
-	if err != nil {
-		t.Fatalf("second RegisterMCPGlobal: %v", err)
-	}
-	codexResult2 := findResult(t, results2, filepath.Join(".codex", "config.toml"))
-	if codexResult2.Action != actionUnchanged {
-		t.Errorf("second register (TOML): action = %q, want %q", codexResult2.Action, actionUnchanged)
+			r := findResult(t, results, tomlPath)
+			if r.Action != tt.wantAction {
+				t.Errorf("action = %q, want %q", r.Action, tt.wantAction)
+			}
+			checkTOMLFile(t, filepath.Join(codexDir, "config.toml"), tt.want)
+		})
 	}
 }
 
@@ -278,48 +302,6 @@ func TestRegisterMCPProjectSkipsAbsentFiles(t *testing.T) {
 	}
 }
 
-func TestUnregisterMCPGlobalTOMLCodex(t *testing.T) {
-	home := t.TempDir()
-	codexDir := filepath.Join(home, ".codex")
-	if err := os.MkdirAll(codexDir, 0750); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	// Seed with rimba and other entries
-	content := "[mcp_servers.rimba]\ncommand = \"rimba\"\nargs = [\"mcp\"]\n[mcp_servers.other]\ncommand = \"x\"\nargs = []\n"
-	if err := os.WriteFile(filepath.Join(codexDir, "config.toml"), []byte(content), 0600); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-
-	results, err := UnregisterMCPGlobal(home)
-	if err != nil {
-		t.Fatalf("UnregisterMCPGlobal: %v", err)
-	}
-
-	codexResult := findResult(t, results, filepath.Join(".codex", "config.toml"))
-	if codexResult.Action != actionUnregistered {
-		t.Errorf("action = %q, want %q", codexResult.Action, actionUnregistered)
-	}
-
-	data, err := os.ReadFile(filepath.Join(codexDir, "config.toml"))
-	if err != nil {
-		t.Fatalf("read: %v", err)
-	}
-	var cfg map[string]any
-	if err := toml.Unmarshal(data, &cfg); err != nil {
-		t.Fatalf("toml unmarshal: %v", err)
-	}
-	servers, ok := cfg["mcp_servers"].(map[string]any)
-	if !ok {
-		t.Fatal("mcp_servers should still exist")
-	}
-	if _, found := servers[mcpServerName]; found {
-		t.Error("rimba entry should have been removed from TOML config")
-	}
-	if _, found := servers["other"]; !found {
-		t.Error("other entry should be preserved in TOML config")
-	}
-}
-
 func TestPatchTOMLMalformedReturnsError(t *testing.T) {
 	home := t.TempDir()
 	codexDir := filepath.Join(home, ".codex")
@@ -394,88 +376,6 @@ func TestUnregisterMCPProjectRemovesRimba(t *testing.T) {
 	}
 	if _, found := servers[mcpServerName]; found {
 		t.Error("rimba should have been removed")
-	}
-}
-
-func TestRegisterMCPGlobalTOMLNoExistingSection(t *testing.T) {
-	home := t.TempDir()
-	codexDir := filepath.Join(home, ".codex")
-	if err := os.MkdirAll(codexDir, 0750); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	// TOML file with no mcp_servers section — triggers addToTOML nil branch
-	if err := os.WriteFile(filepath.Join(codexDir, "config.toml"), []byte("[settings]\nfoo = \"bar\"\n"), 0600); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-
-	results, err := RegisterMCPGlobal(home)
-	if err != nil {
-		t.Fatalf("RegisterMCPGlobal: %v", err)
-	}
-
-	codexResult := findResult(t, results, filepath.Join(".codex", "config.toml"))
-	if codexResult.Action != actionRegistered {
-		t.Errorf("action = %q, want %q", codexResult.Action, actionRegistered)
-	}
-
-	data, err := os.ReadFile(filepath.Join(codexDir, "config.toml"))
-	if err != nil {
-		t.Fatalf("read: %v", err)
-	}
-	var cfg map[string]any
-	if err := toml.Unmarshal(data, &cfg); err != nil {
-		t.Fatalf("toml unmarshal: %v", err)
-	}
-	servers, ok := cfg["mcp_servers"].(map[string]any)
-	if !ok {
-		t.Fatal("mcp_servers should have been created")
-	}
-	if _, ok := servers[mcpServerName]; !ok {
-		t.Error("rimba entry should have been added")
-	}
-}
-
-func TestUnregisterMCPGlobalTOMLSkipsWhenNoSection(t *testing.T) {
-	home := t.TempDir()
-	codexDir := filepath.Join(home, ".codex")
-	if err := os.MkdirAll(codexDir, 0750); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	// TOML file with no mcp_servers section — triggers removeFromTOML nil branch
-	if err := os.WriteFile(filepath.Join(codexDir, "config.toml"), []byte("[settings]\nfoo = \"bar\"\n"), 0600); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-
-	results, err := UnregisterMCPGlobal(home)
-	if err != nil {
-		t.Fatalf("UnregisterMCPGlobal: %v", err)
-	}
-
-	codexResult := findResult(t, results, filepath.Join(".codex", "config.toml"))
-	if codexResult.Action != actionUnchanged {
-		t.Errorf("action = %q, want %q", codexResult.Action, actionUnchanged)
-	}
-}
-
-func TestUnregisterMCPGlobalTOMLSkipsWhenKeyMissing(t *testing.T) {
-	home := t.TempDir()
-	codexDir := filepath.Join(home, ".codex")
-	if err := os.MkdirAll(codexDir, 0750); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	// mcp_servers section exists but no rimba key
-	if err := os.WriteFile(filepath.Join(codexDir, "config.toml"), []byte("[mcp_servers.other]\ncommand = \"x\"\nargs = []\n"), 0600); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-
-	results, err := UnregisterMCPGlobal(home)
-	if err != nil {
-		t.Fatalf("UnregisterMCPGlobal: %v", err)
-	}
-
-	codexResult := findResult(t, results, filepath.Join(".codex", "config.toml"))
-	if codexResult.Action != actionUnchanged {
-		t.Errorf("action = %q, want %q", codexResult.Action, actionUnchanged)
 	}
 }
 
@@ -578,4 +478,50 @@ func findResult(t *testing.T, results []Result, relPath string) Result {
 	}
 	t.Fatalf("no result for %s", relPath)
 	return Result{}
+}
+
+type tomlWant struct {
+	section bool // mcp_servers section should exist
+	rimba   bool // rimba key should exist in mcp_servers
+	other   bool // "other" key should be preserved in mcp_servers
+}
+
+func checkTOMLFile(t *testing.T, path string, want tomlWant) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	var cfg map[string]any
+	if err := toml.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("toml unmarshal %s: %v", path, err)
+	}
+	servers, hasSection := cfg["mcp_servers"].(map[string]any)
+	if want.section && !hasSection {
+		t.Fatal("mcp_servers section should exist")
+	}
+	if !want.section && hasSection {
+		t.Error("mcp_servers section should not exist")
+	}
+	if !hasSection {
+		return
+	}
+	_, hasRimba := servers[mcpServerName]
+	if hasRimba != want.rimba {
+		t.Errorf("rimba in mcp_servers: got %v, want %v", hasRimba, want.rimba)
+	}
+	if want.rimba {
+		entry, ok := servers[mcpServerName].(map[string]any)
+		if !ok {
+			t.Fatalf("mcp_servers.%s wrong type", mcpServerName)
+		}
+		if entry["command"] != mcpServerName {
+			t.Errorf("command = %v, want %s", entry["command"], mcpServerName)
+		}
+	}
+	if want.other {
+		if _, ok := servers["other"]; !ok {
+			t.Error("other entry should be preserved in mcp_servers")
+		}
+	}
 }
