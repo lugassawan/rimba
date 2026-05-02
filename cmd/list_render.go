@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/lugassawan/rimba/internal/gh"
+	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/resolver"
@@ -128,4 +129,53 @@ func formatCICell(status gh.CIStatus, p *termcolor.Painter) string {
 	default:
 		return p.Paint("–", termcolor.Gray)
 	}
+}
+
+func listArchivedBranches(cmd *cobra.Command, r git.Runner, mainBranch string) error {
+	archived, err := operations.ListArchivedBranches(r, mainBranch)
+	if err != nil {
+		return err
+	}
+
+	prefixes := resolver.AllPrefixes()
+
+	if isJSON(cmd) {
+		items := make([]output.ListArchivedItem, 0, len(archived))
+		for _, b := range archived {
+			task, typeName := resolver.TaskAndType(b, prefixes)
+			items = append(items, output.ListArchivedItem{Task: task, Type: typeName, Branch: b})
+		}
+		return output.WriteJSON(cmd.OutOrStdout(), version, "list", items)
+	}
+
+	if len(archived) == 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), "No archived branches found.")
+		return nil
+	}
+
+	noColor, _ := cmd.Flags().GetBool(flagNoColor)
+	p := termcolor.NewPainter(noColor)
+
+	tbl := termcolor.NewTable(2)
+	tbl.AddRow(
+		p.Paint("TASK", termcolor.Bold),
+		p.Paint("TYPE", termcolor.Bold),
+		p.Paint("BRANCH", termcolor.Bold),
+	)
+
+	for _, b := range archived {
+		task, typeName := resolver.TaskAndType(b, prefixes)
+
+		typeCell := typeName
+		if c := typeColor(typeName); c != "" {
+			typeCell = p.Paint(typeCell, c)
+		}
+
+		tbl.AddRow("  "+task, typeCell, b)
+	}
+
+	fmt.Fprintln(cmd.OutOrStdout(), "Archived branches:")
+	tbl.Render(cmd.OutOrStdout())
+	fmt.Fprintf(cmd.OutOrStdout(), "\nTo restore: rimba restore <task>\n")
+	return nil
 }
