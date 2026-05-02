@@ -108,12 +108,8 @@ func execValidateFlags(opts execOpts) error {
 	if !opts.all && opts.typeFilter == "" {
 		return errors.New("provide --all or --type to select worktrees")
 	}
-	if opts.typeFilter != "" && !resolver.ValidPrefixType(opts.typeFilter) {
-		valid := make([]string, 0, len(resolver.AllPrefixes()))
-		for _, p := range resolver.AllPrefixes() {
-			valid = append(valid, strings.TrimSuffix(p, "/"))
-		}
-		return fmt.Errorf("invalid type %q; valid types: %s", opts.typeFilter, strings.Join(valid, ", "))
+	if err := validateTypeFilter(opts.typeFilter); err != nil {
+		return err
 	}
 	return nil
 }
@@ -211,16 +207,7 @@ func init() {
 	execCmd.Flags().Bool(flagFailFast, false, "stop after the first failure")
 	execCmd.Flags().Int(flagConcurrency, 0, "max parallel executions (0 = unlimited)")
 
-	_ = execCmd.RegisterFlagCompletionFunc(flagType, func(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		var types []string
-		for _, p := range resolver.AllPrefixes() {
-			t := strings.TrimSuffix(p, "/")
-			if strings.HasPrefix(t, toComplete) {
-				types = append(types, t)
-			}
-		}
-		return types, cobra.ShellCompDirectiveNoFileComp
-	})
+	_ = execCmd.RegisterFlagCompletionFunc(flagType, typeFilterCompletion())
 
 	rootCmd.AddCommand(execCmd)
 }

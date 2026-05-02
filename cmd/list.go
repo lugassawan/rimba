@@ -1,20 +1,15 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/gh"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
-	"github.com/lugassawan/rimba/internal/output"
-	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
-	"github.com/lugassawan/rimba/internal/termcolor"
 	"github.com/spf13/cobra"
 )
 
@@ -129,14 +124,7 @@ func listReadFlags(cmd *cobra.Command) listOpts {
 }
 
 func listValidateType(typeFilter string) error {
-	if typeFilter == "" || resolver.ValidPrefixType(typeFilter) {
-		return nil
-	}
-	valid := make([]string, 0, len(resolver.AllPrefixes()))
-	for _, p := range resolver.AllPrefixes() {
-		valid = append(valid, strings.TrimSuffix(p, "/"))
-	}
-	return fmt.Errorf("invalid type %q; valid types: %s", typeFilter, strings.Join(valid, ", "))
+	return validateTypeFilter(typeFilter)
 }
 
 func listShowHints(cmd *cobra.Command) {
@@ -167,63 +155,5 @@ func init() {
 	listCmd.MarkFlagsMutuallyExclusive(flagArchived, flagBehind)
 	listCmd.MarkFlagsMutuallyExclusive(flagArchived, flagFull)
 
-	_ = listCmd.RegisterFlagCompletionFunc(flagType, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		var types []string
-		for _, p := range resolver.AllPrefixes() {
-			t := strings.TrimSuffix(p, "/")
-			if strings.HasPrefix(t, toComplete) {
-				types = append(types, t)
-			}
-		}
-		return types, cobra.ShellCompDirectiveNoFileComp
-	})
-}
-
-func listArchivedBranches(cmd *cobra.Command, r git.Runner, mainBranch string) error {
-	archived, err := operations.ListArchivedBranches(r, mainBranch)
-	if err != nil {
-		return err
-	}
-
-	prefixes := resolver.AllPrefixes()
-
-	if isJSON(cmd) {
-		items := make([]output.ListArchivedItem, 0, len(archived))
-		for _, b := range archived {
-			task, typeName := resolver.TaskAndType(b, prefixes)
-			items = append(items, output.ListArchivedItem{Task: task, Type: typeName, Branch: b})
-		}
-		return output.WriteJSON(cmd.OutOrStdout(), version, "list", items)
-	}
-
-	if len(archived) == 0 {
-		fmt.Fprintln(cmd.OutOrStdout(), "No archived branches found.")
-		return nil
-	}
-
-	noColor, _ := cmd.Flags().GetBool(flagNoColor)
-	p := termcolor.NewPainter(noColor)
-
-	tbl := termcolor.NewTable(2)
-	tbl.AddRow(
-		p.Paint("TASK", termcolor.Bold),
-		p.Paint("TYPE", termcolor.Bold),
-		p.Paint("BRANCH", termcolor.Bold),
-	)
-
-	for _, b := range archived {
-		task, typeName := resolver.TaskAndType(b, prefixes)
-
-		typeCell := typeName
-		if c := typeColor(typeName); c != "" {
-			typeCell = p.Paint(typeCell, c)
-		}
-
-		tbl.AddRow("  "+task, typeCell, b)
-	}
-
-	fmt.Fprintln(cmd.OutOrStdout(), "Archived branches:")
-	tbl.Render(cmd.OutOrStdout())
-	fmt.Fprintf(cmd.OutOrStdout(), "\nTo restore: rimba restore <task>\n")
-	return nil
+	_ = listCmd.RegisterFlagCompletionFunc(flagType, typeFilterCompletion())
 }
