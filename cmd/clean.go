@@ -57,6 +57,28 @@ func init() {
 	rootCmd.AddCommand(cleanCmd)
 }
 
+// hintEntry pairs a flag name with its hint message.
+type hintEntry struct {
+	flag string
+	msg  string
+}
+
+// cleanResolveAndHint resolves the main branch and shows usage hints, returning the branch name.
+func cleanResolveAndHint(cmd *cobra.Command, r git.Runner, entries []hintEntry) (string, error) {
+	mainBranch, err := resolveMainBranch(r)
+	if err != nil {
+		return "", err
+	}
+
+	h := hint.New(cmd, hintPainter(cmd))
+	for _, e := range entries {
+		h.Add(e.flag, e.msg)
+	}
+	h.Show()
+
+	return mainBranch, nil
+}
+
 func cleanPrune(cmd *cobra.Command, r git.Runner) error {
 	dryRun, _ := cmd.Flags().GetBool(flagDryRun)
 
@@ -91,15 +113,13 @@ func cleanMerged(cmd *cobra.Command, r git.Runner) error {
 	dryRun, _ := cmd.Flags().GetBool(flagDryRun)
 	force, _ := cmd.Flags().GetBool(flagForce)
 
-	mainBranch, err := resolveMainBranch(r)
+	mainBranch, err := cleanResolveAndHint(cmd, r, []hintEntry{
+		{flagDryRun, hintDryRunClean},
+		{flagForce, hintForce},
+	})
 	if err != nil {
 		return err
 	}
-
-	hint.New(cmd, hintPainter(cmd)).
-		Add(flagDryRun, hintDryRunClean).
-		Add(flagForce, hintForce).
-		Show()
 
 	s := spinner.New(spinnerOpts(cmd))
 	defer s.Stop()
@@ -160,16 +180,14 @@ func cleanStale(cmd *cobra.Command, r git.Runner) error {
 	force, _ := cmd.Flags().GetBool(flagForce)
 	staleDays, _ := cmd.Flags().GetInt(flagStaleDays)
 
-	mainBranch, err := resolveMainBranch(r)
+	mainBranch, err := cleanResolveAndHint(cmd, r, []hintEntry{
+		{flagDryRun, hintDryRunClean},
+		{flagForce, hintForce},
+		{flagStaleDays, "Customize the staleness threshold (default: 14 days)"},
+	})
 	if err != nil {
 		return err
 	}
-
-	hint.New(cmd, hintPainter(cmd)).
-		Add(flagDryRun, hintDryRunClean).
-		Add(flagForce, hintForce).
-		Add(flagStaleDays, "Customize the staleness threshold (default: 14 days)").
-		Show()
 
 	s := spinner.New(spinnerOpts(cmd))
 	defer s.Stop()
