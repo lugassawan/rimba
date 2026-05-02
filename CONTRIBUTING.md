@@ -52,6 +52,37 @@ This convention is enforced locally by git hooks and in CI by PR title validatio
 | `make bench` | Run benchmarks |
 | `make hooks` | Activate git hooks from `.githooks/` |
 
+## Testing
+
+rimba uses a two-tier test layout:
+
+**Unit tests** live next to source under `internal/**/*_test.go` and `cmd/*_test.go`. They run in-process and use mock runners injected through the `git.Runner` / `gh.Runner` interfaces (`cmd/mock_runner_test.go`, `internal/operations/mock_runner_test.go`, `internal/gh/mock_runner_test.go`).
+
+**End-to-end tests** live in `tests/e2e/`. `TestMain` in `tests/e2e/e2e_test.go` builds the binary once with coverage instrumentation (`go build -cover -o … .`) and executes it as a subprocess against a real git repo. Use the `rimba` / `rimbaSuccess` / `rimbaFail` helpers defined in `e2e_test.go:146-203`. Repo-setup helpers come from `testutil/githelper.go` (`NewTestRepo`).
+
+| Target | Runs |
+|--------|------|
+| `make test-short` | Unit tests only |
+| `make test-e2e` | End-to-end tier only |
+| `make test-coverage` | Both tiers, aggregated coverage |
+
+## Adding a Subcommand
+
+Use `cmd/add.go` as the canonical recent reference (added in #138 with the `pr:<num>` variant).
+
+1. Create `cmd/<name>.go`. Declare per-file `flag*` / `hint*` consts at the top.
+2. Declare `var <name>Cmd = &cobra.Command{Use, Short, Long, Args, RunE}`. In `RunE`, read config via `config.FromContext(cmd.Context())`, build a `git.Runner` via `newRunner()`, and (if needed) a `gh.Runner` via the package-level overridable `var newGHRunner = gh.Default` so tests can swap it.
+3. Keep business logic out of `cmd/`. Delegate to `internal/operations/<name>.go` so the same pipeline can back an MCP tool (see `internal/operations.ListWorktrees` / `internal/mcp/tool_list.go`).
+4. Wrap user-facing errors with `errhint.WithFix(err, "<actionable fix>")`.
+5. Bind flags and register the command in `init()` via `rootCmd.AddCommand(<name>Cmd)`.
+6. Add a unit test in `cmd/<name>_test.go` using a mock runner and an e2e test in `tests/e2e/<name>_test.go` using the subprocess helpers.
+
+## Project Conventions
+
+- **`internal/gh`** — thin wrapper around the `gh` CLI (`internal/gh/runner.go` defines the `Runner` interface). Use `gh.Default()` in production; inject a fake in tests. Provides `IsAvailable`, `CheckAuth`, `FetchPRMeta`, `QueryPRStatus`.
+- **`internal/operations.ListWorktrees`** (`internal/operations/list_worktrees.go`) — the shared pipeline behind both `cmd/list.go` and the MCP `list` tool (`internal/mcp/tool_list.go`). Mirror this pattern when adding a subcommand that should also be reachable from MCP.
+- **`internal/errhint.WithFix`** (`internal/errhint/errhint.go`) — wrap user-facing errors with an actionable fix line. Preserves sentinel via `%w`. See `cmd/add.go`, `cmd/exec.go`, `cmd/sync.go` for examples.
+
 ## License
 
 All contributions are licensed under the [MIT](LICENSE) license.

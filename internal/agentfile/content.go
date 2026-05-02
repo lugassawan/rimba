@@ -27,8 +27,8 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 
 | Concern | Commands |
 |---------|----------|
-| Create & navigate | ` + "`" + `rimba add <task>` + "`" + ` (or ` + "`" + `rimba add service/task` + "`" + ` for monorepos), ` + "`" + `rimba open <task>` + "`" + ` |
-| Inspect | ` + "`" + `rimba list` + "`" + `, ` + "`" + `rimba status` + "`" + `, ` + "`" + `rimba log` + "`" + ` |
+| Create & navigate | ` + "`" + `rimba add <task>` + "`" + ` (or ` + "`" + `rimba add service/task` + "`" + ` for monorepos), ` + "`" + `rimba add pr:<num>` + "`" + ` (from a GitHub PR), ` + "`" + `rimba open <task>` + "`" + ` |
+| Inspect | ` + "`" + `rimba list` + "`" + ` (` + "`" + `--full` + "`" + ` adds PR/CI columns), ` + "`" + `rimba status` + "`" + ` (` + "`" + `--detail` + "`" + ` adds disk/velocity), ` + "`" + `rimba log` + "`" + ` |
 | Sync & merge | ` + "`" + `rimba sync [task]` + "`" + `, ` + "`" + `rimba merge <task>` + "`" + ` |
 | Clean up | ` + "`" + `rimba clean --merged` + "`" + `, ` + "`" + `rimba archive <task>` + "`" + `, ` + "`" + `rimba remove <task>` + "`" + ` |
 | Cross-cutting | ` + "`" + `rimba exec <cmd>` + "`" + `, ` + "`" + `rimba conflict-check` + "`" + `, ` + "`" + `rimba deps status` + "`" + ` |
@@ -98,7 +98,8 @@ See AGENTS.md at the repo root for full rimba documentation.
 ### Key Commands
 
 - ` + "`" + `rimba add <task>` + "`" + ` — create worktree (` + "`" + `rimba add service/task` + "`" + ` for monorepos)
-- ` + "`" + `rimba list` + "`" + ` / ` + "`" + `rimba status` + "`" + ` — inspect worktrees (` + "`" + `--service <svc>` + "`" + ` to filter)
+- ` + "`" + `rimba add pr:<num>` + "`" + ` — create worktree from a GitHub PR
+- ` + "`" + `rimba list` + "`" + ` (` + "`" + `--full` + "`" + ` adds PR/CI columns) / ` + "`" + `rimba status` + "`" + ` (` + "`" + `--detail` + "`" + ` adds disk/velocity) — inspect worktrees (` + "`" + `--service <svc>` + "`" + ` to filter)
 - ` + "`" + `rimba merge <task>` + "`" + ` — merge into main and auto-clean up
 - ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
 - ` + "`" + `rimba exec <cmd>` + "`" + ` — run command across all worktrees
@@ -187,8 +188,8 @@ If not found, **ask the user** before installing. Never install automatically.
 
 | Concern | Commands |
 |---------|----------|
-| Create & navigate | ` + "`" + `rimba add <task>` + "`" + `, ` + "`" + `rimba open <task>` + "`" + ` |
-| Inspect | ` + "`" + `rimba list` + "`" + `, ` + "`" + `rimba status` + "`" + ` |
+| Create & navigate | ` + "`" + `rimba add <task>` + "`" + `, ` + "`" + `rimba add pr:<num>` + "`" + ` (from a GitHub PR), ` + "`" + `rimba open <task>` + "`" + ` |
+| Inspect | ` + "`" + `rimba list` + "`" + ` (` + "`" + `--full` + "`" + ` adds PR/CI columns), ` + "`" + `rimba status` + "`" + ` (` + "`" + `--detail` + "`" + ` adds disk/velocity) |
 | Sync & merge | ` + "`" + `rimba sync [task]` + "`" + `, ` + "`" + `rimba merge <task>` + "`" + ` |
 | Clean up | ` + "`" + `rimba clean --merged` + "`" + `, ` + "`" + `rimba archive <task>` + "`" + `, ` + "`" + `rimba remove <task>` + "`" + ` |
 | Cross-cutting | ` + "`" + `rimba exec <cmd>` + "`" + `, ` + "`" + `rimba conflict-check` + "`" + ` |
@@ -316,7 +317,8 @@ rimba manages parallel git worktrees. Check for ` + "`" + `.rimba/settings.toml`
 ### Key Commands
 
 - ` + "`" + `rimba add <task>` + "`" + ` — create worktree + branch
-- ` + "`" + `rimba list` + "`" + ` / ` + "`" + `rimba status` + "`" + ` — inspect worktrees
+- ` + "`" + `rimba add pr:<num>` + "`" + ` — create worktree from a GitHub PR
+- ` + "`" + `rimba list` + "`" + ` (` + "`" + `--full` + "`" + ` adds PR/CI columns) / ` + "`" + `rimba status` + "`" + ` (` + "`" + `--detail` + "`" + ` adds disk/velocity) — inspect worktrees
 - ` + "`" + `rimba merge <task>` + "`" + ` — merge into main and auto-clean up
 - ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
 - ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
@@ -341,8 +343,8 @@ If not found, **ask the user** before installing. Never install automatically.
 
 | Concern | Commands |
 |---------|----------|
-| Create & navigate | ` + "`" + `rimba add <task>` + "`" + `, ` + "`" + `rimba open <task>` + "`" + ` |
-| Inspect | ` + "`" + `rimba list` + "`" + `, ` + "`" + `rimba status` + "`" + ` |
+| Create & navigate | ` + "`" + `rimba add <task>` + "`" + `, ` + "`" + `rimba add pr:<num>` + "`" + ` (from a GitHub PR), ` + "`" + `rimba open <task>` + "`" + ` |
+| Inspect | ` + "`" + `rimba list` + "`" + ` (` + "`" + `--full` + "`" + ` adds PR/CI columns), ` + "`" + `rimba status` + "`" + ` (` + "`" + `--detail` + "`" + ` adds disk/velocity) |
 | Sync & merge | ` + "`" + `rimba sync [task]` + "`" + `, ` + "`" + `rimba merge <task>` + "`" + ` |
 | Clean up | ` + "`" + `rimba clean --merged` + "`" + `, ` + "`" + `rimba archive <task>` + "`" + ` |
 | AI integration | ` + "`" + `rimba mcp` + "`" + ` (MCP server for AI coding agents) |
@@ -367,8 +369,8 @@ If not found, **ask the user** before installing. Never install automatically.
 
 | Concern | Commands |
 |---------|----------|
-| Create & navigate | ` + "`" + `rimba add <task>` + "`" + `, ` + "`" + `rimba open <task>` + "`" + ` |
-| Inspect | ` + "`" + `rimba list` + "`" + `, ` + "`" + `rimba status` + "`" + ` |
+| Create & navigate | ` + "`" + `rimba add <task>` + "`" + `, ` + "`" + `rimba add pr:<num>` + "`" + ` (from a GitHub PR), ` + "`" + `rimba open <task>` + "`" + ` |
+| Inspect | ` + "`" + `rimba list` + "`" + ` (` + "`" + `--full` + "`" + ` adds PR/CI columns), ` + "`" + `rimba status` + "`" + ` (` + "`" + `--detail` + "`" + ` adds disk/velocity) |
 | Sync & merge | ` + "`" + `rimba sync [task]` + "`" + `, ` + "`" + `rimba merge <task>` + "`" + ` |
 | Clean up | ` + "`" + `rimba clean --merged` + "`" + `, ` + "`" + `rimba archive <task>` + "`" + ` |
 | AI integration | ` + "`" + `rimba mcp` + "`" + ` (MCP server for AI coding agents) |
