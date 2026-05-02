@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/progress"
 )
@@ -46,7 +47,10 @@ type StaleResult struct {
 func FindMergedCandidates(r git.Runner, mergeRef, mainBranch string) (MergedResult, error) {
 	mergedList, err := git.MergedBranches(r, mergeRef)
 	if err != nil {
-		return MergedResult{}, fmt.Errorf("failed to list merged branches: %w", err)
+		return MergedResult{}, errhint.WithFix(
+			fmt.Errorf("failed to list merged branches: %w", err),
+			"check that the main branch exists: git branch --list main",
+		)
 	}
 
 	mergedSet := make(map[string]bool, len(mergedList))

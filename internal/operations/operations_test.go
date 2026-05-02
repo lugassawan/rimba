@@ -77,8 +77,15 @@ func TestFindWorktree(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		if _, err := FindWorktree(r, "", "nonexistent"); err == nil {
+		_, err := FindWorktree(r, "", "nonexistent")
+		if err == nil {
 			t.Fatal("expected error for missing worktree")
+		}
+		if !strings.Contains(err.Error(), "To fix:") {
+			t.Errorf("worktree-not-found error missing hint, got: %v", err)
+		}
+		if !strings.Contains(err.Error(), "rimba list") {
+			t.Errorf("worktree-not-found error missing 'rimba list' hint, got: %v", err)
 		}
 	})
 }
