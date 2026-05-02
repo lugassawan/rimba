@@ -591,7 +591,7 @@ Print version, commit, and build date.
 
 ```sh
 rimba version
-# rimba v0.1.0 (commit: abc1234, built: 2026-01-01T00:00:00Z)
+# rimba v<X.Y.Z> (commit: <sha>, built: <iso8601>)
 ```
 
 ---
