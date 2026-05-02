@@ -479,6 +479,31 @@ func TestUnregisterMCPGlobalTOMLSkipsWhenKeyMissing(t *testing.T) {
 	}
 }
 
+func TestPatchReadErrorReturnsError(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root; chmod 000 has no effect")
+	}
+	home := t.TempDir()
+	claudeDir := filepath.Join(home, ".claude")
+	if err := os.MkdirAll(claudeDir, 0750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	path := filepath.Join(claudeDir, "settings.json")
+	seedJSON(t, path, map[string]any{})
+	if err := os.Chmod(path, 0000); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0600) })
+
+	_, err := RegisterMCPGlobal(home)
+	if err == nil {
+		t.Error("expected error for unreadable file, got nil")
+	}
+	if !strings.Contains(err.Error(), "settings.json") {
+		t.Errorf("error should mention file path, got: %v", err)
+	}
+}
+
 func TestUnregisterMCPGlobalMalformedTOMLReturnsError(t *testing.T) {
 	home := t.TempDir()
 	codexDir := filepath.Join(home, ".codex")

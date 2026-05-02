@@ -20,6 +20,17 @@ const (
 	mcpTOML
 )
 
+// mcpCodec parameterizes the unmarshal + write pair across JSON and TOML formats.
+type mcpCodec struct {
+	unmarshal func([]byte, any) error
+	write     func(path string, cfg map[string]any) error
+}
+
+var (
+	jsonCodec = mcpCodec{unmarshal: json.Unmarshal, write: writeJSON}
+	tomlCodec = mcpCodec{unmarshal: toml.Unmarshal, write: writeTOML}
+)
+
 // MCPSpec describes a single agent MCP config file to patch.
 type MCPSpec struct {
 	RelPath      string    // relative to baseDir (homeDir or repoRoot)
@@ -50,36 +61,36 @@ func ProjectMCPSpecs() []MCPSpec {
 
 // RegisterMCPGlobal patches all user-level MCP config files to add the rimba server entry.
 func RegisterMCPGlobal(homeDir string) ([]Result, error) {
-	return registerMCPSpecs(homeDir, GlobalMCPSpecs())
+	return applyMCPSpecs(homeDir, GlobalMCPSpecs(), false)
 }
 
 // UnregisterMCPGlobal removes the rimba server entry from all user-level MCP config files.
 func UnregisterMCPGlobal(homeDir string) ([]Result, error) {
-	return unregisterMCPSpecs(homeDir, GlobalMCPSpecs())
+	return applyMCPSpecs(homeDir, GlobalMCPSpecs(), true)
 }
 
 // RegisterMCPProject patches project-level MCP config files to add the rimba server entry.
 func RegisterMCPProject(repoRoot string) ([]Result, error) {
-	return registerMCPSpecs(repoRoot, ProjectMCPSpecs())
+	return applyMCPSpecs(repoRoot, ProjectMCPSpecs(), false)
 }
 
 // UnregisterMCPProject removes the rimba server entry from project-level MCP config files.
 func UnregisterMCPProject(repoRoot string) ([]Result, error) {
-	return unregisterMCPSpecs(repoRoot, ProjectMCPSpecs())
+	return applyMCPSpecs(repoRoot, ProjectMCPSpecs(), true)
 }
 
-func registerMCPSpecs(baseDir string, specs []MCPSpec) ([]Result, error) {
+func codecFor(f mcpFormat) mcpCodec {
+	if f == mcpTOML {
+		return tomlCodec
+	}
+	return jsonCodec
+}
+
+func applyMCPSpecs(baseDir string, specs []MCPSpec, remove bool) ([]Result, error) {
 	results := make([]Result, 0, len(specs))
 	for _, spec := range specs {
 		path := filepath.Join(baseDir, spec.RelPath)
-		var action string
-		var err error
-		switch spec.Format {
-		case mcpJSON:
-			action, err = patchJSON(path, spec.ContainerKey, false)
-		case mcpTOML:
-			action, err = patchTOML(path, spec.ContainerKey, false)
-		}
+		action, err := patchMCP(path, spec.ContainerKey, remove, codecFor(spec.Format))
 		if err != nil {
 			return results, err
 		}
@@ -88,24 +99,57 @@ func registerMCPSpecs(baseDir string, specs []MCPSpec) ([]Result, error) {
 	return results, nil
 }
 
-func unregisterMCPSpecs(baseDir string, specs []MCPSpec) ([]Result, error) {
-	results := make([]Result, 0, len(specs))
-	for _, spec := range specs {
-		path := filepath.Join(baseDir, spec.RelPath)
-		var action string
-		var err error
-		switch spec.Format {
-		case mcpJSON:
-			action, err = patchJSON(path, spec.ContainerKey, true)
-		case mcpTOML:
-			action, err = patchTOML(path, spec.ContainerKey, true)
+func patchMCP(path, containerKey string, remove bool, codec mcpCodec) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return actionSkippedNoConfig, nil
 		}
-		if err != nil {
-			return results, err
-		}
-		results = append(results, Result{RelPath: spec.RelPath, Action: action})
+		return "", fmt.Errorf("read %s: %w", path, err)
 	}
-	return results, nil
+	var cfg map[string]any
+	if err := codec.unmarshal(data, &cfg); err != nil {
+		return "", fmt.Errorf("parse %s: %w", path, err)
+	}
+	var action string
+	if remove {
+		action = removeFromContainer(cfg, containerKey)
+	} else {
+		action = addToContainer(cfg, containerKey)
+	}
+	if action == actionUnchanged {
+		return action, nil
+	}
+	return action, codec.write(path, cfg)
+}
+
+func addToContainer(cfg map[string]any, containerKey string) string {
+	servers, _ := cfg[containerKey].(map[string]any)
+	if servers == nil {
+		servers = map[string]any{}
+	}
+	// desiredEntry uses []any; go-toml/v2 also decodes TOML arrays as []any,
+	// so reflect.DeepEqual works correctly for TOML idempotency.
+	desired := desiredEntry()
+	if reflect.DeepEqual(servers[mcpServerName], desired) {
+		return actionUnchanged
+	}
+	servers[mcpServerName] = desired
+	cfg[containerKey] = servers
+	return actionRegistered
+}
+
+func removeFromContainer(cfg map[string]any, containerKey string) string {
+	servers, _ := cfg[containerKey].(map[string]any)
+	if servers == nil {
+		return actionUnchanged
+	}
+	if _, present := servers[mcpServerName]; !present {
+		return actionUnchanged
+	}
+	delete(servers, mcpServerName)
+	cfg[containerKey] = servers
+	return actionUnregistered
 }
 
 func desiredEntry() map[string]any {
@@ -113,97 +157,6 @@ func desiredEntry() map[string]any {
 		"command": mcpServerName,
 		"args":    []any{"mcp"},
 	}
-}
-
-func patchJSON(path, containerKey string, remove bool) (string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return actionSkippedNoConfig, nil
-		}
-		return "", fmt.Errorf("read %s: %w", path, err)
-	}
-	var cfg map[string]any
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return "", fmt.Errorf("parse %s: %w", path, err)
-	}
-	if remove {
-		return removeFromJSON(path, containerKey, cfg)
-	}
-	return addToJSON(path, containerKey, cfg)
-}
-
-func addToJSON(path, containerKey string, cfg map[string]any) (string, error) {
-	servers, _ := cfg[containerKey].(map[string]any)
-	if servers == nil {
-		servers = map[string]any{}
-	}
-	desired := desiredEntry()
-	if reflect.DeepEqual(servers[mcpServerName], desired) {
-		return actionUnchanged, nil
-	}
-	servers[mcpServerName] = desired
-	cfg[containerKey] = servers
-	return actionRegistered, writeJSON(path, cfg)
-}
-
-func removeFromJSON(path, containerKey string, cfg map[string]any) (string, error) {
-	servers, _ := cfg[containerKey].(map[string]any)
-	if servers == nil {
-		return actionUnchanged, nil
-	}
-	if _, present := servers[mcpServerName]; !present {
-		return actionUnchanged, nil
-	}
-	delete(servers, mcpServerName)
-	cfg[containerKey] = servers
-	return actionUnregistered, writeJSON(path, cfg)
-}
-
-func patchTOML(path, containerKey string, remove bool) (string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return actionSkippedNoConfig, nil
-		}
-		return "", fmt.Errorf("read %s: %w", path, err)
-	}
-	var cfg map[string]any
-	if err := toml.Unmarshal(data, &cfg); err != nil {
-		return "", fmt.Errorf("parse %s: %w", path, err)
-	}
-	if remove {
-		return removeFromTOML(path, containerKey, cfg)
-	}
-	return addToTOML(path, containerKey, cfg)
-}
-
-func addToTOML(path, containerKey string, cfg map[string]any) (string, error) {
-	servers, _ := cfg[containerKey].(map[string]any)
-	if servers == nil {
-		servers = map[string]any{}
-	}
-	// TOML library decodes args as []any, matching desiredEntry() shape.
-	desired := desiredEntry()
-	if reflect.DeepEqual(servers[mcpServerName], desired) {
-		return actionUnchanged, nil
-	}
-	servers[mcpServerName] = desired
-	cfg[containerKey] = servers
-	return actionRegistered, writeTOML(path, cfg)
-}
-
-func removeFromTOML(path, containerKey string, cfg map[string]any) (string, error) {
-	servers, _ := cfg[containerKey].(map[string]any)
-	if servers == nil {
-		return actionUnchanged, nil
-	}
-	if _, present := servers[mcpServerName]; !present {
-		return actionUnchanged, nil
-	}
-	delete(servers, mcpServerName)
-	cfg[containerKey] = servers
-	return actionUnregistered, writeTOML(path, cfg)
 }
 
 func writeJSON(path string, cfg map[string]any) error {
