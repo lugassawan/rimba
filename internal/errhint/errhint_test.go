@@ -44,6 +44,33 @@ func TestWithFix(t *testing.T) {
 				"To fix: retry",
 			},
 		},
+		{
+			name: "exec provide --all hint",
+			err:  errors.New("provide --all or --type to select worktrees"),
+			fix:  "run: rimba exec --all <cmd>  OR  rimba exec --type <prefix> <cmd>",
+			wantSubstr: []string{
+				"provide --all or --type",
+				"To fix: run: rimba exec --all",
+			},
+		},
+		{
+			name: "worktree not found hint",
+			err:  errors.New(`worktree not found for task "mytask"`),
+			fix:  "run: rimba list  to see available worktrees",
+			wantSubstr: []string{
+				"worktree not found",
+				"To fix: run: rimba list",
+			},
+		},
+		{
+			name: "not a git repository hint",
+			err:  errors.New("not a git repository"),
+			fix:  "run from inside a git repository, or run: git init",
+			wantSubstr: []string{
+				"not a git repository",
+				"To fix: run from inside a git repository",
+			},
+		},
 	}
 
 	for _, tc := range tests {
