@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/spf13/cobra"
 )
@@ -18,7 +19,10 @@ func validateTypeFilter(typeFilter string) error {
 	for _, p := range resolver.AllPrefixes() {
 		valid = append(valid, strings.TrimSuffix(p, "/"))
 	}
-	return fmt.Errorf("invalid type %q; valid types: %s", typeFilter, strings.Join(valid, ", "))
+	return errhint.WithFix(
+		fmt.Errorf("invalid type %q; valid types: %s", typeFilter, strings.Join(valid, ", ")),
+		"use a prefix defined in .rimba/settings.toml [prefixes] section",
+	)
 }
 
 // typeFilterCompletion returns a cobra.CompletionFunc that completes against resolver.AllPrefixes().

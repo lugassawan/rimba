@@ -36,7 +36,7 @@ func AddPRWorktree(
 	progress.Notify(onProgress, fmt.Sprintf("Fetching PR #%d metadata...", params.PRNumber))
 	meta, err := gh.FetchPRMeta(ctx, ghR, params.PRNumber)
 	if err != nil {
-		return AddResult{}, errhint.WithFix(err, "verify PR number and repo access")
+		return AddResult{}, err
 	}
 
 	task := params.TaskOverride

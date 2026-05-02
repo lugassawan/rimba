@@ -196,7 +196,7 @@ func TestAddPRWorktreeFetchPRMetaFailure(t *testing.T) {
 			if len(args) > 0 && args[0] == ghArgAuth {
 				return []byte("Logged in"), nil
 			}
-			return nil, errors.New("PR not found")
+			return nil, errors.New("HTTP 404: Not Found")
 		},
 	}
 	gitR := &mockRunner{

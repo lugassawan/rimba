@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/resolver"
 )
@@ -57,7 +58,10 @@ func FindWorktree(r git.Runner, service, task string) (resolver.WorktreeInfo, er
 				return resolver.WorktreeInfo{}, ambiguityError(task, matches)
 			}
 		}
-		return resolver.WorktreeInfo{}, fmt.Errorf(ErrWorktreeNotFoundFmt, task)
+		return resolver.WorktreeInfo{}, errhint.WithFix(
+			fmt.Errorf(ErrWorktreeNotFoundFmt, task),
+			"run: rimba list  to see available worktrees",
+		)
 	}
 	return wt, nil
 }

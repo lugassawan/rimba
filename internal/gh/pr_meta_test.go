@@ -83,6 +83,78 @@ func TestFetchPRMetaRunnerError(t *testing.T) {
 		t.Fatal("expected error when runner fails")
 	}
 	assertContains(t, err, "fetch PR #999")
+	assertContains(t, err, "To fix:")
+}
+
+func TestFetchPRMetaRunnerErrorClassifier(t *testing.T) {
+	tests := []struct {
+		name       string
+		runErr     string
+		wantSubstr string
+	}{
+		{
+			name:       "404 error routes to PR number hint",
+			runErr:     "HTTP 404: Not Found",
+			wantSubstr: "verify PR number and repo access",
+		},
+		{
+			name:       "could not resolve routes to PR number hint",
+			runErr:     "Could not resolve to a Repository",
+			wantSubstr: "verify PR number and repo access",
+		},
+		{
+			name:       "rate limit routes to token hint",
+			runErr:     "API rate limit exceeded",
+			wantSubstr: "GitHub API rate limit hit",
+		},
+		{
+			name:       "generic error routes to auth hint",
+			runErr:     "connection refused",
+			wantSubstr: "gh auth status",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &mockRunner{
+				run: func(_ context.Context, _ ...string) ([]byte, error) {
+					return nil, errors.New(tt.runErr)
+				},
+			}
+			_, err := FetchPRMeta(context.Background(), r, 1)
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			assertContains(t, err, tt.wantSubstr)
+		})
+	}
+}
+
+func TestFetchPRMetaShapeErrorsHaveGhHint(t *testing.T) {
+	tests := []struct {
+		name string
+		json string
+	}{
+		{"empty response", `{}`},
+		{"missing owner", `{"headRefName":"main","headRepository":{"name":"repo"},"headRepositoryOwner":{"login":""}}`},
+		{"missing repo", `{"headRefName":"main","headRepository":{"name":""},"headRepositoryOwner":{"login":"alice"}}`},
+		{"unsafe owner", `{"headRefName":"main","headRepository":{"name":"repo"},"headRepositoryOwner":{"login":"alice;rm -rf /"}}`},
+		{"unsafe repo", `{"headRefName":"main","headRepository":{"name":"repo$(whoami)"},"headRepositoryOwner":{"login":"alice"}}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &mockRunner{
+				run: func(_ context.Context, _ ...string) ([]byte, error) {
+					return []byte(tt.json), nil
+				},
+			}
+			_, err := FetchPRMeta(context.Background(), r, 1)
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			assertContains(t, err, "To fix:")
+			assertContains(t, err, "update gh")
+		})
+	}
 }
 
 func TestFetchPRMetaInvalidJSON(t *testing.T) {

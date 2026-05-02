@@ -406,6 +406,8 @@ func TestDefaultBranchNotFound(t *testing.T) {
 		t.Fatal("expected error when no default branch found")
 	}
 	assertContains(t, err, "could not detect default branch")
+	assertContains(t, err, "To fix:")
+	assertContains(t, err, "git branch -M main")
 }
 
 func TestHooksDirError(t *testing.T) {
@@ -486,6 +488,8 @@ func TestRepoRootError(t *testing.T) {
 		t.Fatal("expected error from RepoRoot")
 	}
 	assertContains(t, err, errNotAGitRepo)
+	assertContains(t, err, "To fix:")
+	assertContains(t, err, "git init")
 }
 
 func TestHooksDirRelativePathRepoRootError(t *testing.T) {
@@ -882,6 +886,7 @@ func TestLastCommitInfoRunError(t *testing.T) {
 		t.Fatal("expected error from runner failure")
 	}
 	assertContains(t, err, "last commit info")
+	assertContains(t, err, "To fix:")
 }
 
 func TestLocalBranchesError(t *testing.T) {
