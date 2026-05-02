@@ -68,7 +68,7 @@ func UnregisterMCPProject(repoRoot string) ([]Result, error) {
 	return unregisterMCPSpecs(repoRoot, ProjectMCPSpecs())
 }
 
-func registerMCPSpecs(baseDir string, specs []MCPSpec) ([]Result, error) {
+func applyMCPSpecs(baseDir string, specs []MCPSpec, remove bool) ([]Result, error) {
 	results := make([]Result, 0, len(specs))
 	for _, spec := range specs {
 		path := filepath.Join(baseDir, spec.RelPath)
@@ -76,9 +76,9 @@ func registerMCPSpecs(baseDir string, specs []MCPSpec) ([]Result, error) {
 		var err error
 		switch spec.Format {
 		case mcpJSON:
-			action, err = patchJSON(path, spec.ContainerKey, false)
+			action, err = patchJSON(path, spec.ContainerKey, remove)
 		case mcpTOML:
-			action, err = patchTOML(path, spec.ContainerKey, false)
+			action, err = patchTOML(path, spec.ContainerKey, remove)
 		}
 		if err != nil {
 			return results, err
@@ -88,24 +88,12 @@ func registerMCPSpecs(baseDir string, specs []MCPSpec) ([]Result, error) {
 	return results, nil
 }
 
+func registerMCPSpecs(baseDir string, specs []MCPSpec) ([]Result, error) {
+	return applyMCPSpecs(baseDir, specs, false)
+}
+
 func unregisterMCPSpecs(baseDir string, specs []MCPSpec) ([]Result, error) {
-	results := make([]Result, 0, len(specs))
-	for _, spec := range specs {
-		path := filepath.Join(baseDir, spec.RelPath)
-		var action string
-		var err error
-		switch spec.Format {
-		case mcpJSON:
-			action, err = patchJSON(path, spec.ContainerKey, true)
-		case mcpTOML:
-			action, err = patchTOML(path, spec.ContainerKey, true)
-		}
-		if err != nil {
-			return results, err
-		}
-		results = append(results, Result{RelPath: spec.RelPath, Action: action})
-	}
-	return results, nil
+	return applyMCPSpecs(baseDir, specs, true)
 }
 
 func desiredEntry() map[string]any {
