@@ -318,7 +318,7 @@ rimba manages parallel git worktrees. Check for ` + "`" + `.rimba/settings.toml`
 
 - ` + "`" + `rimba add <task>` + "`" + ` — create worktree + branch
 - ` + "`" + `rimba add pr:<num>` + "`" + ` — create worktree from a GitHub PR
-- ` + "`" + `rimba list` + "`" + ` (` + "`" + `--full` + "`" + ` adds PR/CI columns) / ` + "`" + `rimba status` + "`" + ` (` + "`" + `--detail` + "`" + ` adds disk/velocity) — inspect worktrees
+- ` + "`" + `rimba list` + "`" + ` (` + "`" + `--full` + "`" + ` adds PR/CI columns) / ` + "`" + `rimba status` + "`" + ` (` + "`" + `--detail` + "`" + ` adds disk/velocity) — inspect worktrees (` + "`" + `--service <svc>` + "`" + ` to filter)
 - ` + "`" + `rimba merge <task>` + "`" + ` — merge into main and auto-clean up
 - ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
 - ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
