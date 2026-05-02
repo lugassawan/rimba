@@ -57,28 +57,6 @@ func init() {
 	rootCmd.AddCommand(cleanCmd)
 }
 
-// hintEntry pairs a flag name with its hint message.
-type hintEntry struct {
-	flag string
-	msg  string
-}
-
-// cleanResolveAndHint resolves the main branch and shows usage hints, returning the branch name.
-func cleanResolveAndHint(cmd *cobra.Command, r git.Runner, entries []hintEntry) (string, error) {
-	mainBranch, err := resolveMainBranch(r)
-	if err != nil {
-		return "", err
-	}
-
-	h := hint.New(cmd, hintPainter(cmd))
-	for _, e := range entries {
-		h.Add(e.flag, e.msg)
-	}
-	h.Show()
-
-	return mainBranch, nil
-}
-
 func cleanPrune(cmd *cobra.Command, r git.Runner) error {
 	dryRun, _ := cmd.Flags().GetBool(flagDryRun)
 
@@ -109,10 +87,87 @@ func cleanPrune(cmd *cobra.Command, r git.Runner) error {
 	return nil
 }
 
-func cleanMerged(cmd *cobra.Command, r git.Runner) error {
+// hintEntry pairs a flag name with its hint message.
+type hintEntry struct {
+	flag string
+	msg  string
+}
+
+// cleanResolveAndHint resolves the main branch and shows usage hints, returning the branch name.
+func cleanResolveAndHint(cmd *cobra.Command, r git.Runner, entries []hintEntry) (string, error) {
+	mainBranch, err := resolveMainBranch(r)
+	if err != nil {
+		return "", err
+	}
+
+	h := hint.New(cmd, hintPainter(cmd))
+	for _, e := range entries {
+		h.Add(e.flag, e.msg)
+	}
+	h.Show()
+
+	return mainBranch, nil
+}
+
+// cleanStrategy holds the variation points for the cleanMerged and cleanStale pipelines.
+type cleanStrategy struct {
+	label      string
+	spinnerMsg string
+	emptyMsg   string
+	summaryFmt string
+	// preFind is called before find with the spinner already created; nil for stale.
+	// It manages spinner start/stop internally (e.g., fetch step for merged).
+	preFind func(*cobra.Command, git.Runner, *spinner.Spinner) error
+	find    func(*cobra.Command, git.Runner) ([]operations.CleanCandidate, []string, error)
+	// printRows displays candidates; may ignore the passed slice and use a captured typed slice.
+	printRows func([]operations.CleanCandidate)
+}
+
+// runClean executes the common clean pipeline: spinner → find → warn → list → confirm → remove → summary.
+func runClean(cmd *cobra.Command, r git.Runner, s cleanStrategy) error {
 	dryRun, _ := cmd.Flags().GetBool(flagDryRun)
 	force, _ := cmd.Flags().GetBool(flagForce)
 
+	sp := spinner.New(spinnerOpts(cmd))
+	defer sp.Stop()
+
+	if s.preFind != nil {
+		if err := s.preFind(cmd, r, sp); err != nil {
+			return err
+		}
+		// preFind owns spinner start; Update changes message or is a no-op if preFind stopped it.
+		sp.Update(s.spinnerMsg)
+	} else {
+		sp.Start(s.spinnerMsg)
+	}
+
+	candidates, warnings, err := s.find(cmd, r)
+	if err != nil {
+		return err
+	}
+	sp.Stop()
+
+	printWarnings(cmd, warnings)
+	if len(candidates) == 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), s.emptyMsg)
+		return nil
+	}
+
+	s.printRows(candidates)
+	if dryRun {
+		return nil
+	}
+	if !force && !confirmRemoval(cmd, len(candidates), s.label) {
+		fmt.Fprintln(cmd.OutOrStdout(), "Aborted.")
+		return nil
+	}
+
+	removed := cleanRemoveCandidates(cmd, r, sp, candidates)
+	fmt.Fprintf(cmd.OutOrStdout(), s.summaryFmt, removed)
+	return nil
+}
+
+func cleanMerged(cmd *cobra.Command, r git.Runner) error {
 	mainBranch, err := cleanResolveAndHint(cmd, r, []hintEntry{
 		{flagDryRun, hintDryRunClean},
 		{flagForce, hintForce},
@@ -121,36 +176,58 @@ func cleanMerged(cmd *cobra.Command, r git.Runner) error {
 		return err
 	}
 
-	s := spinner.New(spinnerOpts(cmd))
-	defer s.Stop()
+	var mergeRef string
+	return runClean(cmd, r, cleanStrategy{
+		label:      "merged",
+		spinnerMsg: "Analyzing branches...",
+		emptyMsg:   "No merged worktrees found.",
+		summaryFmt: "Cleaned %d merged worktree(s).\n",
+		preFind: func(c *cobra.Command, rr git.Runner, sp *spinner.Spinner) error {
+			mergeRef = cleanFetchMergeRef(c, rr, sp, mainBranch)
+			return nil
+		},
+		find: func(_ *cobra.Command, rr git.Runner) ([]operations.CleanCandidate, []string, error) {
+			result, err := operations.FindMergedCandidates(rr, mergeRef, mainBranch)
+			if err != nil {
+				return nil, nil, err
+			}
+			return result.Candidates, result.Warnings, nil
+		},
+		printRows: func(candidates []operations.CleanCandidate) {
+			printMergedCandidates(cmd, candidates)
+		},
+	})
+}
 
-	mergeRef := cleanFetchMergeRef(cmd, r, s, mainBranch)
-
-	s.Update("Analyzing branches...")
-	mergedResult, err := operations.FindMergedCandidates(r, mergeRef, mainBranch)
+func cleanStale(cmd *cobra.Command, r git.Runner) error {
+	mainBranch, err := cleanResolveAndHint(cmd, r, []hintEntry{
+		{flagDryRun, hintDryRunClean},
+		{flagForce, hintForce},
+		{flagStaleDays, "Customize the staleness threshold (default: 14 days)"},
+	})
 	if err != nil {
 		return err
 	}
-	s.Stop()
 
-	printWarnings(cmd, mergedResult.Warnings)
-	if len(mergedResult.Candidates) == 0 {
-		fmt.Fprintln(cmd.OutOrStdout(), "No merged worktrees found.")
-		return nil
-	}
-
-	printMergedCandidates(cmd, mergedResult.Candidates)
-	if dryRun {
-		return nil
-	}
-	if !force && !confirmRemoval(cmd, len(mergedResult.Candidates), "merged") {
-		fmt.Fprintln(cmd.OutOrStdout(), "Aborted.")
-		return nil
-	}
-
-	removed := cleanRemoveCandidates(cmd, r, s, mergedResult.Candidates)
-	fmt.Fprintf(cmd.OutOrStdout(), "Cleaned %d merged worktree(s).\n", removed)
-	return nil
+	staleDays, _ := cmd.Flags().GetInt(flagStaleDays)
+	var staleCandidates []operations.StaleCandidate
+	return runClean(cmd, r, cleanStrategy{
+		label:      "stale",
+		spinnerMsg: "Analyzing worktree activity...",
+		emptyMsg:   "No stale worktrees found.",
+		summaryFmt: "Cleaned %d stale worktree(s).\n",
+		find: func(_ *cobra.Command, rr git.Runner) ([]operations.CleanCandidate, []string, error) {
+			result, err := operations.FindStaleCandidates(rr, mainBranch, staleDays)
+			if err != nil {
+				return nil, nil, err
+			}
+			staleCandidates = result.Candidates
+			return flattenStaleCandidates(result.Candidates), result.Warnings, nil
+		},
+		printRows: func(_ []operations.CleanCandidate) {
+			printStaleCandidates(cmd, staleCandidates)
+		},
+	})
 }
 
 // cleanFetchMergeRef fetches from origin and returns the ref to diff against.
@@ -173,51 +250,6 @@ func cleanRemoveCandidates(cmd *cobra.Command, r git.Runner, s *spinner.Spinner,
 	s.Stop()
 	printCleanedItems(cmd, items)
 	return countRemoved(items)
-}
-
-func cleanStale(cmd *cobra.Command, r git.Runner) error {
-	dryRun, _ := cmd.Flags().GetBool(flagDryRun)
-	force, _ := cmd.Flags().GetBool(flagForce)
-	staleDays, _ := cmd.Flags().GetInt(flagStaleDays)
-
-	mainBranch, err := cleanResolveAndHint(cmd, r, []hintEntry{
-		{flagDryRun, hintDryRunClean},
-		{flagForce, hintForce},
-		{flagStaleDays, "Customize the staleness threshold (default: 14 days)"},
-	})
-	if err != nil {
-		return err
-	}
-
-	s := spinner.New(spinnerOpts(cmd))
-	defer s.Stop()
-
-	s.Start("Analyzing worktree activity...")
-	staleResult, err := operations.FindStaleCandidates(r, mainBranch, staleDays)
-	if err != nil {
-		return err
-	}
-	s.Stop()
-
-	printWarnings(cmd, staleResult.Warnings)
-	if len(staleResult.Candidates) == 0 {
-		fmt.Fprintln(cmd.OutOrStdout(), "No stale worktrees found.")
-		return nil
-	}
-
-	printStaleCandidates(cmd, staleResult.Candidates)
-	if dryRun {
-		return nil
-	}
-	if !force && !confirmRemoval(cmd, len(staleResult.Candidates), "stale") {
-		fmt.Fprintln(cmd.OutOrStdout(), "Aborted.")
-		return nil
-	}
-
-	toRemove := flattenStaleCandidates(staleResult.Candidates)
-	removed := cleanRemoveCandidates(cmd, r, s, toRemove)
-	fmt.Fprintf(cmd.OutOrStdout(), "Cleaned %d stale worktree(s).\n", removed)
-	return nil
 }
 
 func flattenStaleCandidates(candidates []operations.StaleCandidate) []operations.CleanCandidate {
