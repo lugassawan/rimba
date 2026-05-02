@@ -519,17 +519,26 @@ func checkTOMLFile(t *testing.T, path string, want tomlWant) {
 		t.Errorf("rimba in mcp_servers: got %v, want %v", hasRimba, want.rimba)
 	}
 	if want.rimba {
-		entry, ok := servers[mcpServerName].(map[string]any)
-		if !ok {
-			t.Fatalf("mcp_servers.%s wrong type", mcpServerName)
-		}
-		if entry["command"] != mcpServerName {
-			t.Errorf("command = %v, want %s", entry["command"], mcpServerName)
-		}
+		checkRimbaEntry(t, servers)
 	}
 	if want.other {
 		if _, ok := servers["other"]; !ok {
 			t.Error("other entry should be preserved in mcp_servers")
 		}
+	}
+}
+
+func checkRimbaEntry(t *testing.T, servers map[string]any) {
+	t.Helper()
+	entry, ok := servers[mcpServerName].(map[string]any)
+	if !ok {
+		t.Fatalf("mcp_servers.%s wrong type", mcpServerName)
+	}
+	if entry["command"] != mcpServerName {
+		t.Errorf("command = %v, want %s", entry["command"], mcpServerName)
+	}
+	args, ok := entry["args"].([]any)
+	if !ok || len(args) != 1 || args[0] != "mcp" {
+		t.Errorf("args = %v, want [mcp]", entry["args"])
 	}
 }
