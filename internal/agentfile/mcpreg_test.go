@@ -302,41 +302,49 @@ func TestRegisterMCPProjectSkipsAbsentFiles(t *testing.T) {
 	}
 }
 
-func TestPatchTOMLMalformedReturnsError(t *testing.T) {
-	home := t.TempDir()
-	codexDir := filepath.Join(home, ".codex")
-	if err := os.MkdirAll(codexDir, 0750); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(codexDir, "config.toml"), []byte("not = [valid toml\n"), 0600); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-
-	_, err := RegisterMCPGlobal(home)
-	if err == nil {
-		t.Error("expected error for malformed TOML, got nil")
-	}
-	if !strings.Contains(err.Error(), "config.toml") {
-		t.Errorf("error should mention config.toml, got: %v", err)
-	}
-}
-
-func TestPatchJSONMalformedReturnsError(t *testing.T) {
-	home := t.TempDir()
-	claudeDir := filepath.Join(home, ".claude")
-	if err := os.MkdirAll(claudeDir, 0750); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(claudeDir, "settings.json"), []byte("not json {{{"), 0600); err != nil {
-		t.Fatalf("write: %v", err)
+func TestPatchMalformedReturnsError(t *testing.T) {
+	tests := []struct {
+		name      string
+		dir       string
+		file      string
+		content   string
+		wantInErr string
+	}{
+		{
+			name:      "malformed TOML",
+			dir:       ".codex",
+			file:      "config.toml",
+			content:   "not = [valid toml\n",
+			wantInErr: "config.toml",
+		},
+		{
+			name:      "malformed JSON",
+			dir:       ".claude",
+			file:      "settings.json",
+			content:   "not json {{{",
+			wantInErr: "settings.json",
+		},
 	}
 
-	_, err := RegisterMCPGlobal(home)
-	if err == nil {
-		t.Error("expected error for malformed JSON, got nil")
-	}
-	if !strings.Contains(err.Error(), "settings.json") {
-		t.Errorf("error should mention the file path, got: %v", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			dir := filepath.Join(home, tt.dir)
+			if err := os.MkdirAll(dir, 0750); err != nil {
+				t.Fatalf("mkdir: %v", err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, tt.file), []byte(tt.content), 0600); err != nil {
+				t.Fatalf("write: %v", err)
+			}
+
+			_, err := RegisterMCPGlobal(home)
+			if err == nil {
+				t.Errorf("expected error for malformed %s, got nil", tt.file)
+			}
+			if !strings.Contains(err.Error(), tt.wantInErr) {
+				t.Errorf("error should mention %q, got: %v", tt.wantInErr, err)
+			}
+		})
 	}
 }
 
