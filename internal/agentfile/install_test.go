@@ -7,6 +7,12 @@ import (
 	"testing"
 )
 
+const (
+	fatalInstall   = "Install: %v"
+	fatalUninstall = "Uninstall: %v"
+	fatalRead      = "read file: %v"
+)
+
 func TestInstallCreatesAllFiles(t *testing.T) {
 	dir := t.TempDir()
 
