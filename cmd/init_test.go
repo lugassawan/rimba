@@ -15,18 +15,12 @@ import (
 func TestInitSuccess(t *testing.T) {
 	repoDir := t.TempDir()
 
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return repoDir, nil
-			}
-			if len(args) >= 1 && args[0] == cmdSymbolicRef {
-				return refsRemotesOriginMain, nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
+	r := repoRootRunner(repoDir, func(args ...string) (string, error) {
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", nil
+	})
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -76,15 +70,7 @@ func TestInitMigrationFromLegacy(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return repoDir, nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
+	r := repoRootRunner(repoDir, func(_ ...string) (string, error) { return "", nil })
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -143,15 +129,7 @@ func TestInitExistingDirConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return repoDir, nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
+	r := repoRootRunner(repoDir, func(_ ...string) (string, error) { return "", nil })
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -170,18 +148,12 @@ func TestInitExistingDirConfig(t *testing.T) {
 func TestInitCreatesAgentFiles(t *testing.T) {
 	repoDir := t.TempDir()
 
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return repoDir, nil
-			}
-			if len(args) >= 1 && args[0] == cmdSymbolicRef {
-				return refsRemotesOriginMain, nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
+	r := repoRootRunner(repoDir, func(args ...string) (string, error) {
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", nil
+	})
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -222,18 +194,12 @@ func TestInitExistingConfigInstallsAgentFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return repoDir, nil
-			}
-			if len(args) >= 1 && args[0] == cmdSymbolicRef {
-				return refsRemotesOriginMain, nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
+	r := repoRootRunner(repoDir, func(args ...string) (string, error) {
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", nil
+	})
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -260,18 +226,12 @@ func TestInitExistingConfigInstallsAgentFiles(t *testing.T) {
 func TestInitAgentFilesIdempotent(t *testing.T) {
 	repoDir := t.TempDir()
 
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return repoDir, nil
-			}
-			if len(args) >= 1 && args[0] == cmdSymbolicRef {
-				return refsRemotesOriginMain, nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
+	r := repoRootRunner(repoDir, func(args ...string) (string, error) {
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", nil
+	})
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -307,18 +267,12 @@ func TestInitAgentFilesIdempotent(t *testing.T) {
 func TestInitWithoutFlagSkipsAgentFiles(t *testing.T) {
 	repoDir := t.TempDir()
 
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return repoDir, nil
-			}
-			if len(args) >= 1 && args[0] == cmdSymbolicRef {
-				return refsRemotesOriginMain, nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
+	r := repoRootRunner(repoDir, func(args ...string) (string, error) {
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", nil
+	})
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -369,18 +323,12 @@ func TestInitAgentsErrors(t *testing.T) {
 			wtPath := filepath.Join(filepath.Dir(repoDir), repoName+"-worktrees")
 			t.Cleanup(func() { os.RemoveAll(wtPath) })
 
-			r := &mockRunner{
-				run: func(args ...string) (string, error) {
-					if len(args) >= 2 && args[1] == cmdShowToplevel {
-						return repoDir, nil
-					}
-					if len(args) >= 1 && args[0] == cmdSymbolicRef {
-						return refsRemotesOriginMain, nil
-					}
-					return "", nil
-				},
-				runInDir: noopRunInDir,
-			}
+			r := repoRootRunner(repoDir, func(args ...string) (string, error) {
+				if args[0] == cmdSymbolicRef {
+					return refsRemotesOriginMain, nil
+				}
+				return "", nil
+			})
 			restore := overrideNewRunner(r)
 			defer restore()
 
@@ -410,15 +358,7 @@ func TestInitMigrateGitignoreWriteError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return repoDir, nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
+	r := repoRootRunner(repoDir, func(_ ...string) (string, error) { return "", nil })
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -444,18 +384,12 @@ func TestInitFreshWorktreeDirConflict(t *testing.T) {
 	}
 	t.Cleanup(func() { os.Remove(wtPath) })
 
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return repoDir, nil
-			}
-			if len(args) >= 1 && args[0] == cmdSymbolicRef {
-				return refsRemotesOriginMain, nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
+	r := repoRootRunner(repoDir, func(args ...string) (string, error) {
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", nil
+	})
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -483,18 +417,12 @@ func TestInitFreshGitignoreWriteError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return repoDir, nil
-			}
-			if len(args) >= 1 && args[0] == cmdSymbolicRef {
-				return refsRemotesOriginMain, nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
+	r := repoRootRunner(repoDir, func(args ...string) (string, error) {
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", nil
+	})
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -517,18 +445,12 @@ func TestInitFreshConflictingFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return repoDir, nil
-			}
-			if len(args) >= 1 && args[0] == cmdSymbolicRef {
-				return refsRemotesOriginMain, nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
+	r := repoRootRunner(repoDir, func(args ...string) (string, error) {
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", nil
+	})
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -606,15 +528,7 @@ func TestInitMigrateConflictingDir(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return repoDir, nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
+	r := repoRootRunner(repoDir, func(_ ...string) (string, error) { return "", nil })
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -637,18 +551,12 @@ func TestInitFreshGitignoreAlreadyPresent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return repoDir, nil
-			}
-			if len(args) >= 1 && args[0] == cmdSymbolicRef {
-				return refsRemotesOriginMain, nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
+	r := repoRootRunner(repoDir, func(args ...string) (string, error) {
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", nil
+	})
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -761,18 +669,12 @@ func TestInitGlobalUninstall(t *testing.T) {
 func TestInitAgentsLocalAddsGitignore(t *testing.T) {
 	repoDir := t.TempDir()
 
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return repoDir, nil
-			}
-			if len(args) >= 1 && args[0] == cmdSymbolicRef {
-				return refsRemotesOriginMain, nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
+	r := repoRootRunner(repoDir, func(args ...string) (string, error) {
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", nil
+	})
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -798,18 +700,12 @@ func TestInitAgentsLocalAddsGitignore(t *testing.T) {
 func TestInitAgentsUninstall(t *testing.T) {
 	repoDir := t.TempDir()
 
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return repoDir, nil
-			}
-			if len(args) >= 1 && args[0] == cmdSymbolicRef {
-				return refsRemotesOriginMain, nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
+	r := repoRootRunner(repoDir, func(args ...string) (string, error) {
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", nil
+	})
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -842,18 +738,12 @@ func TestInitAgentsUninstall(t *testing.T) {
 func TestInitAgentsLocalUninstall(t *testing.T) {
 	repoDir := t.TempDir()
 
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return repoDir, nil
-			}
-			if len(args) >= 1 && args[0] == cmdSymbolicRef {
-				return refsRemotesOriginMain, nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
+	r := repoRootRunner(repoDir, func(args ...string) (string, error) {
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", nil
+	})
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -888,15 +778,7 @@ func TestInitAgentsLocalUninstall(t *testing.T) {
 func TestInitFlagValidationErrors(t *testing.T) {
 	repoDir := t.TempDir()
 
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return repoDir, nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
+	r := repoRootRunner(repoDir, func(_ ...string) (string, error) { return "", nil })
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -1086,18 +968,12 @@ func TestInitAgentsMCPRegistration(t *testing.T) {
 		t.Fatalf("write .mcp.json: %v", err)
 	}
 
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return repoDir, nil
-			}
-			if len(args) >= 1 && args[0] == cmdSymbolicRef {
-				return refsRemotesOriginMain, nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
+	r := repoRootRunner(repoDir, func(args ...string) (string, error) {
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", nil
+	})
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -1135,18 +1011,12 @@ func TestInitAgentsMCPRegistration(t *testing.T) {
 func TestInitAgentsLocalSkipsMCP(t *testing.T) {
 	repoDir := t.TempDir()
 
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return repoDir, nil
-			}
-			if len(args) >= 1 && args[0] == cmdSymbolicRef {
-				return refsRemotesOriginMain, nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
+	r := repoRootRunner(repoDir, func(args ...string) (string, error) {
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", nil
+	})
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -1197,18 +1067,12 @@ func TestInitGlobalMCPErrorPropagated(t *testing.T) {
 func TestInitPersonalFreshInit(t *testing.T) {
 	repoDir := t.TempDir()
 
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return repoDir, nil
-			}
-			if len(args) >= 1 && args[0] == cmdSymbolicRef {
-				return refsRemotesOriginMain, nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
+	r := repoRootRunner(repoDir, func(args ...string) (string, error) {
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", nil
+	})
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -1266,15 +1130,7 @@ func TestInitPersonalMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return repoDir, nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
+	r := repoRootRunner(repoDir, func(_ ...string) (string, error) { return "", nil })
 	restore := overrideNewRunner(r)
 	defer restore()
 
