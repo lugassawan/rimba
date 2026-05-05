@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Installation help
+    url: https://github.com/lugassawan/rimba#install
+    about: Check the README's Install section before opening an issue.
+  - name: Configuration reference
+    url: https://github.com/lugassawan/rimba/blob/main/docs/configuration.md
+    about: docs/configuration.md covers settings.toml, env vars, and prefixes.
