@@ -1,7 +1,7 @@
 blank_issues_enabled: false
 contact_links:
   - name: Installation help
-    url: https://github.com/lugassawan/rimba#install
+    url: https://github.com/lugassawan/rimba#installation
     about: Check the README's Install section before opening an issue.
   - name: Configuration reference
     url: https://github.com/lugassawan/rimba/blob/main/docs/configuration.md
