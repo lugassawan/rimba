@@ -8,7 +8,8 @@
 - [ ] Linter passes (`make lint`)
 - [ ] E2E tests pass (`make test-e2e`)
 
-<!-- Link to the GitHub issue this PR addresses.
-     Use: Closes #<number>, Fixes #<number>, or Resolves #<number>
-     For ad-hoc changes without an issue, replace with: Issue: N/A -->
+## Issue
+
+<!-- Closes #NNN   /   Fixes #NNN   /   Resolves #NNN -->
+<!-- No issue? Replace the line below with: Issue: N/A  -->
 Closes #
