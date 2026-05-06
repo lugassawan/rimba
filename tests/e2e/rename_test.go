@@ -129,7 +129,7 @@ func TestRenameFailsBranchExists(t *testing.T) {
 	assertContains(t, r.Stderr, "already exists")
 }
 
-func TestRenamePartialFailBranchHint(t *testing.T) {
+func TestRenamePartialFailRollback(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
 	}
@@ -137,14 +137,29 @@ func TestRenamePartialFailBranchHint(t *testing.T) {
 	repo := setupInitializedRepo(t)
 	rimbaSuccess(t, repo, "add", "--bugfix", "rn-partial-old")
 
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	oldBranch := resolver.BranchName(bugfixPrefix, "rn-partial-old")
+	oldPath := resolver.WorktreePath(wtDir, oldBranch)
+	newBranch := resolver.BranchName(bugfixPrefix, "rn-partial-new")
+	newPath := resolver.WorktreePath(wtDir, newBranch)
+
 	// Create a sub-branch that blocks the rename target in the git ref namespace.
 	// "bugfix/rn-partial-new/sub" makes bugfix/rn-partial-new a directory in
 	// .git/refs/heads/, so git branch -m cannot create it as a file.
 	testutil.GitCmd(t, repo, "branch", "bugfix/rn-partial-new/sub")
 
 	r := rimbaFail(t, repo, "rename", "rn-partial-old", "rn-partial-new")
-	assertContains(t, r.Stderr, "worktree moved but failed to rename branch")
+
+	// Error should report the branch rename failure and successful rollback.
+	assertContains(t, r.Stderr, "failed to rename branch")
+	assertContains(t, r.Stderr, "moved back")
 	assertContains(t, r.Stderr, "git branch -m")
+
+	// Worktree should be back at its original path (rollback succeeded).
+	assertFileExists(t, oldPath)
+	assertFileNotExists(t, newPath)
+	_ = newBranch
 }
 
 func TestRenameFailsNoArgs(t *testing.T) {

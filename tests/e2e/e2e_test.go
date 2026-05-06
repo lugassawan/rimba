@@ -51,6 +51,8 @@ const (
 	taskDupA      = "task-a"
 	taskDupB      = "task-b"
 	taskMyCopy    = "my-copy"
+	taskDupColSrc = "dup-col-src"
+	taskDupColDst = "dup-col-dst"
 	secretContent = "SECRET=test"
 
 	// Merge test constants.

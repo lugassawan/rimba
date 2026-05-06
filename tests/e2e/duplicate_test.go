@@ -176,6 +176,20 @@ func TestDuplicateCopiesDirectory(t *testing.T) {
 	}
 }
 
+func TestDuplicateAsCollision(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", taskDupColSrc)
+	rimbaSuccess(t, repo, "add", taskDupColDst)
+
+	// Duplicate source --as destination that already exists: must fail before any writes.
+	r := rimbaFail(t, repo, "duplicate", taskDupColSrc, "--as", taskDupColDst)
+	assertContains(t, r.Stderr, "already exists")
+}
+
 func TestDuplicateSourceNotFound(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
