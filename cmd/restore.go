@@ -25,9 +25,6 @@ var restoreCmd = &cobra.Command{
 		return completeArchivedTasks(cmd, toComplete), cobra.ShellCompDirectiveNoFileComp
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		task := args[0]
-		cfg := config.FromContext(cmd.Context())
-
 		r := newRunner()
 
 		repoRoot, err := git.MainRepoRoot(r)
@@ -35,7 +32,10 @@ var restoreCmd = &cobra.Command{
 			return err
 		}
 
-		branch, err := operations.FindArchivedBranch(r, task)
+		service, task := operations.ResolveTaskInput(args[0], repoRoot)
+		cfg := config.FromContext(cmd.Context())
+
+		branch, err := operations.FindArchivedBranch(r, service, task)
 		if err != nil {
 			return err
 		}
@@ -65,13 +65,11 @@ var restoreCmd = &cobra.Command{
 			configModules = cfg.Deps.Modules
 		}
 
-		svc, _, _ := resolver.ServiceFromBranch(branch, resolver.AllPrefixes())
-
 		pcResult, err := operations.PostCreateSetup(r, operations.PostCreateParams{
 			RepoRoot:      repoRoot,
 			WtPath:        wtPath,
 			Task:          task,
-			Service:       svc,
+			Service:       service,
 			CopyFiles:     cfg.CopyFiles,
 			SkipDeps:      skipDeps,
 			AutoDetect:    cfg.IsAutoDetectDeps(),

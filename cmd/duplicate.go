@@ -49,6 +49,8 @@ var duplicateCmd = &cobra.Command{
 			return err
 		}
 
+		_, task = operations.ResolveTaskInput(task, repoRoot)
+
 		prefixes := resolver.AllPrefixes()
 
 		if wt.Branch == cfg.DefaultSource {
@@ -64,7 +66,7 @@ var duplicateCmd = &cobra.Command{
 		asFlag, _ := cmd.Flags().GetString(flagAs)
 		var newTask string
 		if asFlag != "" {
-			newTask = asFlag
+			_, newTask = operations.ResolveTaskInput(asFlag, repoRoot)
 		} else {
 			// Auto-suffix: try task-1, task-2, etc.
 			for i := 1; i <= maxDuplicateSuffix; i++ {
