@@ -159,7 +159,6 @@ func TestRenamePartialFailRollback(t *testing.T) {
 	// Worktree should be back at its original path (rollback succeeded).
 	assertFileExists(t, oldPath)
 	assertFileNotExists(t, newPath)
-	_ = newBranch
 }
 
 func TestRenameFailsNoArgs(t *testing.T) {

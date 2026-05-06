@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/resolver"
 )
 
 func TestDuplicateDefaultBranchError(t *testing.T) {
@@ -215,7 +216,8 @@ func TestDuplicateWorktreePathAlreadyExists(t *testing.T) {
 	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: "worktrees"}
 
 	// Create the target worktree path on disk (branch doesn't exist, but directory does)
-	destPath := filepath.Join(wtDir, "feature-orphaned")
+	destBranch := resolver.FullBranchName("", "feature/", "orphaned")
+	destPath := resolver.WorktreePath(wtDir, destBranch)
 	_ = os.MkdirAll(destPath, 0755)
 
 	worktreeOut := strings.Join([]string{
