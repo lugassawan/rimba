@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -233,12 +234,47 @@ func TestFilterDirtyWorktrees(t *testing.T) {
 	s := testExecSpinner(cmd)
 	defer s.Stop()
 
-	result := filterDirtyWorktrees(r, s, worktrees)
+	result := filterDirtyWorktrees(cmd, r, s, worktrees)
 	if len(result) != 1 {
 		t.Fatalf("expected 1 dirty worktree, got %d", len(result))
 	}
 	if result[0].Path != "/dirty" {
 		t.Errorf("expected /dirty, got %s", result[0].Path)
+	}
+}
+
+func TestFilterDirtyWorktreesIsDirtyErrorIncludedAndWarned(t *testing.T) {
+	worktrees := []resolver.WorktreeInfo{
+		{Path: "/wt/error", Branch: "feature/a"},
+	}
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) { return "", nil },
+		runInDir: func(_ string, _ ...string) (string, error) {
+			return "", errors.New("permission denied")
+		},
+	}
+
+	cmd, _ := newTestCmd()
+	var outBuf, errBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&errBuf)
+
+	s := testExecSpinner(cmd)
+	defer s.Stop()
+
+	result := filterDirtyWorktrees(cmd, r, s, worktrees)
+
+	if len(result) != 1 {
+		t.Fatalf("expected erroring worktree to be included (treated as dirty), got %d", len(result))
+	}
+	if result[0].Path != "/wt/error" {
+		t.Errorf("path = %q, want /wt/error", result[0].Path)
+	}
+	if strings.Contains(outBuf.String(), "Warning") {
+		t.Errorf("warning leaked to stdout: %q", outBuf.String())
+	}
+	if !strings.Contains(errBuf.String(), "Warning: cannot check dirty status") {
+		t.Errorf("stderr = %q, want warning", errBuf.String())
 	}
 }
 

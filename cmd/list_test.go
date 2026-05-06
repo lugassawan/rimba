@@ -834,6 +834,25 @@ func TestListRenderTableFullWithPRInfo(t *testing.T) {
 	}
 }
 
+func TestListRenderTableGhWarningOnStderr(t *testing.T) {
+	cmd, _ := newListTestCmd()
+	var outBuf, errBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&errBuf)
+	rows := []resolver.WorktreeDetail{
+		{Task: "a", Branch: "feature/a", Type: "feature", Path: "/wt/a"},
+	}
+
+	listRenderTable(cmd, rows, false, nil, "gh unavailable; PR/CI columns blank")
+
+	if strings.Contains(outBuf.String(), "gh unavailable") {
+		t.Errorf("warning leaked to stdout: %q", outBuf.String())
+	}
+	if !strings.Contains(errBuf.String(), "gh unavailable") {
+		t.Errorf("stderr = %q, want gh warning", errBuf.String())
+	}
+}
+
 func TestListRenderJSONPopulatesPRInfo(t *testing.T) {
 	cmd, buf := newListTestCmd()
 	rows := []resolver.WorktreeDetail{

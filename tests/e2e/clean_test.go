@@ -374,3 +374,17 @@ func TestCleanStaleMutualExclusive(t *testing.T) {
 	r := rimbaFail(t, repo, "clean", flagMergedE2E, flagStaleE2E)
 	assertContains(t, r.Stderr, "if any flags in the group")
 }
+
+func TestCleanFetchWarningOnStderr(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	// setupCleanInitializedRepo has no remote — fetch fails; clean --merged
+	// continues with local state and exits 0 with "No merged worktrees found."
+	repo := setupCleanInitializedRepo(t)
+
+	r := rimbaSuccess(t, repo, "clean", flagMergedE2E)
+	assertContains(t, r.Stderr, "Warning: fetch failed")
+	assertNotContains(t, r.Stdout, "Warning: fetch failed")
+}

@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/lugassawan/rimba/internal/config"
@@ -163,8 +164,11 @@ func buildExecData(command string, results []executor.Result) execData {
 }
 
 // filterDirty filters worktrees to only those with uncommitted changes.
+// If IsDirty returns an error, the worktree is treated as dirty (included)
+// and a warning is written to os.Stderr so the operator can investigate.
 func filterDirty(r git.Runner, worktrees []resolver.WorktreeInfo) []resolver.WorktreeInfo {
 	isDirtyFlags := make([]bool, len(worktrees))
+	warnings := make([]string, len(worktrees))
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 8)
 
@@ -176,12 +180,23 @@ func filterDirty(r git.Runner, worktrees []resolver.WorktreeInfo) []resolver.Wor
 			defer func() { <-sem }()
 
 			d, err := git.IsDirty(r, path)
-			if err == nil && d {
+			if err != nil {
+				warnings[idx] = fmt.Sprintf("Warning: cannot check dirty status for %s: %v", path, err)
+				isDirtyFlags[idx] = true
+				return
+			}
+			if d {
 				isDirtyFlags[idx] = true
 			}
 		}(i, wt.Path)
 	}
 	wg.Wait()
+
+	for _, w := range warnings {
+		if w != "" {
+			fmt.Fprintln(os.Stderr, w)
+		}
+	}
 
 	var out []resolver.WorktreeInfo
 	for i, wt := range worktrees {

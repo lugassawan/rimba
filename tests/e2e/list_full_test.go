@@ -160,7 +160,8 @@ func TestListFullWarnsWhenGhUnauthenticated(t *testing.T) {
 		t.Fatalf("exit = %d\nstdout: %s\nstderr: %s", r.ExitCode, r.Stdout, r.Stderr)
 	}
 
-	assertContains(t, r.Stdout, "gh unavailable")
+	assertContains(t, r.Stderr, "gh unavailable")
+	assertNotContains(t, r.Stdout, "gh unavailable")
 	for _, want := range []string{"PR", "CI", "feat-unauth"} {
 		assertContains(t, r.Stdout, want)
 	}
