@@ -450,3 +450,18 @@ func TestSyncAllPushDefault(t *testing.T) {
 	r := rimbaSuccess(t, repo, "sync", "--all")
 	assertContains(t, r.Stdout, "2 pushed")
 }
+
+func TestSyncFetchWarningOnStderr(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	// setupInitializedRepo has no remote — fetch fails with a warning but sync
+	// continues using local state, so the overall command still exits 0.
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", taskSync)
+
+	r := rimbaSuccess(t, repo, "sync", taskSync)
+	assertContains(t, r.Stderr, "Warning: fetch failed")
+	assertNotContains(t, r.Stdout, "Warning: fetch failed")
+}

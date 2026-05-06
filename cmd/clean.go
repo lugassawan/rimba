@@ -235,7 +235,7 @@ func cleanFetchMergeRef(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, ma
 	s.Start("Fetching from origin...")
 	if err := git.Fetch(r, "origin"); err != nil {
 		s.Stop()
-		fmt.Fprintf(cmd.OutOrStdout(), "Warning: fetch failed (no remote?): continuing with local state\n")
+		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: fetch failed (no remote?): continuing with local state\n")
 		return mainBranch
 	}
 	return "origin/" + mainBranch
@@ -288,7 +288,7 @@ func confirmRemoval(cmd *cobra.Command, count int, label string) bool {
 
 func printWarnings(cmd *cobra.Command, warnings []string) {
 	for _, w := range warnings {
-		fmt.Fprintf(cmd.OutOrStdout(), "Warning: %s\n", w)
+		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: %s\n", w)
 	}
 }
 

@@ -2,6 +2,8 @@ package mcp
 
 import (
 	"errors"
+	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -218,9 +220,50 @@ func TestFilterDirtyError(t *testing.T) {
 			return "", errors.New("git error")
 		},
 	}
+	origStderr := os.Stderr
+	pr, pw, _ := os.Pipe()
+	os.Stderr = pw
+
 	result := filterDirty(r, worktrees)
-	if len(result) != 0 {
-		t.Fatalf("expected 0 on error, got %d", len(result))
+
+	pw.Close()
+	os.Stderr = origStderr
+	_, _ = io.Copy(io.Discard, pr)
+
+	if len(result) != 1 {
+		t.Fatalf("expected erroring worktree treated as dirty (len 1), got %d", len(result))
+	}
+}
+
+func TestFilterDirtyErrorIncludedAndWarned(t *testing.T) {
+	worktrees := []resolver.WorktreeInfo{
+		{Path: "/wt/a", Branch: "feature/a"},
+	}
+	r := &mockRunner{
+		runInDir: func(dir string, args ...string) (string, error) {
+			return "", errors.New("permission denied")
+		},
+	}
+
+	origStderr := os.Stderr
+	pr, pw, _ := os.Pipe()
+	os.Stderr = pw
+
+	result := filterDirty(r, worktrees)
+
+	pw.Close()
+	os.Stderr = origStderr
+	var stderrBuf strings.Builder
+	_, _ = io.Copy(&stderrBuf, pr)
+
+	if len(result) != 1 {
+		t.Fatalf("expected erroring worktree to be included, got %d", len(result))
+	}
+	if result[0].Path != "/wt/a" {
+		t.Errorf("path = %q, want /wt/a", result[0].Path)
+	}
+	if !strings.Contains(stderrBuf.String(), "Warning: cannot check dirty status") {
+		t.Errorf("stderr = %q, want warning", stderrBuf.String())
 	}
 }
 

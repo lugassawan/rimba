@@ -52,7 +52,7 @@ func listRenderTable(cmd *cobra.Command, rows []resolver.WorktreeDetail, full bo
 	p := termcolor.NewPainter(noColor)
 
 	if ghWarning != "" {
-		fmt.Fprintln(cmd.OutOrStdout(), p.Paint(ghWarning, termcolor.Yellow))
+		fmt.Fprintln(cmd.ErrOrStderr(), p.Paint(ghWarning, termcolor.Yellow))
 	}
 
 	tbl := termcolor.NewTable(2)

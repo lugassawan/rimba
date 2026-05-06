@@ -147,7 +147,7 @@ func execSelectWorktrees(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, o
 	}
 
 	if opts.dirty {
-		filtered = filterDirtyWorktrees(r, s, filtered)
+		filtered = filterDirtyWorktrees(cmd, r, s, filtered)
 	}
 	return filtered, nil
 }
@@ -217,8 +217,11 @@ func init() {
 }
 
 // filterDirtyWorktrees filters worktrees to only those with uncommitted changes.
-func filterDirtyWorktrees(r git.Runner, s *spinner.Spinner, worktrees []resolver.WorktreeInfo) []resolver.WorktreeInfo {
+// If IsDirty returns an error for a worktree, it is treated as dirty (included)
+// and a warning is emitted to cmd.ErrOrStderr() so the error is visible.
+func filterDirtyWorktrees(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, worktrees []resolver.WorktreeInfo) []resolver.WorktreeInfo {
 	isDirty := make([]bool, len(worktrees))
+	warnings := make([]string, len(worktrees))
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 8)
 
@@ -231,12 +234,23 @@ func filterDirtyWorktrees(r git.Runner, s *spinner.Spinner, worktrees []resolver
 			defer func() { <-sem }()
 
 			dirty, err := git.IsDirty(r, path)
-			if err == nil && dirty {
+			if err != nil {
+				warnings[idx] = fmt.Sprintf("Warning: cannot check dirty status for %s: %v", path, err)
+				isDirty[idx] = true
+				return
+			}
+			if dirty {
 				isDirty[idx] = true
 			}
 		}(i, wt.Path)
 	}
 	wg.Wait()
+
+	for _, w := range warnings {
+		if w != "" {
+			fmt.Fprintln(cmd.ErrOrStderr(), w)
+		}
+	}
 
 	var out []resolver.WorktreeInfo
 	for i, wt := range worktrees {
