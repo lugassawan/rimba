@@ -88,6 +88,14 @@ func TestResolveOpenCommand(t *testing.T) {
 	}
 	cfgNoOpen := &config.Config{WorktreeDir: "../wt", DefaultSource: "main"}
 	cfgEmpty := &config.Config{WorktreeDir: "../wt", DefaultSource: "main", Open: map[string]string{"empty": ""}}
+	cfgQuoted := &config.Config{
+		WorktreeDir:   "../wt",
+		DefaultSource: "main",
+		Open: map[string]string{
+			"wrap": `sh -c "echo hi"`,
+			"bad":  `echo "unterminated`,
+		},
+	}
 
 	tests := []struct {
 		name       string
@@ -133,6 +141,14 @@ func TestResolveOpenCommand(t *testing.T) {
 		{
 			name:       "inline args passed through",
 			inlineArgs: []string{"pwd"}, wantArgs: []string{"pwd"},
+		},
+		{
+			name: "quoted shortcut args tokenized correctly", cfg: cfgQuoted,
+			withVal: "wrap", wantArgs: []string{"sh", "-c", "echo hi"},
+		},
+		{
+			name: "invalid quoting in shortcut returns error", cfg: cfgQuoted,
+			withVal: "bad", wantErr: "invalid shortcut",
 		},
 	}
 

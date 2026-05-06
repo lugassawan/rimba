@@ -8,7 +8,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/google/shlex"
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/output"
 	"github.com/spf13/cobra"
 )
 
@@ -74,7 +76,7 @@ Shortcuts are configured in .rimba/settings.toml:
 		if err := sub.Run(); err != nil {
 			var exitErr *exec.ExitError
 			if errors.As(err, &exitErr) {
-				os.Exit(exitErr.ExitCode())
+				return &output.SilentError{ExitCode: exitErr.ExitCode()}
 			}
 			return fmt.Errorf("failed to run %q: %w", cmdArgs[0], err)
 		}
@@ -138,7 +140,10 @@ func resolveShortcut(cmd *cobra.Command, name string) ([]string, error) {
 		return nil, fmt.Errorf("shortcut %q not found in [open] config; available: %s", name, availableShortcuts(cfg.Open))
 	}
 
-	parts := strings.Fields(value)
+	parts, err := shlex.Split(value)
+	if err != nil {
+		return nil, fmt.Errorf("invalid shortcut %q in [open] config: %w\nTo fix: check quoting in .rimba/settings.toml", name, err)
+	}
 	if len(parts) == 0 {
 		return nil, fmt.Errorf("shortcut %q has empty value in [open] config", name)
 	}

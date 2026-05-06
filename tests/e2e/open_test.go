@@ -193,3 +193,16 @@ func TestOpenShortcutExitCode(t *testing.T) {
 		t.Error("expected non-zero exit code from shortcut running 'false'")
 	}
 }
+
+func TestOpenQuotedShortcut(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	setupOpenShortcuts(t, repo, map[string]string{"wrap": `sh -c "echo hello world"`})
+	rimbaSuccess(t, repo, "add", "open-quoted")
+
+	r := rimbaSuccess(t, repo, "open", "open-quoted", "-w", "wrap")
+	assertContains(t, r.Stdout, "hello world")
+}
