@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"errors"
 	"strings"
 	"testing"
@@ -512,4 +513,31 @@ func TestPrintSyncSummary(t *testing.T) {
 			t.Errorf("output = %q, want '1 pushed'", out)
 		}
 	})
+}
+
+func TestSyncWorktreeSkipWarningOnStderr(t *testing.T) {
+	var outBuf, errBuf bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool(flagNoColor, true, "")
+	cmd.Flags().Bool(flagJSON, false, "")
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&errBuf)
+
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) { return "", nil },
+		runInDir: func(_ string, _ ...string) (string, error) {
+			return "", errGitFailed
+		},
+	}
+
+	sc := &syncContext{cmd: cmd, r: r, res: &syncResult{}}
+	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
+	syncWorktree(sc, branchMain, wt, false, false)
+
+	if strings.Contains(outBuf.String(), "Warning") {
+		t.Errorf("warning leaked to stdout: %q", outBuf.String())
+	}
+	if !strings.Contains(errBuf.String(), "Warning") {
+		t.Errorf("stderr = %q, want warning", errBuf.String())
+	}
 }

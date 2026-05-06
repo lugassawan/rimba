@@ -84,7 +84,7 @@ var syncCmd = &cobra.Command{
 		s.Start("Fetching from origin...")
 		if err := git.Fetch(r, "origin"); err != nil {
 			s.Stop()
-			fmt.Fprintf(cmd.OutOrStdout(), "Warning: fetch failed (no remote?): continuing with local state\n")
+			fmt.Fprintf(cmd.ErrOrStderr(), "Warning: fetch failed (no remote?): continuing with local state\n")
 		}
 
 		repoRoot, err := git.MainRepoRoot(r)
@@ -211,7 +211,7 @@ func syncWorktree(sc *syncContext, mainBranch string, wt resolver.WorktreeInfo, 
 		if sr.SkipReason == "dirty" {
 			fmt.Fprintf(sc.cmd.OutOrStdout(), "Skipping %s (dirty)\n", sr.Branch)
 		} else {
-			fmt.Fprintf(sc.cmd.OutOrStdout(), "Warning: %s: %s\n", sr.Branch, sr.SkipReason)
+			fmt.Fprintf(sc.cmd.ErrOrStderr(), "Warning: %s: %s\n", sr.Branch, sr.SkipReason)
 		}
 	case sr.Failed:
 		sc.res.failed++

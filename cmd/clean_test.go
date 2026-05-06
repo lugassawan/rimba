@@ -11,12 +11,15 @@ import (
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/operations"
+	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
 )
 
 func TestCleanMergedFetchFails(t *testing.T) {
 	worktreeOut := cleanMergedWorktreeOut()
-	cmd, buf := newCleanMergedCmd()
+	cmd, outBuf := newCleanMergedCmd()
+	var errBuf bytes.Buffer
+	cmd.SetErr(&errBuf) // separate stderr so we can verify warning routing
 	_ = cmd.Flags().Set(flagForce, "true")
 
 	var mergedRef string
@@ -47,9 +50,11 @@ func TestCleanMergedFetchFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fatalCleanMerged, err)
 	}
-	out := buf.String()
-	if !strings.Contains(out, "Warning: fetch failed") {
-		t.Errorf("expected fetch warning, got %q", out)
+	if strings.Contains(outBuf.String(), "Warning: fetch failed") {
+		t.Errorf("warning leaked to stdout: %q", outBuf.String())
+	}
+	if !strings.Contains(errBuf.String(), "Warning: fetch failed") {
+		t.Errorf("expected fetch warning on stderr, got %q", errBuf.String())
 	}
 	if mergedRef != branchMain {
 		t.Errorf("merged ref = %q, want %q (local fallback)", mergedRef, branchMain)
@@ -569,18 +574,54 @@ func TestCleanStaleForce(t *testing.T) {
 
 func TestPrintWarnings(t *testing.T) {
 	cmd := &cobra.Command{}
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
+	var outBuf, errBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&errBuf)
 	printWarnings(cmd, []string{"first", "second"})
-	out := buf.String()
-	if !strings.Contains(out, "Warning: first") || !strings.Contains(out, "Warning: second") {
-		t.Errorf("got %q", out)
+
+	if strings.Contains(outBuf.String(), "Warning") {
+		t.Errorf("warnings leaked to stdout: %q", outBuf.String())
+	}
+	if !strings.Contains(errBuf.String(), "Warning: first") || !strings.Contains(errBuf.String(), "Warning: second") {
+		t.Errorf("stderr = %q, want both warnings", errBuf.String())
 	}
 
-	buf.Reset()
+	outBuf.Reset()
+	errBuf.Reset()
 	printWarnings(cmd, nil)
-	if buf.Len() != 0 {
-		t.Errorf("expected no output for empty warnings, got %q", buf.String())
+	if outBuf.Len() != 0 || errBuf.Len() != 0 {
+		t.Errorf("expected no output for empty warnings")
+	}
+}
+
+func TestCleanFetchMergeRefWarningOnStderr(t *testing.T) {
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool(flagNoColor, true, "")
+	cmd.Flags().Bool(flagJSON, false, "")
+	var outBuf, errBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&errBuf)
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == cmdFetch {
+				return "", errors.New("no remote")
+			}
+			return "", nil
+		},
+	}
+	s := spinner.New(spinnerOpts(cmd))
+	defer s.Stop()
+
+	ref := cleanFetchMergeRef(cmd, r, s, branchMain)
+	if ref != branchMain {
+		t.Errorf("ref = %q, want %q (local fallback)", ref, branchMain)
+	}
+	if strings.Contains(outBuf.String(), "Warning") {
+		t.Errorf("warning leaked to stdout: %q", outBuf.String())
+	}
+	if !strings.Contains(errBuf.String(), "Warning: fetch failed") {
+		t.Errorf("stderr = %q, want 'Warning: fetch failed'", errBuf.String())
 	}
 }
 
