@@ -11,6 +11,7 @@ import (
 const (
 	cmdRevParse     = "rev-parse"
 	cmdWorktree     = "worktree"
+	cmdMove         = "move"
 	wtDir           = "/worktrees"
 	branchAuth      = "feature/auth"
 	errMoveFailed   = "move failed"
@@ -71,7 +72,7 @@ func TestRenameWorktreeMoveFails(t *testing.T) {
 			if len(args) >= 1 && args[0] == cmdRevParse {
 				return "", errGitFailed
 			}
-			if len(args) >= 2 && args[0] == cmdWorktree && args[1] == "move" {
+			if len(args) >= 2 && args[0] == cmdWorktree && args[1] == cmdMove {
 				return "", errors.New(errMoveFailed)
 			}
 			return "", nil
@@ -87,10 +88,15 @@ func TestRenameWorktreeMoveFails(t *testing.T) {
 }
 
 func TestRenameWorktreeBranchRenameFails(t *testing.T) {
+	moveCount := 0
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			if len(args) >= 1 && args[0] == cmdRevParse {
 				return "", errGitFailed
+			}
+			if len(args) >= 2 && args[0] == cmdWorktree && args[1] == cmdMove {
+				moveCount++
+				return "", nil
 			}
 			if len(args) >= 2 && args[0] == "branch" && args[1] == "-m" {
 				return "", errors.New(errRenameFailed)
@@ -105,8 +111,49 @@ func TestRenameWorktreeBranchRenameFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error from branch rename failure")
 	}
-	if !strings.Contains(err.Error(), "worktree moved but failed") {
-		t.Errorf("error = %q, want 'worktree moved but failed'", err.Error())
+	if !strings.Contains(err.Error(), "failed to rename branch") {
+		t.Errorf("error = %q, want 'failed to rename branch'", err.Error())
+	}
+	if !strings.Contains(err.Error(), "moved back") {
+		t.Errorf("error = %q, want 'moved back' (rollback confirmation)", err.Error())
+	}
+	if moveCount != 2 {
+		t.Errorf("expected 2 worktree move calls (forward + rollback), got %d", moveCount)
+	}
+}
+
+func TestRenameWorktreeBranchRenameFailsRollbackFails(t *testing.T) {
+	moveCount := 0
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return "", errGitFailed
+			}
+			if len(args) >= 2 && args[0] == cmdWorktree && args[1] == cmdMove {
+				moveCount++
+				if moveCount == 2 {
+					return "", errors.New("rollback move failed")
+				}
+				return "", nil
+			}
+			if len(args) >= 2 && args[0] == "branch" && args[1] == "-m" {
+				return "", errors.New(errRenameFailed)
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
+	_, err := RenameWorktree(r, wt, "auth", wtDir, false)
+	if err == nil {
+		t.Fatal("expected error from branch rename + rollback failure")
+	}
+	if !strings.Contains(err.Error(), "failed to rename branch") {
+		t.Errorf("error = %q, want 'failed to rename branch'", err.Error())
+	}
+	if !strings.Contains(err.Error(), "Rollback failed") {
+		t.Errorf("error = %q, want 'Rollback failed'", err.Error())
 	}
 }
 

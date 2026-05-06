@@ -38,7 +38,12 @@ func RenameWorktree(r git.Runner, wt resolver.WorktreeInfo, newTask, wtDir strin
 	}
 
 	if err := git.RenameBranch(r, wt.Branch, newBranch); err != nil {
-		return RenameResult{}, fmt.Errorf("worktree moved but failed to rename branch %q: %w\nTo complete manually: git branch -m %s %s", wt.Branch, err, wt.Branch, newBranch)
+		if rbErr := git.MoveWorktree(r, newPath, wt.Path, force); rbErr != nil {
+			return RenameResult{}, fmt.Errorf("failed to rename branch %q → %q: %w\nRollback failed — worktree is at %s: %w\nTo recover: git worktree move %s %s && git branch -m %s %s",
+				wt.Branch, newBranch, err, newPath, rbErr, newPath, wt.Path, wt.Branch, newBranch)
+		}
+		return RenameResult{}, fmt.Errorf("failed to rename branch %q → %q: %w\nWorktree moved back to %s\nTo retry: git branch -m %s %s",
+			wt.Branch, newBranch, err, wt.Path, wt.Branch, newBranch)
 	}
 
 	return RenameResult{
