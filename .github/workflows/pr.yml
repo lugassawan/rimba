@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Validate PR title
+        if: github.event.pull_request.user.login != 'dependabot[bot]'
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
@@ -33,6 +34,7 @@ jobs:
           fi
 
       - name: Validate issue reference
+        if: github.event.pull_request.user.login != 'dependabot[bot]'
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
