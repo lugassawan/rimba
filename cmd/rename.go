@@ -39,6 +39,9 @@ var renameCmd = &cobra.Command{
 			return err
 		}
 
+		_, task = operations.ResolveTaskInput(task, repoRoot)
+		_, newTask = operations.ResolveTaskInput(newTask, repoRoot)
+
 		wtDir := filepath.Join(repoRoot, cfg.WorktreeDir)
 
 		s := spinner.New(spinnerOpts(cmd))

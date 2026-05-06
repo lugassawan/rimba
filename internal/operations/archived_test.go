@@ -10,6 +10,8 @@ const (
 	cmdList         = "list"
 
 	branchListArchived = "main\nfeature/archived-task\nfeature/active-task"
+
+	wtListMainOnly = "worktree /repo\nHEAD abc\nbranch refs/heads/main\n"
 )
 
 func TestFindArchivedBranch(t *testing.T) {
@@ -27,7 +29,7 @@ func TestFindArchivedBranch(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	branch, err := FindArchivedBranch(mr, "archived-task")
+	branch, err := FindArchivedBranch(mr, "", "archived-task")
 	if err != nil {
 		t.Fatalf("FindArchivedBranch: %v", err)
 	}
@@ -51,7 +53,7 @@ func TestFindArchivedBranchNotFound(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	_, err := FindArchivedBranch(mr, "nonexistent")
+	_, err := FindArchivedBranch(mr, "", "nonexistent")
 	if err == nil {
 		t.Fatal("expected error for nonexistent archived branch")
 	}
@@ -64,14 +66,14 @@ func TestFindArchivedBranchExactMatch(t *testing.T) {
 			case args[0] == cmdBranch:
 				return "main\nmy-custom-branch", nil
 			case args[0] == cmdWorktreeTest && args[1] == cmdList:
-				return "worktree /repo\nHEAD abc\nbranch refs/heads/main\n", nil
+				return wtListMainOnly, nil
 			}
 			return "", nil
 		},
 		runInDir: noopRunInDir,
 	}
 
-	branch, err := FindArchivedBranch(mr, "my-custom-branch")
+	branch, err := FindArchivedBranch(mr, "", "my-custom-branch")
 	if err != nil {
 		t.Fatalf("FindArchivedBranch: %v", err)
 	}
@@ -87,14 +89,14 @@ func TestFindArchivedBranchByTaskExtraction(t *testing.T) {
 			case args[0] == cmdBranch:
 				return "main\nbugfix/some-task", nil
 			case args[0] == cmdWorktreeTest && args[1] == cmdList:
-				return "worktree /repo\nHEAD abc\nbranch refs/heads/main\n", nil
+				return wtListMainOnly, nil
 			}
 			return "", nil
 		},
 		runInDir: noopRunInDir,
 	}
 
-	branch, err := FindArchivedBranch(mr, "some-task")
+	branch, err := FindArchivedBranch(mr, "", "some-task")
 	if err != nil {
 		t.Fatalf("FindArchivedBranch: %v", err)
 	}
@@ -121,7 +123,7 @@ func TestFindArchivedBranchExactMatchSkipsActive(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	branch, err := FindArchivedBranch(mr, "my-task")
+	branch, err := FindArchivedBranch(mr, "", "my-task")
 	if err != nil {
 		t.Fatalf("FindArchivedBranch: %v", err)
 	}
@@ -148,7 +150,7 @@ func TestFindArchivedBranchPrefixMatchSkipsActive(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	branch, err := FindArchivedBranch(mr, "task-x")
+	branch, err := FindArchivedBranch(mr, "", "task-x")
 	if err != nil {
 		t.Fatalf("FindArchivedBranch: %v", err)
 	}
@@ -175,7 +177,7 @@ func TestFindArchivedBranchSkipsActiveInFallback(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	_, err := FindArchivedBranch(mr, "some-task")
+	_, err := FindArchivedBranch(mr, "", "some-task")
 	if err == nil {
 		t.Fatal("expected error when only matching branch is active")
 	}
@@ -192,7 +194,7 @@ func TestFindArchivedBranchError(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	_, err := FindArchivedBranch(mr, "any")
+	_, err := FindArchivedBranch(mr, "", "any")
 	if err == nil {
 		t.Fatal("expected error from LocalBranches failure")
 	}
@@ -212,7 +214,7 @@ func TestFindArchivedBranchWorktreeError(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	_, err := FindArchivedBranch(mr, "task")
+	_, err := FindArchivedBranch(mr, "", "task")
 	if err == nil {
 		t.Fatal("expected error from ListWorktrees failure")
 	}
@@ -279,5 +281,95 @@ func TestListArchivedBranchesWorktreeError(t *testing.T) {
 	_, err := ListArchivedBranches(mr, branchMain)
 	if err == nil {
 		t.Fatal("expected error from ListWorktrees failure")
+	}
+}
+
+func TestFindArchivedBranchMonorepoByPrefix(t *testing.T) {
+	mr := &mockRunner{
+		run: func(args ...string) (string, error) {
+			switch {
+			case args[0] == cmdBranch:
+				return "main\nauth-api/feature/login", nil
+			case args[0] == cmdWorktreeTest && args[1] == cmdList:
+				return wtListMainOnly, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	branch, err := FindArchivedBranch(mr, "auth-api", "login")
+	if err != nil {
+		t.Fatalf("FindArchivedBranch: %v", err)
+	}
+	if branch != "auth-api/feature/login" {
+		t.Errorf("branch = %q, want %q", branch, "auth-api/feature/login")
+	}
+}
+
+func TestFindArchivedBranchMonorepoByTaskExtraction(t *testing.T) {
+	mr := &mockRunner{
+		run: func(args ...string) (string, error) {
+			switch {
+			case args[0] == cmdBranch:
+				return "main\nauth-api/bugfix/login", nil
+			case args[0] == cmdWorktreeTest && args[1] == cmdList:
+				return wtListMainOnly, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	branch, err := FindArchivedBranch(mr, "auth-api", "login")
+	if err != nil {
+		t.Fatalf("FindArchivedBranch: %v", err)
+	}
+	if branch != "auth-api/bugfix/login" {
+		t.Errorf("branch = %q, want %q", branch, "auth-api/bugfix/login")
+	}
+}
+
+func TestFindArchivedBranchMonorepoWrongServiceNoMatch(t *testing.T) {
+	mr := &mockRunner{
+		run: func(args ...string) (string, error) {
+			switch {
+			case args[0] == cmdBranch:
+				return "main\nweb-api/feature/login", nil
+			case args[0] == cmdWorktreeTest && args[1] == cmdList:
+				return wtListMainOnly, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	_, err := FindArchivedBranch(mr, "auth-api", "login")
+	if err == nil {
+		t.Fatal("expected error when service does not match")
+	}
+}
+
+func TestFindArchivedBranchNonMonorepoRegression(t *testing.T) {
+	mr := &mockRunner{
+		run: func(args ...string) (string, error) {
+			switch {
+			case args[0] == cmdBranch:
+				return branchListArchived, nil
+			case args[0] == cmdWorktreeTest && args[1] == cmdList:
+				return "worktree /repo\nHEAD abc\nbranch refs/heads/main\n\n" +
+					"worktree /wt/feature-active-task\nHEAD abc\nbranch refs/heads/feature/active-task\n", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	branch, err := FindArchivedBranch(mr, "", "archived-task")
+	if err != nil {
+		t.Fatalf("FindArchivedBranch: %v", err)
+	}
+	if branch != "feature/archived-task" {
+		t.Errorf("branch = %q, want %q", branch, "feature/archived-task")
 	}
 }

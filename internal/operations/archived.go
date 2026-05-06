@@ -7,10 +7,9 @@ import (
 	"github.com/lugassawan/rimba/internal/resolver"
 )
 
-// FindArchivedBranch finds a branch for the given task that is not associated
-// with any active worktree. It tries prefix+task combinations first, then exact
-// match, then falls back to task extraction.
-func FindArchivedBranch(r git.Runner, task string) (string, error) {
+// FindArchivedBranch finds a branch for the given service+task that is not
+// associated with any active worktree. service may be empty for non-monorepo repos.
+func FindArchivedBranch(r git.Runner, service, task string) (string, error) {
 	branches, err := git.LocalBranches(r)
 	if err != nil {
 		return "", fmt.Errorf("list branches: %w", err)
@@ -23,13 +22,13 @@ func FindArchivedBranch(r git.Runner, task string) (string, error) {
 
 	prefixes := resolver.AllPrefixes()
 
-	if b, ok := searchByPrefixedTask(branches, active, prefixes, task); ok {
+	if b, ok := searchByPrefixedTask(branches, active, prefixes, service, task); ok {
 		return b, nil
 	}
-	if b, ok := searchByExactMatch(branches, active, task); ok {
+	if b, ok := searchByExactMatch(branches, active, service, task); ok {
 		return b, nil
 	}
-	if b, ok := searchByTaskExtraction(branches, active, prefixes, task); ok {
+	if b, ok := searchByTaskExtraction(branches, active, prefixes, service, task); ok {
 		return b, nil
 	}
 
@@ -60,9 +59,10 @@ func ListArchivedBranches(r git.Runner, mainBranch string) ([]string, error) {
 }
 
 // searchByPrefixedTask tries prefix+task combinations against branches.
-func searchByPrefixedTask(branches []string, active map[string]bool, prefixes []string, task string) (string, bool) {
+// For monorepo (service non-empty), candidates include the service segment.
+func searchByPrefixedTask(branches []string, active map[string]bool, prefixes []string, service, task string) (string, bool) {
 	for _, p := range prefixes {
-		candidate := resolver.BranchName(p, task)
+		candidate := resolver.FullBranchName(service, p, task)
 		for _, b := range branches {
 			if b == candidate && !active[b] {
 				return b, true
@@ -73,9 +73,10 @@ func searchByPrefixedTask(branches []string, active map[string]bool, prefixes []
 }
 
 // searchByExactMatch checks if the task name exactly matches an inactive branch.
-func searchByExactMatch(branches []string, active map[string]bool, task string) (string, bool) {
+// For monorepo (service non-empty), also tries service+"/"+task as an exact branch name.
+func searchByExactMatch(branches []string, active map[string]bool, service, task string) (string, bool) {
 	for _, b := range branches {
-		if b == task && !active[b] {
+		if !active[b] && (b == task || (service != "" && b == service+"/"+task)) {
 			return b, true
 		}
 	}
@@ -83,15 +84,23 @@ func searchByExactMatch(branches []string, active map[string]bool, task string) 
 }
 
 // searchByTaskExtraction finds a branch whose extracted task matches the given task.
-func searchByTaskExtraction(branches []string, active map[string]bool, prefixes []string, task string) (string, bool) {
+// For monorepo (service non-empty), also verifies the branch's service segment matches.
+func searchByTaskExtraction(branches []string, active map[string]bool, prefixes []string, service, task string) (string, bool) {
 	for _, b := range branches {
 		if active[b] {
 			continue
 		}
 		t, _ := resolver.PureTaskFromBranch(b, prefixes)
-		if t == task {
-			return b, true
+		if t != task {
+			continue
 		}
+		if service != "" {
+			svc, _, _ := resolver.ServiceFromBranch(b, prefixes)
+			if svc != service {
+				continue
+			}
+		}
+		return b, true
 	}
 	return "", false
 }
