@@ -60,6 +60,12 @@
 curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/install.sh | bash
 ```
 
+The install script honors the shell variable `INSTALL_DIR` (default: `$HOME/.local/bin`). This is read by `scripts/install.sh`, not by the `rimba` binary:
+
+```sh
+INSTALL_DIR="$HOME/bin" curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/install.sh | bash
+```
+
 ### Go install
 
 ```sh
