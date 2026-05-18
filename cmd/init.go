@@ -222,7 +222,7 @@ func runInitGlobal(cmd *cobra.Command, uninstall bool) error {
 	if err != nil {
 		return errhint.WithFix(
 			fmt.Errorf("resolve home directory: %w", err),
-			"set HOME to your user home directory: export HOME=/Users/<you>",
+			"set HOME to your user home directory (e.g. /home/<username> on Linux, /Users/<username> on macOS)",
 		)
 	}
 	if uninstall {
@@ -245,7 +245,7 @@ func runInstall(
 	if err != nil {
 		return errhint.WithFix(
 			fmt.Errorf("agent files: %w", err),
-			"check write permissions for the install dir, or retry: rimba init --agents",
+			"check write permissions for the install dir",
 		)
 	}
 	var mcps []agentfile.Result
@@ -254,7 +254,7 @@ func runInstall(
 		if err != nil {
 			return errhint.WithFix(
 				fmt.Errorf("mcp servers: %w", err),
-				"check write permissions for MCP client configs (.mcp.json, .cursor/mcp.json, ~/.claude/settings.json), or retry: rimba init --agents",
+				"check write permissions for MCP client configs (.mcp.json, .cursor/mcp.json, ~/.claude/settings.json)",
 			)
 		}
 	}
