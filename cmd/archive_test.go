@@ -37,6 +37,40 @@ func TestArchiveSuccess(t *testing.T) {
 	}
 }
 
+func TestArchiveDryRun(t *testing.T) {
+	worktreeRemoved := false
+	restore := overrideNewRunner(&mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == cmdWorktreeTest && args[1] == cmdRemove {
+				worktreeRemoved = true
+			}
+			switch {
+			case args[0] == cmdRevParse && args[1] == cmdShowToplevel:
+				return repoPath, nil
+			case args[0] == cmdWorktreeTest && args[1] == cmdList:
+				return wtRepo + headMainBlock + "\n" +
+					wtFeatureLogin + "\n" + headDEF456 + "\n" + branchRefFeatureLogin + "\n", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	})
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().Bool(flagDryRun, false, "")
+	_ = cmd.Flags().Set(flagDryRun, "true")
+	if err := archiveCmd.RunE(cmd, []string{taskLogin}); err != nil {
+		t.Fatalf("archiveCmd.RunE: %v", err)
+	}
+	if worktreeRemoved {
+		t.Error("worktree must not be removed in dry-run mode")
+	}
+	if !strings.Contains(buf.String(), "[dry-run]") {
+		t.Errorf("output = %q, want '[dry-run]' prefix", buf.String())
+	}
+}
+
 func TestArchiveNotFound(t *testing.T) {
 	restore := overrideNewRunner(&mockRunner{
 		run: func(args ...string) (string, error) {

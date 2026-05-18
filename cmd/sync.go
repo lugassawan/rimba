@@ -34,6 +34,7 @@ type syncContext struct {
 	cfg      *config.Config
 	s        *spinner.Spinner
 	repoRoot string
+	dryRun   bool
 	res      *syncResult // used by syncAll goroutines
 	mu       sync.Mutex  // guards res and output in syncAll
 }
@@ -48,8 +49,11 @@ type syncResult struct {
 var syncCmd = &cobra.Command{
 	Use:   "sync [task]",
 	Short: "Sync worktree(s) with the main branch",
-	Long:  "Rebases (or merges) worktree branches onto the latest main branch and pushes the result. Use --no-push to skip pushing. Use --all to sync all eligible worktrees, or specify a single task.",
-	Args:  cobra.MaximumNArgs(1),
+	Long:  "Rebases (or merges) worktree branches onto the latest main branch and pushes the result. Use --no-push to skip pushing. Use --all to sync all eligible worktrees. Use --dry-run to preview what would be synced without making changes.",
+	Example: `  rimba sync auth             # rebase auth onto main
+  rimba sync --all            # sync all eligible worktrees
+  rimba sync auth --dry-run   # preview without syncing`,
+	Args: cobra.MaximumNArgs(1),
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
@@ -64,6 +68,7 @@ var syncCmd = &cobra.Command{
 		useMerge, _ := cmd.Flags().GetBool(flagSyncMerge)
 		includeInherited, _ := cmd.Flags().GetBool(flagIncludeInherited)
 		noPush, _ := cmd.Flags().GetBool(flagNoPush)
+		dryRun, _ := cmd.Flags().GetBool(flagDryRun)
 		push := !noPush
 
 		if !all && len(args) == 0 {
@@ -75,16 +80,21 @@ var syncCmd = &cobra.Command{
 			Add(flagSyncMerge, hintSyncMerge).
 			Add(flagIncludeInherited, hintIncludeInherited).
 			Add(flagNoPush, hintNoPush).
+			Add(flagDryRun, hintDryRun).
 			Show()
 
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
 
 		// Fetch latest from origin (non-fatal if no remote configured)
-		s.Start("Fetching from origin...")
-		if err := git.Fetch(r, "origin"); err != nil {
-			s.Stop()
-			fmt.Fprintf(cmd.ErrOrStderr(), "Warning: fetch failed (no remote?): continuing with local state\n")
+		if dryRun {
+			fmt.Fprintln(cmd.OutOrStdout(), "[dry-run] would fetch origin")
+		} else {
+			s.Start("Fetching from origin...")
+			if err := git.Fetch(r, "origin"); err != nil {
+				s.Stop()
+				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: fetch failed (no remote?): continuing with local state\n")
+			}
 		}
 
 		repoRoot, err := git.MainRepoRoot(r)
@@ -98,7 +108,7 @@ var syncCmd = &cobra.Command{
 		}
 
 		prefixes := resolver.AllPrefixes()
-		sc := &syncContext{cmd: cmd, r: r, cfg: cfg, s: s, repoRoot: repoRoot}
+		sc := &syncContext{cmd: cmd, r: r, cfg: cfg, s: s, repoRoot: repoRoot, dryRun: dryRun}
 
 		if all {
 			return syncAll(sc, worktrees, prefixes, useMerge, includeInherited, push)
@@ -112,6 +122,7 @@ func init() {
 	syncCmd.Flags().Bool(flagSyncMerge, false, "Use merge instead of rebase")
 	syncCmd.Flags().Bool(flagIncludeInherited, false, "Include inherited/duplicate worktrees when using --all")
 	syncCmd.Flags().Bool(flagNoPush, false, "Skip pushing after sync")
+	syncCmd.Flags().Bool(flagDryRun, false, "Preview what would be synced without making changes")
 
 	rootCmd.AddCommand(syncCmd)
 }
@@ -132,6 +143,11 @@ func syncOne(sc *syncContext, input string, worktrees []resolver.WorktreeInfo, p
 			fmt.Errorf("worktree %q has uncommitted changes", task),
 			"Commit or stash changes before syncing: cd "+wt.Path,
 		)
+	}
+
+	if sc.dryRun {
+		printSyncDryRun(sc.cmd, wt.Branch, sc.cfg.DefaultSource, useMerge, push)
+		return nil
 	}
 
 	verb := "Rebasing"
@@ -195,11 +211,20 @@ func syncAll(sc *syncContext, worktrees []resolver.WorktreeInfo, prefixes []stri
 	wg.Wait()
 
 	sc.s.Stop()
-	printSyncSummary(sc.cmd, sc.cfg.DefaultSource, useMerge, sc.res)
+	if !sc.dryRun {
+		printSyncSummary(sc.cmd, sc.cfg.DefaultSource, useMerge, sc.res)
+	}
 	return nil
 }
 
 func syncWorktree(sc *syncContext, mainBranch string, wt resolver.WorktreeInfo, useMerge, push bool) {
+	if sc.dryRun {
+		sc.mu.Lock()
+		defer sc.mu.Unlock()
+		printSyncDryRun(sc.cmd, wt.Branch, mainBranch, useMerge, push)
+		return
+	}
+
 	sr := operations.SyncWorktree(sc.r, mainBranch, wt, useMerge, push)
 
 	sc.mu.Lock()
@@ -232,6 +257,17 @@ func syncWorktree(sc *syncContext, mainBranch string, wt resolver.WorktreeInfo, 
 			}
 			sc.res.failures = append(sc.res.failures, fmt.Sprintf("  %s: push failed: %s\n    To resolve: %s", sr.Branch, sr.PushError, pushHint))
 		}
+	}
+}
+
+func printSyncDryRun(cmd *cobra.Command, branch, mainBranch string, useMerge, push bool) {
+	verb := "rebase"
+	if useMerge {
+		verb = "merge"
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] would %s %s onto %s\n", verb, branch, mainBranch)
+	if push {
+		fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] would push %s to origin\n", branch)
 	}
 }
 

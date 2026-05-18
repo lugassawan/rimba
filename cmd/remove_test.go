@@ -102,6 +102,32 @@ func TestRemoveWorktreeFails(t *testing.T) {
 	}
 }
 
+func TestRemoveDryRun(t *testing.T) {
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return removeWorktreeOut, nil },
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().Bool(flagKeepBranch, false, "")
+	cmd.Flags().Bool(flagForce, false, "")
+	cmd.Flags().Bool(flagDryRun, false, "")
+	_ = cmd.Flags().Set(flagDryRun, "true")
+
+	if err := removeCmd.RunE(cmd, []string{"login"}); err != nil {
+		t.Fatalf("removeCmd.RunE: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "[dry-run]") {
+		t.Errorf("output = %q, want '[dry-run]' prefix", out)
+	}
+	if strings.Contains(out, "Removed worktree") {
+		t.Errorf("output = %q, must not contain 'Removed worktree' in dry-run mode", out)
+	}
+}
+
 func TestRemoveBranchDeleteFails(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {

@@ -404,6 +404,33 @@ func TestMergeTargetDirtyInto(t *testing.T) {
 	}
 }
 
+func TestMergeDryRun(t *testing.T) {
+	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: defaultRelativeWtDir}
+	r := mergeTestRunner(nil)
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().String(flagInto, "", "")
+	cmd.Flags().Bool(flagNoFF, false, "")
+	cmd.Flags().Bool(flagKeep, false, "")
+	cmd.Flags().Bool(flagDelete, false, "")
+	cmd.Flags().Bool(flagDryRun, false, "")
+	_ = cmd.Flags().Set(flagDryRun, "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	if err := mergeCmd.RunE(cmd, []string{"login"}); err != nil {
+		t.Fatalf(fatalMergeRunE, err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "[dry-run]") {
+		t.Errorf("output = %q, want '[dry-run]' prefix", out)
+	}
+	if strings.Contains(out, "Merged feature/login") {
+		t.Errorf("output = %q, must not contain 'Merged' in dry-run mode", out)
+	}
+}
+
 func TestMergeWithNoFF(t *testing.T) {
 	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: defaultRelativeWtDir}
 

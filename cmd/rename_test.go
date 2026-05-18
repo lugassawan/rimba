@@ -130,6 +130,123 @@ func TestRenameWorktreeNotFound(t *testing.T) {
 	}
 }
 
+func makeRenameWorktreeOut(repoDir string) string {
+	return strings.Join([]string{
+		wtPrefix + repoDir,
+		headABC123,
+		branchRefMain,
+		"",
+		wtFeatureLogin,
+		headDEF456,
+		branchRefFeatureLogin,
+		"",
+	}, "\n")
+}
+
+func makeRenameRunner(repoDir, worktreeOut string) *mockRunner {
+	return &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdGitCommonDir {
+				return filepath.Join(repoDir, ".git"), nil
+			}
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return "", errGitFailed
+			}
+			return worktreeOut, nil
+		},
+		runInDir: noopRunInDir,
+	}
+}
+
+func TestRenameRunsHooksWhenConfigured(t *testing.T) {
+	// WorktreeDir must be relative; cmd layer joins it with repoRoot.
+	// new branch = feature/auth → new path = <repoDir>/wt/feature-auth
+	repoDir := t.TempDir()
+	newWtPath := filepath.Join(repoDir, "wt", "feature-auth")
+	_ = os.MkdirAll(newWtPath, 0755)
+	marker := filepath.Join(repoDir, "hook-ran")
+
+	cfg := &config.Config{
+		WorktreeDir:   "wt",
+		DefaultSource: branchMain,
+		PostRename:    []string{"touch " + marker},
+	}
+	worktreeOut := makeRenameWorktreeOut(repoDir)
+	restore := overrideNewRunner(makeRenameRunner(repoDir, worktreeOut))
+	defer restore()
+
+	cmd, _ := newTestCmd()
+	cmd.Flags().BoolP("force", "f", false, "")
+	cmd.Flags().Bool(flagSkipDeps, false, "")
+	cmd.Flags().Bool(flagSkipHooks, false, "")
+	_ = cmd.Flags().Set(flagSkipDeps, "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	if err := renameCmd.RunE(cmd, []string{"login", "auth"}); err != nil {
+		t.Fatalf("renameCmd.RunE: %v", err)
+	}
+	if _, err := os.Stat(marker); os.IsNotExist(err) {
+		t.Error("post-rename hook did not run; expected marker file to be created")
+	}
+}
+
+func TestRenameSkipHooks(t *testing.T) {
+	repoDir := t.TempDir()
+	hookDir := t.TempDir()
+	marker := filepath.Join(hookDir, "hook-ran")
+	cfg := &config.Config{
+		WorktreeDir:   hookDir,
+		DefaultSource: branchMain,
+		PostRename:    []string{"touch " + marker},
+	}
+	worktreeOut := makeRenameWorktreeOut(repoDir)
+	restore := overrideNewRunner(makeRenameRunner(repoDir, worktreeOut))
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().BoolP("force", "f", false, "")
+	cmd.Flags().Bool(flagSkipDeps, false, "")
+	cmd.Flags().Bool(flagSkipHooks, false, "")
+	_ = cmd.Flags().Set(flagSkipDeps, "true")
+	_ = cmd.Flags().Set(flagSkipHooks, "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	if err := renameCmd.RunE(cmd, []string{"login", "auth"}); err != nil {
+		t.Fatalf("renameCmd.RunE: %v", err)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("post-rename hook must not run when --skip-hooks is set")
+	}
+	if !strings.Contains(buf.String(), "Renamed worktree") {
+		t.Errorf("output = %q, want 'Renamed worktree'", buf.String())
+	}
+}
+
+func TestRenameSkipDeps(t *testing.T) {
+	repoDir := t.TempDir()
+	cfg := &config.Config{WorktreeDir: defaultRelativeWtDir, DefaultSource: branchMain}
+	worktreeOut := makeRenameWorktreeOut(repoDir)
+	restore := overrideNewRunner(makeRenameRunner(repoDir, worktreeOut))
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().BoolP("force", "f", false, "")
+	cmd.Flags().Bool(flagSkipDeps, false, "")
+	cmd.Flags().Bool(flagSkipHooks, false, "")
+	_ = cmd.Flags().Set(flagSkipDeps, "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	if err := renameCmd.RunE(cmd, []string{"login", "auth"}); err != nil {
+		t.Fatalf("renameCmd.RunE: %v", err)
+	}
+	if !strings.Contains(buf.String(), "Renamed worktree") {
+		t.Errorf("output = %q, want 'Renamed worktree'", buf.String())
+	}
+}
+
 func TestRenameMoveFails(t *testing.T) {
 	repoDir := t.TempDir()
 	cfg := &config.Config{WorktreeDir: defaultRelativeWtDir, DefaultSource: branchMain}

@@ -181,3 +181,38 @@ func TestRenameFailsOneArg(t *testing.T) {
 	repo := setupInitializedRepo(t)
 	rimbaFail(t, repo, "rename", "some-task")
 }
+
+func TestRenamePostRenameHookRuns(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	cfg := loadConfig(t, repo)
+	marker := filepath.Join(repo, "hook-ran.txt")
+	cfg.PostRename = []string{"touch " + marker}
+	saveConfig(t, repo, cfg)
+
+	rimbaSuccess(t, repo, "add", "hook-src", flagSkipDepsE2E, flagSkipHooksE2E)
+	rimbaSuccess(t, repo, "rename", "hook-src", "hook-dst", flagSkipDepsE2E)
+
+	assertFileExists(t, marker)
+}
+
+func TestRenameSkipHooksSkipsPostRenameHook(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	cfg := loadConfig(t, repo)
+	marker := filepath.Join(repo, "hook-ran.txt")
+	cfg.PostRename = []string{"touch " + marker}
+	saveConfig(t, repo, cfg)
+
+	rimbaSuccess(t, repo, "add", "hook-skip-src", flagSkipDepsE2E, flagSkipHooksE2E)
+	rimbaSuccess(t, repo, "rename", "hook-skip-src", "hook-skip-dst",
+		flagSkipDepsE2E, flagSkipHooksE2E)
+
+	assertFileNotExists(t, marker)
+}

@@ -28,6 +28,7 @@ type Config struct {
 	DefaultSource string   `toml:"default_source,omitempty"`
 	CopyFiles     []string `toml:"copy_files"`
 	PostCreate    []string `toml:"post_create,omitempty"`
+	PostRename    []string `toml:"post_rename,omitempty"`
 
 	Deps *DepsConfig       `toml:"deps,omitempty"`
 	Open map[string]string `toml:"open,omitempty"`
@@ -154,6 +155,9 @@ func Merge(team, local *Config) *Config {
 	}
 	if local.PostCreate != nil {
 		merged.PostCreate = local.PostCreate
+	}
+	if local.PostRename != nil {
+		merged.PostRename = local.PostRename
 	}
 	if local.Deps != nil {
 		merged.Deps = local.Deps

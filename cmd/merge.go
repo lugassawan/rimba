@@ -25,8 +25,11 @@ const (
 var mergeCmd = &cobra.Command{
 	Use:   "merge <source-task>",
 	Short: "Merge a worktree branch into main or another worktree",
-	Long:  "Merges the source worktree's branch into main (default) or another worktree. Auto-deletes the source when merging to main unless --keep is set. Keeps the source when merging between worktrees unless --delete is set.",
-	Args:  cobra.ExactArgs(1),
+	Long:  "Merges the source worktree's branch into main (default) or another worktree. Auto-deletes the source when merging to main unless --keep is set. Keeps the source when merging between worktrees unless --delete is set. Use --dry-run to preview what would happen without making changes.",
+	Example: `  rimba merge auth             # merge auth into main
+  rimba merge auth --keep      # merge but keep the worktree
+  rimba merge auth --dry-run   # preview without merging`,
+	Args: cobra.ExactArgs(1),
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
@@ -52,11 +55,13 @@ var mergeCmd = &cobra.Command{
 		noFF, _ := cmd.Flags().GetBool(flagNoFF)
 		keep, _ := cmd.Flags().GetBool(flagKeep)
 		del, _ := cmd.Flags().GetBool(flagDelete)
+		dryRun, _ := cmd.Flags().GetBool(flagDryRun)
 
 		hint.New(cmd, hintPainter(cmd)).
 			Add(flagNoFF, hintNoFF).
 			Add(flagKeep, hintKeep).
 			Add(flagInto, hintInto).
+			Add(flagDryRun, hintDryRun).
 			Show()
 
 		s := spinner.New(spinnerOpts(cmd))
@@ -73,12 +78,21 @@ var mergeCmd = &cobra.Command{
 			NoFF:          noFF,
 			Keep:          keep,
 			Delete:        del,
+			DryRun:        dryRun,
 		}, func(msg string) { s.Update(msg) })
 		if err != nil {
 			return err
 		}
 
 		s.Stop()
+
+		if dryRun {
+			out := cmd.OutOrStdout()
+			for _, step := range result.Plan.Steps {
+				fmt.Fprintf(out, "[dry-run] %s\n", step)
+			}
+			return nil
+		}
 
 		fmt.Fprintf(cmd.OutOrStdout(), "Merged %s into %s\n", result.SourceBranch, result.TargetLabel)
 
@@ -102,6 +116,7 @@ func init() {
 	mergeCmd.Flags().Bool(flagNoFF, false, "Force a merge commit (no fast-forward)")
 	mergeCmd.Flags().Bool(flagKeep, false, "Keep source worktree after merging into main")
 	mergeCmd.Flags().Bool(flagDelete, false, "Delete source worktree after merging into another worktree")
+	mergeCmd.Flags().Bool(flagDryRun, false, "Preview what would be merged/cleaned up without making changes")
 	mergeCmd.MarkFlagsMutuallyExclusive(flagKeep, flagDelete)
 
 	_ = mergeCmd.RegisterFlagCompletionFunc(flagInto, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {

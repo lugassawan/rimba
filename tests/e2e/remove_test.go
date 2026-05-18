@@ -127,3 +127,29 @@ func TestRemoveFailsNoArgs(t *testing.T) {
 	repo := setupInitializedRepo(t)
 	rimbaFail(t, repo, "remove")
 }
+
+func TestRemoveDryRun(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", taskRm, flagSkipDepsE2E, flagSkipHooksE2E)
+
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch := resolver.BranchName(defaultPrefix, taskRm)
+	wtPath := resolver.WorktreePath(wtDir, branch)
+
+	r := rimbaSuccess(t, repo, "remove", taskRm, flagDryRunE2E)
+	assertContains(t, r.Stdout, "[dry-run]")
+
+	// Worktree must still exist after dry-run
+	assertFileExists(t, wtPath)
+
+	// Branch must still exist
+	out := testutil.GitCmd(t, repo, "branch", flagBranchList)
+	if !strings.Contains(out, defaultPrefix+taskRm) {
+		t.Errorf("expected branch %s%s to still exist after dry-run", defaultPrefix, taskRm)
+	}
+}

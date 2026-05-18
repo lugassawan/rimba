@@ -465,3 +465,34 @@ func TestSyncFetchWarningOnStderr(t *testing.T) {
 	assertContains(t, r.Stderr, "Warning: fetch failed")
 	assertNotContains(t, r.Stdout, "Warning: fetch failed")
 }
+
+func TestSyncDryRun(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo, wtPath := syncSetup(t, "sync-dry")
+	headBefore := testutil.GitCmd(t, wtPath, "rev-parse", "HEAD")
+
+	r := rimbaSuccess(t, repo, "sync", "sync-dry", flagDryRunE2E)
+	assertContains(t, r.Stdout, "[dry-run]")
+
+	// Worktree HEAD must not have moved
+	headAfter := testutil.GitCmd(t, wtPath, "rev-parse", "HEAD")
+	if headBefore != headAfter {
+		t.Errorf("dry-run must not rebase: HEAD changed from %q to %q", headBefore, headAfter)
+	}
+}
+
+func TestSyncAllDryRun(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupCleanInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", "sync-all-dry-1")
+	rimbaSuccess(t, repo, "add", "sync-all-dry-2")
+
+	r := rimbaSuccess(t, repo, "sync", "--all", flagDryRunE2E)
+	assertContains(t, r.Stdout, "[dry-run]")
+}

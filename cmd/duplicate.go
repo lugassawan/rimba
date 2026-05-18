@@ -25,8 +25,11 @@ const (
 var duplicateCmd = &cobra.Command{
 	Use:   "duplicate <task>",
 	Short: "Create a new worktree from an existing worktree",
-	Long:  "Creates a new worktree branched from an existing worktree's branch, inheriting its prefix. Auto-suffixes with -1, -2, etc. unless --as is provided.",
-	Args:  cobra.ExactArgs(1),
+	Long:  "Creates a new worktree branched from an existing worktree's branch, inheriting its prefix. Auto-suffixes with -1, -2, etc. unless --as is provided. Use --dry-run to preview what would be created without making changes.",
+	Example: `  rimba duplicate auth             # duplicate auth worktree (auto-suffix)
+  rimba duplicate auth --as copy    # duplicate with custom name
+  rimba duplicate auth --dry-run    # preview without duplicating`,
+	Args: cobra.ExactArgs(1),
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
@@ -94,11 +97,31 @@ var duplicateCmd = &cobra.Command{
 			return fmt.Errorf("worktree path already exists: %s", wtPath)
 		}
 
+		dryRun, _ := cmd.Flags().GetBool(flagDryRun)
+
 		hint.New(cmd, hintPainter(cmd)).
 			Add(flagSkipDeps, hintSkipDeps).
 			Add(flagSkipHooks, hintSkipHooks).
 			Add(flagAs, hintAs).
+			Add(flagDryRun, hintDryRun).
 			Show()
+
+		if dryRun {
+			out := cmd.OutOrStdout()
+			fmt.Fprintf(out, "[dry-run] would create worktree: %s (branch %s from %s)\n", wtPath, newBranch, wt.Branch)
+			if len(cfg.CopyFiles) > 0 {
+				fmt.Fprintf(out, "[dry-run] would copy files: %v\n", cfg.CopyFiles)
+			}
+			skipDeps, _ := cmd.Flags().GetBool(flagSkipDeps)
+			if !skipDeps {
+				fmt.Fprintf(out, "[dry-run] would install deps\n")
+			}
+			skipHooks, _ := cmd.Flags().GetBool(flagSkipHooks)
+			if !skipHooks && len(cfg.PostCreate) > 0 {
+				fmt.Fprintf(out, "[dry-run] would run post-create hooks\n")
+			}
+			return nil
+		}
 
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
@@ -159,5 +182,6 @@ func init() {
 	duplicateCmd.Flags().String(flagAs, "", "Custom name for the duplicate worktree")
 	duplicateCmd.Flags().Bool(flagSkipDeps, false, "Skip dependency detection and installation")
 	duplicateCmd.Flags().Bool(flagSkipHooks, false, "Skip post-create hooks")
+	duplicateCmd.Flags().Bool(flagDryRun, false, "Preview what would be duplicated without making changes")
 	rootCmd.AddCommand(duplicateCmd)
 }
