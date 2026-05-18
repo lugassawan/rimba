@@ -157,6 +157,95 @@ func TestRenameWorktreeBranchRenameFailsRollbackFails(t *testing.T) {
 	}
 }
 
+func TestRenameWorktreeBranchExistsHint(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return "", nil // BranchExists returns true
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
+	_, err := RenameWorktree(r, wt, "auth", wtDir, false)
+	if err == nil {
+		t.Fatal("expected error for existing branch")
+	}
+	if !strings.Contains(err.Error(), "To fix:") {
+		t.Errorf("error = %q, want 'To fix:' hint", err.Error())
+	}
+	if !strings.Contains(err.Error(), "git branch -D") {
+		t.Errorf("error = %q, want 'git branch -D' hint fragment", err.Error())
+	}
+}
+
+func TestRenameWorktreeBranchRenameFailsHint(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return "", errGitFailed
+			}
+			if len(args) >= 2 && args[0] == cmdWorktree && args[1] == cmdMove {
+				return "", nil
+			}
+			if len(args) >= 2 && args[0] == "branch" && args[1] == "-m" {
+				return "", errors.New(errRenameFailed)
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
+	_, err := RenameWorktree(r, wt, "auth", wtDir, false)
+	if err == nil {
+		t.Fatal("expected error from branch rename failure")
+	}
+	if !strings.Contains(err.Error(), "To fix:") {
+		t.Errorf("error = %q, want 'To fix:' hint", err.Error())
+	}
+	if !strings.Contains(err.Error(), "git branch -m") {
+		t.Errorf("error = %q, want 'git branch -m' hint fragment", err.Error())
+	}
+}
+
+func TestRenameWorktreeBranchRenameFailsRollbackFailsHint(t *testing.T) {
+	moveCount := 0
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return "", errGitFailed
+			}
+			if len(args) >= 2 && args[0] == cmdWorktree && args[1] == cmdMove {
+				moveCount++
+				if moveCount == 2 {
+					return "", errors.New("rollback move failed")
+				}
+				return "", nil
+			}
+			if len(args) >= 2 && args[0] == "branch" && args[1] == "-m" {
+				return "", errors.New(errRenameFailed)
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
+	_, err := RenameWorktree(r, wt, "auth", wtDir, false)
+	if err == nil {
+		t.Fatal("expected error from branch rename + rollback failure")
+	}
+	if !strings.Contains(err.Error(), "To fix:") {
+		t.Errorf("error = %q, want 'To fix:' hint", err.Error())
+	}
+	if !strings.Contains(err.Error(), "git worktree move") {
+		t.Errorf("error = %q, want 'git worktree move' hint fragment", err.Error())
+	}
+}
+
 func TestRenameWorktreeNoPrefixMatch(t *testing.T) {
 	// Branch without a recognized prefix falls back to default prefix
 	r := &mockRunner{
