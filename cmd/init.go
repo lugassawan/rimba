@@ -129,7 +129,7 @@ func runInitFresh(cmd *cobra.Command, r git.Runner, repoRoot, dirPath, gitignore
 	if err := os.MkdirAll(dirPath, 0750); err != nil {
 		return errhint.WithFix(
 			fmt.Errorf("failed to create config directory: %w", err),
-			"check directory permissions for .rimba/ in the repo root",
+			localConfigHint,
 		)
 	}
 
@@ -172,7 +172,7 @@ func runInitMigrate(cmd *cobra.Command, repoRoot, dirPath, legacyPath, gitignore
 	if err := os.MkdirAll(dirPath, 0750); err != nil {
 		return errhint.WithFix(
 			fmt.Errorf("failed to create config directory: %w", err),
-			"check directory permissions for .rimba/ in the repo root",
+			localConfigHint,
 		)
 	}
 

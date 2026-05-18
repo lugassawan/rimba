@@ -53,7 +53,7 @@ func RenameWorktree(r git.Runner, wt resolver.WorktreeInfo, newTask, wtDir strin
 		return RenameResult{}, errhint.WithFix(
 			fmt.Errorf("failed to rename branch %q → %q: %w\nWorktree moved back to %s",
 				wt.Branch, newBranch, err, wt.Path),
-			fmt.Sprintf("retry the branch rename: git branch -m %s %s", wt.Branch, newBranch),
+			fmt.Sprintf("retry: git branch -m %s %s", wt.Branch, newBranch),
 		)
 	}
 
