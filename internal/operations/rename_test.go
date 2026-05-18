@@ -91,6 +91,12 @@ func TestRenameWorktreeMoveFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error from move failure")
 	}
+	if !strings.Contains(err.Error(), "To fix:") {
+		t.Errorf("error = %q, want 'To fix:' hint", err.Error())
+	}
+	if !strings.Contains(err.Error(), "git worktree unlock") {
+		t.Errorf("error = %q, want 'git worktree unlock' hint fragment", err.Error())
+	}
 }
 
 func TestRenameWorktreeBranchRenameFails(t *testing.T) {

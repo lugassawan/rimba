@@ -38,7 +38,10 @@ func RenameWorktree(r git.Runner, wt resolver.WorktreeInfo, newTask, wtDir strin
 	newPath := resolver.WorktreePath(wtDir, newBranch)
 
 	if err := git.MoveWorktree(r, wt.Path, newPath, force); err != nil {
-		return RenameResult{}, err
+		return RenameResult{}, errhint.WithFix(
+			fmt.Errorf("failed to move worktree: %w", err),
+			"unlock the worktree if locked: git worktree unlock "+wt.Path+", then retry: rimba rename",
+		)
 	}
 
 	if err := git.RenameBranch(r, wt.Branch, newBranch); err != nil {

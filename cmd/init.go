@@ -134,7 +134,7 @@ func runInitFresh(cmd *cobra.Command, r git.Runner, repoRoot, dirPath, gitignore
 	}
 
 	if err := config.Save(filepath.Join(dirPath, config.TeamFile), cfg); err != nil {
-		return err
+		return errhint.WithFix(fmt.Errorf("failed to save team config: %w", err), localConfigHint)
 	}
 
 	if !personal {
