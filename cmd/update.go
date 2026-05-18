@@ -7,10 +7,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/lugassawan/rimba/internal/updater"
 	"github.com/spf13/cobra"
 )
+
+const retryUpdateHint = "retry: rimba update"
 
 var updateCmd = &cobra.Command{
 	Use:   "update",
@@ -41,7 +44,10 @@ refresh). Set RIMBA_QUIET=1 to suppress the tip.`,
 		s.Start("Checking for updates...")
 		result, err := u.Check()
 		if err != nil {
-			return fmt.Errorf("checking for updates: %w", err)
+			return errhint.WithFix(
+				fmt.Errorf("checking for updates: %w", err),
+				"check network connectivity, or set GITHUB_TOKEN if rate limited",
+			)
 		}
 
 		if result.UpToDate {
@@ -56,41 +62,56 @@ refresh). Set RIMBA_QUIET=1 to suppress the tip.`,
 		s.Start("Downloading...")
 		newBinary, err := u.Download(result.DownloadURL)
 		if err != nil {
-			return fmt.Errorf("downloading update: %w", err)
+			return errhint.WithFix(
+				fmt.Errorf("downloading update: %w", err),
+				"check network connectivity and retry: rimba update",
+			)
 		}
 		defer updater.CleanupTempDir(newBinary)
 
 		if err := updater.PrepareBinary(newBinary); err != nil {
-			return fmt.Errorf("preparing binary: %w", err)
+			return errhint.WithFix(fmt.Errorf("preparing binary: %w", err), retryUpdateHint)
 		}
 
 		currentBinary, err := os.Executable()
 		if err != nil {
-			return fmt.Errorf("locating current binary: %w", err)
+			return errhint.WithFix(
+				fmt.Errorf("locating current binary: %w", err),
+				"reinstall rimba: https://github.com/lugassawan/rimba#installation",
+			)
 		}
 		currentBinary, err = filepath.EvalSymlinks(currentBinary)
 		if err != nil {
-			return fmt.Errorf("resolving binary path: %w", err)
+			return errhint.WithFix(
+				fmt.Errorf("resolving binary path: %w", err),
+				"reinstall rimba: https://github.com/lugassawan/rimba#installation",
+			)
 		}
 
 		s.Update("Installing...")
 		installedBinary := currentBinary
 		if err := updater.Replace(currentBinary, newBinary); err != nil {
 			if !updater.IsPermissionError(err) {
-				return fmt.Errorf("replacing binary: %w", err)
+				return errhint.WithFix(fmt.Errorf("replacing binary: %w", err), retryUpdateHint)
 			}
 
 			// Install to user-writable directory instead
 			s.Stop()
 			userDir, dirErr := updater.UserInstallDir()
 			if dirErr != nil {
-				return fmt.Errorf("getting user install dir: %w", dirErr)
+				return errhint.WithFix(
+					fmt.Errorf("getting user install dir: %w", dirErr),
+					"set HOME or XDG_DATA_HOME and retry: rimba update",
+				)
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Cannot write to %s. Installing to %s instead.\n",
 				filepath.Dir(currentBinary), userDir)
 
 			if mkErr := os.MkdirAll(userDir, 0750); mkErr != nil {
-				return fmt.Errorf("creating install dir: %w", mkErr)
+				return errhint.WithFix(
+					fmt.Errorf("creating install dir: %w", mkErr),
+					"check write permissions for ~/.local/bin and retry: rimba update",
+				)
 			}
 
 			installedBinary = filepath.Join(userDir, "rimba")
@@ -99,17 +120,26 @@ refresh). Set RIMBA_QUIET=1 to suppress the tip.`,
 				// First install to this directory — write directly
 				src, readErr := os.ReadFile(newBinary)
 				if readErr != nil {
-					return fmt.Errorf("reading new binary: %w", readErr)
+					return errhint.WithFix(fmt.Errorf("reading new binary: %w", readErr), retryUpdateHint)
 				}
 				if writeErr := os.WriteFile(installedBinary, src, 0755); writeErr != nil { //nolint:gosec // executable binary
-					return fmt.Errorf("writing binary: %w", writeErr)
+					return errhint.WithFix(
+						fmt.Errorf("writing binary: %w", writeErr),
+						fmt.Sprintf("check write permissions for %s and retry: rimba update", userDir),
+					)
 				}
 			} else if err := updater.Replace(installedBinary, newBinary); err != nil {
-				return fmt.Errorf("replacing binary: %w", err)
+				return errhint.WithFix(
+					fmt.Errorf("replacing binary: %w", err),
+					fmt.Sprintf("check write permissions for %s and retry: rimba update", userDir),
+				)
 			}
 
 			if pathErr := updater.EnsurePath(userDir); pathErr != nil {
-				return fmt.Errorf("updating PATH: %w", pathErr)
+				return errhint.WithFix(
+					fmt.Errorf("updating PATH: %w", pathErr),
+					fmt.Sprintf("add %s to PATH manually: export PATH=\"%s:$PATH\"", userDir, userDir),
+				)
 			}
 		}
 
@@ -118,7 +148,10 @@ refresh). Set RIMBA_QUIET=1 to suppress the tip.`,
 		// Verify the new binary works
 		out, err := exec.Command(filepath.Clean(installedBinary), "version").Output() //nolint:gosec // path comes from os.Executable
 		if err != nil {
-			return fmt.Errorf("verifying new binary: %w", err)
+			return errhint.WithFix(
+				fmt.Errorf("verifying new binary: %w", err),
+				fmt.Sprintf("the new binary at %s may be corrupt — retry: rimba update", installedBinary),
+			)
 		}
 
 		fmt.Fprintf(cmd.OutOrStdout(), "Updated successfully: %s\n", strings.TrimSpace(string(out)))
