@@ -3,12 +3,15 @@ package e2e_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/testutil"
 )
+
+const branchPromoteMe = "feature/promote-me"
 
 func TestAddCreatesWorktree(t *testing.T) {
 	if testing.Short() {
@@ -441,4 +444,124 @@ func saveConfig(t *testing.T, repo string, cfg *config.Config) {
 	if err := config.Save(filepath.Join(dir, teamFile), cfg); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
+}
+
+// --- branch: promote tests ---
+
+func TestAddBranchPromoteDirty(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupCleanInitializedRepo(t)
+
+	// Create the branch and switch to it.
+	testutil.GitCmd(t, repo, "checkout", "-b", branchPromoteMe)
+
+	// Dirty state: one staged file + one untracked file.
+	testutil.CreateFile(t, repo, "staged.txt", "staged content")
+	testutil.GitCmd(t, repo, "add", "staged.txt")
+	testutil.CreateFile(t, repo, "untracked.txt", "untracked content")
+
+	r := rimbaSuccess(t, repo, "add", "branch:"+branchPromoteMe)
+	assertContains(t, r.Stdout, "Promoted branch")
+
+	// Main repo must be clean and on main.
+	headBranch := strings.TrimSpace(testutil.GitCmd(t, repo, "rev-parse", "--abbrev-ref", "HEAD"))
+	if headBranch != branchMain {
+		t.Errorf("main repo HEAD = %q, want %q", headBranch, branchMain)
+	}
+	status := strings.TrimSpace(testutil.GitCmd(t, repo, "status", "--porcelain"))
+	if status != "" {
+		t.Errorf("main repo should be clean after promotion, got:\n%s", status)
+	}
+
+	// Worktree directory must exist and contain promoted files.
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	wtPath := resolver.WorktreePath(wtDir, branchPromoteMe)
+	assertFileExists(t, wtPath)
+	assertFileExists(t, filepath.Join(wtPath, "staged.txt"))
+	assertFileExists(t, filepath.Join(wtPath, "untracked.txt"))
+
+	// Stash must be empty — StashDrop must have cleaned up.
+	stashList := strings.TrimSpace(testutil.GitCmd(t, repo, "stash", "list"))
+	if stashList != "" {
+		t.Errorf("stash should be empty after promotion, got:\n%s", stashList)
+	}
+}
+
+func TestAddBranchPromoteClean(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupCleanInitializedRepo(t)
+	testutil.GitCmd(t, repo, "checkout", "-b", branchPromoteMe)
+
+	rimbaSuccess(t, repo, "add", "branch:"+branchPromoteMe)
+
+	headBranch := strings.TrimSpace(testutil.GitCmd(t, repo, "rev-parse", "--abbrev-ref", "HEAD"))
+	if headBranch != branchMain {
+		t.Errorf("main repo HEAD = %q, want %q", headBranch, branchMain)
+	}
+
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	wtPath := resolver.WorktreePath(wtDir, branchPromoteMe)
+	assertFileExists(t, wtPath)
+
+	// Verify the worktree's HEAD is on the feature branch.
+	wtBranch := strings.TrimSpace(testutil.GitCmd(t, wtPath, "rev-parse", "--abbrev-ref", "HEAD"))
+	if wtBranch != branchPromoteMe {
+		t.Errorf("worktree HEAD = %q, want %q", wtBranch, branchPromoteMe)
+	}
+}
+
+func TestAddBranchRefusesMain(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupCleanInitializedRepo(t)
+
+	r := rimbaFail(t, repo, "add", "branch:main")
+	assertContains(t, r.Stderr, "cannot promote default branch")
+}
+
+func TestAddBranchRefusesNonHead(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupCleanInitializedRepo(t)
+	// Create branch but stay on main.
+	testutil.GitCmd(t, repo, "branch", branchPromoteMe)
+
+	r := rimbaFail(t, repo, "add", "branch:"+branchPromoteMe)
+	assertContains(t, r.Stderr, "is not the current branch")
+}
+
+func TestAddBranchRefusesAlreadyPromoted(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupCleanInitializedRepo(t)
+	testutil.GitCmd(t, repo, "checkout", "-b", branchPromoteMe)
+	rimbaSuccess(t, repo, "add", "branch:"+branchPromoteMe)
+
+	// Switch back to the feature branch (it's no longer checked out in main repo).
+	// Try to promote again — should fail because the branch is already in a worktree.
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	wtPath := resolver.WorktreePath(wtDir, branchPromoteMe)
+
+	// The second attempt from the worktree itself would fail differently; instead
+	// try from a fresh checkout context. The branch is now in the worktree so any
+	// rimba add branch: call for it should fail with "already checked out".
+	// We test by switching back to main and creating the branch again (impossible since
+	// the branch is checked out in worktree). Instead, test from the worktree dir:
+	r := rimbaFail(t, wtPath, "add", "branch:"+branchPromoteMe)
+	assertContains(t, r.Stderr, "already checked out in worktree")
 }

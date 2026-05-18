@@ -26,25 +26,31 @@ const (
 )
 
 var prArgRe = regexp.MustCompile(`^pr:(\d+)$`)
+var branchArgRe = regexp.MustCompile(`^branch:(.+)$`)
 
 var newGHRunner = gh.Default
 
 var addCmd = &cobra.Command{
-	Use:   "add <task|pr:<num>> or add <service>/<task>",
-	Short: "Create a new worktree for a task or GitHub PR",
+	Use:   "add <task|pr:<num>|branch:<branch>> or add <service>/<task>",
+	Short: "Create a new worktree for a task, GitHub PR, or promote the current branch",
 	Long: `Create a worktree, copy files, install dependencies, and run hooks.
 Use <service>/<task> to scope to a specific service in a monorepo.
 Use pr:<num> to create a worktree from a GitHub PR's head branch.
+Use branch:<branch> to promote the current branch into its own worktree,
+transferring any dirty working-tree state via git stash.
 
   rimba add my-feature
   rimba add my-feature --bugfix          # Use bugfix/ prefix
   rimba add auth-api/my-feature          # Monorepo service scope
   rimba add pr:123                       # Create worktree from PR #123
   rimba add pr:123 --task review/auth    # Override auto-derived task name
+  rimba add branch:feature/my-feature   # Promote current branch to worktree
 
 pr:<num> requires gh installed and authenticated. For cross-fork PRs, rimba adds a
 gh-fork-<owner> remote automatically. Without --task, the task name is derived as
-review/<num>-<slug>. The --task flag is only valid in pr:<num> mode.`,
+review/<num>-<slug>. The --task flag is only valid in pr:<num> mode.
+branch:<branch> requires that <branch> is the currently checked-out branch in the
+main repo and is not the default branch. --source is not valid in branch: mode.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.FromContext(cmd.Context())
@@ -66,6 +72,16 @@ review/<num>-<slug>. The --task flag is only valid in pr:<num> mode.`,
 		if m := prArgRe.FindStringSubmatch(args[0]); m != nil {
 			prNum, _ := strconv.Atoi(m[1])
 			return runAddPR(cmd, r, newGHRunner(), prNum, postOpts, s)
+		}
+
+		if m := branchArgRe.FindStringSubmatch(args[0]); m != nil {
+			if cmd.Flags().Changed(flagSource) {
+				return errhint.WithFix(
+					errors.New("--source is not valid in branch: mode"),
+					"remove the --source flag: branch: promotes an existing branch, not a new one",
+				)
+			}
+			return runAddBranch(cmd, r, cfg, repoRoot, m[1])
 		}
 
 		if cmd.Flags().Changed(flagTask) {
@@ -139,6 +155,25 @@ func runAddTask(cmd *cobra.Command, r git.Runner, arg string, cfg *config.Config
 	}
 	printWorktreeResult(cmd, header, result)
 
+	return nil
+}
+
+func runAddBranch(cmd *cobra.Command, r git.Runner, cfg *config.Config, repoRoot, branch string) error {
+	s := spinner.New(spinnerOpts(cmd))
+	defer s.Stop()
+
+	wtDir := filepath.Join(repoRoot, cfg.WorktreeDir)
+	s.Start("Promoting branch to worktree...")
+	wtPath, err := operations.PromoteBranch(cmd.Context(), wtDir, r, repoRoot, branch)
+	if err != nil {
+		return err
+	}
+	s.Stop()
+
+	out := cmd.OutOrStdout()
+	fmt.Fprintf(out, "Promoted branch %q to worktree\n", branch)
+	fmt.Fprintf(out, "  Branch: %s\n", branch)
+	fmt.Fprintf(out, "  Path:   %s\n", wtPath)
 	return nil
 }
 
