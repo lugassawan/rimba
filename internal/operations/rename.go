@@ -31,7 +31,7 @@ func RenameWorktree(r git.Runner, wt resolver.WorktreeInfo, newTask, wtDir strin
 	if git.BranchExists(r, newBranch) {
 		return RenameResult{}, errhint.WithFix(
 			fmt.Errorf("branch %q already exists", newBranch),
-			fmt.Sprintf("choose a different task name, or remove the existing branch: git branch -D %s", newBranch),
+			"choose a different task name, or remove the existing branch: git branch -D "+newBranch,
 		)
 	}
 
