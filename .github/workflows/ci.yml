@@ -15,9 +15,12 @@ jobs:
         with:
           go-version: stable
           cache: true
-      - uses: golangci/golangci-lint-action@v7
+      - uses: actions/cache@v4
         with:
-          version: v2.11.4
+          path: ~/go/bin/golangci-lint
+          key: golangci-lint-v2.11.4
+      - run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4
+      - run: make lint
 
   coverage:
     runs-on: ubuntu-latest
