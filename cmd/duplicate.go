@@ -98,6 +98,8 @@ var duplicateCmd = &cobra.Command{
 		}
 
 		dryRun, _ := cmd.Flags().GetBool(flagDryRun)
+		skipDeps, _ := cmd.Flags().GetBool(flagSkipDeps)
+		skipHooks, _ := cmd.Flags().GetBool(flagSkipHooks)
 
 		hint.New(cmd, hintPainter(cmd)).
 			Add(flagSkipDeps, hintSkipDeps).
@@ -112,11 +114,9 @@ var duplicateCmd = &cobra.Command{
 			if len(cfg.CopyFiles) > 0 {
 				fmt.Fprintf(out, "[dry-run] would copy files: %v\n", cfg.CopyFiles)
 			}
-			skipDeps, _ := cmd.Flags().GetBool(flagSkipDeps)
 			if !skipDeps {
 				fmt.Fprintf(out, "[dry-run] would install deps\n")
 			}
-			skipHooks, _ := cmd.Flags().GetBool(flagSkipHooks)
 			if !skipHooks && len(cfg.PostCreate) > 0 {
 				fmt.Fprintf(out, "[dry-run] would run post-create hooks\n")
 			}
@@ -133,8 +133,6 @@ var duplicateCmd = &cobra.Command{
 		}
 
 		// Post-create setup: copy files, deps, hooks
-		skipDeps, _ := cmd.Flags().GetBool(flagSkipDeps)
-		skipHooks, _ := cmd.Flags().GetBool(flagSkipHooks)
 		var configModules []config.ModuleConfig
 		if cfg.Deps != nil {
 			configModules = cfg.Deps.Modules

@@ -33,7 +33,7 @@ type MergeResult struct {
 	SourceRemoved   bool  // true only if both worktree removed and branch deleted
 	WorktreeRemoved bool  // true if worktree was removed (branch may still exist)
 	RemoveError     error // non-nil if cleanup failed
-	Plan            *Plan // non-nil when DryRun=true; records steps that would execute
+	Plan            *Plan // always non-nil on a successful return; records steps that were (or would be) executed
 }
 
 // dirtyResult holds the outcome of an IsDirty check.

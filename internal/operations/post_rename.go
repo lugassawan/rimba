@@ -1,6 +1,8 @@
 package operations
 
 import (
+	"fmt"
+
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/deps"
 	"github.com/lugassawan/rimba/internal/git"
@@ -33,7 +35,7 @@ func PostRenameSetup(r git.Runner, params PostRenameParams, onProgress progress.
 		progress.Notify(onProgress, "Refreshing dependencies...")
 		wtEntries, err := git.ListWorktrees(r)
 		if err != nil {
-			return result, err
+			return result, fmt.Errorf("failed to list worktrees for dependency refresh: %w", err)
 		}
 		dp := DepsParams{
 			WtPath:        params.WtPath,
