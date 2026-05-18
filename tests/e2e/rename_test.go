@@ -127,6 +127,8 @@ func TestRenameFailsBranchExists(t *testing.T) {
 
 	r := rimbaFail(t, repo, "rename", taskBrExist, taskBrExistNew)
 	assertContains(t, r.Stderr, "already exists")
+	assertContains(t, r.Stderr, "To fix:")
+	assertContains(t, r.Stderr, "git branch -D")
 }
 
 func TestRenamePartialFailRollback(t *testing.T) {
@@ -154,6 +156,7 @@ func TestRenamePartialFailRollback(t *testing.T) {
 	// Error should report the branch rename failure and successful rollback.
 	assertContains(t, r.Stderr, "failed to rename branch")
 	assertContains(t, r.Stderr, "moved back")
+	assertContains(t, r.Stderr, "To fix:")
 	assertContains(t, r.Stderr, "git branch -m")
 
 	// Worktree should be back at its original path (rollback succeeded).

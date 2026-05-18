@@ -3,6 +3,7 @@ package operations
 import (
 	"fmt"
 
+	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/resolver"
 )
@@ -28,22 +29,35 @@ func RenameWorktree(r git.Runner, wt resolver.WorktreeInfo, newTask, wtDir strin
 	newBranch := resolver.FullBranchName(svc, matchedPrefix, newTask)
 
 	if git.BranchExists(r, newBranch) {
-		return RenameResult{}, fmt.Errorf("branch %q already exists", newBranch)
+		return RenameResult{}, errhint.WithFix(
+			fmt.Errorf("branch %q already exists", newBranch),
+			"choose a different task name, or remove the existing branch: git branch -D "+newBranch,
+		)
 	}
 
 	newPath := resolver.WorktreePath(wtDir, newBranch)
 
 	if err := git.MoveWorktree(r, wt.Path, newPath, force); err != nil {
-		return RenameResult{}, err
+		return RenameResult{}, errhint.WithFix(
+			fmt.Errorf("failed to move worktree: %w", err),
+			"unlock the worktree if locked: git worktree unlock "+wt.Path+", then retry: rimba rename",
+		)
 	}
 
 	if err := git.RenameBranch(r, wt.Branch, newBranch); err != nil {
 		if rbErr := git.MoveWorktree(r, newPath, wt.Path, force); rbErr != nil {
-			return RenameResult{}, fmt.Errorf("failed to rename branch %q → %q: %w\nRollback failed — worktree is at %s: %w\nTo recover: git worktree move %s %s && git branch -m %s %s",
-				wt.Branch, newBranch, err, newPath, rbErr, newPath, wt.Path, wt.Branch, newBranch)
+			return RenameResult{}, errhint.WithFix(
+				fmt.Errorf("failed to rename branch %q → %q: %w\nRollback failed — worktree is at %s: %w",
+					wt.Branch, newBranch, err, newPath, rbErr),
+				fmt.Sprintf("git worktree move %s %s && git branch -m %s %s",
+					newPath, wt.Path, wt.Branch, newBranch),
+			)
 		}
-		return RenameResult{}, fmt.Errorf("failed to rename branch %q → %q: %w\nWorktree moved back to %s\nTo retry: git branch -m %s %s",
-			wt.Branch, newBranch, err, wt.Path, wt.Branch, newBranch)
+		return RenameResult{}, errhint.WithFix(
+			fmt.Errorf("failed to rename branch %q → %q: %w\nWorktree moved back to %s",
+				wt.Branch, newBranch, err, wt.Path),
+			fmt.Sprintf("retry: git branch -m %s %s", wt.Branch, newBranch),
+		)
 	}
 
 	return RenameResult{
