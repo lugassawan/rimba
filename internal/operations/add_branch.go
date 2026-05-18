@@ -111,7 +111,7 @@ func restoreStash(r git.Runner, dir, sha string) error {
 		return nil
 	}
 	if err := git.StashApply(r, dir, sha); err != nil {
-		return fmt.Errorf("your changes are preserved in stash %s — apply manually with: git stash list && git stash apply stash@{0}: %w", sha, err)
+		return fmt.Errorf("your changes are preserved in stash %s — find it with: git stash list (look for 'rimba: promote ...') then: git stash apply stash@{N}: %w", sha, err)
 	}
 	_ = git.StashDrop(r, dir, sha)
 	return nil
@@ -123,7 +123,7 @@ func applyStashToWorktree(r git.Runner, wtPath, sha string) error {
 	if err := git.StashApply(r, wtPath, sha); err != nil {
 		return errhint.WithFix(
 			errors.New("stash apply had conflicts"),
-			fmt.Sprintf("resolve conflicts in %s (stash ref: %s), then: git stash list && git stash drop stash@{0}", wtPath, sha),
+			fmt.Sprintf("resolve conflicts in %s (stash SHA: %s), then: git stash list (find 'rimba: promote ...' entry) && git stash drop stash@{N}", wtPath, sha),
 		)
 	}
 	_ = git.StashDrop(r, wtPath, sha)
