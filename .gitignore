@@ -48,3 +48,7 @@ local.properties
 
 # Worktrees
 .worktrees/
+
+# Claude Code runtime files
+.claude/scheduled_tasks.lock
+.claude/worktrees/
