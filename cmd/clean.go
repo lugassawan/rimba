@@ -14,7 +14,6 @@ import (
 )
 
 const (
-	flagDryRun = "dry-run"
 	flagMerged = "merged"
 	flagStale  = "stale"
 

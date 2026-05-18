@@ -347,6 +347,39 @@ func TestMergeWorktreeSourceDirtyCheckError(t *testing.T) {
 	}
 }
 
+func TestMergeWorktreeDryRun(t *testing.T) {
+	r := mergeRunner(nil)
+
+	result, err := MergeWorktree(r, MergeParams{
+		SourceTask: "login",
+		RepoRoot:   "/repo",
+		MainBranch: "main",
+		DryRun:     true,
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.SourceRemoved {
+		t.Error("expected source NOT removed in dry-run mode")
+	}
+	if result.Plan == nil {
+		t.Fatal("expected Plan to be non-nil in dry-run mode")
+	}
+	if len(result.Plan.Steps) == 0 {
+		t.Error("expected at least one planned step")
+	}
+	hasMerge := false
+	for _, s := range result.Plan.Steps {
+		if strings.Contains(s, "merge") {
+			hasMerge = true
+			break
+		}
+	}
+	if !hasMerge {
+		t.Errorf("expected a merge step in plan, got: %v", result.Plan.Steps)
+	}
+}
+
 func TestMergeWorktreeTargetDirtyCheckError(t *testing.T) {
 	wt := mergeWorktreeList()
 	r := &mockRunner{

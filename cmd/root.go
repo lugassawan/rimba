@@ -15,6 +15,7 @@ import (
 const (
 	flagDebug        = "debug"
 	flagDetail       = "detail"
+	flagDryRun       = "dry-run"
 	flagForce        = "force"
 	flagJSON         = "json"
 	flagNoColor      = "no-color"
@@ -23,8 +24,10 @@ const (
 	flagStaleDays    = "stale-days"
 	defaultStaleDays = 14
 
-	hintSkipDeps  = "Skip dependency installation (faster, but requires manual install)"
-	hintSkipHooks = "Skip post-create hooks (faster, but automation won't run)"
+	hintDryRun          = "Preview what would be done without making changes"
+	hintSkipDeps        = "Skip dependency installation (faster, but requires manual install)"
+	hintSkipHooks       = "Skip post-create hooks (faster, but automation won't run)"
+	hintSkipHooksRename = "Skip post-rename hooks (faster, but automation won't run)"
 )
 
 // commandName stores the resolved command name for JSON error reporting.

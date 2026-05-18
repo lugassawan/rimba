@@ -218,3 +218,27 @@ func TestDuplicateMain(t *testing.T) {
 	r := rimbaFail(t, repo, "duplicate", "main")
 	assertContains(t, r.Stderr, "cannot duplicate the default branch")
 }
+
+func TestDuplicateDryRun(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", taskDupA, flagSkipDepsE2E, flagSkipHooksE2E)
+
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+
+	r := rimbaSuccess(t, repo, "duplicate", taskDupA, flagDryRunE2E)
+	assertContains(t, r.Stdout, "[dry-run]")
+
+	// No new worktree should have been created (only taskDupA's dir exists)
+	entries, err := os.ReadDir(wtDir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("expected 1 worktree dir, got %d — dry-run must not create a new worktree", len(entries))
+	}
+}

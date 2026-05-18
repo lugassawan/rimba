@@ -260,10 +260,12 @@ func TestMergeSliceReplaces(t *testing.T) {
 		DefaultSource: testDefaultBranch,
 		CopyFiles:     []string{".env", ".envrc"},
 		PostCreate:    []string{"make build"},
+		PostRename:    []string{"echo team-rename"},
 	}
 	local := &config.Config{
 		CopyFiles:  []string{".env.local"},
 		PostCreate: []string{"npm install", "npm run build"},
+		PostRename: []string{"echo local-rename"},
 	}
 
 	merged := config.Merge(team, local)
@@ -272,6 +274,22 @@ func TestMergeSliceReplaces(t *testing.T) {
 	}
 	if !reflect.DeepEqual(merged.PostCreate, []string{"npm install", "npm run build"}) {
 		t.Errorf("PostCreate = %v, want [npm install, npm run build]", merged.PostCreate)
+	}
+	if !reflect.DeepEqual(merged.PostRename, []string{"echo local-rename"}) {
+		t.Errorf("PostRename = %v, want [echo local-rename]", merged.PostRename)
+	}
+}
+
+func TestMergePostRenameNilPreservesTeam(t *testing.T) {
+	team := &config.Config{
+		WorktreeDir: "../wt",
+		PostRename:  []string{"echo team-hook"},
+	}
+	local := &config.Config{} // nil PostRename — team value should survive
+
+	merged := config.Merge(team, local)
+	if !reflect.DeepEqual(merged.PostRename, []string{"echo team-hook"}) {
+		t.Errorf("PostRename = %v, want [echo team-hook]", merged.PostRename)
 	}
 }
 

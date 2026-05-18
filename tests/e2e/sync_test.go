@@ -465,3 +465,49 @@ func TestSyncFetchWarningOnStderr(t *testing.T) {
 	assertContains(t, r.Stderr, "Warning: fetch failed")
 	assertNotContains(t, r.Stdout, "Warning: fetch failed")
 }
+
+func TestSyncDryRun(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo, wtPath := syncSetup(t, "sync-dry")
+	headBefore := testutil.GitCmd(t, wtPath, "rev-parse", "HEAD")
+
+	r := rimbaSuccess(t, repo, "sync", "sync-dry", flagDryRunE2E)
+	assertContains(t, r.Stdout, "[dry-run]")
+
+	// Worktree HEAD must not have moved
+	headAfter := testutil.GitCmd(t, wtPath, "rev-parse", "HEAD")
+	if headBefore != headAfter {
+		t.Errorf("dry-run must not rebase: HEAD changed from %q to %q", headBefore, headAfter)
+	}
+}
+
+func TestSyncAllDryRun(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupCleanInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", "sync-all-dry-1")
+	rimbaSuccess(t, repo, "add", "sync-all-dry-2")
+
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	wt1 := resolver.WorktreePath(wtDir, resolver.BranchName(defaultPrefix, "sync-all-dry-1"))
+	wt2 := resolver.WorktreePath(wtDir, resolver.BranchName(defaultPrefix, "sync-all-dry-2"))
+
+	head1Before := testutil.GitCmd(t, wt1, "rev-parse", "HEAD")
+	head2Before := testutil.GitCmd(t, wt2, "rev-parse", "HEAD")
+
+	r := rimbaSuccess(t, repo, "sync", "--all", flagDryRunE2E)
+	assertContains(t, r.Stdout, "[dry-run]")
+
+	if got := testutil.GitCmd(t, wt1, "rev-parse", "HEAD"); got != head1Before {
+		t.Errorf("dry-run must not rebase sync-all-dry-1: HEAD changed from %q to %q", head1Before, got)
+	}
+	if got := testutil.GitCmd(t, wt2, "rev-parse", "HEAD"); got != head2Before {
+		t.Errorf("dry-run must not rebase sync-all-dry-2: HEAD changed from %q to %q", head2Before, got)
+	}
+}

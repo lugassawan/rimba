@@ -21,6 +21,7 @@ type MergeParams struct {
 	NoFF          bool
 	Keep          bool
 	Delete        bool
+	DryRun        bool
 }
 
 // MergeResult holds the outcome of a merge operation.
@@ -32,6 +33,7 @@ type MergeResult struct {
 	SourceRemoved   bool  // true only if both worktree removed and branch deleted
 	WorktreeRemoved bool  // true if worktree was removed (branch may still exist)
 	RemoveError     error // non-nil if cleanup failed
+	Plan            *Plan // always non-nil on a successful return; records steps that were (or would be) executed
 }
 
 // dirtyResult holds the outcome of an IsDirty check.
@@ -72,14 +74,16 @@ func MergeWorktree(r git.Runner, params MergeParams, onProgress progress.Func) (
 		targetLabel = target.Branch
 	}
 
+	plan := &Plan{DryRun: params.DryRun}
 	result := MergeResult{
 		SourceBranch:  source.Branch,
 		SourcePath:    source.Path,
 		TargetLabel:   targetLabel,
 		MergingToMain: mergingToMain,
+		Plan:          plan,
 	}
 
-	// Concurrent dirty checks
+	// Concurrent dirty checks (always run — read-only pre-flight)
 	progress.Notify(onProgress, "Checking for uncommitted changes...")
 	if err := checkDirty(r, source.Path, targetDir, params.SourceTask, params.IntoTask, mergingToMain, targetLabel); err != nil {
 		return result, err
@@ -87,7 +91,10 @@ func MergeWorktree(r git.Runner, params MergeParams, onProgress progress.Func) (
 
 	// Execute merge
 	progress.Notify(onProgress, "Merging...")
-	if err := git.Merge(r, targetDir, source.Branch, params.NoFF); err != nil {
+	mergeDesc := fmt.Sprintf("merge %s into %s", source.Branch, targetLabel)
+	if err := plan.Do(mergeDesc, func() error {
+		return git.Merge(r, targetDir, source.Branch, params.NoFF)
+	}); err != nil {
 		return result, errhint.WithFix(
 			fmt.Errorf("merge failed: %w", err),
 			fmt.Sprintf("resolve conflicts in %s, commit, then re-run rimba merge", targetDir),
@@ -98,7 +105,12 @@ func MergeWorktree(r git.Runner, params MergeParams, onProgress progress.Func) (
 	shouldDelete := (mergingToMain && !params.Keep) || (!mergingToMain && params.Delete)
 	if shouldDelete {
 		progress.Notify(onProgress, "Removing worktree...")
-		wtRemoved, brDeleted, rmErr := removeAndCleanup(r, source.Path, source.Branch)
+		var wtRemoved, brDeleted bool
+		rmErr := plan.Do("remove worktree: "+source.Path, func() error {
+			var err error
+			wtRemoved, brDeleted, err = removeAndCleanup(r, source.Path, source.Branch)
+			return err
+		})
 		result.WorktreeRemoved = wtRemoved
 		result.SourceRemoved = wtRemoved && brDeleted
 		if rmErr != nil {

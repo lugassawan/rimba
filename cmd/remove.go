@@ -20,8 +20,11 @@ const (
 var removeCmd = &cobra.Command{
 	Use:   "remove <task>",
 	Short: "Remove a worktree and delete its branch",
-	Long:  "Removes the worktree for the given task and deletes the local branch. Use --keep-branch to preserve the branch.",
-	Args:  cobra.ExactArgs(1),
+	Long:  "Removes the worktree for the given task and deletes the local branch. Use --keep-branch to preserve the branch. Use --dry-run to preview what would be removed without making changes.",
+	Example: `  rimba remove auth             # remove worktree and branch
+  rimba remove auth --keep-branch  # preserve the local branch
+  rimba remove auth --dry-run   # preview without removing`,
+	Args: cobra.ExactArgs(1),
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
@@ -40,10 +43,21 @@ var removeCmd = &cobra.Command{
 		hint.New(cmd, hintPainter(cmd)).
 			Add(flagKeepBranch, hintKeepBranch).
 			Add(flagForce, hintForceRm).
+			Add(flagDryRun, hintDryRun).
 			Show()
 
 		keepBranch, _ := cmd.Flags().GetBool(flagKeepBranch)
 		force, _ := cmd.Flags().GetBool(flagForce)
+		dryRun, _ := cmd.Flags().GetBool(flagDryRun)
+
+		if dryRun {
+			out := cmd.OutOrStdout()
+			fmt.Fprintf(out, "[dry-run] would remove worktree: %s\n", wt.Path)
+			if !keepBranch {
+				fmt.Fprintf(out, "[dry-run] would delete branch: %s\n", wt.Branch)
+			}
+			return nil
+		}
 
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
@@ -75,5 +89,6 @@ var removeCmd = &cobra.Command{
 func init() {
 	removeCmd.Flags().BoolP(flagKeepBranch, "k", false, "Keep the local branch after removing the worktree")
 	removeCmd.Flags().BoolP(flagForce, "f", false, "Force removal even if worktree is dirty")
+	removeCmd.Flags().Bool(flagDryRun, false, "Preview what would be removed without making changes")
 	rootCmd.AddCommand(removeCmd)
 }

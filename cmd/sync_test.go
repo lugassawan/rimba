@@ -515,6 +515,57 @@ func TestPrintSyncSummary(t *testing.T) {
 	})
 }
 
+func TestSyncOneDryRun(t *testing.T) {
+	worktrees := testSyncWorktrees()
+	cmd, buf := newTestCmd()
+	rebaseCalled := false
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) { return "", nil },
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdRebase {
+				rebaseCalled = true
+			}
+			return "", nil
+		},
+	}
+	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd), dryRun: true}
+
+	if err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false, true); err != nil {
+		t.Fatalf("syncOne: %v", err)
+	}
+	if rebaseCalled {
+		t.Error("rebase must not be called in dry-run mode")
+	}
+	out := buf.String()
+	if !strings.Contains(out, "[dry-run]") {
+		t.Errorf("output = %q, want '[dry-run]' prefix", out)
+	}
+	if strings.Contains(out, "Rebased") {
+		t.Errorf("output = %q, must not contain 'Rebased' in dry-run", out)
+	}
+}
+
+func TestSyncAllDryRun(t *testing.T) {
+	worktrees := testSyncWorktrees()
+	cmd, buf := newTestCmd()
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return "", nil },
+		runInDir: noopRunInDir,
+	}
+	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd), dryRun: true}
+
+	if err := syncAll(sc, worktrees, testSyncPrefixes(), false, false, true); err != nil {
+		t.Fatalf("syncAll: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "[dry-run]") {
+		t.Errorf("output = %q, want '[dry-run]' lines", out)
+	}
+	if strings.Contains(out, "Rebased") {
+		t.Errorf("output = %q, must not contain 'Rebased' in dry-run", out)
+	}
+}
+
 func TestSyncWorktreeSkipWarningOnStderr(t *testing.T) {
 	var outBuf, errBuf bytes.Buffer
 	cmd := &cobra.Command{}

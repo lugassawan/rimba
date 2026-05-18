@@ -217,3 +217,30 @@ func TestMergeTargetNotFound(t *testing.T) {
 	r := rimbaFail(t, repo, "merge", "merge-no-tgt-src", flagInto, "ghost-target")
 	assertContains(t, r.Stderr, "not found")
 }
+
+func TestMergeDryRun(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupCleanInitializedRepo(t)
+	mergeSetup(t, repo, "merge-dry-src")
+
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	srcBranch := resolver.BranchName(defaultPrefix, "merge-dry-src")
+	srcPath := resolver.WorktreePath(wtDir, srcBranch)
+	logBefore := testutil.GitCmd(t, repo, "log", "--oneline", "-1")
+
+	r := rimbaSuccess(t, repo, "merge", "merge-dry-src", flagDryRunE2E)
+	assertContains(t, r.Stdout, "[dry-run]")
+
+	// Source worktree must still exist (not removed)
+	assertFileExists(t, srcPath)
+
+	// No new commit on main
+	logAfter := testutil.GitCmd(t, repo, "log", "--oneline", "-1")
+	if logBefore != logAfter {
+		t.Errorf("dry-run must not create a commit: before=%q after=%q", logBefore, logAfter)
+	}
+}

@@ -83,6 +83,26 @@ func TestArchiveDirtyFails(t *testing.T) {
 	rimbaFail(t, repo, "archive", "dirty-fail")
 }
 
+func TestArchiveDryRun(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", taskArchive+"-dry", flagSkipDepsE2E, flagSkipHooksE2E)
+
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch := resolver.BranchName(defaultPrefix, taskArchive+"-dry")
+	wtPath := resolver.WorktreePath(wtDir, branch)
+
+	r := rimbaSuccess(t, repo, "archive", taskArchive+"-dry", flagDryRunE2E)
+	assertContains(t, r.Stdout, "[dry-run]")
+
+	// Worktree must still exist after dry-run
+	assertFileExists(t, wtPath)
+}
+
 func TestArchiveRestoreRoundTrip(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
