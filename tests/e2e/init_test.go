@@ -190,6 +190,24 @@ func TestInitFailsOutsideGitRepo(t *testing.T) {
 	rimbaFail(t, dir, "init")
 }
 
+func TestInitGitignoreWriteFailHint(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupRepo(t)
+	// Pre-create a read-only .gitignore so EnsureGitignore fails to write it.
+	gitignorePath := filepath.Join(repo, gitignoreFile)
+	if err := os.WriteFile(gitignorePath, []byte("node_modules\n"), 0444); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	t.Cleanup(func() { os.Chmod(gitignorePath, 0644) }) //nolint:errcheck // cleanup best-effort
+
+	r := rimbaFail(t, repo, "init")
+	assertContains(t, r.Stderr, "To fix:")
+	assertContains(t, r.Stderr, ".gitignore")
+}
+
 func TestInitWithAgentsFlag(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)

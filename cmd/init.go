@@ -29,6 +29,11 @@ const (
 	tierProjectLocal installTier = "project-local"
 )
 
+const (
+	localConfigHint = "check directory permissions for .rimba/ in the repo root"
+	gitignoreHint   = "check write permissions for .gitignore in the repo root"
+)
+
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize rimba in the current repository",
@@ -134,18 +139,21 @@ func runInitFresh(cmd *cobra.Command, r git.Runner, repoRoot, dirPath, gitignore
 
 	if !personal {
 		if err := os.WriteFile(filepath.Join(dirPath, config.LocalFile), nil, 0600); err != nil {
-			return fmt.Errorf("failed to create local config: %w", err)
+			return errhint.WithFix(fmt.Errorf("failed to create local config: %w", err), localConfigHint)
 		}
 	}
 
 	wtDir := filepath.Join(repoRoot, config.DefaultWorktreeDir(repoName))
 	if err := os.MkdirAll(wtDir, 0750); err != nil {
-		return fmt.Errorf("failed to create worktree directory: %w", err)
+		return errhint.WithFix(
+			fmt.Errorf("failed to create worktree directory: %w", err),
+			"check directory permissions for the worktree dir, or set worktree.dir in .rimba/settings.toml",
+		)
 	}
 
 	added, err := fileutil.EnsureGitignore(repoRoot, gitignoreEntry)
 	if err != nil {
-		return fmt.Errorf("failed to update .gitignore: %w", err)
+		return errhint.WithFix(fmt.Errorf("failed to update .gitignore: %w", err), gitignoreHint)
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Initialized rimba in %s\n", repoRoot)
@@ -169,19 +177,22 @@ func runInitMigrate(cmd *cobra.Command, repoRoot, dirPath, legacyPath, gitignore
 	}
 
 	if err := os.Rename(legacyPath, filepath.Join(dirPath, config.TeamFile)); err != nil {
-		return fmt.Errorf("failed to move legacy config: %w", err)
+		return errhint.WithFix(
+			fmt.Errorf("failed to move legacy config: %w", err),
+			"check write permissions for the repo root and move .rimba.toml to .rimba/settings.toml manually",
+		)
 	}
 
 	if !personal {
 		if err := os.WriteFile(filepath.Join(dirPath, config.LocalFile), nil, 0600); err != nil {
-			return fmt.Errorf("failed to create local config: %w", err)
+			return errhint.WithFix(fmt.Errorf("failed to create local config: %w", err), localConfigHint)
 		}
 	}
 
 	_, _ = fileutil.RemoveGitignoreEntry(repoRoot, config.FileName)
 
 	if _, err := fileutil.EnsureGitignore(repoRoot, gitignoreEntry); err != nil {
-		return fmt.Errorf("failed to update .gitignore: %w", err)
+		return errhint.WithFix(fmt.Errorf("failed to update .gitignore: %w", err), gitignoreHint)
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Migrated rimba config in %s\n", repoRoot)
@@ -209,7 +220,10 @@ func runInitAgents(cmd *cobra.Command, repoRoot string, local, uninstall bool) e
 func runInitGlobal(cmd *cobra.Command, uninstall bool) error {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return fmt.Errorf("resolve home directory: %w", err)
+		return errhint.WithFix(
+			fmt.Errorf("resolve home directory: %w", err),
+			"set HOME to your user home directory: export HOME=/Users/<you>",
+		)
 	}
 	if uninstall {
 		return runInstall(cmd, home, tierUser, "Removed", agentfile.UninstallGlobal, agentfile.UnregisterMCPGlobal)
@@ -229,13 +243,19 @@ func runInstall(
 ) error {
 	files, err := installFn(dir)
 	if err != nil {
-		return fmt.Errorf("agent files: %w", err)
+		return errhint.WithFix(
+			fmt.Errorf("agent files: %w", err),
+			"check write permissions for the install dir, or retry: rimba init --agents",
+		)
 	}
 	var mcps []agentfile.Result
 	if mcpFn != nil {
 		mcps, err = mcpFn(dir)
 		if err != nil {
-			return fmt.Errorf("mcp servers: %w", err)
+			return errhint.WithFix(
+				fmt.Errorf("mcp servers: %w", err),
+				"check write permissions for MCP client configs (.mcp.json, .cursor/mcp.json, ~/.claude/settings.json), or retry: rimba init --agents",
+			)
 		}
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "%s rimba (%s):\n", verb, tier)
