@@ -7,15 +7,6 @@ on:
     branches: [main]
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
-        with:
-          go-version: stable
-      - run: make test
-
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -23,16 +14,19 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: stable
+          cache: true
       - run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4
       - run: make lint
 
   coverage:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
           go-version: stable
+          cache: true
       - name: Run tests with coverage
         run: make test-coverage
       - name: Check coverage threshold
@@ -52,4 +46,5 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: stable
+          cache: true
       - run: make build
