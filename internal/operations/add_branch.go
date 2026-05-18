@@ -48,11 +48,13 @@ func PromoteBranch(_ context.Context, worktreeDir string, r git.Runner, repoRoot
 	}
 
 	if err := git.AddWorktreeFromBranch(r, wtPath, branch); err != nil {
-		if restoreErr := restoreStash(r, repoRoot, stashSHA); restoreErr != nil {
-			return "", fmt.Errorf("create worktree: %w; also failed to restore stash: %w", err, restoreErr)
-		}
+		// Switch back first while the tree is still clean, then restore the stash.
+		// Reversing this order would make the switch fail (dirty tree).
 		if switchErr := git.Checkout(r, repoRoot, branch); switchErr != nil {
 			return "", fmt.Errorf("create worktree: %w; also failed to restore HEAD to %s: %w", err, branch, switchErr)
+		}
+		if restoreErr := restoreStash(r, repoRoot, stashSHA); restoreErr != nil {
+			return "", fmt.Errorf("create worktree: %w; also failed to restore stash: %w", err, restoreErr)
 		}
 		return "", fmt.Errorf("create worktree: %w", err)
 	}
@@ -113,7 +115,9 @@ func restoreStash(r git.Runner, dir, sha string) error {
 	if err := git.StashApply(r, dir, sha); err != nil {
 		return fmt.Errorf("your changes are preserved in stash %s — find it with: git stash list (look for 'rimba: promote ...') then: git stash apply stash@{N}: %w", sha, err)
 	}
-	_ = git.StashDrop(r, dir, sha)
+	if dropErr := git.StashDrop(r, dir, sha); dropErr != nil {
+		return fmt.Errorf("stash applied but could not drop entry %s (clean up manually: git stash list, then git stash drop stash@{N}): %w", sha, dropErr)
+	}
 	return nil
 }
 

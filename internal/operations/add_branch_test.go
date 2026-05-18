@@ -300,6 +300,80 @@ func TestPromoteBranchRejectsPathExists(t *testing.T) {
 	}
 }
 
+// wtAddFailsRunFn is the Run closure for TestPromoteBranchWorktreeAddFails.
+func wtAddFailsRunFn(repoRoot string) func(args ...string) (string, error) {
+	porcelain := "worktree " + repoRoot + "\nHEAD abc\nbranch refs/heads/main\n"
+	return func(args ...string) (string, error) {
+		switch {
+		case len(args) >= 1 && args[0] == gitCmdSymbolicRef:
+			return refsRemotesOriginMain, nil
+		case len(args) >= 2 && args[0] == cmdRevParse && args[1] == flagVerifyOpt:
+			return "", nil
+		case len(args) >= 2 && args[0] == gitCmdWorktree && args[1] == gitSubcmdList:
+			return porcelain, nil
+		case len(args) >= 2 && args[0] == gitCmdWorktree && args[1] == gitSubcmdAdd:
+			return "", errGitFailed
+		}
+		return "", nil
+	}
+}
+
+// wtAddFailsRunInDirFn records switch and stash-apply operations so tests can verify ordering.
+func wtAddFailsRunInDirFn(ops *[]string) func(dir string, args ...string) (string, error) {
+	return func(_ string, args ...string) (string, error) {
+		if out, ok := promoteRunInDirIdentity(true, args); ok {
+			return out, nil
+		}
+		if len(args) >= 2 && args[0] == gitCmdSwitch {
+			*ops = append(*ops, "switch:"+args[1])
+		}
+		if len(args) >= 2 && args[0] == gitCmdStash && args[1] == gitSubcmdApply {
+			*ops = append(*ops, "stash:apply")
+		}
+		out, _ := promoteRunInDirStash(args)
+		return out, nil
+	}
+}
+
+func TestPromoteBranchWorktreeAddFails(t *testing.T) {
+	repoRoot := t.TempDir()
+	wtDir := filepath.Join(t.TempDir(), "worktrees")
+	var ops []string
+
+	r := &mockRunner{
+		run:      wtAddFailsRunFn(repoRoot),
+		runInDir: wtAddFailsRunInDirFn(&ops),
+	}
+
+	_, err := PromoteBranch(context.Background(), wtDir, r, repoRoot, branchFeatureX)
+	if err == nil {
+		t.Fatal("expected error when worktree add fails")
+	}
+	if !strings.Contains(err.Error(), "create worktree") {
+		t.Errorf("error %q should mention 'create worktree'", err)
+	}
+	if strings.Contains(err.Error(), "failed to restore") {
+		t.Errorf("rollback should succeed; error %q should not mention restore failure", err)
+	}
+	// Verify switch-back happens before stash-apply: switching while the tree is clean
+	// avoids git refusing the checkout due to uncommitted changes.
+	switchIdx, applyIdx := -1, -1
+	for i, op := range ops {
+		if op == "switch:"+branchFeatureX {
+			switchIdx = i
+		}
+		if op == "stash:apply" {
+			applyIdx = i
+		}
+	}
+	if switchIdx == -1 || applyIdx == -1 {
+		t.Fatalf("expected switch-back and stash-apply in rollback; got ops: %v", ops)
+	}
+	if switchIdx > applyIdx {
+		t.Errorf("switch-back (idx %d) must precede stash-apply (idx %d); got ops: %v", switchIdx, applyIdx, ops)
+	}
+}
+
 // conflictRunFn is the Run closure for TestPromoteBranchStashApplyConflict.
 func conflictRunFn(porcelain, wtDir string) func(args ...string) (string, error) {
 	return func(args ...string) (string, error) {
