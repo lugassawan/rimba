@@ -101,7 +101,7 @@ refresh). Set RIMBA_QUIET=1 to suppress the tip.`,
 			if dirErr != nil {
 				return errhint.WithFix(
 					fmt.Errorf("getting user install dir: %w", dirErr),
-					"set HOME or XDG_DATA_HOME and retry: rimba update",
+					"set HOME to your user home directory and retry: rimba update",
 				)
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Cannot write to %s. Installing to %s instead.\n",
