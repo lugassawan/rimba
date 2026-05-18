@@ -247,3 +247,75 @@ func TestIsSquashMergedIntegrationNotMerged(t *testing.T) {
 		t.Error("expected unmerged branch to not be detected as squash-merged")
 	}
 }
+
+func TestCurrentBranch(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	branch, err := git.CurrentBranch(r, repo)
+	if err != nil {
+		t.Fatalf("CurrentBranch: %v", err)
+	}
+	if branch != "main" {
+		t.Errorf("CurrentBranch = %q, want %q", branch, "main")
+	}
+}
+
+func TestCurrentBranchAfterSwitch(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	testutil.GitCmd(t, repo, "checkout", "-b", "feature/cur-branch-test")
+
+	branch, err := git.CurrentBranch(r, repo)
+	if err != nil {
+		t.Fatalf("CurrentBranch after switch: %v", err)
+	}
+	if branch != "feature/cur-branch-test" {
+		t.Errorf("CurrentBranch = %q, want %q", branch, "feature/cur-branch-test")
+	}
+}
+
+func TestCheckout(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	testutil.GitCmd(t, repo, "branch", "feature/checkout-test")
+
+	if err := git.Checkout(r, repo, "feature/checkout-test"); err != nil {
+		t.Fatalf("Checkout: %v", err)
+	}
+
+	branch, err := git.CurrentBranch(r, repo)
+	if err != nil {
+		t.Fatalf("CurrentBranch after Checkout: %v", err)
+	}
+	if branch != "feature/checkout-test" {
+		t.Errorf("branch after Checkout = %q, want %q", branch, "feature/checkout-test")
+	}
+}
+
+func TestCheckoutError(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	if err := git.Checkout(r, repo, "nonexistent-branch"); err == nil {
+		t.Error("expected error for nonexistent branch")
+	}
+}

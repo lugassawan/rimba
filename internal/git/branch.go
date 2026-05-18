@@ -33,6 +33,25 @@ func RenameBranch(r Runner, oldBranch, newBranch string) error {
 	return err
 }
 
+// CurrentBranch returns the short branch name checked out in the given directory.
+// Returns an error with a hint if HEAD is detached.
+func CurrentBranch(r Runner, dir string) (string, error) {
+	out, err := r.RunInDir(dir, "symbolic-ref", "--short", "HEAD")
+	if err != nil {
+		return "", errhint.WithFix(
+			fmt.Errorf("could not determine current branch: %w", err),
+			"checkout a branch first: git checkout <branch>",
+		)
+	}
+	return strings.TrimSpace(out), nil
+}
+
+// Checkout switches the working tree in dir to the given branch.
+func Checkout(r Runner, dir, branch string) error {
+	_, err := r.RunInDir(dir, "switch", branch)
+	return err
+}
+
 // IsDirty returns true if the working tree at the given directory has uncommitted changes.
 func IsDirty(r Runner, dir string) (bool, error) {
 	out, err := r.RunInDir(dir, "status", "--porcelain")
