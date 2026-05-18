@@ -41,12 +41,16 @@ func PromoteBranch(_ context.Context, worktreeDir string, r git.Runner, repoRoot
 	}
 
 	if err := git.Checkout(r, repoRoot, defaultBranch); err != nil {
-		restoreStash(r, repoRoot, stashSHA)
+		if restoreErr := restoreStash(r, repoRoot, stashSHA); restoreErr != nil {
+			return "", fmt.Errorf("switch to %s: %w; also failed to restore stash: %w", defaultBranch, err, restoreErr)
+		}
 		return "", fmt.Errorf("switch to %s: %w", defaultBranch, err)
 	}
 
 	if err := git.AddWorktreeFromBranch(r, wtPath, branch); err != nil {
-		restoreStash(r, repoRoot, stashSHA)
+		if restoreErr := restoreStash(r, repoRoot, stashSHA); restoreErr != nil {
+			return "", fmt.Errorf("create worktree: %w; also failed to restore stash: %w", err, restoreErr)
+		}
 		if switchErr := git.Checkout(r, repoRoot, branch); switchErr != nil {
 			return "", fmt.Errorf("create worktree: %w; also failed to restore HEAD to %s: %w", err, branch, switchErr)
 		}
@@ -101,13 +105,16 @@ func validateForPromotion(r git.Runner, repoRoot, branch string) (string, error)
 }
 
 // restoreStash re-applies and drops a stash entry to undo a failed mid-operation stash push.
-// No-ops when sha is empty.
-func restoreStash(r git.Runner, dir, sha string) {
+// No-ops when sha is empty. Returns an error if the apply fails (stash entry is preserved).
+func restoreStash(r git.Runner, dir, sha string) error {
 	if sha == "" {
-		return
+		return nil
 	}
-	_ = git.StashApply(r, dir, sha)
+	if err := git.StashApply(r, dir, sha); err != nil {
+		return fmt.Errorf("your changes are preserved in stash %s — apply manually with: git stash list && git stash apply stash@{0}: %w", sha, err)
+	}
 	_ = git.StashDrop(r, dir, sha)
+	return nil
 }
 
 // applyStashToWorktree applies a stash to the worktree. On conflict, the stash entry
@@ -116,7 +123,7 @@ func applyStashToWorktree(r git.Runner, wtPath, sha string) error {
 	if err := git.StashApply(r, wtPath, sha); err != nil {
 		return errhint.WithFix(
 			errors.New("stash apply had conflicts"),
-			fmt.Sprintf("resolve conflicts in %s, then: git stash drop %s", wtPath, sha),
+			fmt.Sprintf("resolve conflicts in %s (stash ref: %s), then: git stash list && git stash drop stash@{0}", wtPath, sha),
 		)
 	}
 	_ = git.StashDrop(r, wtPath, sha)
