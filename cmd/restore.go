@@ -16,8 +16,16 @@ import (
 var restoreCmd = &cobra.Command{
 	Use:   "restore <task>",
 	Short: "Restore an archived worktree from its preserved branch",
-	Long:  "Recreates a worktree from a branch that was previously archived with `rimba archive`.",
-	Args:  cobra.ExactArgs(1),
+	Long: `Recreates a worktree from a branch that was previously archived with
+rimba archive. The local branch must still exist — restore does not
+fetch from a remote.
+
+If no archived branch is found for the task, restore fails with
+"no archived branch found for task <name>". Use 'rimba list --archived'
+to see available archived branches.`,
+	Example: `  rimba restore auth
+  rimba restore auth --skip-hooks`,
+	Args: cobra.ExactArgs(1),
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
@@ -103,7 +111,7 @@ var restoreCmd = &cobra.Command{
 }
 
 func init() {
-	restoreCmd.Flags().Bool(flagSkipDeps, false, "Skip dependency detection and installation")
-	restoreCmd.Flags().Bool(flagSkipHooks, false, "Skip post-create hooks")
+	restoreCmd.Flags().Bool(flagSkipDeps, false, "skip dependency detection and installation")
+	restoreCmd.Flags().Bool(flagSkipHooks, false, "skip post-create hooks")
 	rootCmd.AddCommand(restoreCmd)
 }
