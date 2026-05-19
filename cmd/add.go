@@ -39,18 +39,17 @@ Use pr:<num> to create a worktree from a GitHub PR's head branch.
 Use branch:<branch> to promote the current branch into its own worktree,
 transferring any dirty working-tree state via git stash.
 
-  rimba add my-feature
-  rimba add my-feature --bugfix          # Use bugfix/ prefix
-  rimba add auth-api/my-feature          # Monorepo service scope
-  rimba add pr:123                       # Create worktree from PR #123
-  rimba add pr:123 --task review/auth    # Override auto-derived task name
-  rimba add branch:feature/my-feature   # Promote current branch to worktree
-
 pr:<num> requires gh installed and authenticated. For cross-fork PRs, rimba adds a
 gh-fork-<owner> remote automatically. Without --task, the task name is derived as
 review/<num>-<slug>. The --task flag is only valid in pr:<num> mode.
 branch:<branch> requires that <branch> is the currently checked-out branch in the
 main repo and is not the default branch. --source is not valid in branch: mode.`,
+	Example: `  rimba add my-feature
+  rimba add my-feature --bugfix          # use bugfix/ prefix
+  rimba add auth-api/my-feature          # monorepo service scope
+  rimba add pr:123                       # create worktree from PR #123
+  rimba add pr:123 --task review/auth    # override auto-derived task name
+  rimba add branch:feature/my-feature   # promote current branch to worktree`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.FromContext(cmd.Context())
@@ -212,10 +211,10 @@ func buildPostCreateOptions(cfg *config.Config, repoRoot string, skipDeps, skipH
 
 func init() {
 	addPrefixFlags(addCmd)
-	addCmd.Flags().StringP(flagSource, "s", "", "Source branch to create worktree from (default from config)")
-	addCmd.Flags().String(flagTask, "", "Override auto-derived task name (pr:<num> mode only)")
-	addCmd.Flags().Bool(flagSkipDeps, false, "Skip dependency detection and installation")
-	addCmd.Flags().Bool(flagSkipHooks, false, "Skip post-create hooks")
+	addCmd.Flags().StringP(flagSource, "s", "", "source branch to create worktree from (default from config)")
+	addCmd.Flags().String(flagTask, "", "override auto-derived task name (pr:<num> mode only)")
+	addCmd.Flags().Bool(flagSkipDeps, false, "skip dependency detection and installation")
+	addCmd.Flags().Bool(flagSkipHooks, false, "skip post-create hooks")
 	_ = addCmd.RegisterFlagCompletionFunc(flagSource, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return completeBranchNames(cmd, toComplete), cobra.ShellCompDirectiveNoFileComp
 	})

@@ -75,7 +75,7 @@ var archiveCmd = &cobra.Command{
 }
 
 func init() {
-	archiveCmd.Flags().BoolP(flagForce, "f", false, "Force archival even if worktree is dirty")
-	archiveCmd.Flags().Bool(flagDryRun, false, "Preview what would be archived without making changes")
+	archiveCmd.Flags().BoolP(flagForce, "f", false, "force archival even if worktree is dirty")
+	archiveCmd.Flags().Bool(flagDryRun, false, "preview what would be archived without making changes")
 	rootCmd.AddCommand(archiveCmd)
 }

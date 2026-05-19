@@ -87,8 +87,8 @@ var removeCmd = &cobra.Command{
 }
 
 func init() {
-	removeCmd.Flags().BoolP(flagKeepBranch, "k", false, "Keep the local branch after removing the worktree")
-	removeCmd.Flags().BoolP(flagForce, "f", false, "Force removal even if worktree is dirty")
-	removeCmd.Flags().Bool(flagDryRun, false, "Preview what would be removed without making changes")
+	removeCmd.Flags().BoolP(flagKeepBranch, "k", false, "keep the local branch after removing the worktree")
+	removeCmd.Flags().BoolP(flagForce, "f", false, "force removal even if worktree is dirty")
+	removeCmd.Flags().Bool(flagDryRun, false, "preview what would be removed without making changes")
 	rootCmd.AddCommand(removeCmd)
 }

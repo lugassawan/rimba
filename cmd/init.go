@@ -37,6 +37,10 @@ const (
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize rimba in the current repository",
+	Example: `  rimba init
+  rimba init --personal
+  rimba init --agents
+  rimba init -g`,
 	Long: `Detects the repository root and sets up the .rimba/ config directory with
 settings.toml (team-shared) and settings.local.toml (personal overrides).
 
@@ -281,11 +285,11 @@ func printSection(cmd *cobra.Command, title string, tier installTier, results []
 
 func init() {
 	rootCmd.AddCommand(initCmd)
-	initCmd.Flags().Bool(flagPersonal, false, "Gitignore the .rimba/ directory (for solo developers)")
-	initCmd.Flags().BoolP(flagGlobal, "g", false, "Install rimba agent files at user level (~/)")
-	initCmd.Flags().Bool(flagAgents, false, "Install rimba agent files in this project (committed to repo)")
-	initCmd.Flags().Bool(flagLocal, false, "With --agents, install as project-local (gitignored)")
-	initCmd.Flags().Bool(flagUninstall, false, "Remove agent files: use with -g, --agents, or --agents --local")
+	initCmd.Flags().Bool(flagPersonal, false, "gitignore the .rimba/ directory (for solo developers)")
+	initCmd.Flags().BoolP(flagGlobal, "g", false, "install rimba agent files at user level (~/)")
+	initCmd.Flags().Bool(flagAgents, false, "install rimba agent files in this project (committed to repo)")
+	initCmd.Flags().Bool(flagLocal, false, "with --agents, install as project-local (gitignored)")
+	initCmd.Flags().Bool(flagUninstall, false, "remove agent files: use with -g, --agents, or --agents --local")
 	initCmd.MarkFlagsMutuallyExclusive(flagGlobal, flagAgents)
 }
 

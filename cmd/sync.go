@@ -118,11 +118,11 @@ var syncCmd = &cobra.Command{
 }
 
 func init() {
-	syncCmd.Flags().Bool(flagAll, false, "Sync all eligible worktrees")
-	syncCmd.Flags().Bool(flagSyncMerge, false, "Use merge instead of rebase")
-	syncCmd.Flags().Bool(flagIncludeInherited, false, "Include inherited/duplicate worktrees when using --all")
-	syncCmd.Flags().Bool(flagNoPush, false, "Skip pushing after sync")
-	syncCmd.Flags().Bool(flagDryRun, false, "Preview what would be synced without making changes")
+	syncCmd.Flags().Bool(flagAll, false, "sync all eligible worktrees")
+	syncCmd.Flags().Bool(flagSyncMerge, false, "use merge instead of rebase")
+	syncCmd.Flags().Bool(flagIncludeInherited, false, "include inherited/duplicate worktrees when using --all")
+	syncCmd.Flags().Bool(flagNoPush, false, "skip pushing after sync")
+	syncCmd.Flags().Bool(flagDryRun, false, "preview what would be synced without making changes")
 
 	rootCmd.AddCommand(syncCmd)
 }
