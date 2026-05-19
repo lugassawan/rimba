@@ -14,9 +14,10 @@ import (
 )
 
 var mergePlanCmd = &cobra.Command{
-	Use:   "merge-plan",
-	Short: "Recommend optimal merge order",
-	Long:  "Analyzes file overlaps between worktree branches and recommends a merge order that minimizes conflicts.",
+	Use:     "merge-plan",
+	Short:   "Recommend optimal merge order",
+	Long:    "Analyzes file overlaps between worktree branches and recommends a merge order that minimizes conflicts.",
+	Example: "  rimba merge-plan",
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		cfg := config.FromContext(cmd.Context())
 

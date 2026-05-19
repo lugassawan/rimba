@@ -17,8 +17,9 @@ var hookCmd = &cobra.Command{
 }
 
 var hookInstallCmd = &cobra.Command{
-	Use:   "install",
-	Short: "Install post-merge and pre-commit hooks",
+	Use:     "install",
+	Short:   "Install post-merge and pre-commit hooks",
+	Example: "  rimba hook install",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		r := newRunner()
 
@@ -59,8 +60,9 @@ var hookInstallCmd = &cobra.Command{
 }
 
 var hookUninstallCmd = &cobra.Command{
-	Use:   "uninstall",
-	Short: "Remove post-merge and pre-commit hooks",
+	Use:     "uninstall",
+	Short:   "Remove post-merge and pre-commit hooks",
+	Example: "  rimba hook uninstall",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		r := newRunner()
 
@@ -102,8 +104,9 @@ var hookUninstallCmd = &cobra.Command{
 }
 
 var hookStatusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "Show hook status",
+	Use:     "status",
+	Short:   "Show hook status",
+	Example: "  rimba hook status",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		r := newRunner()
 

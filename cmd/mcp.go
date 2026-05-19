@@ -11,8 +11,9 @@ import (
 )
 
 var mcpCmd = &cobra.Command{
-	Use:   "mcp",
-	Short: "Start MCP server for AI tool integration",
+	Use:     "mcp",
+	Short:   "Start MCP server for AI tool integration",
+	Example: "  rimba mcp",
 	Long: `Starts a Model Context Protocol (MCP) server over stdio.
 
 Any MCP-compatible client can connect to this server to discover and invoke

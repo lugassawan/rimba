@@ -18,34 +18,11 @@ var completionCmd = &cobra.Command{
 	ValidArgs:   []string{"bash", "zsh", "fish", "powershell"},
 	Args:        cobra.ExactArgs(1),
 	Annotations: map[string]string{"skipConfig": "true"},
-	Long: `Generate shell completion scripts for rimba.
-
-Bash:
-  # Load for the current session:
-  source <(rimba completion bash)
-
-  # Install permanently (Linux):
-  rimba completion bash > /etc/bash_completion.d/rimba
-
-  # Install permanently (macOS with Homebrew bash-completion@2):
-  rimba completion bash > "$(brew --prefix)/etc/bash_completion.d/rimba"
-
-Zsh:
-  # Load for the current session:
-  source <(rimba completion zsh)
-
-  # Install permanently:
-  rimba completion zsh > "${fpath[1]}/_rimba"
-
-Fish:
-  rimba completion fish > ~/.config/fish/completions/rimba.fish
-
-PowerShell:
-  rimba completion powershell | Out-String | Invoke-Expression
-
-  # To load completions for every new session:
-  rimba completion powershell > rimba.ps1
-  # then source rimba.ps1 from your PowerShell profile`,
+	Long:        "Generate shell completion scripts for rimba.",
+	Example: `  rimba completion bash          # load: source <(rimba completion bash)
+  rimba completion zsh           # load: source <(rimba completion zsh)
+  rimba completion fish          # install: rimba completion fish > ~/.config/fish/completions/rimba.fish
+  rimba completion powershell    # load: rimba completion powershell | Out-String | Invoke-Expression`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		out := cmd.OutOrStdout()
 		switch args[0] {

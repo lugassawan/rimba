@@ -18,6 +18,8 @@ const retryUpdateHint = "retry: rimba update"
 var updateCmd = &cobra.Command{
 	Use:   "update",
 	Short: "Update rimba to the latest version",
+	Example: `  rimba update
+  rimba update --force`,
 	Long: `Check for the latest release on GitHub and update the binary in place.
 
 If the current binary cannot be replaced due to file permissions, rimba installs the

@@ -25,19 +25,17 @@ var openCmd = &cobra.Command{
 	Short: "Open a worktree or run a command inside it",
 	Long: `Prints the worktree path for the given task, or executes a command inside it.
 
-Examples:
-  rimba open my-task              # Print worktree path
-  cd $(rimba open my-task)        # Navigate to worktree
-  rimba open my-task --ide        # Run the 'ide' shortcut
-  rimba open my-task --agent      # Run the 'agent' shortcut
-  rimba open my-task -w test      # Run a named shortcut
-  rimba open my-task npm start    # Run an inline command
-
 Shortcuts are configured in .rimba/settings.toml:
   [open]
   ide = "code ."
   agent = "claude"
   test = "npm test"`,
+	Example: `  rimba open my-task              # print worktree path
+  cd $(rimba open my-task)        # navigate to worktree
+  rimba open my-task --ide        # run the 'ide' shortcut
+  rimba open my-task --agent      # run the 'agent' shortcut
+  rimba open my-task -w test      # run a named shortcut
+  rimba open my-task npm start    # run an inline command`,
 	Args: cobra.MinimumNArgs(1),
 	FParseErrWhitelist: cobra.FParseErrWhitelist{
 		UnknownFlags: true,
