@@ -16,6 +16,7 @@ var (
 var versionCmd = &cobra.Command{
 	Use:         "version",
 	Short:       "Print the version information",
+	Example:     "  rimba version",
 	Annotations: map[string]string{"skipConfig": "true"},
 	Run: func(cmd *cobra.Command, args []string) {
 		w := cmd.OutOrStdout()
@@ -24,6 +25,7 @@ var versionCmd = &cobra.Command{
 		fmt.Fprintf(w, "built:  %s\n", date)
 		fmt.Fprintf(w, "os:     %s\n", runtime.GOOS)
 		fmt.Fprintf(w, "arch:   %s\n", runtime.GOARCH)
+		fmt.Fprintf(w, "go:     %s\n", runtime.Version())
 	},
 }
 
