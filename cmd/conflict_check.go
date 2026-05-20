@@ -32,6 +32,8 @@ var conflictCheckCmd = &cobra.Command{
 	Use:   "conflict-check",
 	Short: "Detect file overlaps between worktree branches",
 	Long:  "Scans all active worktrees and reports files modified in multiple branches, indicating potential merge conflicts.",
+	Example: `  rimba conflict-check
+  rimba conflict-check --dry-merge`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		cfg := config.FromContext(cmd.Context())
 

@@ -8,6 +8,15 @@ import (
 	"github.com/lugassawan/rimba/internal/config"
 )
 
+func TestRestoreLongDescribesArchivePrereq(t *testing.T) {
+	if !strings.Contains(restoreCmd.Long, "rimba archive") {
+		t.Error("restoreCmd.Long must mention 'rimba archive' prerequisite")
+	}
+	if !strings.Contains(restoreCmd.Long, "no archived branch found") {
+		t.Error("restoreCmd.Long must mention 'no archived branch found' failure case")
+	}
+}
+
 func TestRestoreSuccess(t *testing.T) {
 	restore := overrideNewRunner(&mockRunner{
 		run: func(args ...string) (string, error) {

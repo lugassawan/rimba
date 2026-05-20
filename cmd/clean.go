@@ -24,9 +24,12 @@ const (
 )
 
 var cleanCmd = &cobra.Command{
-	Use:         "clean",
-	Short:       "Prune stale worktree references or remove merged worktrees",
-	Long:        "Runs git worktree prune to clean up stale references. Use --merged to detect and remove worktrees whose branches have been merged into main.",
+	Use:   "clean",
+	Short: "Prune stale worktree references or remove merged worktrees",
+	Long:  "Runs git worktree prune to clean up stale references. Use --merged to detect and remove worktrees whose branches have been merged into main.",
+	Example: `  rimba clean
+  rimba clean --merged
+  rimba clean --stale --stale-days 7`,
 	Annotations: map[string]string{"skipConfig": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		r := newRunner()
@@ -45,11 +48,11 @@ var cleanCmd = &cobra.Command{
 }
 
 func init() {
-	cleanCmd.Flags().Bool(flagDryRun, false, "Show what would be pruned/removed without making changes")
-	cleanCmd.Flags().Bool(flagMerged, false, "Remove worktrees whose branches are merged into main")
-	cleanCmd.Flags().Bool(flagStale, false, "Remove worktrees with no recent commits")
-	cleanCmd.Flags().Int(flagStaleDays, defaultStaleDays, "Number of days to consider a worktree stale (used with --stale)")
-	cleanCmd.Flags().Bool(flagForce, false, "Skip confirmation prompt when used with --merged or --stale")
+	cleanCmd.Flags().Bool(flagDryRun, false, "show what would be pruned/removed without making changes")
+	cleanCmd.Flags().Bool(flagMerged, false, "remove worktrees whose branches are merged into main")
+	cleanCmd.Flags().Bool(flagStale, false, "remove worktrees with no recent commits")
+	cleanCmd.Flags().Int(flagStaleDays, defaultStaleDays, "number of days to consider a worktree stale (used with --stale)")
+	cleanCmd.Flags().Bool(flagForce, false, "skip confirmation prompt when used with --merged or --stale")
 
 	cleanCmd.MarkFlagsMutuallyExclusive(flagMerged, flagStale)
 

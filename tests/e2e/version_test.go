@@ -16,6 +16,7 @@ func TestVersionPrintsInfo(t *testing.T) {
 	assertContains(t, r.Stdout, "built:")
 	assertContains(t, r.Stdout, "os:")
 	assertContains(t, r.Stdout, "arch:")
+	assertContains(t, r.Stdout, "go:")
 }
 
 func TestVersionWorksOutsideRepo(t *testing.T) {

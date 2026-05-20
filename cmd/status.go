@@ -23,11 +23,10 @@ plus per-worktree age information.
 
 Use --detail to add SIZE and 7D columns and a disk-footprint summary line. SIZE is the
 on-disk footprint of the worktree directory; 7D is the number of commits on the branch
-in the last 7 days. With --detail, rows are sorted largest-first.
-
-  rimba status
-  rimba status --detail          # Add SIZE/7D columns and disk summary
-  rimba status --stale-days 7    # Consider worktrees stale after 7 days`,
+in the last 7 days. With --detail, rows are sorted largest-first.`,
+	Example: `  rimba status
+  rimba status --detail          # add SIZE/7D columns and disk summary
+  rimba status --stale-days 7    # consider worktrees stale after 7 days`,
 	Annotations: map[string]string{"skipConfig": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		r := newRunner()
@@ -71,8 +70,8 @@ in the last 7 days. With --detail, rows are sorted largest-first.
 }
 
 func init() {
-	statusCmd.Flags().Int(flagStaleDays, defaultStaleDays, "Number of days after which a worktree is considered stale")
-	statusCmd.Flags().Bool(flagDetail, false, "Show per-worktree disk size and 7-day commit velocity")
+	statusCmd.Flags().Int(flagStaleDays, defaultStaleDays, "number of days after which a worktree is considered stale")
+	statusCmd.Flags().Bool(flagDetail, false, "show per-worktree disk size and 7-day commit velocity")
 	rootCmd.AddCommand(statusCmd)
 }
 

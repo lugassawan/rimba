@@ -15,11 +15,11 @@ type prefixFlag struct {
 // prefixFlags lists the non-default prefix types available as boolean flags.
 // "feature" is the default and does not need a flag.
 var prefixFlags = []prefixFlag{
-	{"bugfix", resolver.PrefixBugfix, "Fixing minor bugs that are part of the normal workflow"},
-	{"hotfix", resolver.PrefixHotfix, "Urgent fixes that need to be patched directly in production"},
-	{"docs", resolver.PrefixDocs, "Changes related to documentation"},
-	{"test", resolver.PrefixTest, "Experiments or new tests that might not be merged"},
-	{"chore", resolver.PrefixChore, "Non-code tasks like dependency updates"},
+	{"bugfix", resolver.PrefixBugfix, "fixing minor bugs that are part of the normal workflow"},
+	{"hotfix", resolver.PrefixHotfix, "urgent fixes that need to be patched directly in production"},
+	{"docs", resolver.PrefixDocs, "changes related to documentation"},
+	{"test", resolver.PrefixTest, "experiments or new tests that might not be merged"},
+	{"chore", resolver.PrefixChore, "non-code tasks like dependency updates"},
 }
 
 // addPrefixFlags registers all prefix boolean flags on cmd and marks them mutually exclusive.

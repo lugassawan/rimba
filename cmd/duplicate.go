@@ -177,9 +177,9 @@ var duplicateCmd = &cobra.Command{
 }
 
 func init() {
-	duplicateCmd.Flags().String(flagAs, "", "Custom name for the duplicate worktree")
-	duplicateCmd.Flags().Bool(flagSkipDeps, false, "Skip dependency detection and installation")
-	duplicateCmd.Flags().Bool(flagSkipHooks, false, "Skip post-create hooks")
-	duplicateCmd.Flags().Bool(flagDryRun, false, "Preview what would be duplicated without making changes")
+	duplicateCmd.Flags().String(flagAs, "", "custom name for the duplicate worktree")
+	duplicateCmd.Flags().Bool(flagSkipDeps, false, "skip dependency detection and installation")
+	duplicateCmd.Flags().Bool(flagSkipHooks, false, "skip post-create hooks")
+	duplicateCmd.Flags().Bool(flagDryRun, false, "preview what would be duplicated without making changes")
 	rootCmd.AddCommand(duplicateCmd)
 }

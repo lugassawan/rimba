@@ -36,15 +36,14 @@ var listCmd = &cobra.Command{
 Use --full to show branch, path, and (when gh is installed and authenticated) PR number
 and CI rollup. CI symbols: ✓ success · ● pending · ✗ failure · – unknown.
 
-  rimba list                     # Compact view
-  rimba list --full              # All columns including PR/CI
-  rimba list --type bugfix       # Filter by prefix type
-  rimba list --service auth-api  # Filter by service (monorepo)
-  rimba list --dirty             # Only worktrees with uncommitted changes
-  rimba list --behind            # Only worktrees behind upstream
-  rimba list --archived          # Archived branches (no active worktree)
-
 --archived is mutually exclusive with --type, --dirty, --behind, and --full.`,
+	Example: `  rimba list                     # compact view
+  rimba list --full              # all columns including PR/CI
+  rimba list --type bugfix       # filter by prefix type
+  rimba list --service auth-api  # filter by service (monorepo)
+  rimba list --dirty             # only worktrees with uncommitted changes
+  rimba list --behind            # only worktrees behind upstream
+  rimba list --archived          # archived branches (no active worktree)`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		opts := listReadFlags(cmd)
 

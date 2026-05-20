@@ -31,9 +31,11 @@ type logEntry struct {
 }
 
 var logCmd = &cobra.Command{
-	Use:         "log",
-	Short:       "Show last commit from each worktree, sorted by recency",
-	Long:        "Displays the most recent commit from each worktree, sorted from newest to oldest.",
+	Use:   "log",
+	Short: "Show last commit from each worktree, sorted by recency",
+	Long:  "Displays the most recent commit from each worktree, sorted from newest to oldest.",
+	Example: `  rimba log
+  rimba log --since 7d --limit 10`,
 	Annotations: map[string]string{"skipConfig": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		r := newRunner()
@@ -99,8 +101,8 @@ var logCmd = &cobra.Command{
 }
 
 func init() {
-	logCmd.Flags().Int(flagLimit, 0, "Maximum number of entries to show (0 = all)")
-	logCmd.Flags().String(flagSince, "", "Show entries since duration (e.g. 7d, 2w, 3h)")
+	logCmd.Flags().Int(flagLimit, 0, "maximum number of entries to show (0 = all)")
+	logCmd.Flags().String(flagSince, "", "show entries since duration (e.g. 7d, 2w, 3h)")
 	rootCmd.AddCommand(logCmd)
 }
 

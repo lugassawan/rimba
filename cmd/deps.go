@@ -28,8 +28,9 @@ var depsCmd = &cobra.Command{
 }
 
 var depsStatusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "Show detected modules and lockfile hashes for all worktrees",
+	Use:     "status",
+	Short:   "Show detected modules and lockfile hashes for all worktrees",
+	Example: "  rimba deps status",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.FromContext(cmd.Context())
 
@@ -124,9 +125,10 @@ var depsStatusCmd = &cobra.Command{
 }
 
 var depsInstallCmd = &cobra.Command{
-	Use:   "install <task>",
-	Short: "Install dependencies for a specific worktree",
-	Args:  cobra.ExactArgs(1),
+	Use:     "install <task>",
+	Short:   "Install dependencies for a specific worktree",
+	Example: "  rimba deps install auth",
+	Args:    cobra.ExactArgs(1),
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp

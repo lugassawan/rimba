@@ -100,7 +100,7 @@ func init() {
 
 	rootCmd.PersistentFlags().Bool(flagJSON, false, "output in JSON format")
 	rootCmd.PersistentFlags().Bool(flagNoColor, false, "disable colored output")
-	rootCmd.PersistentFlags().Bool(flagDebug, false, "Log git commands and timings to stderr")
+	rootCmd.PersistentFlags().Bool(flagDebug, false, "log git commands and timings to stderr")
 
 	originalHelp := rootCmd.HelpFunc()
 	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {

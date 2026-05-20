@@ -93,8 +93,8 @@ var renameCmd = &cobra.Command{
 }
 
 func init() {
-	renameCmd.Flags().BoolP(flagForce, "f", false, "Force rename even if worktree is locked")
-	renameCmd.Flags().Bool(flagSkipDeps, false, "Skip dependency refresh after rename")
-	renameCmd.Flags().Bool(flagSkipHooks, false, "Skip post-rename hooks")
+	renameCmd.Flags().BoolP(flagForce, "f", false, "force rename even if worktree is locked")
+	renameCmd.Flags().Bool(flagSkipDeps, false, "skip dependency refresh after rename")
+	renameCmd.Flags().Bool(flagSkipHooks, false, "skip post-rename hooks")
 	rootCmd.AddCommand(renameCmd)
 }

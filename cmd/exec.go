@@ -35,7 +35,9 @@ var execCmd = &cobra.Command{
 	Use:   "exec <command>",
 	Short: "Run a shell command across worktrees",
 	Long:  "Executes a shell command in parallel across matching worktrees. Use --all to target all worktrees, or --type to filter by prefix type.",
-	Args:  cobra.ExactArgs(1),
+	Example: `  rimba exec --all "git status"
+  rimba exec --type bugfix "npm test"`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		opts := execReadFlags(cmd)
 		if err := execValidateFlags(opts); err != nil {
