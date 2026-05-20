@@ -72,4 +72,4 @@ for src in "$ROOT"/.githooks/*; do
   ln -sfn "$ROOT/.githooks/$name" "$GIT_DIR/hooks/$name"
 done
 
-printf 'Git hooks linked: %s/hooks/<hook> -> %s/.githooks/<hook>\n' "$GIT_DIR" "$ROOT"
+printf 'Git hooks linked: %s/hooks/ -> %s/.githooks/\n' "$GIT_DIR" "$ROOT"

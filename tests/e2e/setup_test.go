@@ -14,8 +14,9 @@ import (
 
 // conflictRow describes one conflict scenario for TestSetupConflicts.
 type conflictRow struct {
-	name  string
-	setup func(t *testing.T, repo string)
+	name        string
+	setup       func(t *testing.T, repo string)
+	forceStdout string // if non-empty, assertContains checks r2.Stdout after --force run
 }
 
 // resolveScriptPath returns the absolute path to scripts/setup.sh, relative to
@@ -210,7 +211,8 @@ func TestSetupConflicts(t *testing.T) {
 
 	rows := []conflictRow{
 		{
-			name: "custom core.hooksPath",
+			name:        "custom core.hooksPath",
+			forceStdout: "Unset core.hooksPath",
 			setup: func(t *testing.T, repo string) {
 				t.Helper()
 				testutil.GitCmd(t, repo, "config", "core.hooksPath", "custom-hooks")
@@ -271,6 +273,9 @@ func TestSetupConflicts(t *testing.T) {
 					r2.ExitCode, r2.Stdout, r2.Stderr)
 			}
 			assertContains(t, r2.Stderr, "--force")
+			if row.forceStdout != "" {
+				assertContains(t, r2.Stdout, row.forceStdout)
+			}
 
 			repo2Real := repoRealPath(t, repo2)
 			gitDir := strings.TrimSpace(testutil.GitCmd(t, repo2, "rev-parse", "--git-dir"))
