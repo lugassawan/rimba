@@ -40,5 +40,4 @@ bench:
 	go test -bench=. -benchmem -run=^$$ ./...
 
 hooks:
-	git config core.hooksPath .githooks
-	@echo "Git hooks activated from .githooks/"
+	./scripts/setup.sh

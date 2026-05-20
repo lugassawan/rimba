@@ -7,16 +7,19 @@ Thanks for your interest in contributing! This guide covers the development work
 ```sh
 git clone https://github.com/lugassawan/rimba.git
 cd rimba
-make hooks  # Activate git hooks
+make hooks  # Install git hooks (re-runnable; use --force to overwrite conflicts)
 make build  # Build the binary
 ```
 
 ## Git Hooks
 
-Running `make hooks` configures Git to use the hooks in `.githooks/`:
+Running `make hooks` (or `./scripts/setup.sh` directly) installs symlinks from `.git/hooks/` to `.githooks/`. It is safe to re-run and will refuse to overwrite existing hook state unless you pass `--force`.
+
+The hooks in `.githooks/`:
 
 - **pre-commit** — prevents direct commits to main/master, formats staged Go files with `make fmt`, and runs `make lint`
 - **commit-msg** — enforces the `[type] Description` commit message format
+- **post-merge** — runs `rimba clean --merged --force` on main after a merge, automatically pruning stale worktrees
 
 ## Commit Convention
 
@@ -50,7 +53,7 @@ This convention is enforced locally by git hooks and in CI by PR title validatio
 | `make fmt` | Format all Go source files |
 | `make lint` | Run linters via golangci-lint |
 | `make bench` | Run benchmarks |
-| `make hooks` | Activate git hooks from `.githooks/` |
+| `make hooks` | Install git hooks via `./scripts/setup.sh` (re-runnable, `--force` to overwrite) |
 
 ## Testing
 
