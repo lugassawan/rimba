@@ -17,7 +17,7 @@ var restoreCmd = &cobra.Command{
 	Use:   "restore <task>",
 	Short: "Restore an archived worktree from its preserved branch",
 	Long: `Recreates a worktree from a branch that was previously archived with
-rimba archive. The local branch must still exist — restore does not
+rimba archive. The archived branch must still exist locally — restore does not
 fetch from a remote.
 
 If no archived branch is found for the task, restore fails with

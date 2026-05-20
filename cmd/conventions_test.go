@@ -20,6 +20,9 @@ func allCommands(c *cobra.Command) []*cobra.Command {
 
 func TestFlagUsageIsLowercase(t *testing.T) {
 	for _, c := range allCommands(rootCmd) {
+		// LocalFlags covers this command's own Flags() and PersistentFlags(),
+		// but not flags inherited from ancestor commands — those are validated
+		// when the ancestor command is processed in the outer loop.
 		c.LocalFlags().VisitAll(func(f *pflag.Flag) {
 			if f.Hidden || f.Usage == "" {
 				return

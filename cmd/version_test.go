@@ -25,7 +25,7 @@ func TestVersionCmd(t *testing.T) {
 		}
 	}
 	lines := strings.Split(strings.TrimSpace(out), "\n")
-	if len(lines) < 6 {
-		t.Errorf("expected at least 6 lines, got %d: %q", len(lines), out)
+	if len(lines) != 6 {
+		t.Errorf("expected 6 lines, got %d: %q", len(lines), out)
 	}
 }
