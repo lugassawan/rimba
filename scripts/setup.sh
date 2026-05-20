@@ -17,8 +17,7 @@ for arg in "$@"; do
 done
 
 ROOT="$(git rev-parse --show-toplevel)"
-GIT_DIR="$(git rev-parse --git-dir)"
-case "$GIT_DIR" in /*) ;; *) GIT_DIR="$ROOT/$GIT_DIR" ;; esac
+GIT_DIR="$(git -C "$ROOT" rev-parse --absolute-git-dir)"
 
 # --- Preflight: collect conflicts ------------------------------------------
 conflicts=""
@@ -35,6 +34,7 @@ fi
 mkdir -p "$GIT_DIR/hooks"
 for src in "$ROOT"/.githooks/*; do
   [ -e "$src" ] || [ -L "$src" ] || break   # glob unexpanded — .githooks is empty or missing
+  [ -L "$src" ] && [ ! -e "$src" ] && { printf 'warning: broken symlink in .githooks, skipping: %s\n' "$src" >&2; continue; }
   name="$(basename "$src")"
   target="$GIT_DIR/hooks/$name"
   expected="$ROOT/.githooks/$name"
@@ -62,12 +62,14 @@ fi
 # --- Apply -----------------------------------------------------------------
 case "$existing_hp" in
   ""|.githooks|"$ROOT/.githooks") ;;   # unset or already correct — leave it alone
-  *) git -C "$ROOT" config --local --unset core.hooksPath ;;
+  *) git -C "$ROOT" config --local --unset core.hooksPath
+     printf 'Unset core.hooksPath (was: %s)\n' "$existing_hp" ;;
 esac
 for src in "$ROOT"/.githooks/*; do
   [ -e "$src" ] || [ -L "$src" ] || break   # glob unexpanded — .githooks is empty or missing
+  [ -L "$src" ] && [ ! -e "$src" ] && { printf 'warning: broken symlink in .githooks, skipping: %s\n' "$src" >&2; continue; }
   name="$(basename "$src")"
   ln -sfn "$ROOT/.githooks/$name" "$GIT_DIR/hooks/$name"
 done
 
-echo "Git hooks linked: $GIT_DIR/hooks/<name> -> $ROOT/.githooks/<name>"
+printf 'Git hooks linked: %s/hooks/<hook> -> %s/.githooks/<hook>\n' "$GIT_DIR" "$ROOT"

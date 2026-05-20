@@ -38,7 +38,7 @@ func runSetup(t *testing.T, repo string, args ...string) result {
 	t.Helper()
 	scriptPath := resolveScriptPath(t)
 	cmdArgs := append([]string{scriptPath}, args...)
-	cmd := exec.Command("bash", cmdArgs...)
+	cmd := exec.Command("sh", cmdArgs...)
 	cmd.Dir = repo
 
 	var stdout, stderr bytes.Buffer
@@ -301,9 +301,14 @@ func TestSetupInWorktree(t *testing.T) {
 	wtPath := filepath.Join(t.TempDir(), "linked-wt")
 	testutil.GitCmd(t, mainRepo, "worktree", "add", wtPath, "-b", "feature/wt-setup-test")
 
-	// Populate .githooks/ in the WORKTREE's working directory; when the script
-	// runs inside the worktree, ROOT = wtPath (git rev-parse --show-toplevel
-	// returns the linked worktree's root, not the main repo).
+	// Populate .githooks/ in the WORKTREE's working directory. When the script
+	// runs inside the worktree, ROOT = git rev-parse --show-toplevel = wtPath
+	// (linked worktrees have their own show-toplevel). This mirrors rimba's
+	// behavior: rimba add copies tracked files (including .githooks/) into each
+	// linked worktree. Tests that use plain `git worktree add` without that copy
+	// step would find no hooks to install — a no-op, not a failure.
+	// This test specifically validates GIT_DIR path normalization: symlinks must
+	// land under the WORKTREE's own git dir, not the main repo's .git/hooks/.
 	populateGithooks(t, wtPath)
 
 	// Run setup inside the linked worktree
@@ -336,7 +341,10 @@ func TestSetupInWorktree(t *testing.T) {
 }
 
 func TestSetupHookSourcesAreExecutable(t *testing.T) {
-	// This test does NOT need a repo — it just checks the tracked .githooks/ files.
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+	// Checks that tracked .githooks/ sources have the execute bit set.
 	projRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatalf("resolve project root: %v", err)
