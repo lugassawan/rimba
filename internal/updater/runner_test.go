@@ -5,9 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/lugassawan/rimba/internal/spinner"
 )
 
 const (
@@ -20,16 +23,19 @@ const (
 func newTestRunner(t *testing.T) (*Runner, *bytes.Buffer) {
 	t.Helper()
 	var buf bytes.Buffer
-	r := NewRunner("1.0.0")
-	r.Out = &buf
-	r.check = func() (*CheckResult, error) {
+	r := &Runner{
+		Version: "1.0.0",
+		Out:     &buf,
+		Spinner: spinner.New(spinner.Options{Writer: io.Discard}),
+	}
+	r.check = func(_ context.Context) (*CheckResult, error) {
 		return &CheckResult{
 			CurrentVersion: "1.0.0",
 			LatestVersion:  "v1.1.0",
 			DownloadURL:    "http://fake/download",
 		}, nil
 	}
-	r.download = func(url string) (string, error) { return "/tmp/rimba-test/rimba", nil }
+	r.download = func(_ context.Context, url string) (string, error) { return "/tmp/rimba-test/rimba", nil }
 	r.prepareBinary = func(path string) error { return nil }
 	r.executable = func() (string, error) { return testCurrentBinary, nil }
 	r.evalSymlinks = func(path string) (string, error) { return path, nil }
@@ -89,7 +95,7 @@ func TestHintSurfaces(t *testing.T) {
 		{
 			name: "check fails",
 			setupFn: func(_ *testing.T, r *Runner) {
-				r.check = func() (*CheckResult, error) {
+				r.check = func(_ context.Context) (*CheckResult, error) {
 					return nil, errors.New("network error")
 				}
 			},
@@ -99,7 +105,7 @@ func TestHintSurfaces(t *testing.T) {
 		{
 			name: "download fails",
 			setupFn: func(_ *testing.T, r *Runner) {
-				r.download = func(url string) (string, error) {
+				r.download = func(_ context.Context, url string) (string, error) {
 					return "", errors.New("connection refused")
 				}
 			},
@@ -252,7 +258,7 @@ func TestRunHappyPath(t *testing.T) {
 
 func TestRunUpToDate(t *testing.T) {
 	r, out := newTestRunner(t)
-	r.check = func() (*CheckResult, error) {
+	r.check = func(_ context.Context) (*CheckResult, error) {
 		return &CheckResult{CurrentVersion: "1.0.0", UpToDate: true}, nil
 	}
 
@@ -330,5 +336,38 @@ func TestRunCtxCancelledBeforeInstall(t *testing.T) {
 	}
 	if replaceCalled {
 		t.Error("replace should not be called after ctx cancellation")
+	}
+}
+
+func TestRunVerifyFailsAfterFallbackInstall(t *testing.T) {
+	r, _ := newTestRunner(t)
+	r.replace = func(_, _ string) error { return testPermErr() }
+	r.execCommand = func(_ context.Context, name string, args ...string) ([]byte, error) {
+		return nil, errors.New("exec failed")
+	}
+
+	err := r.Run(context.Background())
+	requireErrContains(t, err, "To fix:", "verifying new binary:", testUserDir+"/rimba")
+}
+
+func TestNewRunner(t *testing.T) {
+	r := NewRunner("1.2.3")
+	if r.Version != "1.2.3" {
+		t.Errorf("Version = %q, want %q", r.Version, "1.2.3")
+	}
+	if r.Out == nil {
+		t.Error("Out should not be nil")
+	}
+	if r.Spinner == nil {
+		t.Error("Spinner should not be nil")
+	}
+}
+
+func TestRunNilDefaults(t *testing.T) {
+	r, _ := newTestRunner(t)
+	r.Spinner = nil
+	r.Out = nil
+	if err := r.Run(context.Background()); err != nil {
+		t.Fatalf("unexpected error with nil Spinner/Out: %v", err)
 	}
 }

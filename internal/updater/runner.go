@@ -30,8 +30,8 @@ type Runner struct {
 	Spinner   *spinner.Spinner
 	OnSuccess func()
 
-	check          func() (*CheckResult, error)
-	download       func(url string) (string, error)
+	check          func(ctx context.Context) (*CheckResult, error)
+	download       func(ctx context.Context, url string) (string, error)
 	prepareBinary  func(path string) error
 	executable     func() (string, error)
 	evalSymlinks   func(path string) (string, error)
@@ -54,8 +54,8 @@ func NewRunner(version string) *Runner {
 		Out:     os.Stdout,
 		Spinner: spinner.New(spinner.Options{Writer: io.Discard}),
 	}
-	r.check = u.Check
-	r.download = u.Download
+	r.check = func(_ context.Context) (*CheckResult, error) { return u.Check() }
+	r.download = func(_ context.Context, url string) (string, error) { return u.Download(url) }
 	r.prepareBinary = PrepareBinary
 	r.executable = os.Executable
 	r.evalSymlinks = filepath.EvalSymlinks
@@ -72,14 +72,20 @@ func NewRunner(version string) *Runner {
 }
 
 func defaultExecCommand(ctx context.Context, name string, args ...string) ([]byte, error) {
-	return exec.CommandContext(ctx, filepath.Clean(name), args...).Output() //nolint:gosec // path comes from os.Executable
+	return exec.CommandContext(ctx, filepath.Clean(name), args...).Output() //nolint:gosec // G204: name is installedBinary, written by this process
 }
 
 // Run executes the full update pipeline: check → download → prepare → locate →
 // install → verify. ctx is checked before the destructive install stage.
 func (r *Runner) Run(ctx context.Context) error {
+	if r.Spinner == nil {
+		r.Spinner = spinner.New(spinner.Options{Writer: io.Discard})
+	}
+	if r.Out == nil {
+		r.Out = io.Discard
+	}
 	r.Spinner.Start("Checking for updates...")
-	result, err := r.check()
+	result, err := r.check(ctx)
 	if err != nil {
 		return errhint.WithFix(
 			fmt.Errorf("checking for updates: %w", err),
@@ -97,7 +103,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	fmt.Fprintf(r.Out, "New version available: %s → %s\n", result.CurrentVersion, result.LatestVersion)
 
 	r.Spinner.Start("Downloading...")
-	newBinary, err := r.download(result.DownloadURL)
+	newBinary, err := r.download(ctx, result.DownloadURL)
 	if err != nil {
 		return errhint.WithFix(
 			fmt.Errorf("downloading update: %w", err),
@@ -115,8 +121,8 @@ func (r *Runner) Run(ctx context.Context) error {
 		return err
 	}
 
-	if ctx.Err() != nil {
-		return ctx.Err()
+	if err := ctx.Err(); err != nil {
+		return errhint.WithFix(err, retryUpdateHint)
 	}
 
 	r.Spinner.Update("Installing...")
@@ -174,7 +180,6 @@ func (r *Runner) install(currentBinary, newBinary string) (string, error) {
 }
 
 func (r *Runner) installToUserDir(currentBinary, newBinary string) (string, error) {
-	r.Spinner.Stop()
 	userDir, err := r.userInstallDir()
 	if err != nil {
 		return "", errhint.WithFix(
