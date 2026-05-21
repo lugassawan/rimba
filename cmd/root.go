@@ -1,9 +1,12 @@
 package cmd
 
 import (
+	"context"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/lugassawan/rimba/internal/config"
@@ -130,5 +133,7 @@ func CommandName() string {
 }
 
 func Execute() error {
-	return rootCmd.Execute()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return rootCmd.ExecuteContext(ctx)
 }
