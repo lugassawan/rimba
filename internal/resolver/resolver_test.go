@@ -197,6 +197,10 @@ func TestSplitServiceInput(t *testing.T) {
 		{"feature/my-task", "feature", "my-task"},
 		{"my-task", "", "my-task"},
 		{"", "", ""},
+		{"/", "", ""},                       // separator-only: leading "/" splits to two empty parts
+		{"/foo", "", "foo"},                 // leading slash: empty candidate
+		{"auth/v2/beta", "auth", "v2/beta"}, // multiple separators: only the first splits
+		{" auth/task ", " auth", "task "},   // whitespace is NOT trimmed
 	}
 	for _, tt := range tests {
 		candidate, rest := resolver.SplitServiceInput(tt.input)
@@ -224,26 +228,41 @@ func TestSanitizeTask(t *testing.T) {
 }
 
 func TestServiceFromBranch(t *testing.T) {
-	prefixes := resolver.AllPrefixes()
+	defaultPrefixes := resolver.AllPrefixes()
 
 	tests := []struct {
 		branch     string
+		prefixes   []string // nil → defaultPrefixes (AllPrefixes)
 		wantSvc    string
 		wantTask   string
 		wantPrefix string
 	}{
-		{"feature/my-task", "", "my-task", featurePrefix},
-		{"bugfix/login-fix", "", "login-fix", bugfixPrefix},
-		{"auth-api/feature/my-task", "auth-api", "my-task", featurePrefix},
-		{"auth-api/bugfix/crash", "auth-api", "crash", bugfixPrefix},
-		{"bare-branch", "", "bare-branch", ""},
-		{"unknown/prefix", "", "unknown/prefix", ""},
+		// existing happy-path rows
+		{branch: "feature/my-task", wantTask: "my-task", wantPrefix: featurePrefix},
+		{branch: "bugfix/login-fix", wantTask: "login-fix", wantPrefix: bugfixPrefix},
+		{branch: "auth-api/feature/my-task", wantSvc: "auth-api", wantTask: "my-task", wantPrefix: featurePrefix},
+		{branch: "auth-api/bugfix/crash", wantSvc: "auth-api", wantTask: "crash", wantPrefix: bugfixPrefix},
+		{branch: "bare-branch", wantTask: "bare-branch"},
+		{branch: "unknown/prefix", wantTask: "unknown/prefix"},
+		// G3 edge cases
+		{branch: "", wantTask: ""},                                                                  // empty branch, no prefix → clean
+		{branch: "feature/", wantTask: "", wantPrefix: featurePrefix},                               // prefix matches, empty task
+		{branch: "auth-api/feature/", wantSvc: "auth-api", wantTask: "", wantPrefix: featurePrefix}, // monorepo, empty task
+		// prefix-ordering sensitivity: ServiceFromBranch returns the FIRST matching
+		// prefix in slice order, not the longest. Synthetic overlapping prefixes
+		// (real AllPrefixes never overlap) demonstrate the contract.
+		{branch: "a/b/task", prefixes: []string{"a/", "a/b/"}, wantTask: "b/task", wantPrefix: "a/"},
+		{branch: "a/b/task", prefixes: []string{"a/b/", "a/"}, wantTask: "task", wantPrefix: "a/b/"},
 	}
 	for _, tt := range tests {
+		prefixes := tt.prefixes
+		if prefixes == nil {
+			prefixes = defaultPrefixes
+		}
 		svc, task, prefix := resolver.ServiceFromBranch(tt.branch, prefixes)
 		if svc != tt.wantSvc || task != tt.wantTask || prefix != tt.wantPrefix {
-			t.Errorf("ServiceFromBranch(%q) = (%q, %q, %q), want (%q, %q, %q)",
-				tt.branch, svc, task, prefix, tt.wantSvc, tt.wantTask, tt.wantPrefix)
+			t.Errorf("ServiceFromBranch(%q, %v) = (%q, %q, %q), want (%q, %q, %q)",
+				tt.branch, prefixes, svc, task, prefix, tt.wantSvc, tt.wantTask, tt.wantPrefix)
 		}
 	}
 }
