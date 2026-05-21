@@ -21,11 +21,12 @@ func FullBranchName(service, prefix, task string) string {
 }
 
 // SplitServiceInput splits input on the first "/" and returns the candidate
-// service name and the rest. Returns ("", input) if no "/" is found.
+// service name (the part before the first "/") and the rest (the part after).
+// A leading "/" yields an empty candidate. Returns ("", input) when there is no "/".
 // The caller is responsible for validating whether candidate is a real service.
 func SplitServiceInput(input string) (candidate, rest string) {
-	if i := strings.Index(input, "/"); i > 0 {
-		return input[:i], input[i+1:]
+	if before, after, ok := strings.Cut(input, "/"); ok {
+		return before, after
 	}
 	return "", input
 }
