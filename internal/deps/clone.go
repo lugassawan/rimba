@@ -63,7 +63,7 @@ func cloneRecursive(srcWT, dstWT string, mod Module) error {
 	_ = filepath.WalkDir(searchRoot, walkCloneFunc(srcWT, dstWT, baseName, &cloneErrs))
 
 	if err := cloneExtraDirs(srcWT, dstWT, mod.ExtraDirs); err != nil {
-		return err
+		cloneErrs = append(cloneErrs, err)
 	}
 
 	return errors.Join(cloneErrs...)
