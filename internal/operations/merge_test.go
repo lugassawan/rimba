@@ -12,6 +12,7 @@ const (
 	gitCmdStatus       = "status"
 	gitCmdMerge        = "merge"
 	branchFeatureLogin = "feature/login"
+	statusDirtyOutput  = "M dirty.go"
 )
 
 func mergeWorktreeList() string {
@@ -171,7 +172,7 @@ func TestMergeWorktreeSourceDirty(t *testing.T) {
 		runInDir: func(dir string, args ...string) (string, error) {
 			if len(args) >= 1 && args[0] == gitCmdStatus {
 				if strings.Contains(dir, "login") {
-					return "M dirty.go", nil
+					return statusDirtyOutput, nil
 				}
 				return "", nil
 			}
@@ -201,7 +202,7 @@ func TestMergeWorktreeTargetDirty(t *testing.T) {
 		runInDir: func(dir string, args ...string) (string, error) {
 			if len(args) >= 1 && args[0] == gitCmdStatus {
 				if dir == "/repo" {
-					return "M dirty.go", nil
+					return statusDirtyOutput, nil
 				}
 				return "", nil
 			}
@@ -408,5 +409,36 @@ func TestMergeWorktreeTargetDirtyCheckError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "target status failed") {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestMergeWorktreeTargetDirtyToWorktree(t *testing.T) {
+	wt := mergeWorktreeList()
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			return wt, nil
+		},
+		runInDir: func(dir string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == gitCmdStatus {
+				if dir == "/wt/feature-dashboard" {
+					return statusDirtyOutput, nil
+				}
+				return "", nil
+			}
+			return "", nil
+		},
+	}
+
+	_, err := MergeWorktree(r, MergeParams{
+		SourceTask: "login",
+		IntoTask:   "dashboard",
+		RepoRoot:   "/repo",
+		MainBranch: branchMain,
+	}, nil)
+	if err == nil {
+		t.Fatal("expected error for dirty target worktree")
+	}
+	if !strings.Contains(err.Error(), "uncommitted changes") {
+		t.Errorf("expected 'uncommitted changes', got: %v", err)
 	}
 }

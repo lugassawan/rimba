@@ -33,9 +33,13 @@ in the last 7 days. With --detail, rows are sorted largest-first.`,
 		staleDays, _ := cmd.Flags().GetInt(flagStaleDays)
 		detail, _ := cmd.Flags().GetBool(flagDetail)
 
+		ctx := cmd.Context()
+		if ctx == nil {
+			ctx = context.Background()
+		}
 		s := spinner.New(spinnerOpts(cmd))
 		s.Start("Collecting worktree status...")
-		res, err := operations.StatusDashboard(context.Background(), r, operations.StatusDashboardRequest{Detail: detail})
+		res, err := operations.StatusDashboard(ctx, r, operations.StatusDashboardRequest{Detail: detail})
 		s.Stop()
 		if err != nil {
 			return err

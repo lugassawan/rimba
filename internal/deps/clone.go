@@ -1,6 +1,8 @@
 package deps
 
 import (
+	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -56,20 +58,24 @@ func cloneRecursive(srcWT, dstWT string, mod Module) error {
 		searchRoot = filepath.Join(srcWT, mod.WorkDir)
 	}
 
+	var cloneErrs []error
 	baseName := filepath.Base(mod.Dir)
-	err := filepath.WalkDir(searchRoot, walkCloneFunc(srcWT, dstWT, baseName))
-	if err != nil {
-		return err
+	_ = filepath.WalkDir(searchRoot, walkCloneFunc(srcWT, dstWT, baseName, &cloneErrs))
+
+	if err := cloneExtraDirs(srcWT, dstWT, mod.ExtraDirs); err != nil {
+		cloneErrs = append(cloneErrs, err)
 	}
 
-	return cloneExtraDirs(srcWT, dstWT, mod.ExtraDirs)
+	return errors.Join(cloneErrs...)
 }
 
 // walkCloneFunc returns a WalkDirFunc that clones directories matching baseName.
-func walkCloneFunc(srcWT, dstWT, baseName string) fs.WalkDirFunc {
+// Clone failures are appended to errs; walking continues regardless.
+func walkCloneFunc(srcWT, dstWT, baseName string, errs *[]error) fs.WalkDirFunc {
 	return func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			return nil //nolint:nilerr // WalkDir: skip errors and continue walking
+			*errs = append(*errs, err)
+			return nil // keep walking
 		}
 		if !d.IsDir() {
 			return nil
@@ -80,20 +86,22 @@ func walkCloneFunc(srcWT, dstWT, baseName string) fs.WalkDirFunc {
 		}
 
 		relPath, _ := filepath.Rel(srcWT, path)
-		return cloneIfParentExists(path, dstWT, relPath)
+		return cloneIfParentExists(path, dstWT, relPath, errs)
 	}
 }
 
 // cloneIfParentExists clones srcPath to dstWT/relPath if the parent dir exists in dstWT.
-func cloneIfParentExists(srcPath, dstWT, relPath string) error {
+// Clone failures are appended to errs and the directory is skipped.
+func cloneIfParentExists(srcPath, dstWT, relPath string, errs *[]error) error {
 	dstParent := filepath.Join(dstWT, filepath.Dir(relPath))
 	if _, err := os.Stat(dstParent); os.IsNotExist(err) {
 		return filepath.SkipDir
 	}
 
 	dst := filepath.Join(dstWT, relPath)
-	if err := CloneDir(srcPath, dst); err != nil { //nolint:nilerr // best-effort clone; continue walking
-		return filepath.SkipDir
+	if err := CloneDir(srcPath, dst); err != nil {
+		*errs = append(*errs, fmt.Errorf("clone %s: %w", relPath, err))
+		return filepath.SkipDir // continue walking other dirs
 	}
 	return filepath.SkipDir // don't descend into cloned dir
 }

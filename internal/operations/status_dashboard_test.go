@@ -2,6 +2,7 @@ package operations
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -266,6 +267,34 @@ func TestStatusDashboardLastCommitTimeErrorIsNonFatal(t *testing.T) {
 		if e.Entry.Branch == branchBugfixLogin && e.HasTime {
 			t.Errorf("bugfix/login: expected HasTime=false on commit-time error")
 		}
+	}
+}
+
+func TestStatusDashboardCancelledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // pre-cancelled
+
+	r := &mockRunner{
+		run:      func(...string) (string, error) { return "", nil },
+		runInDir: noopRunInDir,
+	}
+	_, err := StatusDashboard(ctx, r, StatusDashboardRequest{})
+	if err == nil {
+		t.Fatal("expected error for pre-cancelled context")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("error = %v, want context.Canceled", err)
+	}
+}
+
+func TestStatusDashboardResolveMainBranchError(t *testing.T) {
+	r := &mockRunner{
+		run:      func(...string) (string, error) { return "", errGitFailed },
+		runInDir: noopRunInDir,
+	}
+	_, err := StatusDashboard(context.Background(), r, StatusDashboardRequest{})
+	if err == nil {
+		t.Fatal("expected error when ResolveMainBranch fails")
 	}
 }
 

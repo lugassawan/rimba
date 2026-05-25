@@ -52,3 +52,17 @@ jobs:
           go-version: stable
           cache: true
       - run: make build
+
+  vuln:
+    runs-on: ubuntu-latest
+    # TODO: remove continue-on-error once go.mod toolchain is bumped to ≥go1.26.1
+    # to resolve stdlib CVEs (GO-2026-4599 etc.) and gate is confirmed clean.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          cache: true
+      - run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - run: govulncheck ./...

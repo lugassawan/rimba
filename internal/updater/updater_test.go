@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 const (
@@ -79,7 +81,7 @@ func TestCheckUpToDate(t *testing.T) {
 	srv := serveJSON(t, `{"tag_name":"`+testVersion+`","assets":[]}`)
 	u := newTestUpdater(srv)
 
-	result, err := u.Check()
+	result, err := u.Check(context.Background())
 	requireNoError(t, err)
 	if !result.UpToDate {
 		t.Errorf("expected up to date, got not up to date")
@@ -98,7 +100,7 @@ func TestCheckNewVersionAvailable(t *testing.T) {
 	}`)
 	u := newTestUpdater(srv)
 
-	result, err := u.Check()
+	result, err := u.Check(context.Background())
 	requireNoError(t, err)
 	if result.UpToDate {
 		t.Errorf("expected not up to date")
@@ -119,7 +121,7 @@ func TestCheckNoMatchingAsset(t *testing.T) {
 	}`)
 	u := newTestUpdater(srv)
 
-	_, err := u.Check()
+	_, err := u.Check(context.Background())
 	if err == nil {
 		t.Fatal("expected error for missing asset")
 	}
@@ -137,7 +139,7 @@ func TestCheckAPIError(t *testing.T) {
 	t.Cleanup(srv.Close)
 	u := newTestUpdater(srv)
 
-	_, err := u.Check()
+	_, err := u.Check(context.Background())
 	if err == nil {
 		t.Fatal("expected error for API failure")
 	}
@@ -175,7 +177,7 @@ func TestDownloadValidArchive(t *testing.T) {
 
 	u := newTestUpdater(srv)
 
-	binaryPath, err := u.Download(srv.URL + "/rimba_1.0.0_linux_amd64.tar.gz")
+	binaryPath, err := u.Download(context.Background(), srv.URL+"/rimba_1.0.0_linux_amd64.tar.gz")
 	requireNoError(t, err)
 	t.Cleanup(func() { CleanupTempDir(binaryPath) })
 
@@ -264,6 +266,84 @@ func TestNew(t *testing.T) {
 	}
 }
 
+func TestNewClientHasTimeout(t *testing.T) {
+	u := New(testVersion)
+	hc, ok := u.Client.(*http.Client)
+	if !ok {
+		t.Fatal("Client is not *http.Client")
+	}
+	if hc.Timeout != 30*time.Second {
+		t.Errorf("Client.Timeout = %v, want 30s", hc.Timeout)
+	}
+}
+
+// ctxCapturingClient records the context from the most recent request.
+type ctxCapturingClient struct {
+	captured context.Context
+	delegate HTTPClient
+}
+
+func (c *ctxCapturingClient) Do(req *http.Request) (*http.Response, error) {
+	c.captured = req.Context()
+	return c.delegate.Do(req)
+}
+
+// ctxMarkerKey is a package-level context key used to verify ctx propagation.
+type ctxMarkerKey struct{}
+
+func TestCheckContextPropagated(t *testing.T) {
+	srv := serveJSON(t, `{"tag_name":"`+testVersion+`","assets":[]}`)
+	capturing := &ctxCapturingClient{delegate: srv.Client()}
+	u := &Updater{
+		CurrentVersion: testVersion,
+		GOOS:           testOS,
+		GOARCH:         testArch,
+		Client:         capturing,
+		APIEndpoint:    srv.URL,
+	}
+
+	ctx := context.WithValue(context.Background(), ctxMarkerKey{}, "marker")
+	_, err := u.Check(ctx)
+	requireNoError(t, err)
+
+	if capturing.captured == nil || capturing.captured.Value(ctxMarkerKey{}) != "marker" {
+		t.Error("Check did not propagate the provided context to the HTTP request")
+	}
+}
+
+func TestCheckCancelledContext(t *testing.T) {
+	srv := serveJSON(t, `{"tag_name":"`+testVersion+`","assets":[]}`)
+	u := newTestUpdater(srv)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := u.Check(ctx)
+	if err == nil {
+		t.Fatal("expected error for cancelled context")
+	}
+}
+
+func TestDownloadMkdirTempError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("data"))
+	}))
+	t.Cleanup(srv.Close)
+
+	// Point TMPDIR at a non-existent path so os.MkdirTemp fails.
+	t.Setenv("TMPDIR", "/nonexistent/tmp/rimba-test")
+
+	u := newTestUpdater(srv)
+	_, err := u.Download(context.Background(), srv.URL+"/archive.tar.gz")
+	if err == nil {
+		t.Fatal("expected error when MkdirTemp fails")
+	}
+	if !strings.Contains(err.Error(), "creating temp dir") {
+		t.Errorf("error = %q, want to contain 'creating temp dir'", err.Error())
+	}
+}
+
 func TestDownloadHTTPError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -271,7 +351,7 @@ func TestDownloadHTTPError(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	u := newTestUpdater(srv)
-	_, err := u.Download(srv.URL + "/missing.tar.gz")
+	_, err := u.Download(context.Background(), srv.URL+"/missing.tar.gz")
 	if err == nil {
 		t.Fatal("expected error for 404 response")
 	}
@@ -285,7 +365,7 @@ func TestDownloadInvalidArchive(t *testing.T) {
 	srv := serveOctetStream(t, []byte("not a valid gzip archive"))
 
 	u := newTestUpdater(srv)
-	_, err := u.Download(srv.URL + "/invalid.tar.gz")
+	_, err := u.Download(context.Background(), srv.URL+"/invalid.tar.gz")
 	if err == nil {
 		t.Fatal("expected error for invalid archive")
 	}
@@ -296,7 +376,7 @@ func TestDownloadMissingBinary(t *testing.T) {
 	srv := serveOctetStream(t, archiveData)
 
 	u := newTestUpdater(srv)
-	_, err := u.Download(srv.URL + "/archive.tar.gz")
+	_, err := u.Download(context.Background(), srv.URL+"/archive.tar.gz")
 	if err == nil {
 		t.Fatal("expected error for archive without rimba binary")
 	}
@@ -373,7 +453,7 @@ func TestCheckNetworkError(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	u := newTestUpdater(srv)
-	_, err := u.Check()
+	_, err := u.Check(context.Background())
 	if err == nil {
 		t.Fatal("expected error for network failure")
 	}
@@ -388,7 +468,7 @@ func TestCheckRequestError(t *testing.T) {
 		APIEndpoint:    "\x7f://invalid", // control char causes NewRequest to fail
 	}
 
-	_, err := u.Check()
+	_, err := u.Check(context.Background())
 	if err == nil {
 		t.Fatal("expected error for invalid URL")
 	}
@@ -405,7 +485,7 @@ func TestDownloadRequestError(t *testing.T) {
 		Client:         http.DefaultClient,
 	}
 
-	_, err := u.Download("\x7f://invalid/archive.tar.gz")
+	_, err := u.Download(context.Background(), "\x7f://invalid/archive.tar.gz")
 	if err == nil {
 		t.Fatal("expected error for invalid download URL")
 	}
@@ -428,7 +508,7 @@ func TestDownloadCorruptTarArchive(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	u := newTestUpdater(srv)
-	_, err := u.Download(srv.URL + "/corrupt.tar.gz")
+	_, err := u.Download(context.Background(), srv.URL+"/corrupt.tar.gz")
 	if err == nil {
 		t.Fatal("expected error for corrupt tar archive")
 	}
@@ -453,7 +533,7 @@ func TestDownloadConnectionError(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	u := newTestUpdater(srv)
-	_, err := u.Download(srv.URL + "/archive.tar.gz")
+	_, err := u.Download(context.Background(), srv.URL+"/archive.tar.gz")
 	if err == nil {
 		t.Fatal("expected error for connection failure")
 	}
@@ -504,6 +584,74 @@ func TestWriteBinaryOpenError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "creating binary file") {
 		t.Errorf("error = %q, want to contain 'creating binary file'", err.Error())
+	}
+}
+
+// buildTestArchiveTypeflag creates a tar.gz archive with a single entry of the given typeflag.
+func buildTestArchiveTypeflag(t *testing.T, name, content string, typeflag byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gw)
+	hdr := &tar.Header{
+		Typeflag: typeflag,
+		Name:     name,
+		Mode:     0755,
+		Size:     int64(len(content)),
+	}
+	if err := tw.WriteHeader(hdr); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tw.Write([]byte(content)); err != nil {
+		t.Fatal(err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func TestExtractBinarySkipsNonRegularFiles(t *testing.T) {
+	tests := []struct {
+		name     string
+		typeflag byte
+	}{
+		{"dir typeflag", tar.TypeDir},
+		{"symlink typeflag", tar.TypeSymlink},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			archiveData := buildTestArchiveTypeflag(t, binaryName, "", tt.typeflag)
+			tmpDir := t.TempDir()
+			_, err := extractBinary(bytes.NewReader(archiveData), tmpDir)
+			if err == nil {
+				t.Fatal("expected error when rimba entry is not a regular file")
+			}
+			if !strings.Contains(err.Error(), "not found in archive") {
+				t.Errorf("error = %q, want 'not found in archive'", err.Error())
+			}
+		})
+	}
+}
+
+func TestWriteBinaryExceedsMaxSize(t *testing.T) {
+	orig := maxBinarySize
+	maxBinarySize = 5
+	t.Cleanup(func() { maxBinarySize = orig })
+
+	tmpDir := t.TempDir()
+	dst := filepath.Join(tmpDir, "binary")
+
+	r := strings.NewReader("this is more than 5 bytes of content")
+	_, err := writeBinary(dst, r)
+	if err == nil {
+		t.Fatal("expected size-limit error for oversized binary")
+	}
+	if !strings.Contains(err.Error(), "exceeds max") {
+		t.Errorf("error = %q, want to contain 'exceeds max'", err.Error())
 	}
 }
 
@@ -622,7 +770,7 @@ func TestCheckInvalidJSON(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	u := newTestUpdater(srv)
-	_, err := u.Check()
+	_, err := u.Check(context.Background())
 	if err == nil {
 		t.Fatal("expected error for invalid JSON response")
 	}
@@ -810,6 +958,35 @@ func TestEnsurePathIdempotent(t *testing.T) {
 	// Should not have added a duplicate
 	if strings.Count(string(content), dir) != 1 {
 		t.Errorf("expected exactly one PATH entry, got:\n%s", content)
+	}
+}
+
+func TestEnsurePathSkipsCommentLines(t *testing.T) {
+	tmpDir := t.TempDir()
+	rcFile := filepath.Join(tmpDir, testRcZshrc)
+
+	dir := filepath.Join(tmpDir, localBinSubdir, "bin")
+	// A comment that mentions both the dir and "PATH" must not be treated as
+	// an existing export — EnsurePath should still append the real export line.
+	commentOnly := fmt.Sprintf("# %s is not yet in PATH\n", dir)
+	if err := os.WriteFile(rcFile, []byte(commentOnly), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("SHELL", testShellZsh)
+	t.Setenv("HOME", tmpDir)
+
+	if err := EnsurePath(dir); err != nil {
+		t.Fatalf("EnsurePath: %v", err)
+	}
+
+	content, err := os.ReadFile(rcFile)
+	if err != nil {
+		t.Fatalf("reading rc file: %v", err)
+	}
+	exportLine := fmt.Sprintf(`export PATH="%s:$PATH"`, dir)
+	if !strings.Contains(string(content), exportLine) {
+		t.Errorf("rc file missing real export line; got:\n%s", content)
 	}
 }
 
@@ -1003,7 +1180,7 @@ func TestDownloadValidArchiveCleanup(t *testing.T) {
 
 	u := newTestUpdater(srv)
 
-	binaryPath, err := u.Download(srv.URL + "/rimba_1.0.0_linux_amd64.tar.gz")
+	binaryPath, err := u.Download(context.Background(), srv.URL+"/rimba_1.0.0_linux_amd64.tar.gz")
 	requireNoError(t, err)
 
 	// Verify the binary exists

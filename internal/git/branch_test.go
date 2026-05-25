@@ -2,6 +2,7 @@ package git_test
 
 import (
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -317,5 +318,23 @@ func TestCheckoutError(t *testing.T) {
 
 	if err := git.Checkout(r, repo, "nonexistent-branch"); err == nil {
 		t.Error("expected error for nonexistent branch")
+	}
+}
+
+func TestCurrentBranchDetachedHead(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	// Detach HEAD by checking out the current commit SHA directly.
+	sha := testutil.GitCmd(t, repo, "rev-parse", "HEAD")
+	testutil.GitCmd(t, repo, "checkout", "--detach", strings.TrimSpace(sha))
+
+	_, err := git.CurrentBranch(r, repo)
+	if err == nil {
+		t.Fatal("expected error for detached HEAD")
 	}
 }
