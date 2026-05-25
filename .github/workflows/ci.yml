@@ -15,7 +15,7 @@ jobs:
         with:
           go-version: stable
           cache: true
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: ~/go/bin/golangci-lint
           key: golangci-lint-v2.12.2
