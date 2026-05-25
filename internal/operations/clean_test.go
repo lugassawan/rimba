@@ -364,3 +364,20 @@ func TestFindStaleCandidatesLastCommitError(t *testing.T) {
 		t.Errorf("expected 1 warning, got %d", len(result.Warnings))
 	}
 }
+
+func TestFindMergedCandidatesListWorktreesError(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == gitCmdBranch {
+				return "", nil // MergedBranches succeeds (empty list)
+			}
+			return "", errors.New("worktree list failed")
+		},
+		runInDir: noopRunInDir,
+	}
+
+	_, err := FindMergedCandidates(r, "origin/main", branchMain)
+	if err == nil {
+		t.Fatal("expected error when ListWorktrees fails")
+	}
+}

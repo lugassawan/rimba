@@ -218,3 +218,56 @@ func TestFetchPRMetaArgsIncludeNumber(t *testing.T) {
 		t.Errorf("expected args to include 'view 42', got %v", capturedArgs)
 	}
 }
+
+func TestFetchPRMetaHeadRefNameValidation(t *testing.T) {
+	makeJSON := func(ref string) string {
+		return `{"headRefName":"` + ref + `","headRepository":{"name":"rimba"},"headRepositoryOwner":{"login":"alice"}}`
+	}
+
+	valid := []string{
+		"feature/foo",
+		"dependabot/go_modules/x",
+		"release-1.2",
+		"fix-login-redirect",
+		"main",
+	}
+	for _, ref := range valid {
+		t.Run("accept "+ref, func(t *testing.T) {
+			r := &mockRunner{
+				run: func(_ context.Context, _ ...string) ([]byte, error) {
+					return []byte(makeJSON(ref)), nil
+				},
+			}
+			_, err := FetchPRMeta(context.Background(), r, 1)
+			if err != nil {
+				t.Errorf("expected valid branch %q to be accepted, got error: %v", ref, err)
+			}
+		})
+	}
+
+	invalid := []struct {
+		ref     string
+		wantErr string
+	}{
+		{"-foo", "leading dash"},
+		{"../etc/passwd", "contains .."},
+		{"/abs/path", "leading slash"},
+		{"a;b", "unsafe headRefName"},
+		{"a b", "unsafe headRefName"},
+	}
+	for _, tt := range invalid {
+		t.Run("reject "+tt.ref, func(t *testing.T) {
+			r := &mockRunner{
+				run: func(_ context.Context, _ ...string) ([]byte, error) {
+					return []byte(makeJSON(tt.ref)), nil
+				},
+			}
+			_, err := FetchPRMeta(context.Background(), r, 1)
+			if err == nil {
+				t.Fatalf("expected error for branch %q, got nil", tt.ref)
+			}
+			assertContains(t, err, tt.wantErr)
+			assertContains(t, err, "To fix:")
+		})
+	}
+}

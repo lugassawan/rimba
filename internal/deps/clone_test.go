@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -262,9 +263,13 @@ func TestCloneIfParentExistsNoParent(t *testing.T) {
 	// dstWT does NOT have packages/foo — parent is missing
 	relPath := filepath.Join("packages", "foo", "node_modules")
 
-	err := cloneIfParentExists(srcPath, dstWT, relPath)
+	var errs []error
+	err := cloneIfParentExists(srcPath, dstWT, relPath, &errs)
 	if !errors.Is(err, filepath.SkipDir) {
 		t.Errorf("expected filepath.SkipDir, got: %v", err)
+	}
+	if len(errs) != 0 {
+		t.Errorf("expected no collected errors for missing-parent skip, got: %v", errs)
 	}
 
 	// Verify node_modules was NOT cloned
@@ -358,12 +363,16 @@ func TestWalkCloneFuncSkipsErrors(t *testing.T) {
 	srcWT := t.TempDir()
 	dstWT := t.TempDir()
 
-	fn := walkCloneFunc(srcWT, dstWT, DirNodeModules)
+	var errs []error
+	fn := walkCloneFunc(srcWT, dstWT, DirNodeModules, &errs)
 
-	// Call the returned WalkDirFunc with a non-nil error — should return nil (skip)
+	// Call the returned WalkDirFunc with a non-nil error — should return nil (keep walking)
 	err := fn("/some/path", nil, os.ErrPermission)
 	if err != nil {
 		t.Errorf("expected nil when err is non-nil, got: %v", err)
+	}
+	if len(errs) != 1 || !errors.Is(errs[0], os.ErrPermission) {
+		t.Errorf("expected traversal error to be collected, got: %v", errs)
 	}
 }
 
@@ -393,7 +402,8 @@ func TestWalkCloneFuncSkipsFiles(t *testing.T) {
 		t.Fatal("could not find file entry")
 	}
 
-	fn := walkCloneFunc(srcWT, dstWT, DirNodeModules)
+	var errs []error
+	fn := walkCloneFunc(srcWT, dstWT, DirNodeModules, &errs)
 
 	result := fn(filePath, fileEntry, nil)
 	if result != nil {
@@ -414,9 +424,13 @@ func TestCloneIfParentExistsCloneFails(t *testing.T) {
 	srcPath := filepath.Join(t.TempDir(), "nonexistent", "node_modules")
 	relPath := filepath.Join("packages", "foo", "node_modules")
 
-	err := cloneIfParentExists(srcPath, dstWT, relPath)
+	var errs []error
+	err := cloneIfParentExists(srcPath, dstWT, relPath, &errs)
 	if !errors.Is(err, filepath.SkipDir) {
 		t.Errorf("expected filepath.SkipDir on clone failure, got: %v", err)
+	}
+	if len(errs) == 0 {
+		t.Error("expected clone failure to be collected in errs")
 	}
 }
 
@@ -513,4 +527,83 @@ func TestCloneRecursiveWithExtraDirs(t *testing.T) {
 
 	// Verify extra dir (.yarn/cache) was cloned
 	assertFileContent(t, filepath.Join(dstWT, ".yarn", "cache", testDepZip), "cached")
+}
+
+func TestCloneModuleRecursiveSearchRootNotFound(t *testing.T) {
+	srcWT := t.TempDir()
+	dstWT := t.TempDir()
+
+	// WorkDir points to a non-existent directory — WalkDir fails on Lstat
+	mod := Module{Dir: DirNodeModules, Recursive: true, WorkDir: "nonexistent"}
+	err := CloneModule(srcWT, dstWT, mod)
+	if err == nil {
+		t.Fatal("expected error when WorkDir does not exist")
+	}
+}
+
+func TestCloneModuleRecursiveExtraDirError(t *testing.T) {
+	srcWT := t.TempDir()
+	dstWT := t.TempDir()
+
+	// Create a node_modules in srcWT root so walk finds it
+	if err := os.MkdirAll(filepath.Join(srcWT, DirNodeModules), 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(srcWT, DirNodeModules), "pkg.json", "{}")
+
+	// Create a valid ExtraDir source
+	extraSrc := filepath.Join(srcWT, ".yarn", "cache")
+	if err := os.MkdirAll(extraSrc, 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, extraSrc, testDepZip, "data")
+
+	// Block the ExtraDir dst by placing a regular file where the parent dir would go
+	if err := os.WriteFile(filepath.Join(dstWT, ".yarn"), []byte("block"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	mod := Module{Dir: DirNodeModules, Recursive: true, ExtraDirs: []string{DirYarnCache}}
+	err := CloneModule(srcWT, dstWT, mod)
+	if err == nil {
+		t.Fatal("expected error when ExtraDir clone fails in recursive mode")
+	}
+}
+
+func TestCloneModuleRecursiveAggregatesErrors(t *testing.T) {
+	srcWT := t.TempDir()
+	dstWT := t.TempDir()
+
+	// Create two nested node_modules dirs in srcWT
+	for _, app := range []string{"app-a", "app-b"} {
+		if err := os.MkdirAll(filepath.Join(srcWT, app, DirNodeModules), 0755); err != nil {
+			t.Fatal(err)
+		}
+		writeFile(t, filepath.Join(srcWT, app, DirNodeModules), "pkg.json", app)
+	}
+
+	// app-a: create the parent dir normally so it clones fine
+	if err := os.MkdirAll(filepath.Join(dstWT, "app-a"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// app-b: place a regular file named "app-b" so MkdirAll(dstWT/app-b) fails
+	// inside CloneDir, causing the clone to fail and be collected in errs.
+	if err := os.WriteFile(filepath.Join(dstWT, "app-b"), []byte("block"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	mod := Module{Dir: DirNodeModules, Recursive: true}
+	err := CloneModule(srcWT, dstWT, mod)
+
+	// app-a should have been cloned successfully despite app-b failing
+	assertFileContent(t, filepath.Join(dstWT, "app-a", DirNodeModules, "pkg.json"), "app-a")
+
+	// Error must be returned and mention the failed path
+	if err == nil {
+		t.Fatal("expected aggregated error for partial clone failure")
+	}
+	if !strings.Contains(err.Error(), "app-b") {
+		t.Errorf("error = %q, want it to mention 'app-b'", err.Error())
+	}
 }

@@ -54,8 +54,8 @@ func NewRunner(version string) *Runner {
 		Out:     os.Stdout,
 		Spinner: spinner.New(spinner.Options{Writer: io.Discard}),
 	}
-	r.check = func(_ context.Context) (*CheckResult, error) { return u.Check() }
-	r.download = func(_ context.Context, url string) (string, error) { return u.Download(url) }
+	r.check = u.Check
+	r.download = u.Download
 	r.prepareBinary = PrepareBinary
 	r.executable = os.Executable
 	r.evalSymlinks = filepath.EvalSymlinks

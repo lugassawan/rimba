@@ -363,6 +363,16 @@ func TestNewRunner(t *testing.T) {
 	}
 }
 
+func TestDefaultExecCommand(t *testing.T) {
+	out, err := defaultExecCommand(context.Background(), "echo", "rimba-test")
+	if err != nil {
+		t.Fatalf("defaultExecCommand: %v", err)
+	}
+	if !strings.Contains(string(out), "rimba-test") {
+		t.Errorf("output = %q, expected to contain 'rimba-test'", string(out))
+	}
+}
+
 func TestRunNilDefaults(t *testing.T) {
 	r, _ := newTestRunner(t)
 	r.Spinner = nil

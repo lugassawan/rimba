@@ -14,6 +14,10 @@ import (
 // safeNameRe matches strings safe to embed in git remote names and URLs.
 var safeNameRe = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 
+// branchNameRe matches valid branch names. Allows slashes for namespaced refs
+// (e.g. feature/foo, dependabot/go_modules/x) but excludes shell-special chars.
+var branchNameRe = regexp.MustCompile(`^[a-zA-Z0-9._/-]+$`)
+
 const ghShapeHint = "gh CLI returned an unexpected response shape — update gh: gh --version"
 
 // PRMeta holds the metadata needed to check out a PR's head branch.
@@ -55,6 +59,9 @@ func FetchPRMeta(ctx context.Context, r Runner, num int) (PRMeta, error) {
 	if resp.HeadRefName == "" {
 		return PRMeta{}, errhint.WithFix(fmt.Errorf("PR #%d: missing headRefName in response", num), ghShapeHint)
 	}
+	if err := validateBranchName(num, resp.HeadRefName); err != nil {
+		return PRMeta{}, err
+	}
 	owner := resp.HeadRepositoryOwner.Login
 	repoName := resp.HeadRepository.Name
 	if owner == "" {
@@ -77,6 +84,22 @@ func FetchPRMeta(ctx context.Context, r Runner, num int) (PRMeta, error) {
 		HeadRepoName:      repoName,
 		IsCrossRepository: resp.IsCrossRepository,
 	}, nil
+}
+
+// validateBranchName rejects headRefName values that could inject options or
+// traverse paths when used in git commands.
+func validateBranchName(num int, name string) error {
+	switch {
+	case strings.HasPrefix(name, "-"):
+		return errhint.WithFix(fmt.Errorf("PR #%d: unsafe headRefName %q (leading dash)", num, name), ghShapeHint)
+	case strings.Contains(name, ".."):
+		return errhint.WithFix(fmt.Errorf("PR #%d: unsafe headRefName %q (contains ..)", num, name), ghShapeHint)
+	case strings.HasPrefix(name, "/"):
+		return errhint.WithFix(fmt.Errorf("PR #%d: unsafe headRefName %q (leading slash)", num, name), ghShapeHint)
+	case !branchNameRe.MatchString(name):
+		return errhint.WithFix(fmt.Errorf("PR #%d: unsafe headRefName %q", num, name), ghShapeHint)
+	}
+	return nil
 }
 
 func classifyFetchPRErr(err error) string {

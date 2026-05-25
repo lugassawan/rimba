@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bufio"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
 
 const (
@@ -21,6 +23,10 @@ const (
 	binaryName         = "rimba"
 	localBinSubdir     = ".local"
 )
+
+// maxBinarySize is the decompressed size limit for the extracted binary (100 MiB).
+// Tests may override this to exercise the size-limit path.
+var maxBinarySize int64 = 100 << 20
 
 // HTTPClient abstracts HTTP requests for testability.
 type HTTPClient interface {
@@ -62,7 +68,7 @@ func New(currentVersion string) *Updater {
 		CurrentVersion: currentVersion,
 		GOOS:           runtime.GOOS,
 		GOARCH:         runtime.GOARCH,
-		Client:         &http.Client{},
+		Client:         &http.Client{Timeout: 30 * time.Second},
 		APIEndpoint:    defaultAPIEndpoint,
 	}
 }
@@ -73,10 +79,10 @@ func IsDevVersion(v string) bool {
 }
 
 // Check queries the GitHub API for the latest release and compares versions.
-func (u *Updater) Check() (*CheckResult, error) {
+func (u *Updater) Check(ctx context.Context) (*CheckResult, error) {
 	url := u.APIEndpoint + repoPath
 
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
@@ -124,8 +130,8 @@ func (u *Updater) Check() (*CheckResult, error) {
 
 // Download fetches a tar.gz archive from the given URL and extracts the binary
 // to a temporary directory. Returns the path to the extracted binary.
-func (u *Updater) Download(url string) (string, error) {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+func (u *Updater) Download(ctx context.Context, url string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", fmt.Errorf("creating download request: %w", err)
 	}
@@ -258,7 +264,8 @@ func EnsurePath(dir string) error {
 	if f, err := os.Open(rcFile); err == nil {
 		scanner := bufio.NewScanner(f)
 		for scanner.Scan() {
-			if strings.Contains(scanner.Text(), dir) && strings.Contains(scanner.Text(), "PATH") {
+			line := scanner.Text()
+			if !strings.HasPrefix(strings.TrimSpace(line), "#") && strings.Contains(line, dir) && strings.Contains(line, "PATH") {
 				_ = f.Close()
 				return nil // already configured
 			}
@@ -302,6 +309,9 @@ func extractBinary(r io.Reader, dstDir string) (string, error) {
 			return "", fmt.Errorf("reading archive: %w", err)
 		}
 
+		if hdr.Typeflag != tar.TypeReg {
+			continue
+		}
 		if hdr.Name == binaryName {
 			return writeBinary(filepath.Join(dstDir, binaryName), tr)
 		}
@@ -311,6 +321,7 @@ func extractBinary(r io.Reader, dstDir string) (string, error) {
 }
 
 // writeBinary writes the tar entry contents to dst with executable permissions.
+// It enforces maxBinarySize to guard against zip-bomb payloads.
 func writeBinary(dst string, r io.Reader) (_ string, retErr error) {
 	f, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY, 0755) //nolint:gosec // executable binary requires 0755
 	if err != nil {
@@ -322,8 +333,13 @@ func writeBinary(dst string, r io.Reader) (_ string, retErr error) {
 		}
 	}()
 
-	if _, err := io.Copy(f, r); err != nil {
+	lr := io.LimitReader(r, maxBinarySize+1)
+	n, err := io.Copy(f, lr)
+	if err != nil {
 		return "", fmt.Errorf("extracting binary: %w", err)
+	}
+	if n > maxBinarySize {
+		return "", fmt.Errorf("binary exceeds max allowed size of %d bytes", maxBinarySize)
 	}
 
 	return dst, nil

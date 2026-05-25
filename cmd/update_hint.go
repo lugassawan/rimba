@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -25,7 +26,7 @@ func checkUpdateHint(version string, timeout time.Duration) <-chan *updater.Chec
 
 	go func() {
 		u := newUpdater(version)
-		result, err := u.Check()
+		result, err := u.Check(context.Background())
 		if err != nil || result.UpToDate {
 			close(ch)
 			return

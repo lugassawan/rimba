@@ -46,7 +46,10 @@ type StatusDashboardResult struct {
 //
 // Spinner is a UI concern excluded from this layer; callers wrap the call
 // with spinner.Start/Stop as needed.
-func StatusDashboard(_ context.Context, gitR git.Runner, req StatusDashboardRequest) (StatusDashboardResult, error) {
+func StatusDashboard(ctx context.Context, gitR git.Runner, req StatusDashboardRequest) (StatusDashboardResult, error) {
+	if err := ctx.Err(); err != nil {
+		return StatusDashboardResult{}, err
+	}
 	mainBranch, err := ResolveMainBranch(gitR, "")
 	if err != nil {
 		return StatusDashboardResult{}, err
