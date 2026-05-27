@@ -393,17 +393,25 @@ func conflictRunFn(porcelain, wtDir string) func(args ...string) (string, error)
 	}
 }
 
-// stashOutcomeDispatch handles stash-operation args for promote mocks, injecting
-// the given apply/drop errors. Extracted so its cyclomatic complexity does not
-// count toward the closure in stashOutcomeRunInDirFn.
-func stashOutcomeDispatch(stashDropped *bool, applyErr, dropErr error, args []string) (string, error, bool) {
+// stashOutcomeDispatchA handles push / rev-parse / switch for promote mocks.
+func stashOutcomeDispatchA(args []string) (string, bool) {
 	switch {
 	case len(args) >= 2 && args[0] == gitCmdStash && args[1] == gitSubcmdPush:
-		return "", nil, true
+		return "", true
 	case len(args) >= 2 && args[0] == cmdRevParse && args[1] == "stash@{0}":
-		return stashSHATest, nil, true
+		return stashSHATest, true
 	case len(args) >= 2 && args[0] == gitCmdSwitch:
-		return "", nil, true
+		return "", true
+	}
+	return "", false
+}
+
+// stashOutcomeDispatchB handles list / apply / drop for promote mocks, injecting
+// the given apply/drop errors. Split from stashOutcomeDispatchA to stay under gocyclo=15.
+func stashOutcomeDispatchB(stashDropped *bool, applyErr, dropErr error, args []string) (string, error, bool) {
+	switch {
+	case len(args) >= 3 && args[0] == gitCmdStash && args[1] == gitSubcmdList:
+		return stashListLine, nil, true
 	case len(args) >= 2 && args[0] == gitCmdStash && args[1] == gitSubcmdApply:
 		return "", applyErr, true
 	case len(args) >= 2 && args[0] == gitCmdStash && args[1] == gitSubcmdDrop:
@@ -411,6 +419,15 @@ func stashOutcomeDispatch(stashDropped *bool, applyErr, dropErr error, args []st
 		return "", dropErr, true
 	}
 	return "", nil, false
+}
+
+// stashOutcomeDispatch drives promote mocks to the apply/drop step, injecting the
+// given apply/drop errors so tests can exercise each applyStashToWorktree branch.
+func stashOutcomeDispatch(stashDropped *bool, applyErr, dropErr error, args []string) (string, error, bool) {
+	if out, ok := stashOutcomeDispatchA(args); ok {
+		return out, nil, true
+	}
+	return stashOutcomeDispatchB(stashDropped, applyErr, dropErr, args)
 }
 
 // stashOutcomeRunInDirFn drives promote to the apply/drop step, injecting the given
@@ -501,5 +518,8 @@ func TestPromoteBranchStashDropFails(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), stashSHATest) {
 		t.Errorf("error %q should contain the stash SHA for recovery", err)
+	}
+	if !stashDropped {
+		t.Error("drop should have been attempted (stashDropped should be true)")
 	}
 }
