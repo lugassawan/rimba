@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/git"
@@ -121,15 +122,29 @@ func restoreStash(r git.Runner, dir, sha string) error {
 	return nil
 }
 
-// applyStashToWorktree applies a stash to the worktree. On conflict, the stash entry
-// is preserved so the user can resolve manually.
+// applyStashToWorktree applies a stash to the worktree and drops it on success.
+// Any failure preserves the stash so the user can recover: real conflicts get a
+// resolve-then-cleanup hint, other apply errors surface their true cause, and a
+// failed drop after a clean apply is reported rather than swallowed.
 func applyStashToWorktree(r git.Runner, wtPath, sha string) error {
 	if err := git.StashApply(r, wtPath, sha); err != nil {
-		return errhint.WithFix(
-			errors.New("stash apply had conflicts"),
-			fmt.Sprintf("resolve conflicts in %s (stash SHA: %s), then: git stash list (find 'rimba: promote ...' entry) && git stash drop stash@{N}", wtPath, sha),
-		)
+		if stashApplyConflicted(err) {
+			return errhint.WithFix(
+				errors.New("stash apply had conflicts"),
+				fmt.Sprintf("resolve conflicts in %s (stash SHA: %s), then: git stash list (find 'rimba: promote ...' entry) && git stash drop stash@{N}", wtPath, sha),
+			)
+		}
+		return fmt.Errorf("stash apply failed; your changes are preserved in stash %s — recover them with: cd %s && git stash list (look for 'rimba: promote ...') then git stash apply stash@{N}: %w", sha, wtPath, err)
 	}
-	_ = git.StashDrop(r, wtPath, sha)
+	if dropErr := git.StashDrop(r, wtPath, sha); dropErr != nil {
+		return fmt.Errorf("stash applied but could not drop entry %s (clean up manually: git stash list, then git stash drop stash@{N}): %w", sha, dropErr)
+	}
 	return nil
+}
+
+// stashApplyConflicted reports whether a failed git stash apply was due to merge
+// conflicts. git prints CONFLICT markers and StashApply wraps that output, so the
+// marker surfaces in the error text (see git.StashApply / git.RunInDir).
+func stashApplyConflicted(err error) bool {
+	return strings.Contains(err.Error(), "CONFLICT")
 }

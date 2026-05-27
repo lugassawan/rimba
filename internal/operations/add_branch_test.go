@@ -393,31 +393,51 @@ func conflictRunFn(porcelain, wtDir string) func(args ...string) (string, error)
 	}
 }
 
-// conflictStash handles stash ops with apply-conflict simulation; returns (out, err, matched).
-func conflictStash(stashDropped *bool, args []string) (string, error, bool) {
+// stashOutcomeDispatchA handles push / rev-parse / switch for promote mocks.
+func stashOutcomeDispatchA(args []string) (string, bool) {
 	switch {
 	case len(args) >= 2 && args[0] == gitCmdStash && args[1] == gitSubcmdPush:
-		return "", nil, true
+		return "", true
 	case len(args) >= 2 && args[0] == cmdRevParse && args[1] == "stash@{0}":
-		return stashSHATest, nil, true
+		return stashSHATest, true
 	case len(args) >= 2 && args[0] == gitCmdSwitch:
-		return "", nil, true
+		return "", true
+	}
+	return "", false
+}
+
+// stashOutcomeDispatchB handles list / apply / drop for promote mocks, injecting
+// the given apply/drop errors. Split from stashOutcomeDispatchA to stay under gocyclo=15.
+func stashOutcomeDispatchB(stashDropped *bool, applyErr, dropErr error, args []string) (string, error, bool) {
+	switch {
+	case len(args) >= 3 && args[0] == gitCmdStash && args[1] == gitSubcmdList:
+		return stashListLine, nil, true
 	case len(args) >= 2 && args[0] == gitCmdStash && args[1] == gitSubcmdApply:
-		return "", errors.New("CONFLICT: merge conflict"), true
+		return "", applyErr, true
 	case len(args) >= 2 && args[0] == gitCmdStash && args[1] == gitSubcmdDrop:
 		*stashDropped = true
-		return "", nil, true
+		return "", dropErr, true
 	}
 	return "", nil, false
 }
 
-// conflictRunInDirFn is the RunInDir closure for TestPromoteBranchStashApplyConflict.
-func conflictRunInDirFn(stashDropped *bool) func(dir string, args ...string) (string, error) {
+// stashOutcomeDispatch drives promote mocks to the apply/drop step, injecting the
+// given apply/drop errors so tests can exercise each applyStashToWorktree branch.
+func stashOutcomeDispatch(stashDropped *bool, applyErr, dropErr error, args []string) (string, error, bool) {
+	if out, ok := stashOutcomeDispatchA(args); ok {
+		return out, nil, true
+	}
+	return stashOutcomeDispatchB(stashDropped, applyErr, dropErr, args)
+}
+
+// stashOutcomeRunInDirFn drives promote to the apply/drop step, injecting the given
+// apply/drop errors so tests can exercise each applyStashToWorktree branch.
+func stashOutcomeRunInDirFn(stashDropped *bool, applyErr, dropErr error) func(string, ...string) (string, error) {
 	return func(_ string, args ...string) (string, error) {
 		if out, ok := promoteRunInDirIdentity(true, args); ok {
 			return out, nil
 		}
-		out, err, _ := conflictStash(stashDropped, args)
+		out, err, _ := stashOutcomeDispatch(stashDropped, applyErr, dropErr, args)
 		return out, err
 	}
 }
@@ -430,7 +450,7 @@ func TestPromoteBranchStashApplyConflict(t *testing.T) {
 
 	r := &mockRunner{
 		run:      conflictRunFn(porcelain, wtDir),
-		runInDir: conflictRunInDirFn(&stashDropped),
+		runInDir: stashOutcomeRunInDirFn(&stashDropped, errors.New("CONFLICT: merge conflict"), nil),
 	}
 
 	_, err := PromoteBranch(context.Background(), wtDir, r, repoRoot, branchFeatureX)
@@ -445,5 +465,61 @@ func TestPromoteBranchStashApplyConflict(t *testing.T) {
 	}
 	if stashDropped {
 		t.Error("stash should NOT be dropped on conflict")
+	}
+}
+
+func TestPromoteBranchStashApplyNonConflictFails(t *testing.T) {
+	repoRoot := t.TempDir()
+	wtDir := t.TempDir()
+	porcelain := "worktree " + repoRoot + "\nHEAD abc\nbranch refs/heads/main\n"
+	stashDropped := false
+
+	applyErr := errors.New("error: Your local changes would be overwritten by merge")
+	r := &mockRunner{
+		run:      conflictRunFn(porcelain, wtDir),
+		runInDir: stashOutcomeRunInDirFn(&stashDropped, applyErr, nil),
+	}
+
+	_, err := PromoteBranch(context.Background(), wtDir, r, repoRoot, branchFeatureX)
+	if err == nil {
+		t.Fatal("expected error from non-conflict stash apply failure")
+	}
+	if !strings.Contains(err.Error(), "preserved") {
+		t.Errorf("error %q should say stash is 'preserved'", err)
+	}
+	if !strings.Contains(err.Error(), stashSHATest) {
+		t.Errorf("error %q should contain the stash SHA for recovery", err)
+	}
+	if strings.Contains(err.Error(), "had conflicts") {
+		t.Errorf("error %q should NOT mention 'had conflicts' for a non-conflict failure", err)
+	}
+	if stashDropped {
+		t.Error("stash should NOT be dropped on apply failure")
+	}
+}
+
+func TestPromoteBranchStashDropFails(t *testing.T) {
+	repoRoot := t.TempDir()
+	wtDir := t.TempDir()
+	porcelain := "worktree " + repoRoot + "\nHEAD abc\nbranch refs/heads/main\n"
+	stashDropped := false
+
+	r := &mockRunner{
+		run:      conflictRunFn(porcelain, wtDir),
+		runInDir: stashOutcomeRunInDirFn(&stashDropped, nil, errGitFailed),
+	}
+
+	_, err := PromoteBranch(context.Background(), wtDir, r, repoRoot, branchFeatureX)
+	if err == nil {
+		t.Fatal("expected error from stash drop failure")
+	}
+	if !strings.Contains(err.Error(), "could not drop") {
+		t.Errorf("error %q should mention 'could not drop'", err)
+	}
+	if !strings.Contains(err.Error(), stashSHATest) {
+		t.Errorf("error %q should contain the stash SHA for recovery", err)
+	}
+	if !stashDropped {
+		t.Error("drop should have been attempted (stashDropped should be true)")
 	}
 }
