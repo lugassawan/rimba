@@ -52,3 +52,6 @@ local.properties
 # Claude Code runtime files
 .claude/scheduled_tasks.lock
 .claude/worktrees/
+
+# macOS
+.DS_Store
