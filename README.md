@@ -30,8 +30,8 @@
 
 🌿 **Core Workflow**
 
-- **Automatic branch naming** — configurable prefix (e.g. `feat/`, `fix/`) applied to task names
-- **File & directory copying** — auto-copies `.env`, `.envrc`, `.tool-versions`, `.vscode/` and other files or directories into new worktrees
+- **Automatic branch naming** — fixed prefix types (`feature/`, `bugfix/`, `hotfix/`, `docs/`, `test/`, `chore/`) selected per task via flags
+- **File & directory copying** — auto-copies `.env`, `.env.local`, `.envrc`, `.tool-versions` and other files or directories (e.g. `.vscode/`) into new worktrees
 - **Duplicate worktrees** — copy an existing worktree with auto-suffixed or custom name
 - **Local merge** — merge worktree branches into main or other worktrees with auto-cleanup
 - **Sync worktrees** — rebase or merge onto the latest main branch, with bulk sync support
@@ -95,7 +95,7 @@ rimba remove my-feature
 
 | Command | Description |
 |---------|-------------|
-| `rimba init` | Initialize rimba in the current repo; with `--agents` / `-g` also installs agent files at the chosen tier (`--user`/`--team`/`--local`) and registers the MCP server |
+| `rimba init` | Initialize rimba in the current repo; with `--agents` also installs team agent files, `--agents --local` for personal agent files, `-g`/`--global` for user-level installation, all registering the MCP server |
 | `rimba add <task>` | Create a new worktree with auto-prefixed branch (`service/task` for monorepos), or `pr:<num>` to create one from a GitHub PR |
 | `rimba remove <task>` | Remove a worktree and delete its branch |
 | `rimba rename <old> <new>` | Rename a worktree's task, branch, and directory |
@@ -118,7 +118,7 @@ rimba remove my-feature
 | `rimba deps install <task>` | Detect and install dependencies for a worktree |
 | `rimba clean` | Prune stale references or remove merged/stale worktrees |
 | `rimba update` | Check for updates and replace the binary in place; reminds you to refresh agent files after a successful update |
-| `rimba version` | Print version, commit, and build date |
+| `rimba version` | Print version, commit, build date, and platform info (os/arch/go) |
 | `rimba mcp` | Start MCP server for AI tool integration |
 | `rimba completion` | Generate shell completion scripts (bash, zsh, fish, powershell) |
 

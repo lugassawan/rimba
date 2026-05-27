@@ -61,7 +61,7 @@ rimba init --agents --uninstall   # Remove project-team agent files and MCP regi
 
 ### rimba add
 
-Create a new worktree with a branch named `<prefix><task>` and copy dotfiles from the repo root. In monorepos, prefix the task with a service directory name to create service-scoped branches. Use `pr:<num>` to create a worktree from a GitHub PR's head branch.
+Create a new worktree with a branch named `<prefix><task>` and copy dotfiles from the repo root. In monorepos, prefix the task with a service directory name to create service-scoped branches. Use `pr:<num>` to create a worktree from a GitHub PR's head branch. Use `branch:<branch>` to promote the currently checked-out branch into its own worktree.
 
 ```sh
 rimba add my-feature
@@ -71,11 +71,14 @@ rimba add auth-api/my-feature        # Monorepo: branch auth-api/feature/my-feat
 rimba add auth-api/my-feature --bugfix  # Monorepo: branch auth-api/bugfix/my-feature
 rimba add pr:123                     # Create worktree from PR #123's head branch
 rimba add pr:123 --task review/auth-tweak  # Override auto-derived task name
+rimba add branch:feature/my-feature  # Promote current branch to its own worktree
 ```
 
 > **Monorepo:** If the first segment before `/` matches a directory in the repo root, rimba treats it as a service scope. The branch uses a 3-segment pattern: `<service>/<prefix>/<task>`. No configuration needed — detection is automatic.
 
 > **PR mode:** `pr:<num>` requires `gh` to be installed and authenticated. For cross-fork PRs, rimba adds a `gh-fork-<owner>` remote automatically. Without `--task`, the task name is derived as `review/<num>-<slug>`.
+
+> **Branch mode:** `branch:<branch>` requires that `<branch>` is the currently checked-out branch in the main repo and is not the default branch. Any uncommitted changes are transferred to the new worktree via `git stash`. `--source` is not valid in `branch:` mode.
 
 | Flag | Description |
 |------|-------------|
@@ -103,6 +106,7 @@ rimba remove my-feature -f           # Force removal even if dirty
 |------|-------------|
 | `-k`, `--keep-branch` | Keep the local branch after removing the worktree |
 | `-f`, `--force` | Force removal even if the worktree is dirty |
+| `--dry-run` | Preview what would be removed without making changes |
 
 ### rimba rename
 
@@ -116,6 +120,8 @@ rimba rename old-task new-task -f  # Force rename even if locked
 | Flag | Description |
 |------|-------------|
 | `-f`, `--force` | Force rename even if the worktree is locked |
+| `--skip-deps` | Skip dependency refresh after rename |
+| `--skip-hooks` | Skip post-rename hooks |
 
 ### rimba duplicate
 
@@ -131,6 +137,7 @@ rimba duplicate auth --as auth-v2 # Creates feature/auth-v2 from feature/auth
 | `--as` | Custom name for the duplicate worktree (instead of auto-suffix) |
 | `--skip-deps` | Skip dependency detection and installation |
 | `--skip-hooks` | Skip post-create hooks |
+| `--dry-run` | Preview what would be duplicated without making changes |
 
 ### rimba archive
 
@@ -144,6 +151,7 @@ rimba archive my-feature -f      # Force archival even if dirty
 | Flag | Description |
 |------|-------------|
 | `-f`, `--force` | Force archival even if the worktree has uncommitted changes |
+| `--dry-run` | Preview what would be archived without making changes |
 
 > **Note:** The branch is preserved locally. Use [`rimba restore`](#rimba-restore) to recreate the worktree from the archived branch.
 
@@ -316,6 +324,7 @@ rimba merge auth --keep                    # Merge into main, keep source
 rimba merge auth --into dashboard          # Merge into worktree, keep source
 rimba merge auth --into dashboard --delete # Merge into worktree, delete source
 rimba merge auth --no-ff                   # Force merge commit
+rimba merge auth --dry-run                 # Preview merge without making changes
 ```
 
 | Flag | Description |
@@ -324,6 +333,7 @@ rimba merge auth --no-ff                   # Force merge commit
 | `--no-ff` | Force a merge commit (no fast-forward) |
 | `--keep` | Keep source worktree after merging into main |
 | `--delete` | Delete source worktree after merging into another worktree |
+| `--dry-run` | Preview what would be merged/cleaned up without making changes |
 
 > **Note:** `--keep` and `--delete` are mutually exclusive. Merging to main deletes the source by default; merging to another worktree keeps it by default.
 
@@ -345,6 +355,7 @@ rimba sync --all --include-inherited # Include duplicate worktrees
 | `--merge` | Use merge instead of rebase |
 | `--include-inherited` | Include inherited/duplicate worktrees when using `--all` |
 | `--no-push` | Skip pushing after sync (useful for local-only rebase/merge) |
+| `--dry-run` | Preview what would be synced without making changes |
 
 > **Note:** Dirty worktrees are skipped with a warning. On conflict, the rebase is automatically aborted and a recovery hint is printed. After a successful sync, the branch is pushed to origin by default.
 
@@ -587,11 +598,19 @@ rimba update --force     # Also works on dev builds
 
 ### rimba version
 
-Print version, commit, and build date.
+Print version, commit, build date, and platform info.
 
 ```sh
 rimba version
-# rimba v<X.Y.Z> (commit: <sha>, built: <iso8601>)
+```
+
+```
+rimba v<X.Y.Z>
+commit: <sha>
+built:  <iso8601>
+os:     <linux|darwin|windows>
+arch:   <amd64|arm64>
+go:     go<X.Y.Z>
 ```
 
 ---
