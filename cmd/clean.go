@@ -304,7 +304,7 @@ func printCleanedItems(cmd *cobra.Command, items []operations.CleanedItem) {
 		if item.BranchDeleted {
 			fmt.Fprintf(cmd.OutOrStdout(), "Deleted branch: %s\n", item.Branch)
 		} else {
-			fmt.Fprintf(cmd.OutOrStdout(), "Worktree removed but failed to delete branch\nTo delete manually: git branch -D %s\n", item.Branch)
+			fmt.Fprintln(cmd.OutOrStdout(), item.Error)
 		}
 	}
 }

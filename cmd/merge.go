@@ -102,7 +102,7 @@ var mergeCmd = &cobra.Command{
 			fmt.Fprintf(cmd.OutOrStdout(), "Deleted branch: %s\n", result.SourceBranch)
 		} else if result.WorktreeRemoved {
 			fmt.Fprintf(cmd.OutOrStdout(), "Removed worktree: %s\n", result.SourcePath)
-			fmt.Fprintf(cmd.OutOrStdout(), "Worktree removed but failed to delete branch: %v\nTo delete manually: git branch -D %s\n", result.RemoveError, result.SourceBranch)
+			fmt.Fprintln(cmd.OutOrStdout(), result.RemoveError)
 		} else if result.RemoveError != nil {
 			fmt.Fprintf(cmd.OutOrStdout(), "Merged successfully but failed to remove worktree: %v\nTo remove manually: rimba remove %s\n", result.RemoveError, sourceTask)
 		}
