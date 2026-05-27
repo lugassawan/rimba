@@ -698,7 +698,7 @@ func conflictRunInDirStash(stashDropped *bool, args []string) (string, error, bo
 	case len(args) >= 2 && args[0] == cmdSwitch:
 		return "", nil, true
 	case len(args) >= 3 && args[0] == cmdStash && args[1] == gitSubcmdStashAppl:
-		return "", errGitFailed, true // simulate conflict
+		return "", errors.New("CONFLICT: merge conflict in file.txt"), true
 	case len(args) >= 3 && args[0] == cmdStash && args[1] == gitSubcmdStashDrop:
 		*stashDropped = true
 		return "", nil, true
