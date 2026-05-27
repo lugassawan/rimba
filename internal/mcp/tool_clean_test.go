@@ -591,3 +591,70 @@ func TestCleanToolStaleResolveMainBranchError(t *testing.T) {
 		t.Error("expected error when main branch can't be resolved")
 	}
 }
+
+func TestCleanToolPruneRemoteRefs(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			key := mockCmdKey(args)
+			switch key {
+			case "remote get-url":
+				return "https://github.com/owner/repo.git", nil
+			case "remote prune":
+				return " * [pruned] origin/x\n", nil
+			}
+			return "", nil
+		},
+	}
+	hctx := testContext(r)
+	handler := handleClean(hctx)
+
+	result := callTool(t, handler, map[string]any{"mode": modePrune})
+	data := unmarshalJSON[cleanResult](t, result)
+	if len(data.RemotePruned) != 1 || data.RemotePruned[0] != "origin/x" {
+		t.Errorf("RemotePruned = %v, want [origin/x]", data.RemotePruned)
+	}
+}
+
+func TestCleanToolPruneNoOrigin(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == "remote" && args[1] == "get-url" {
+				return "", errors.New("no such remote 'origin'")
+			}
+			return "", nil
+		},
+	}
+	hctx := testContext(r)
+	handler := handleClean(hctx)
+
+	result := callTool(t, handler, map[string]any{"mode": modePrune})
+	data := unmarshalJSON[cleanResult](t, result)
+	if data.Mode != modePrune {
+		t.Errorf("mode = %q, want %q", data.Mode, modePrune)
+	}
+	if len(data.RemotePruned) != 0 {
+		t.Errorf("expected RemotePruned empty when no origin, got %v", data.RemotePruned)
+	}
+}
+
+func TestCleanToolPruneRemoteError(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			key := mockCmdKey(args)
+			switch key {
+			case "remote get-url":
+				return "https://github.com/owner/repo.git", nil
+			case "remote prune":
+				return "", errors.New("connection refused")
+			}
+			return "", nil
+		},
+	}
+	hctx := testContext(r)
+	handler := handleClean(hctx)
+
+	result := callTool(t, handler, map[string]any{"mode": modePrune})
+	if !result.IsError {
+		t.Error("expected error result when remote prune fails")
+	}
+}

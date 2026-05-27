@@ -2,6 +2,7 @@ package e2e_test
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -387,4 +388,105 @@ func TestCleanFetchWarningOnStderr(t *testing.T) {
 	r := rimbaSuccess(t, repo, "clean", flagMergedE2E)
 	assertContains(t, r.Stderr, "Warning: fetch failed")
 	assertNotContains(t, r.Stdout, "Warning: fetch failed")
+}
+
+// setupRepoWithBareOrigin creates a bare repo, clones it, runs rimba init,
+// commits, and pushes. Returns (localRepo, bareDir).
+func setupRepoWithBareOrigin(t *testing.T) (string, string) {
+	t.Helper()
+
+	dir := t.TempDir()
+
+	bareDir := filepath.Join(dir, "origin.git")
+	if err := os.MkdirAll(bareDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitBare(t, bareDir, "init", "--bare", "-b", "main")
+
+	repo := filepath.Join(dir, "repo")
+	cmd := exec.Command("git", "clone", bareDir, repo)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("clone: %s: %v", out, err)
+	}
+	testutil.GitCmd(t, repo, "config", "user.email", "test@test.com")
+	testutil.GitCmd(t, repo, "config", "user.name", "Test")
+
+	testutil.CreateFile(t, repo, "README.md", "# Test\n")
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "initial commit")
+	testutil.GitCmd(t, repo, "push", "-u", "origin", "main")
+
+	rimbaSuccess(t, repo, "init")
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "rimba init")
+	testutil.GitCmd(t, repo, "push")
+
+	return repo, bareDir
+}
+
+func TestCleanPrunesRemoteRefs(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo, bareDir := setupRepoWithBareOrigin(t)
+
+	// Create and push a branch, then delete it from the bare repo so it's stale.
+	testutil.GitCmd(t, repo, "checkout", "-b", "gone")
+	testutil.GitCmd(t, repo, "push", "-u", "origin", "gone")
+	testutil.GitCmd(t, repo, "checkout", "main")
+	gitBare(t, bareDir, "branch", "-D", "gone")
+
+	r := rimbaSuccess(t, repo, "clean")
+	assertContains(t, r.Stdout, "Pruned remote-tracking refs: origin/gone")
+
+	// Verify origin/gone is no longer listed.
+	out := testutil.GitCmd(t, repo, "branch", "-r")
+	if strings.Contains(out, "origin/gone") {
+		t.Error("expected origin/gone to be pruned from remote-tracking refs")
+	}
+}
+
+func TestCleanRemotePruneDryRun(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo, bareDir := setupRepoWithBareOrigin(t)
+
+	testutil.GitCmd(t, repo, "checkout", "-b", "gone")
+	testutil.GitCmd(t, repo, "push", "-u", "origin", "gone")
+	testutil.GitCmd(t, repo, "checkout", "main")
+	gitBare(t, bareDir, "branch", "-D", "gone")
+
+	r := rimbaSuccess(t, repo, "clean", flagDryRunE2E)
+	assertContains(t, r.Stdout, "Would prune remote-tracking refs: origin/gone")
+
+	// Dry run: origin/gone should still be listed.
+	out := testutil.GitCmd(t, repo, "branch", "-r")
+	if !strings.Contains(out, "origin/gone") {
+		t.Error("expected origin/gone to still exist after dry run")
+	}
+}
+
+func TestCleanRemotePruneNothingStale(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo, _ := setupRepoWithBareOrigin(t)
+
+	r := rimbaSuccess(t, repo, "clean")
+	assertContains(t, r.Stdout, "No stale remote-tracking refs to prune.")
+}
+
+func TestCleanNoOriginSkipsRemotePrune(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+
+	r := rimbaSuccess(t, repo, "clean")
+	assertContains(t, r.Stdout, "No 'origin' remote; skipped remote-ref prune.")
 }
