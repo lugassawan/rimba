@@ -44,6 +44,7 @@ func TestCleanDryRun(t *testing.T) {
 
 	r := rimbaSuccess(t, repo, "clean", flagDryRunE2E)
 	assertContains(t, r.Stdout, "Nothing to prune")
+	assertContains(t, r.Stdout, "skipped remote-ref prune")
 }
 
 func TestCleanNothingToPrune(t *testing.T) {
@@ -55,6 +56,7 @@ func TestCleanNothingToPrune(t *testing.T) {
 
 	r := rimbaSuccess(t, repo, "clean")
 	assertContains(t, r.Stdout, "Pruned stale worktree references")
+	assertContains(t, r.Stdout, "skipped remote-ref prune")
 }
 
 func TestCleanWorksWithoutInit(t *testing.T) {

@@ -93,11 +93,13 @@ func cleanPrune(cmd *cobra.Command, r git.Runner) error {
 // cleanRemotePrune prunes stale origin remote-tracking refs, skipping gracefully
 // when there is no origin remote.
 func cleanRemotePrune(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, dryRun bool) error {
+	s.Start("Pruning remote-tracking refs...")
 	if !git.RemoteExists(r, "origin") {
+		s.Stop()
 		fmt.Fprintln(cmd.OutOrStdout(), "No 'origin' remote; skipped remote-ref prune.")
 		return nil
 	}
-	s.Start("Pruning remote-tracking refs...")
+	s.Update("Pruning remote-tracking refs...")
 	refs, err := git.RemotePrune(r, "origin", dryRun)
 	if err != nil {
 		return err

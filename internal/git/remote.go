@@ -43,8 +43,9 @@ func parsePrunedRefs(out string) []string {
 	refs := []string{}
 	for line := range strings.SplitSeq(out, "\n") {
 		if strings.Contains(line, "[pruned]") || strings.Contains(line, "[would prune]") {
-			fields := strings.Fields(line)
-			refs = append(refs, fields[len(fields)-1])
+			if fields := strings.Fields(line); len(fields) >= 2 {
+				refs = append(refs, fields[len(fields)-1])
+			}
 		}
 	}
 	return refs
