@@ -24,8 +24,11 @@ func checkUpdateHint(version string, timeout time.Duration) <-chan *updater.Chec
 		return ch
 	}
 
+	// Read newUpdater before spawning the goroutine: goroutine launch
+	// establishes a happens-before edge, preventing a data race with
+	// test overrides that restore the variable via t.Cleanup.
+	u := newUpdater(version)
 	go func() {
-		u := newUpdater(version)
 		result, err := u.Check(context.Background())
 		if err != nil || result.UpToDate {
 			close(ch)

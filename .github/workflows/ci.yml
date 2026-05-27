@@ -53,6 +53,28 @@ jobs:
           cache: true
       - run: make build
 
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          cache: true
+      - run: make test-e2e
+
+  race:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          cache: true
+      - run: make test-race
+
   vuln:
     runs-on: ubuntu-latest
     # TODO: remove continue-on-error once go.mod toolchain is bumped to ≥go1.26.1
