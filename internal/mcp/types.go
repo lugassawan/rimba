@@ -85,11 +85,12 @@ type syncWorktreeResult struct {
 
 // cleanResult holds the outcome of a clean operation.
 type cleanResult struct {
-	Mode     string        `json:"mode"`
-	DryRun   bool          `json:"dry_run"`
-	Removed  []cleanedItem `json:"removed"`
-	Output   string        `json:"output,omitempty"`
-	Warnings []string      `json:"warnings,omitempty"`
+	Mode         string        `json:"mode"`
+	DryRun       bool          `json:"dry_run"`
+	Removed      []cleanedItem `json:"removed"`
+	Output       string        `json:"output,omitempty"`
+	Warnings     []string      `json:"warnings,omitempty"`
+	RemotePruned []string      `json:"remote_pruned,omitempty"`
 }
 
 // cleanedItem represents a single cleaned branch/worktree.

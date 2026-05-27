@@ -26,8 +26,9 @@ const (
 var cleanCmd = &cobra.Command{
 	Use:   "clean",
 	Short: "Prune stale worktree references or remove merged worktrees",
-	Long:  "Runs git worktree prune to clean up stale references. Use --merged to detect and remove worktrees whose branches have been merged into main.",
+	Long:  "Runs git worktree prune to clean up stale references and prunes stale remote-tracking refs from origin. Use --merged to detect and remove worktrees whose branches have been merged into main.",
 	Example: `  rimba clean
+  rimba clean --dry-run
   rimba clean --merged
   rimba clean --stale --stale-days 7`,
 	Annotations: map[string]string{"skipConfig": "true"},
@@ -86,6 +87,33 @@ func cleanPrune(cmd *cobra.Command, r git.Runner) error {
 		fmt.Fprintln(cmd.OutOrStdout(), "Pruned stale worktree references.")
 	}
 
+	return cleanRemotePrune(cmd, r, s, dryRun)
+}
+
+// cleanRemotePrune prunes stale origin remote-tracking refs, skipping gracefully
+// when there is no origin remote.
+func cleanRemotePrune(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, dryRun bool) error {
+	s.Start("Pruning remote-tracking refs...")
+	if !git.RemoteExists(r, "origin") {
+		s.Stop()
+		fmt.Fprintln(cmd.OutOrStdout(), "No 'origin' remote; skipped remote-ref prune.")
+		return nil
+	}
+	s.Update("Pruning remote-tracking refs...")
+	refs, err := git.RemotePrune(r, "origin", dryRun)
+	if err != nil {
+		return err
+	}
+	s.Stop()
+
+	switch {
+	case len(refs) == 0:
+		fmt.Fprintln(cmd.OutOrStdout(), "No stale remote-tracking refs to prune.")
+	case dryRun:
+		fmt.Fprintf(cmd.OutOrStdout(), "Would prune remote-tracking refs: %s\n", strings.Join(refs, ", "))
+	default:
+		fmt.Fprintf(cmd.OutOrStdout(), "Pruned remote-tracking refs: %s\n", strings.Join(refs, ", "))
+	}
 	return nil
 }
 

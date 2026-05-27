@@ -59,11 +59,20 @@ func mcpCleanPrune(r git.Runner, dryRun bool) (*mcp.CallToolResult, error) {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
+	var remotePruned []string
+	if git.RemoteExists(r, "origin") {
+		remotePruned, err = git.RemotePrune(r, "origin", dryRun)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+	}
+
 	return marshalResult(cleanResult{
-		Mode:    "prune",
-		DryRun:  dryRun,
-		Removed: make([]cleanedItem, 0),
-		Output:  output,
+		Mode:         "prune",
+		DryRun:       dryRun,
+		Removed:      make([]cleanedItem, 0),
+		Output:       output,
+		RemotePruned: remotePruned,
 	})
 }
 
