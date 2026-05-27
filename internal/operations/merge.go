@@ -121,8 +121,18 @@ func MergeWorktree(r git.Runner, params MergeParams, onProgress progress.Func) (
 // abortFailedMerge attempts to roll back a failed merge in targetDir.
 // It checks MERGE_HEAD first so we only abort when a merge is actually in progress.
 // If the abort also fails, both errors are surfaced with a manual-cleanup hint.
+// If the MERGE_HEAD check itself fails (infrastructure error), a conservative
+// manual-cleanup hint is returned rather than assuming no merge is in progress.
 func abortFailedMerge(r git.Runner, targetDir, targetLabel, sourceBranch string, mergeErr error) error {
-	if git.MergeInProgress(r, targetDir) {
+	inProgress, checkErr := git.MergeInProgress(r, targetDir)
+	if checkErr != nil {
+		// Cannot determine merge state — conservative: tell user to clean up manually.
+		return errhint.WithFix(
+			fmt.Errorf("merge failed: %w", mergeErr),
+			"clean up manually: cd "+targetDir+" && git merge --abort",
+		)
+	}
+	if inProgress {
 		if abortErr := git.MergeAbort(r, targetDir); abortErr != nil {
 			return errhint.WithFix(
 				fmt.Errorf("merge failed and rollback failed: %w (rollback: %w)", mergeErr, abortErr),

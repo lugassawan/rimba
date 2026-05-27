@@ -87,7 +87,11 @@ func TestMergeInProgress(t *testing.T) {
 	r := &git.ExecRunner{Dir: repo}
 
 	// Clean repo: no merge in progress
-	if git.MergeInProgress(r, repo) {
+	inProgress, err := git.MergeInProgress(r, repo)
+	if err != nil {
+		t.Fatalf("MergeInProgress on clean repo: %v", err)
+	}
+	if inProgress {
 		t.Error("expected MergeInProgress=false on clean repo")
 	}
 
@@ -111,7 +115,11 @@ func TestMergeInProgress(t *testing.T) {
 	}
 
 	// Now a merge should be in progress.
-	if !git.MergeInProgress(r, repo) {
+	inProgress, err = git.MergeInProgress(r, repo)
+	if err != nil {
+		t.Fatalf("MergeInProgress after conflict: %v", err)
+	}
+	if !inProgress {
 		t.Error("expected MergeInProgress=true after conflicting merge")
 	}
 }
@@ -154,7 +162,11 @@ func TestMergeAbort(t *testing.T) {
 	if dirty {
 		t.Error("expected repo to be clean after MergeAbort")
 	}
-	if git.MergeInProgress(r, repo) {
+	inProgress, err := git.MergeInProgress(r, repo)
+	if err != nil {
+		t.Fatalf("MergeInProgress after abort: %v", err)
+	}
+	if inProgress {
 		t.Error("expected MergeInProgress=false after MergeAbort")
 	}
 }
