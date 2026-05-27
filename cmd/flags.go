@@ -21,7 +21,7 @@ func validateTypeFilter(typeFilter string) error {
 	}
 	return errhint.WithFix(
 		fmt.Errorf("invalid type %q; valid types: %s", typeFilter, strings.Join(valid, ", ")),
-		"use a prefix defined in .rimba/settings.toml [prefixes] section",
+		"choose one of the built-in prefix types: "+strings.Join(valid, ", "),
 	)
 }
 
