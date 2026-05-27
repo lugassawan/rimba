@@ -11,6 +11,7 @@ import (
 const (
 	gitCmdStatus       = "status"
 	gitCmdMerge        = "merge"
+	gitCmdAbort        = "--abort"
 	branchFeatureLogin = "feature/login"
 	statusDirtyOutput  = "M dirty.go"
 )
@@ -25,6 +26,7 @@ func mergeWorktreeList() string {
 
 func mergeRunner(mergeErr error) *mockRunner {
 	wt := mergeWorktreeList()
+	mergeInProgress := mergeErr != nil // MERGE_HEAD exists iff a merge failure is expected
 	return &mockRunner{
 		run: func(args ...string) (string, error) {
 			if len(args) >= 2 && args[0] == gitCmdWorktree {
@@ -37,7 +39,16 @@ func mergeRunner(mergeErr error) *mockRunner {
 				return "", nil
 			}
 			if len(args) >= 1 && args[0] == gitCmdMerge {
+				if len(args) >= 2 && args[1] == gitCmdAbort {
+					return "", nil // abort succeeds by default
+				}
 				return "", mergeErr
+			}
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				if !mergeInProgress {
+					return "", errors.New("no MERGE_HEAD")
+				}
+				return "abc1234", nil // MERGE_HEAD exists
 			}
 			return "", nil
 		},
@@ -238,6 +249,9 @@ func TestMergeWorktreeMergeConflict(t *testing.T) {
 	if !strings.Contains(err.Error(), "merge failed") {
 		t.Errorf("expected 'merge failed', got: %v", err)
 	}
+	if !strings.Contains(err.Error(), "restored to pre-merge state") {
+		t.Errorf("expected 'restored to pre-merge state', got: %v", err)
+	}
 }
 
 func TestMergeWorktreeCleanupPartialFailure(t *testing.T) {
@@ -409,6 +423,141 @@ func TestMergeWorktreeTargetDirtyCheckError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "target status failed") {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestMergeWorktreeMergeFailsAbortAlsoFails(t *testing.T) {
+	abortErr := errors.New("abort failed")
+	wt := mergeWorktreeList()
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == gitCmdWorktree {
+				return wt, nil
+			}
+			return "", nil
+		},
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == gitCmdStatus {
+				return "", nil
+			}
+			if len(args) >= 1 && args[0] == gitCmdMerge {
+				if len(args) >= 2 && args[1] == gitCmdAbort {
+					return "", abortErr
+				}
+				return "", errors.New("conflict")
+			}
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return "abc1234", nil // MERGE_HEAD exists
+			}
+			return "", nil
+		},
+	}
+
+	_, err := MergeWorktree(r, MergeParams{
+		SourceTask: "login",
+		RepoRoot:   "/repo",
+		MainBranch: "main",
+		Keep:       true,
+	}, nil)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "rollback failed") {
+		t.Errorf("expected 'rollback failed', got: %v", err)
+	}
+}
+
+func TestMergeWorktreeMergeFailsNoMergeInProgress(t *testing.T) {
+	wt := mergeWorktreeList()
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == gitCmdWorktree {
+				return wt, nil
+			}
+			return "", nil
+		},
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == gitCmdStatus {
+				return "", nil
+			}
+			if len(args) >= 1 && args[0] == gitCmdMerge {
+				return "", errors.New("conflict")
+			}
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return "", errors.New("no MERGE_HEAD") // merge never started
+			}
+			return "", nil
+		},
+	}
+
+	_, err := MergeWorktree(r, MergeParams{
+		SourceTask: "login",
+		RepoRoot:   "/repo",
+		MainBranch: "main",
+		Keep:       true,
+	}, nil)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "merge failed") {
+		t.Errorf("expected 'merge failed', got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "target") || !strings.Contains(err.Error(), "unchanged") {
+		t.Errorf("expected 'target ... unchanged', got: %v", err)
+	}
+}
+
+// mergeCleanupBranchDeleteFailsRunner returns a runner where merge + worktree
+// removal succeed but branch deletion fails. Extracted to keep
+// TestMergeWorktreeCleanupBranchDeleteFails under the gocyclo limit.
+func mergeCleanupBranchDeleteFailsRunner(wt string) *mockRunner {
+	return &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == gitCmdWorktree && args[1] == gitSubcmdList {
+				return wt, nil
+			}
+			if len(args) >= 2 && args[0] == gitCmdWorktree && args[1] == "remove" {
+				return "", nil
+			}
+			if len(args) >= 2 && args[0] == cmdBranch && args[1] == "-D" {
+				return "", errors.New("branch in use")
+			}
+			return "", nil
+		},
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == gitCmdStatus {
+				return "", nil
+			}
+			if len(args) >= 1 && args[0] == gitCmdMerge {
+				return "", nil
+			}
+			return "", nil
+		},
+	}
+}
+
+func TestMergeWorktreeCleanupBranchDeleteFails(t *testing.T) {
+	r := mergeCleanupBranchDeleteFailsRunner(mergeWorktreeList())
+
+	result, err := MergeWorktree(r, MergeParams{
+		SourceTask: "login",
+		RepoRoot:   "/repo",
+		MainBranch: "main",
+	}, nil)
+	if err != nil {
+		t.Fatalf("expected no fatal error (branch delete failure is non-fatal), got: %v", err)
+	}
+	if result.SourceRemoved {
+		t.Error("expected SourceRemoved=false when branch delete fails")
+	}
+	if result.RemoveError == nil {
+		t.Fatal("expected RemoveError to be set")
+	}
+	if !strings.Contains(result.RemoveError.Error(), "failed to delete branch") {
+		t.Errorf("expected unified hint in RemoveError, got: %v", result.RemoveError)
+	}
+	if !strings.Contains(result.RemoveError.Error(), "git branch -D "+branchFeatureLogin) {
+		t.Errorf("expected branch name in RemoveError hint, got: %v", result.RemoveError)
 	}
 }
 

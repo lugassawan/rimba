@@ -211,4 +211,10 @@ func TestRemoveAndCleanupBranchDeleteFails(t *testing.T) {
 	if brDeleted {
 		t.Error("expected brDeleted to be false")
 	}
+	if !strings.Contains(err.Error(), "failed to delete branch") {
+		t.Errorf("expected unified hint in error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "git branch -D feature/test") {
+		t.Errorf("expected 'git branch -D feature/test' hint in error, got: %v", err)
+	}
 }

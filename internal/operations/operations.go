@@ -80,6 +80,15 @@ func FilterByType(worktrees []resolver.WorktreeInfo, prefixes []string, typeStr 
 	return out
 }
 
+// branchDeleteFailedErr builds the unified recovery error for the
+// "worktree removed but branch delete failed" partial-failure case.
+func branchDeleteFailedErr(branch string, cause error) error {
+	return errhint.WithFix(
+		fmt.Errorf("worktree removed but failed to delete branch: %w", cause),
+		"delete manually: git branch -D "+branch,
+	)
+}
+
 // ambiguityError builds a descriptive error when a bare task matches multiple services.
 func ambiguityError(task string, matches []resolver.WorktreeInfo) error {
 	branches := make([]string, len(matches))

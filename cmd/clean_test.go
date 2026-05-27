@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
@@ -633,7 +634,13 @@ func TestPrintCleanedItemsAllBranches(t *testing.T) {
 		// Success: worktree removed + branch deleted
 		{Branch: "feature/ok", Path: "/wt/ok", WorktreeRemoved: true, BranchDeleted: true},
 		// Partial: worktree removed but branch delete failed
-		{Branch: "feature/partial", Path: "/wt/partial", WorktreeRemoved: true, BranchDeleted: false},
+		{
+			Branch: "feature/partial", Path: "/wt/partial", WorktreeRemoved: true, BranchDeleted: false,
+			Error: errhint.WithFix(
+				errors.New("worktree removed but failed to delete branch: branch in use"),
+				"delete manually: git branch -D feature/partial",
+			),
+		},
 		// Failure: worktree removal failed
 		{Branch: "feature/fail", Path: "/wt/fail", WorktreeRemoved: false, BranchDeleted: false},
 	}

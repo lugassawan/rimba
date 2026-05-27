@@ -66,7 +66,7 @@ func (m *mockGHRunner) Run(_ context.Context, args ...string) ([]byte, error) {
 	if len(args) >= 2 && args[0] == "auth" && args[1] == "status" {
 		return nil, m.authErr
 	}
-	if len(args) >= 2 && args[0] == "pr" && args[1] == "list" {
+	if len(args) >= 2 && args[0] == "pr" && args[1] == gitSubcmdList {
 		if m.prErr != nil {
 			return nil, m.prErr
 		}
