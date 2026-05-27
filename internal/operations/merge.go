@@ -95,10 +95,7 @@ func MergeWorktree(r git.Runner, params MergeParams, onProgress progress.Func) (
 	if err := plan.Do(mergeDesc, func() error {
 		return git.Merge(r, targetDir, source.Branch, params.NoFF)
 	}); err != nil {
-		return result, errhint.WithFix(
-			fmt.Errorf("merge failed: %w", err),
-			fmt.Sprintf("resolve conflicts in %s, commit, then re-run rimba merge", targetDir),
-		)
+		return result, abortFailedMerge(r, targetDir, targetLabel, source.Branch, err)
 	}
 
 	// Auto-cleanup
@@ -119,6 +116,28 @@ func MergeWorktree(r git.Runner, params MergeParams, onProgress progress.Func) (
 	}
 
 	return result, nil
+}
+
+// abortFailedMerge attempts to roll back a failed merge in targetDir.
+// It checks MERGE_HEAD first so we only abort when a merge is actually in progress.
+// If the abort also fails, both errors are surfaced with a manual-cleanup hint.
+func abortFailedMerge(r git.Runner, targetDir, targetLabel, sourceBranch string, mergeErr error) error {
+	if git.MergeInProgress(r, targetDir) {
+		if abortErr := git.MergeAbort(r, targetDir); abortErr != nil {
+			return errhint.WithFix(
+				fmt.Errorf("merge failed and rollback failed: %w (rollback: %w)", mergeErr, abortErr),
+				"clean up manually: cd "+targetDir+" && git merge --abort",
+			)
+		}
+		return errhint.WithFix(
+			fmt.Errorf("merge failed: %w", mergeErr),
+			fmt.Sprintf("%s restored to pre-merge state; reconcile %s, then re-run rimba merge", targetLabel, sourceBranch),
+		)
+	}
+	return errhint.WithFix(
+		fmt.Errorf("merge failed: %w", mergeErr),
+		fmt.Sprintf("target %s unchanged; reconcile %s, then re-run rimba merge", targetLabel, sourceBranch),
+	)
 }
 
 // checkDirty checks both source and target for uncommitted changes concurrently.
