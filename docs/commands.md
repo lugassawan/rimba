@@ -78,7 +78,7 @@ rimba add branch:feature/my-feature  # Promote current branch to its own worktre
 
 > **PR mode:** `pr:<num>` requires `gh` to be installed and authenticated. For cross-fork PRs, rimba adds a `gh-fork-<owner>` remote automatically. Without `--task`, the task name is derived as `review/<num>-<slug>`.
 
-> **Branch mode:** `branch:<branch>` requires that `<branch>` is the currently checked-out branch in the main repo and is not the default branch. Any uncommitted changes are transferred to the new worktree via `git stash`. `--source` is not valid in `branch:` mode.
+> **Branch mode:** `branch:<branch>` requires that `<branch>` is the currently checked-out branch in the main repo and is not the default branch. Any uncommitted changes are transferred to the new worktree via `git stash`. `--source` is not valid in `branch:` mode. `--skip-deps` and `--skip-hooks` are accepted by the parser but have no effect in `branch:` mode; promote does not run dependency installation or post-create hooks.
 
 | Flag | Description |
 |------|-------------|
@@ -610,7 +610,7 @@ commit: <sha>
 built:  <iso8601>
 os:     <linux|darwin|windows>
 arch:   <amd64|arm64>
-go:     go<X.Y.Z>
+go:     go<version>
 ```
 
 ---
