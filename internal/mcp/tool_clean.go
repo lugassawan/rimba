@@ -90,8 +90,8 @@ func mcpCleanMerged(r git.Runner, hctx *HandlerContext, dryRun bool) (*mcp.CallT
 
 	// Fetch latest (non-fatal)
 	mergeRef := mainBranch
-	if err := git.Fetch(r, "origin"); err == nil {
-		mergeRef = "origin/" + mainBranch
+	if err := git.Fetch(r, git.DefaultRemote); err == nil {
+		mergeRef = git.DefaultRemote + "/" + mainBranch
 	}
 
 	mergedResult, err := operations.FindMergedCandidates(r, mergeRef, mainBranch)
@@ -112,17 +112,23 @@ func mcpCleanMerged(r git.Runner, hctx *HandlerContext, dryRun bool) (*mcp.CallT
 		})
 	}
 
-	// Force mode: no confirmation prompts
-	opItems := operations.RemoveCandidates(r, mergedResult.Candidates, nil)
+	// Force mode: no confirmation prompts. Probe origin once and pass the result
+	// directly so RemoveCandidates does not re-issue git remote get-url per candidate.
+	originPresent := git.RemoteExists(r, git.DefaultRemote)
+	opItems := operations.RemoveCandidates(r, mergedResult.Candidates, originPresent, nil)
+	warnings := mergedResult.Warnings
 	items := make([]cleanedItem, len(opItems))
 	for i, item := range opItems {
-		items[i] = cleanedItem{Branch: item.Branch, Path: item.Path}
+		items[i] = cleanedItem{Branch: item.Branch, Path: item.Path, RemoteDeleted: item.RemoteDeleted}
+		if item.RemoteError != nil {
+			warnings = append(warnings, fmt.Sprintf("failed to delete remote branch %s/%s: %v", git.DefaultRemote, item.Branch, item.RemoteError))
+		}
 	}
 	return marshalResult(cleanResult{
 		Mode:     "merged",
 		DryRun:   false,
 		Removed:  items,
-		Warnings: mergedResult.Warnings,
+		Warnings: warnings,
 	})
 }
 
@@ -155,7 +161,7 @@ func mcpCleanStale(r git.Runner, hctx *HandlerContext, dryRun bool, staleDays in
 		toRemove[i] = c.CleanCandidate
 	}
 
-	opItems := operations.RemoveCandidates(r, toRemove, nil)
+	opItems := operations.RemoveCandidates(r, toRemove, false, nil)
 	items := make([]cleanedItem, len(opItems))
 	for i, item := range opItems {
 		items[i] = cleanedItem{Branch: item.Branch, Path: item.Path}

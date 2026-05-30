@@ -27,6 +27,8 @@ type CleanedItem struct {
 	Path            string
 	WorktreeRemoved bool
 	BranchDeleted   bool
+	RemoteDeleted   bool  // true if the remote branch was successfully deleted
+	RemoteError     error // non-nil if remote branch deletion failed
 	Error           error // non-nil if removal or branch deletion failed
 }
 
@@ -111,18 +113,36 @@ func FindStaleCandidates(r git.Runner, mainBranch string, staleDays int) (StaleR
 }
 
 // RemoveCandidates removes worktrees and their branches, returning the outcome of each.
-func RemoveCandidates(r git.Runner, candidates []CleanCandidate, onProgress progress.Func) []CleanedItem {
+// When originPresent is true the remote branch is also deleted after the worktree is
+// removed. Callers are responsible for probing RemoteExists before invoking — passing
+// a pre-resolved boolean avoids redundant git remote get-url calls per candidate and
+// ensures the CLI dry-run preview and actual deletion share a single probe result.
+func RemoveCandidates(r git.Runner, candidates []CleanCandidate, originPresent bool, onProgress progress.Func) []CleanedItem {
 	items := make([]CleanedItem, 0, len(candidates))
 	for _, c := range candidates {
 		progress.Notifyf(onProgress, "Removing %s...", c.Branch)
 		wtRemoved, brDeleted, err := removeAndCleanup(r, c.Path, c.Branch)
-		items = append(items, CleanedItem{
+		item := CleanedItem{
 			Branch:          c.Branch,
 			Path:            c.Path,
 			WorktreeRemoved: wtRemoved,
 			BranchDeleted:   brDeleted,
 			Error:           err,
-		})
+		}
+		if originPresent && wtRemoved {
+			deleteRemoteForItem(r, c.Branch, &item)
+		}
+		items = append(items, item)
 	}
 	return items
+}
+
+// deleteRemoteForItem deletes the remote branch on git.DefaultRemote.
+// Caller must verify the remote exists before invoking.
+func deleteRemoteForItem(r git.Runner, branch string, item *CleanedItem) {
+	if err := git.DeleteRemoteBranch(r, git.DefaultRemote, branch); err != nil {
+		item.RemoteError = err
+		return
+	}
+	item.RemoteDeleted = true
 }

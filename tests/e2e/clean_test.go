@@ -545,6 +545,114 @@ func TestCleanPrunesNonOriginRemote(t *testing.T) {
 	}
 }
 
+// cleanMergeSetupWithRemote creates a worktree, commits, pushes branch to origin,
+// merges into main, then pushes main to origin — so rimba sees the merge via origin/main.
+func cleanMergeSetupWithRemote(t *testing.T, repo, task string) (wtPath, branch string) {
+	t.Helper()
+	rimbaSuccess(t, repo, "add", task)
+
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch = resolver.BranchName(defaultPrefix, task)
+	wtPath = resolver.WorktreePath(wtDir, branch)
+
+	testutil.CreateFile(t, wtPath, task+".txt", "content from "+task)
+	testutil.GitCmd(t, wtPath, "add", ".")
+	testutil.GitCmd(t, wtPath, "commit", "-m", "add "+task)
+	testutil.GitCmd(t, wtPath, "push", "-u", "origin", branch)
+	testutil.GitCmd(t, repo, "merge", branch)
+	testutil.GitCmd(t, repo, "push", "origin", "main")
+	return wtPath, branch
+}
+
+func TestCleanMergedDeletesRemoteBranch(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo, _ := setupRepoWithBareOrigin(t)
+	wtPath, branch := cleanMergeSetupWithRemote(t, repo, "remote-clean")
+
+	r := rimbaSuccess(t, repo, "clean", flagMergedE2E, flagForceE2E)
+	assertContains(t, r.Stdout, msgRemovedWorktree)
+	assertContains(t, r.Stdout, msgDeletedBranch)
+	assertContains(t, r.Stdout, "Deleted remote branch: origin/"+branch)
+	assertFileNotExists(t, wtPath)
+
+	// Local branch gone.
+	out := testutil.GitCmd(t, repo, "branch", flagBranchList)
+	if strings.Contains(out, branch) {
+		t.Error("expected local branch to be deleted")
+	}
+	// Remote branch gone.
+	out = testutil.GitCmd(t, repo, "branch", "-r")
+	if strings.Contains(out, "origin/"+branch) {
+		t.Error("expected remote branch to be deleted")
+	}
+}
+
+func TestCleanMergedDryRunShowsRemote(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo, _ := setupRepoWithBareOrigin(t)
+	_, branch := cleanMergeSetupWithRemote(t, repo, "remote-dry")
+
+	r := rimbaSuccess(t, repo, "clean", flagMergedE2E, flagDryRunE2E)
+	assertContains(t, r.Stdout, "will delete remote: origin/"+branch)
+
+	// Remote branch must still be present (dry run).
+	out := testutil.GitCmd(t, repo, "branch", "-r")
+	if !strings.Contains(out, "origin/"+branch) {
+		t.Error("expected remote branch to still exist after dry run")
+	}
+}
+
+func TestCleanStaleKeepsRemote(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo, _ := setupRepoWithBareOrigin(t)
+
+	rimbaSuccess(t, repo, "add", "stale-remote")
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch := resolver.BranchName(defaultPrefix, "stale-remote")
+	wtPath := resolver.WorktreePath(wtDir, branch)
+
+	testutil.GitCmd(t, wtPath, "push", "-u", "origin", branch)
+
+	r := rimbaSuccess(t, repo, "clean", flagStaleE2E, flagForceE2E, "--stale-days", "0")
+	assertContains(t, r.Stdout, "Cleaned 1 stale worktree(s)")
+	assertFileNotExists(t, wtPath)
+
+	// Remote branch should remain (stale mode is local-only).
+	out := testutil.GitCmd(t, repo, "branch", "-r")
+	if !strings.Contains(out, "origin/"+branch) {
+		t.Error("expected remote branch to remain after --stale clean")
+	}
+}
+
+func TestCleanMergedIdempotent(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo, _ := setupRepoWithBareOrigin(t)
+	cleanMergeSetupWithRemote(t, repo, "idempotent")
+
+	// First run: clean the merged worktree (local + remote).
+	rimbaSuccess(t, repo, "clean", flagMergedE2E, flagForceE2E)
+
+	// Second run on already-clean state: should be a no-op with no failure messages.
+	r := rimbaSuccess(t, repo, "clean", flagMergedE2E, flagForceE2E)
+	assertContains(t, r.Stdout, "No merged worktrees found")
+	assertNotContains(t, r.Stdout, "Failed")
+	assertNotContains(t, r.Stderr, "Failed")
+}
+
 func TestCleanPrunesCustomRefspec(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)

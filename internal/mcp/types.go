@@ -95,6 +95,7 @@ type cleanResult struct {
 
 // cleanedItem represents a single cleaned branch/worktree.
 type cleanedItem struct {
-	Branch string `json:"branch"`
-	Path   string `json:"path,omitempty"`
+	Branch        string `json:"branch"`
+	Path          string `json:"path,omitempty"`
+	RemoteDeleted bool   `json:"remote_deleted,omitempty"`
 }

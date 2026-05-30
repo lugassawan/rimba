@@ -148,10 +148,11 @@ func cleanResolveAndHint(cmd *cobra.Command, r git.Runner, entries []hintEntry) 
 
 // cleanStrategy describes what differs between the merged and stale clean modes.
 type cleanStrategy struct {
-	label      string
-	spinnerMsg string
-	emptyMsg   string
-	summaryFmt string
+	label         string
+	spinnerMsg    string
+	emptyMsg      string
+	summaryFmt    string
+	originPresent bool // pre-resolved: origin exists AND remote deletion is wanted
 	// preFind runs before find and owns the spinner; nil means runClean starts it.
 	preFind func(*cobra.Command, git.Runner, *spinner.Spinner) error
 	find    func(git.Runner) ([]operations.CleanCandidate, []string, error)
@@ -198,7 +199,7 @@ func runClean(cmd *cobra.Command, r git.Runner, s cleanStrategy) error {
 		return nil
 	}
 
-	removed := cleanRemoveCandidates(cmd, r, sp, candidates)
+	removed := cleanRemoveCandidates(cmd, r, sp, candidates, s.originPresent)
 	fmt.Fprintf(cmd.OutOrStdout(), s.summaryFmt, removed)
 	return nil
 }
@@ -212,12 +213,14 @@ func cleanMerged(cmd *cobra.Command, r git.Runner) error {
 		return err
 	}
 
+	remotePresent := git.RemoteExists(r, git.DefaultRemote)
 	var mergeRef string
 	return runClean(cmd, r, cleanStrategy{
-		label:      "merged",
-		spinnerMsg: "Analyzing branches...",
-		emptyMsg:   "No merged worktrees found.",
-		summaryFmt: "Cleaned %d merged worktree(s).\n",
+		label:         "merged",
+		spinnerMsg:    "Analyzing branches...",
+		emptyMsg:      "No merged worktrees found.",
+		summaryFmt:    "Cleaned %d merged worktree(s).\n",
+		originPresent: remotePresent, // shared with printMergedCandidates — single probe
 		preFind: func(c *cobra.Command, rr git.Runner, sp *spinner.Spinner) error {
 			mergeRef = cleanFetchMergeRef(c, rr, sp, mainBranch)
 			return nil
@@ -230,7 +233,7 @@ func cleanMerged(cmd *cobra.Command, r git.Runner) error {
 			return result.Candidates, result.Warnings, nil
 		},
 		printRows: func(candidates []operations.CleanCandidate) {
-			printMergedCandidates(cmd, candidates)
+			printMergedCandidates(cmd, candidates, remotePresent)
 		},
 	})
 }
@@ -248,10 +251,11 @@ func cleanStale(cmd *cobra.Command, r git.Runner) error {
 	staleDays, _ := cmd.Flags().GetInt(flagStaleDays)
 	var staleCandidates []operations.StaleCandidate
 	return runClean(cmd, r, cleanStrategy{
-		label:      "stale",
-		spinnerMsg: "Analyzing worktree activity...",
-		emptyMsg:   "No stale worktrees found.",
-		summaryFmt: "Cleaned %d stale worktree(s).\n",
+		label:         "stale",
+		spinnerMsg:    "Analyzing worktree activity...",
+		emptyMsg:      "No stale worktrees found.",
+		summaryFmt:    "Cleaned %d stale worktree(s).\n",
+		originPresent: false, // stale mode is local-only
 		find: func(rr git.Runner) ([]operations.CleanCandidate, []string, error) {
 			result, err := operations.FindStaleCandidates(rr, mainBranch, staleDays)
 			if err != nil {
@@ -269,18 +273,18 @@ func cleanStale(cmd *cobra.Command, r git.Runner) error {
 // cleanFetchMergeRef fetches from origin and returns the ref to diff against.
 // Falls back to mainBranch with a warning if fetch fails.
 func cleanFetchMergeRef(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, mainBranch string) string {
-	s.Start("Fetching from origin...")
-	if err := git.Fetch(r, "origin"); err != nil {
+	s.Start("Fetching from " + git.DefaultRemote + "...")
+	if err := git.Fetch(r, git.DefaultRemote); err != nil {
 		s.Stop()
 		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: fetch failed (no remote?): continuing with local state\n")
 		return mainBranch
 	}
-	return "origin/" + mainBranch
+	return git.DefaultRemote + "/" + mainBranch
 }
 
-func cleanRemoveCandidates(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, candidates []operations.CleanCandidate) int {
+func cleanRemoveCandidates(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, candidates []operations.CleanCandidate, originPresent bool) int {
 	s.Start("Removing worktrees...")
-	items := operations.RemoveCandidates(r, candidates, func(msg string) {
+	items := operations.RemoveCandidates(r, candidates, originPresent, func(msg string) {
 		s.Update(msg)
 	})
 	s.Stop()
@@ -296,12 +300,15 @@ func flattenStaleCandidates(candidates []operations.StaleCandidate) []operations
 	return out
 }
 
-func printMergedCandidates(cmd *cobra.Command, candidates []operations.CleanCandidate) {
+func printMergedCandidates(cmd *cobra.Command, candidates []operations.CleanCandidate, remotePresent bool) {
 	prefixes := resolver.AllPrefixes()
 	fmt.Fprintln(cmd.OutOrStdout(), "Merged worktrees:")
 	for _, c := range candidates {
 		task, _ := resolver.PureTaskFromBranch(c.Branch, prefixes)
 		fmt.Fprintf(cmd.OutOrStdout(), "  %s (%s)\n", task, c.Branch)
+		if remotePresent {
+			fmt.Fprintf(cmd.OutOrStdout(), "    will delete remote: %s/%s\n", git.DefaultRemote, c.Branch)
+		}
 	}
 }
 
@@ -338,8 +345,14 @@ func printCleanedItems(cmd *cobra.Command, items []operations.CleanedItem) {
 		fmt.Fprintf(cmd.OutOrStdout(), "Removed worktree: %s\n", item.Path)
 		if item.BranchDeleted {
 			fmt.Fprintf(cmd.OutOrStdout(), "Deleted branch: %s\n", item.Branch)
-		} else {
+		} else if item.Error != nil {
 			fmt.Fprintln(cmd.OutOrStdout(), item.Error)
+		}
+		if item.RemoteDeleted {
+			fmt.Fprintf(cmd.OutOrStdout(), "Deleted remote branch: %s/%s\n", git.DefaultRemote, item.Branch)
+		} else if item.RemoteError != nil {
+			fmt.Fprintf(cmd.OutOrStdout(), "Failed to delete remote branch %s/%s\nTo delete remote: git push %s --delete %s\n",
+				git.DefaultRemote, item.Branch, git.DefaultRemote, item.Branch)
 		}
 	}
 }

@@ -13,6 +13,9 @@ type RemoteFailure struct {
 	Err    error
 }
 
+// DefaultRemote is the conventional name for the primary upstream remote.
+const DefaultRemote = "origin"
+
 // RemoteExists reports whether a remote with the given name is configured.
 func RemoteExists(r Runner, name string) bool {
 	_, err := r.Run("remote", "get-url", name)
@@ -35,6 +38,23 @@ func RemotePrune(r Runner, remote string, dryRun bool) ([]string, error) {
 		)
 	}
 	return parsePrunedRefs(out), nil
+}
+
+// DeleteRemoteBranch deletes a branch on the given remote.
+// An already-gone remote ref is treated as success (idempotent).
+func DeleteRemoteBranch(r Runner, remote, branch string) error {
+	_, err := r.Run("push", remote, "--delete", branch)
+	if err == nil {
+		return nil
+	}
+	// git emits "error: remote ref does not exist" — assumes LC_ALL=C or English git.
+	if strings.Contains(err.Error(), "remote ref does not exist") {
+		return nil
+	}
+	return errhint.WithFix(
+		fmt.Errorf("delete remote branch %s/%s: %w", remote, branch, err),
+		"check remote access, then run: git push "+remote+" --delete "+branch,
+	)
 }
 
 // AddRemote adds a new remote with the given name and URL.
