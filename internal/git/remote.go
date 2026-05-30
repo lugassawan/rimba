@@ -7,6 +7,12 @@ import (
 	"github.com/lugassawan/rimba/internal/errhint"
 )
 
+// RemoteFailure records a prune error for a single remote.
+type RemoteFailure struct {
+	Remote string
+	Err    error
+}
+
 // RemoteExists reports whether a remote with the given name is configured.
 func RemoteExists(r Runner, name string) bool {
 	_, err := r.Run("remote", "get-url", name)
@@ -54,12 +60,6 @@ func ListRemotes(r Runner) ([]string, error) {
 		}
 	}
 	return remotes, nil
-}
-
-// RemoteFailure records a prune error for a single remote.
-type RemoteFailure struct {
-	Remote string
-	Err    error
 }
 
 // PruneRemotes calls RemotePrune for each remote in order. Pruned refs from all
