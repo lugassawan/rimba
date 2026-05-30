@@ -669,6 +669,43 @@ func TestCleanToolPruneRemoteError(t *testing.T) {
 	}
 }
 
+func TestMcpCleanPruneListRemotesError(t *testing.T) {
+	// When git.ListRemotes itself fails, mcpCleanPrune records a warning
+	// and returns a success result with empty RemotePruned — not a tool error.
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if mockCmdKey(args) == gitRemote {
+				return "", errors.New("not a git repository")
+			}
+			return "", nil
+		},
+	}
+	hctx := testContext(r)
+	handler := handleClean(hctx)
+
+	result := callTool(t, handler, map[string]any{"mode": modePrune})
+	if result.IsError {
+		t.Error("expected success result when ListRemotes fails; got error result")
+	}
+	data := unmarshalJSON[cleanResult](t, result)
+	if len(data.RemotePruned) != 0 {
+		t.Errorf("RemotePruned = %v, want empty when ListRemotes fails", data.RemotePruned)
+	}
+	if len(data.Warnings) == 0 {
+		t.Error("expected Warnings to be populated when ListRemotes fails")
+	}
+	found := false
+	for _, w := range data.Warnings {
+		if strings.Contains(w, "list remotes") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Warnings = %v, want an entry mentioning 'list remotes'", data.Warnings)
+	}
+}
+
 func TestMcpCleanPruneMultiRemote(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {

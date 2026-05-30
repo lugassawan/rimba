@@ -22,9 +22,9 @@ func TestCleanRemotePruneMultiRemote(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			if len(args) == 1 && args[0] == cmdRemote {
-				return "origin\nupstream\n", nil
+				return twoRemotesList, nil
 			}
-			if len(args) >= 3 && args[0] == cmdRemote && args[1] == "prune" {
+			if len(args) >= 3 && args[0] == cmdRemote && args[1] == cmdPrune {
 				remote := args[len(args)-1]
 				calls = append(calls, remote)
 				return " * [pruned] " + remote + "/gone\n", nil
@@ -55,9 +55,9 @@ func TestCleanRemotePrunePartialFailure(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			if len(args) == 1 && args[0] == cmdRemote {
-				return "origin\nupstream\n", nil
+				return twoRemotesList, nil
 			}
-			if len(args) >= 3 && args[0] == cmdRemote && args[1] == "prune" {
+			if len(args) >= 3 && args[0] == cmdRemote && args[1] == cmdPrune {
 				remote := args[len(args)-1]
 				if remote == "upstream" {
 					return "", errors.New("connection refused")
@@ -77,6 +77,37 @@ func TestCleanRemotePrunePartialFailure(t *testing.T) {
 	}
 	if !strings.Contains(errBuf.String(), "Warning: failed to prune upstream:") {
 		t.Errorf("stderr = %q, want 'Warning: failed to prune upstream:'", errBuf.String())
+	}
+}
+
+func TestCleanRemotePruneAllFail(t *testing.T) {
+	cmd, buf := newCleanPruneCmd()
+	var errBuf bytes.Buffer
+	cmd.SetErr(&errBuf)
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) == 1 && args[0] == cmdRemote {
+				return twoRemotesList, nil
+			}
+			if len(args) >= 3 && args[0] == cmdRemote && args[1] == cmdPrune {
+				return "", errors.New("connection refused")
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+	if err := cleanPrune(cmd, r); err != nil {
+		t.Fatalf("cleanPrune should return nil on all-remote failure, got: %v", err)
+	}
+	// stdout must NOT contain the false-positive "No stale" message
+	if strings.Contains(buf.String(), "No stale remote-tracking refs to prune.") {
+		t.Errorf("stdout = %q: false-positive 'No stale' message when all remotes failed", buf.String())
+	}
+	if !strings.Contains(errBuf.String(), "Warning: failed to prune origin:") {
+		t.Errorf("stderr = %q, want warning for origin failure", errBuf.String())
+	}
+	if !strings.Contains(errBuf.String(), "Warning: failed to prune upstream:") {
+		t.Errorf("stderr = %q, want warning for upstream failure", errBuf.String())
 	}
 }
 

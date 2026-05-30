@@ -60,7 +60,7 @@ func mcpCleanPrune(r git.Runner, dryRun bool) (*mcp.CallToolResult, error) {
 	}
 
 	var remotePruned []string
-	var warnings []string
+	warnings := []string{}
 	remotes, err := git.ListRemotes(r)
 	if err != nil {
 		warnings = append(warnings, fmt.Sprintf("failed to list remotes: %v", err))

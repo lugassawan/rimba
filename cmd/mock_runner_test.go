@@ -45,11 +45,14 @@ const (
 	cmdRevList                = "rev-list"
 
 	// Shared git command and value constants
-	cmdList               = "list"
-	cmdDiff               = "diff"
-	cmdFetch              = "fetch"
-	cmdRemote             = "remote"
-	cmdRemove             = "remove"
+	cmdList   = "list"
+	cmdDiff   = "diff"
+	cmdFetch  = "fetch"
+	cmdPrune  = "prune"
+	cmdRemote = "remote"
+	cmdRemove = "remove"
+
+	twoRemotesList        = "origin\nupstream\n"
 	gitSubcmdWorktreeAdd  = "add"
 	cmdSymbolicRef        = "symbolic-ref"
 	cmdStatus             = "status"

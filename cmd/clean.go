@@ -106,10 +106,14 @@ func cleanRemotePrune(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, dryR
 	}
 	pruned, failures := git.PruneRemotes(r, remotes, dryRun)
 	s.Stop()
-	for _, f := range failures {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: failed to prune %s: %v\n", f.Remote, f.Err)
+	failureMsgs := make([]string, len(failures))
+	for i, f := range failures {
+		failureMsgs[i] = fmt.Sprintf("failed to prune %s: %v", f.Remote, f.Err)
 	}
+	printWarnings(cmd, failureMsgs)
 	switch {
+	case len(pruned) == 0 && len(failures) > 0:
+		// All remotes failed; warnings already emitted above.
 	case len(pruned) == 0:
 		fmt.Fprintln(cmd.OutOrStdout(), "No stale remote-tracking refs to prune.")
 	case dryRun:
