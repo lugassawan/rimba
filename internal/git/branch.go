@@ -18,12 +18,16 @@ func BranchExists(r Runner, branch string) bool {
 }
 
 // DeleteBranch deletes a local branch. If force is true, uses -D instead of -d.
+// Already-gone branches are treated as success (idempotent).
 func DeleteBranch(r Runner, branch string, force bool) error {
 	flag := "-d"
 	if force {
 		flag = "-D"
 	}
 	_, err := r.Run("branch", flag, branch)
+	if err != nil && strings.Contains(err.Error(), "branch '") && strings.Contains(err.Error(), "not found") {
+		return nil // already gone — idempotent
+	}
 	return err
 }
 

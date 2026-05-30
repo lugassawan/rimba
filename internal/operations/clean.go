@@ -27,6 +27,8 @@ type CleanedItem struct {
 	Path            string
 	WorktreeRemoved bool
 	BranchDeleted   bool
+	RemoteDeleted   bool  // true if the remote branch was successfully deleted
+	RemoteError     error // non-nil if remote branch deletion failed
 	Error           error // non-nil if removal or branch deletion failed
 }
 
@@ -41,6 +43,8 @@ type StaleResult struct {
 	Candidates []StaleCandidate
 	Warnings   []string
 }
+
+const remoteOrigin = "origin"
 
 // FindMergedCandidates returns worktrees whose branches are merged into mergeRef.
 // It checks both regular merges and squash-merges.
@@ -111,18 +115,36 @@ func FindStaleCandidates(r git.Runner, mainBranch string, staleDays int) (StaleR
 }
 
 // RemoveCandidates removes worktrees and their branches, returning the outcome of each.
-func RemoveCandidates(r git.Runner, candidates []CleanCandidate, onProgress progress.Func) []CleanedItem {
+// When deleteRemote is true (merged mode), it also deletes the branch on origin after
+// the worktree is successfully removed.
+func RemoveCandidates(r git.Runner, candidates []CleanCandidate, deleteRemote bool, onProgress progress.Func) []CleanedItem {
 	items := make([]CleanedItem, 0, len(candidates))
 	for _, c := range candidates {
 		progress.Notifyf(onProgress, "Removing %s...", c.Branch)
 		wtRemoved, brDeleted, err := removeAndCleanup(r, c.Path, c.Branch)
-		items = append(items, CleanedItem{
+		item := CleanedItem{
 			Branch:          c.Branch,
 			Path:            c.Path,
 			WorktreeRemoved: wtRemoved,
 			BranchDeleted:   brDeleted,
 			Error:           err,
-		})
+		}
+		if deleteRemote && wtRemoved {
+			deleteRemoteForItem(r, c.Branch, &item)
+		}
+		items = append(items, item)
 	}
 	return items
+}
+
+// deleteRemoteForItem deletes the remote branch for an item, if origin exists.
+func deleteRemoteForItem(r git.Runner, branch string, item *CleanedItem) {
+	if !git.RemoteExists(r, remoteOrigin) {
+		return
+	}
+	if err := git.DeleteRemoteBranch(r, remoteOrigin, branch); err != nil {
+		item.RemoteError = err
+		return
+	}
+	item.RemoteDeleted = true
 }

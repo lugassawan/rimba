@@ -7,6 +7,57 @@ import (
 	"testing"
 )
 
+func TestDeleteRemoteBranchSuccess(t *testing.T) {
+	var captured []string
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			captured = args
+			return "", nil
+		},
+	}
+	if err := DeleteRemoteBranch(r, "origin", "feature/done"); err != nil {
+		t.Fatalf("DeleteRemoteBranch: %v", err)
+	}
+	want := []string{"push", "origin", "--delete", "feature/done"}
+	if len(captured) != len(want) {
+		t.Fatalf("args = %v, want %v", captured, want)
+	}
+	for i, w := range want {
+		if captured[i] != w {
+			t.Errorf("args[%d] = %q, want %q", i, captured[i], w)
+		}
+	}
+}
+
+func TestDeleteRemoteBranchRefGoneIsIdempotent(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			return "", errors.New("error: remote ref does not exist")
+		},
+	}
+	if err := DeleteRemoteBranch(r, "origin", "gone-branch"); err != nil {
+		t.Fatalf("expected nil for already-gone remote ref, got: %v", err)
+	}
+}
+
+func TestDeleteRemoteBranchFailure(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			return "", errors.New("connection refused")
+		},
+	}
+	err := DeleteRemoteBranch(r, "origin", "feature/x")
+	if err == nil {
+		t.Fatal("expected non-nil error for remote failure")
+	}
+	if !strings.Contains(err.Error(), "delete remote branch") {
+		t.Errorf("error = %q, want it to contain %q", err.Error(), "delete remote branch")
+	}
+	if !strings.Contains(err.Error(), "To fix:") {
+		t.Errorf("error = %q, want it to contain hint", err.Error())
+	}
+}
+
 func TestRemoteExistsTrue(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {

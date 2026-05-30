@@ -225,7 +225,7 @@ func TestPrintMergedCandidates(t *testing.T) {
 		{Path: pathWtDone, Branch: branchDone},
 		{Path: "/wt/bugfix-old", Branch: "bugfix/old"},
 	}
-	printMergedCandidates(cmd, candidates)
+	printMergedCandidates(cmd, candidates, false)
 
 	out := buf.String()
 	if !strings.Contains(out, "Merged worktrees:") {

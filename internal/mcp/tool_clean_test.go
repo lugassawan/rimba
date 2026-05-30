@@ -740,6 +740,92 @@ func TestMcpCleanPruneMultiRemote(t *testing.T) {
 	}
 }
 
+// newCleanMergedWithRemoteRunner builds a runner for merged-clean tests with remote support.
+// If pushErr is nil, push --delete succeeds; otherwise it returns pushErr.
+// pushCalled is incremented when push --delete is invoked (nil = ignore).
+func newCleanMergedWithRemoteRunner(porcelain, mergedBranches string, pushErr error, pushCalled *int) *mockRunner {
+	return &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == gitFetch {
+				return "", nil
+			}
+			if len(args) >= 3 && args[0] == gitRemote && args[1] == "get-url" {
+				return "https://github.com/owner/repo.git", nil
+			}
+			if len(args) >= 3 && args[0] == "push" && args[2] == "--delete" {
+				if pushCalled != nil {
+					*pushCalled++
+				}
+				return "", pushErr
+			}
+			key := mockCmdKey(args)
+			switch key {
+			case gitBranch + " " + gitMerged:
+				return mergedBranches, nil
+			case gitWorktree + " " + gitList:
+				return porcelain, nil
+			case gitWorktree + " " + gitRemove:
+				return "", nil
+			}
+			if isBranchDelete(args) {
+				return "", nil
+			}
+			return "", nil
+		},
+	}
+}
+
+func TestCleanToolMergedDeletesRemoteBranch(t *testing.T) {
+	porcelain := worktreePorcelain(
+		struct{ path, branch string }{"/repo", "main"},
+		struct{ path, branch string }{"/wt/feature-done", branchFeatureDone},
+	)
+	pushCalled := 0
+	r := newCleanMergedWithRemoteRunner(porcelain, mergedFeatureDoneOutput, nil, &pushCalled)
+
+	result := callTool(t, handleClean(testContext(r)), map[string]any{"mode": modeMerged})
+	data := unmarshalJSON[cleanResult](t, result)
+	if len(data.Removed) != 1 {
+		t.Fatalf("expected 1 removed, got %d", len(data.Removed))
+	}
+	if !data.Removed[0].RemoteDeleted {
+		t.Error("expected remote_deleted=true in result")
+	}
+	if pushCalled == 0 {
+		t.Error("expected git push --delete to be called")
+	}
+}
+
+func TestCleanToolMergedRemoteFailureSurfacesInWarnings(t *testing.T) {
+	porcelain := worktreePorcelain(
+		struct{ path, branch string }{"/repo", "main"},
+		struct{ path, branch string }{"/wt/feature-done", branchFeatureDone},
+	)
+	r := newCleanMergedWithRemoteRunner(porcelain, mergedFeatureDoneOutput, errors.New("connection refused"), nil)
+
+	result := callTool(t, handleClean(testContext(r)), map[string]any{"mode": modeMerged})
+	if result.IsError {
+		t.Fatal("expected success result even when remote delete fails")
+	}
+	data := unmarshalJSON[cleanResult](t, result)
+	if len(data.Warnings) == 0 {
+		t.Error("expected Warnings to be populated when remote delete fails")
+	}
+	found := false
+	for _, w := range data.Warnings {
+		if strings.Contains(w, "remote") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Warnings = %v, expected an entry mentioning 'remote'", data.Warnings)
+	}
+	if len(data.Removed) != 1 || data.Removed[0].RemoteDeleted {
+		t.Error("expected remote_deleted=false when push --delete fails")
+	}
+}
+
 func TestMcpCleanPrunePartialFailure(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {

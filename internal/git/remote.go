@@ -37,6 +37,22 @@ func RemotePrune(r Runner, remote string, dryRun bool) ([]string, error) {
 	return parsePrunedRefs(out), nil
 }
 
+// DeleteRemoteBranch deletes a branch on the given remote.
+// An already-gone remote ref is treated as success (idempotent).
+func DeleteRemoteBranch(r Runner, remote, branch string) error {
+	_, err := r.Run("push", remote, "--delete", branch)
+	if err == nil {
+		return nil
+	}
+	if strings.Contains(err.Error(), "remote ref does not exist") {
+		return nil
+	}
+	return errhint.WithFix(
+		fmt.Errorf("delete remote branch %s/%s: %w", remote, branch, err),
+		"check remote access, then run: git push "+remote+" --delete "+branch,
+	)
+}
+
 // AddRemote adds a new remote with the given name and URL.
 func AddRemote(r Runner, name, url string) error {
 	_, err := r.Run("remote", "add", name, url)

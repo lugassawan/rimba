@@ -182,6 +182,40 @@ func TestDeleteBranchForce(t *testing.T) {
 	}
 }
 
+func TestDeleteBranchNotFoundIsIdempotent(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			return "", errors.New("error: branch 'gone' not found.")
+		},
+	}
+	if err := DeleteBranch(r, "gone", false); err != nil {
+		t.Fatalf("expected nil for already-gone branch, got: %v", err)
+	}
+}
+
+func TestDeleteBranchOtherErrorPropagates(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			return "", errors.New("error: Cannot delete branch 'main' checked out at '/repo'")
+		},
+	}
+	if err := DeleteBranch(r, "main", false); err == nil {
+		t.Fatal("expected non-nil error for checked-out branch")
+	}
+}
+
+func TestDeleteBranchNotFoundWithoutBranchKeywordPropagates(t *testing.T) {
+	// "not found" alone (no "branch '") must NOT be swallowed — tight substring match.
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			return "", errors.New("ref not found")
+		},
+	}
+	if err := DeleteBranch(r, "gone", false); err == nil {
+		t.Fatal("expected non-nil error when 'branch \\'' is absent from the message")
+	}
+}
+
 func TestRenameBranch(t *testing.T) {
 	var captured []string
 	r := &mockRunner{

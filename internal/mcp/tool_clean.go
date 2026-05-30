@@ -10,6 +10,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+const mcpRemoteOrigin = "origin"
+
 func registerCleanTool(s *server.MCPServer, hctx *HandlerContext) {
 	tool := mcp.NewTool("clean",
 		mcp.WithDescription("Clean up stale worktree references, merged branches, or stale worktrees"),
@@ -90,8 +92,8 @@ func mcpCleanMerged(r git.Runner, hctx *HandlerContext, dryRun bool) (*mcp.CallT
 
 	// Fetch latest (non-fatal)
 	mergeRef := mainBranch
-	if err := git.Fetch(r, "origin"); err == nil {
-		mergeRef = "origin/" + mainBranch
+	if err := git.Fetch(r, mcpRemoteOrigin); err == nil {
+		mergeRef = mcpRemoteOrigin + "/" + mainBranch
 	}
 
 	mergedResult, err := operations.FindMergedCandidates(r, mergeRef, mainBranch)
@@ -113,16 +115,20 @@ func mcpCleanMerged(r git.Runner, hctx *HandlerContext, dryRun bool) (*mcp.CallT
 	}
 
 	// Force mode: no confirmation prompts
-	opItems := operations.RemoveCandidates(r, mergedResult.Candidates, nil)
+	opItems := operations.RemoveCandidates(r, mergedResult.Candidates, true, nil)
+	warnings := mergedResult.Warnings
 	items := make([]cleanedItem, len(opItems))
 	for i, item := range opItems {
-		items[i] = cleanedItem{Branch: item.Branch, Path: item.Path}
+		items[i] = cleanedItem{Branch: item.Branch, Path: item.Path, RemoteDeleted: item.RemoteDeleted}
+		if item.RemoteError != nil {
+			warnings = append(warnings, fmt.Sprintf("failed to delete remote branch %s/%s: %v", mcpRemoteOrigin, item.Branch, item.RemoteError))
+		}
 	}
 	return marshalResult(cleanResult{
 		Mode:     "merged",
 		DryRun:   false,
 		Removed:  items,
-		Warnings: mergedResult.Warnings,
+		Warnings: warnings,
 	})
 }
 
@@ -155,7 +161,7 @@ func mcpCleanStale(r git.Runner, hctx *HandlerContext, dryRun bool, staleDays in
 		toRemove[i] = c.CleanCandidate
 	}
 
-	opItems := operations.RemoveCandidates(r, toRemove, nil)
+	opItems := operations.RemoveCandidates(r, toRemove, false, nil)
 	items := make([]cleanedItem, len(opItems))
 	for i, item := range opItems {
 		items[i] = cleanedItem{Branch: item.Branch, Path: item.Path}
