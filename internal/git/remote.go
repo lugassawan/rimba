@@ -47,6 +47,7 @@ func DeleteRemoteBranch(r Runner, remote, branch string) error {
 	if err == nil {
 		return nil
 	}
+	// git emits "error: remote ref does not exist" — assumes LC_ALL=C or English git.
 	if strings.Contains(err.Error(), "remote ref does not exist") {
 		return nil
 	}

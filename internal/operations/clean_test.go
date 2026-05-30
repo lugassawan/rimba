@@ -383,32 +383,21 @@ func TestFindMergedCandidatesListWorktreesError(t *testing.T) {
 	}
 }
 
-// remoteExistsRun returns a run func that answers "remote get-url origin" successfully.
-func remoteExistsRun(inner func(args ...string) (string, error)) func(args ...string) (string, error) {
-	return func(args ...string) (string, error) {
-		if len(args) >= 3 && args[0] == gitCmdRemote && args[1] == "get-url" {
-			return "https://github.com/owner/repo.git", nil
-		}
-		return inner(args...)
-	}
-}
-
 func TestRemoveCandidatesRemoteDeleteSuccess(t *testing.T) {
 	pushCalled := false
 	r := &mockRunner{
-		run: remoteExistsRun(func(args ...string) (string, error) {
+		run: func(args ...string) (string, error) {
 			if len(args) > 0 && args[0] == gitCmdPush {
 				pushCalled = true
 				return "", nil
 			}
-			// worktree remove and branch delete succeed
 			return "", nil
-		}),
+		},
 		runInDir: noopRunInDir,
 	}
 
 	candidates := []CleanCandidate{{Path: "/wt/a", Branch: "feature/a"}}
-	items := RemoveCandidates(r, candidates, true, nil)
+	items := RemoveCandidates(r, candidates, true, nil) // originPresent=true passed by caller
 	if len(items) != 1 {
 		t.Fatalf("expected 1 item, got %d", len(items))
 	}
@@ -425,12 +414,12 @@ func TestRemoveCandidatesRemoteDeleteSuccess(t *testing.T) {
 
 func TestRemoveCandidatesRemoteDeleteFailureStillCountsItem(t *testing.T) {
 	r := &mockRunner{
-		run: remoteExistsRun(func(args ...string) (string, error) {
+		run: func(args ...string) (string, error) {
 			if len(args) > 0 && args[0] == gitCmdPush {
 				return "", errors.New("connection refused")
 			}
 			return "", nil
-		}),
+		},
 		runInDir: noopRunInDir,
 	}
 
@@ -439,7 +428,6 @@ func TestRemoveCandidatesRemoteDeleteFailureStillCountsItem(t *testing.T) {
 	if len(items) != 1 {
 		t.Fatalf("expected 1 item, got %d", len(items))
 	}
-	// worktree was removed successfully
 	if !items[0].WorktreeRemoved {
 		t.Error("expected WorktreeRemoved=true")
 	}
@@ -452,6 +440,7 @@ func TestRemoveCandidatesRemoteDeleteFailureStillCountsItem(t *testing.T) {
 }
 
 func TestRemoveCandidatesNoOriginSkipsRemoteDelete(t *testing.T) {
+	// Caller resolved RemoteExists=false and passes originPresent=false.
 	pushCalled := false
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
@@ -459,38 +448,34 @@ func TestRemoveCandidatesNoOriginSkipsRemoteDelete(t *testing.T) {
 				pushCalled = true
 				return "", nil
 			}
-			// remote get-url fails → no origin
-			if len(args) >= 2 && args[0] == gitCmdRemote && args[1] == "get-url" {
-				return "", errors.New("no such remote")
-			}
 			return "", nil
 		},
 		runInDir: noopRunInDir,
 	}
 
 	candidates := []CleanCandidate{{Path: "/wt/a", Branch: "feature/a"}}
-	items := RemoveCandidates(r, candidates, true, nil)
+	items := RemoveCandidates(r, candidates, false, nil) // originPresent=false → no push
 	if len(items) != 1 {
 		t.Fatalf("expected 1 item, got %d", len(items))
 	}
 	if items[0].RemoteDeleted {
-		t.Error("expected RemoteDeleted=false when no origin")
+		t.Error("expected RemoteDeleted=false when originPresent=false")
 	}
 	if pushCalled {
-		t.Error("expected no push call when origin absent")
+		t.Error("expected no push call when originPresent=false")
 	}
 }
 
 func TestRemoveCandidatesDeleteRemoteFalseSkipsRemote(t *testing.T) {
 	pushCalled := false
 	r := &mockRunner{
-		run: remoteExistsRun(func(args ...string) (string, error) {
+		run: func(args ...string) (string, error) {
 			if len(args) > 0 && args[0] == gitCmdPush {
 				pushCalled = true
 				return "", nil
 			}
 			return "", nil
-		}),
+		},
 		runInDir: noopRunInDir,
 	}
 

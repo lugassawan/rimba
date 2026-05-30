@@ -113,12 +113,11 @@ func FindStaleCandidates(r git.Runner, mainBranch string, staleDays int) (StaleR
 }
 
 // RemoveCandidates removes worktrees and their branches, returning the outcome of each.
-// When deleteRemote is true (merged mode), it also deletes the branch on origin after
-// the worktree is successfully removed.
-func RemoveCandidates(r git.Runner, candidates []CleanCandidate, deleteRemote bool, onProgress progress.Func) []CleanedItem {
-	// Probe origin once before the loop — eliminates N redundant git remote get-url
-	// calls and closes the TOCTOU gap between the CLI dry-run preview and actual deletion.
-	originPresent := deleteRemote && git.RemoteExists(r, git.DefaultRemote)
+// When originPresent is true the remote branch is also deleted after the worktree is
+// removed. Callers are responsible for probing RemoteExists before invoking — passing
+// a pre-resolved boolean avoids redundant git remote get-url calls per candidate and
+// ensures the CLI dry-run preview and actual deletion share a single probe result.
+func RemoveCandidates(r git.Runner, candidates []CleanCandidate, originPresent bool, onProgress progress.Func) []CleanedItem {
 	items := make([]CleanedItem, 0, len(candidates))
 	for _, c := range candidates {
 		progress.Notifyf(onProgress, "Removing %s...", c.Branch)

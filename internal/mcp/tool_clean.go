@@ -112,8 +112,10 @@ func mcpCleanMerged(r git.Runner, hctx *HandlerContext, dryRun bool) (*mcp.CallT
 		})
 	}
 
-	// Force mode: no confirmation prompts
-	opItems := operations.RemoveCandidates(r, mergedResult.Candidates, true, nil)
+	// Force mode: no confirmation prompts. Probe origin once and pass the result
+	// directly so RemoveCandidates does not re-issue git remote get-url per candidate.
+	originPresent := git.RemoteExists(r, git.DefaultRemote)
+	opItems := operations.RemoveCandidates(r, mergedResult.Candidates, originPresent, nil)
 	warnings := mergedResult.Warnings
 	items := make([]cleanedItem, len(opItems))
 	for i, item := range opItems {
