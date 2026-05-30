@@ -10,11 +10,13 @@ import (
 
 // Constants for repeated string literals in clean tests.
 const (
-	gitFetch  = "fetch"
-	gitBranch = "branch"
-	gitLog    = "log"
-	gitRemove = "remove"
-	gitMerged = "--merged"
+	gitFetch       = "fetch"
+	gitBranch      = "branch"
+	gitLog         = "log"
+	gitRemote      = "remote"
+	gitRemotePrune = "remote prune"
+	gitRemove      = "remove"
+	gitMerged      = "--merged"
 
 	modeStale  = "stale"
 	modeMerged = "merged"
@@ -28,6 +30,8 @@ const (
 
 // mockCmdKey builds a dispatch key from git arguments.
 // Two-arg commands like "worktree list" use "arg0 arg1"; single-arg commands use "arg0".
+// Note: unmatched keys silently return ("", nil) — callers are responsible for handling
+// only the args they declare and letting the remainder fall through harmlessly.
 func mockCmdKey(args []string) string {
 	if len(args) >= 2 {
 		return args[0] + " " + args[1]
@@ -597,9 +601,9 @@ func TestCleanToolPruneRemoteRefs(t *testing.T) {
 		run: func(args ...string) (string, error) {
 			key := mockCmdKey(args)
 			switch key {
-			case "remote get-url":
-				return "https://github.com/owner/repo.git", nil
-			case "remote prune":
+			case gitRemote:
+				return "origin\n", nil
+			case gitRemotePrune:
 				return " * [pruned] origin/x\n", nil
 			}
 			return "", nil
@@ -618,8 +622,8 @@ func TestCleanToolPruneRemoteRefs(t *testing.T) {
 func TestCleanToolPruneNoOrigin(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[0] == "remote" && args[1] == "get-url" {
-				return "", errors.New("no such remote 'origin'")
+			if len(args) == 1 && args[0] == gitRemote {
+				return "", nil // no remotes configured
 			}
 			return "", nil
 		},
@@ -633,18 +637,20 @@ func TestCleanToolPruneNoOrigin(t *testing.T) {
 		t.Errorf("mode = %q, want %q", data.Mode, modePrune)
 	}
 	if len(data.RemotePruned) != 0 {
-		t.Errorf("expected RemotePruned empty when no origin, got %v", data.RemotePruned)
+		t.Errorf("expected RemotePruned empty when no remotes, got %v", data.RemotePruned)
 	}
 }
 
 func TestCleanToolPruneRemoteError(t *testing.T) {
+	// When a remote prune fails, mcpCleanPrune records it as a warning (partial failure),
+	// not as a tool error — the result should be successful with warnings populated.
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			key := mockCmdKey(args)
 			switch key {
-			case "remote get-url":
-				return "https://github.com/owner/repo.git", nil
-			case "remote prune":
+			case gitRemote:
+				return "origin\n", nil
+			case gitRemotePrune:
 				return "", errors.New("connection refused")
 			}
 			return "", nil
@@ -654,7 +660,125 @@ func TestCleanToolPruneRemoteError(t *testing.T) {
 	handler := handleClean(hctx)
 
 	result := callTool(t, handler, map[string]any{"mode": modePrune})
-	if !result.IsError {
-		t.Error("expected error result when remote prune fails")
+	if result.IsError {
+		t.Error("expected success result (warning) when remote prune fails; got error result")
+	}
+	data := unmarshalJSON[cleanResult](t, result)
+	if len(data.Warnings) == 0 {
+		t.Error("expected Warnings to be populated on partial failure")
+	}
+}
+
+func TestMcpCleanPruneListRemotesError(t *testing.T) {
+	// When git.ListRemotes itself fails, mcpCleanPrune records a warning
+	// and returns a success result with empty RemotePruned — not a tool error.
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if mockCmdKey(args) == gitRemote {
+				return "", errors.New("not a git repository")
+			}
+			return "", nil
+		},
+	}
+	hctx := testContext(r)
+	handler := handleClean(hctx)
+
+	result := callTool(t, handler, map[string]any{"mode": modePrune})
+	if result.IsError {
+		t.Error("expected success result when ListRemotes fails; got error result")
+	}
+	data := unmarshalJSON[cleanResult](t, result)
+	if len(data.RemotePruned) != 0 {
+		t.Errorf("RemotePruned = %v, want empty when ListRemotes fails", data.RemotePruned)
+	}
+	if len(data.Warnings) == 0 {
+		t.Error("expected Warnings to be populated when ListRemotes fails")
+	}
+	found := false
+	for _, w := range data.Warnings {
+		if strings.Contains(w, "list remotes") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Warnings = %v, want an entry mentioning 'list remotes'", data.Warnings)
+	}
+}
+
+func TestMcpCleanPruneMultiRemote(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			key := mockCmdKey(args)
+			switch key {
+			case gitRemote:
+				return "origin\nupstream\n", nil
+			case gitRemotePrune:
+				remote := args[len(args)-1]
+				return " * [pruned] " + remote + "/gone\n", nil
+			}
+			return "", nil
+		},
+	}
+	hctx := testContext(r)
+	handler := handleClean(hctx)
+
+	result := callTool(t, handler, map[string]any{"mode": modePrune})
+	data := unmarshalJSON[cleanResult](t, result)
+	if data.Mode != modePrune {
+		t.Errorf("mode = %q, want %q", data.Mode, modePrune)
+	}
+	pruned := make(map[string]bool)
+	for _, ref := range data.RemotePruned {
+		pruned[ref] = true
+	}
+	if !pruned["origin/gone"] {
+		t.Errorf("RemotePruned = %v, want origin/gone included", data.RemotePruned)
+	}
+	if !pruned["upstream/gone"] {
+		t.Errorf("RemotePruned = %v, want upstream/gone included", data.RemotePruned)
+	}
+}
+
+func TestMcpCleanPrunePartialFailure(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			key := mockCmdKey(args)
+			switch key {
+			case gitRemote:
+				return "origin\nupstream\n", nil
+			case gitRemotePrune:
+				remote := args[len(args)-1]
+				if remote == "upstream" {
+					return "", errors.New("connection refused")
+				}
+				return " * [pruned] origin/gone\n", nil
+			}
+			return "", nil
+		},
+	}
+	hctx := testContext(r)
+	handler := handleClean(hctx)
+
+	result := callTool(t, handler, map[string]any{"mode": modePrune})
+	if result.IsError {
+		t.Error("expected success result on partial failure; got error result")
+	}
+	data := unmarshalJSON[cleanResult](t, result)
+	if len(data.RemotePruned) != 1 || data.RemotePruned[0] != "origin/gone" {
+		t.Errorf("RemotePruned = %v, want [origin/gone]", data.RemotePruned)
+	}
+	if len(data.Warnings) == 0 {
+		t.Error("expected Warnings to be populated for upstream failure")
+	}
+	found := false
+	for _, w := range data.Warnings {
+		if strings.Contains(w, "upstream") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Warnings = %v, want an entry mentioning 'upstream'", data.Warnings)
 	}
 }

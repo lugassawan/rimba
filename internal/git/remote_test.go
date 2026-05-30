@@ -177,3 +177,130 @@ func TestRemotePruneErrorWrapping(t *testing.T) {
 		t.Errorf("error = %q, want it to contain %q", err.Error(), "remote prune:")
 	}
 }
+
+func TestListRemotesTwoRemotes(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			return "origin\nupstream\n", nil
+		},
+	}
+	remotes, err := ListRemotes(r)
+	if err != nil {
+		t.Fatalf("ListRemotes: %v", err)
+	}
+	want := []string{"origin", "upstream"}
+	if len(remotes) != len(want) {
+		t.Fatalf("remotes = %v, want %v", remotes, want)
+	}
+	for i, w := range want {
+		if remotes[i] != w {
+			t.Errorf("remotes[%d] = %q, want %q", i, remotes[i], w)
+		}
+	}
+}
+
+func TestListRemotesEmpty(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			return "", nil
+		},
+	}
+	remotes, err := ListRemotes(r)
+	if err != nil {
+		t.Fatalf("ListRemotes: %v", err)
+	}
+	if remotes == nil {
+		t.Fatal("expected non-nil slice, got nil")
+	}
+	if len(remotes) != 0 {
+		t.Errorf("expected empty slice, got %v", remotes)
+	}
+}
+
+func TestListRemotesRunnerError(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			return "", errors.New("not a git repository")
+		},
+	}
+	_, err := ListRemotes(r)
+	if err == nil {
+		t.Fatal("expected error from ListRemotes")
+	}
+	if !strings.Contains(err.Error(), "list remotes:") {
+		t.Errorf("error = %q, want it to contain %q", err.Error(), "list remotes:")
+	}
+}
+
+func TestPruneRemotesBothSucceed(t *testing.T) {
+	calls := map[string]string{
+		"origin":   " * [pruned] origin/old\n",
+		"upstream": " * [pruned] upstream/gone\n",
+	}
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			remote := args[len(args)-1]
+			return calls[remote], nil
+		},
+	}
+	pruned, failures := PruneRemotes(r, []string{"origin", "upstream"}, false)
+	if len(failures) != 0 {
+		t.Fatalf("expected no failures, got %v", failures)
+	}
+	want := []string{"origin/old", "upstream/gone"}
+	if len(pruned) != len(want) {
+		t.Fatalf("pruned = %v, want %v", pruned, want)
+	}
+	for i, w := range want {
+		if pruned[i] != w {
+			t.Errorf("pruned[%d] = %q, want %q", i, pruned[i], w)
+		}
+	}
+}
+
+func TestPruneRemotesPartialFailure(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			remote := args[len(args)-1]
+			if remote == "upstream" {
+				return "", errors.New("could not read from remote")
+			}
+			return " * [pruned] origin/old\n", nil
+		},
+	}
+	pruned, failures := PruneRemotes(r, []string{"origin", "upstream"}, false)
+	if len(failures) != 1 {
+		t.Fatalf("expected 1 failure, got %d: %v", len(failures), failures)
+	}
+	if failures[0].Remote != "upstream" {
+		t.Errorf("failures[0].Remote = %q, want %q", failures[0].Remote, "upstream")
+	}
+	if failures[0].Err == nil {
+		t.Error("failures[0].Err should not be nil")
+	}
+	if len(pruned) != 1 || pruned[0] != "origin/old" {
+		t.Errorf("pruned = %v, want [origin/old]", pruned)
+	}
+}
+
+func TestPruneRemotesEmptyInput(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			t.Error("runner should not be called for empty input")
+			return "", nil
+		},
+	}
+	pruned, failures := PruneRemotes(r, []string{}, false)
+	if pruned == nil {
+		t.Error("expected non-nil pruned slice")
+	}
+	if failures == nil {
+		t.Error("expected non-nil failures slice")
+	}
+	if len(pruned) != 0 {
+		t.Errorf("expected empty pruned, got %v", pruned)
+	}
+	if len(failures) != 0 {
+		t.Errorf("expected empty failures, got %v", failures)
+	}
+}

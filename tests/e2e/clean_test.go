@@ -490,5 +490,89 @@ func TestCleanNoOriginSkipsRemotePrune(t *testing.T) {
 	repo := setupInitializedRepo(t)
 
 	r := rimbaSuccess(t, repo, "clean")
-	assertContains(t, r.Stdout, "No 'origin' remote; skipped remote-ref prune.")
+	assertContains(t, r.Stdout, "No remotes; skipped remote-ref prune.")
+}
+
+func TestCleanPrunesNonOriginRemote(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	dir := t.TempDir()
+
+	bareDir := filepath.Join(dir, "upstream.git")
+	if err := os.MkdirAll(bareDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitBare(t, bareDir, "init", "--bare", "-b", "main")
+
+	repo := filepath.Join(dir, "repo")
+	cmd := exec.Command("git", "clone", bareDir, repo)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("clone: %s: %v", out, err)
+	}
+
+	testutil.GitCmd(t, repo, "config", "user.email", "test@test.com")
+	testutil.GitCmd(t, repo, "config", "user.name", "Test")
+
+	// Rename the remote from "origin" to "upstream"
+	testutil.GitCmd(t, repo, "remote", "rename", "origin", "upstream")
+
+	testutil.CreateFile(t, repo, "README.md", "# Test\n")
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "initial commit")
+	testutil.GitCmd(t, repo, "push", "-u", "upstream", "main")
+
+	rimbaSuccess(t, repo, "init")
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "rimba init")
+	testutil.GitCmd(t, repo, "push", "upstream", "main")
+
+	// Create a branch, push to upstream, then delete from bare so it's stale.
+	testutil.GitCmd(t, repo, "checkout", "-b", "gone")
+	testutil.GitCmd(t, repo, "push", "-u", "upstream", "gone")
+	testutil.GitCmd(t, repo, "checkout", "main")
+	gitBare(t, bareDir, "branch", "-D", "gone")
+
+	r := rimbaSuccess(t, repo, "clean")
+	assertContains(t, r.Stdout, "Pruned remote-tracking refs: upstream/gone")
+
+	// Verify a subsequent fetch --prune emits no "[deleted]" line.
+	fetchCmd := exec.Command("git", "-C", repo, "fetch", "--prune", "upstream")
+	fetchOut, _ := fetchCmd.CombinedOutput()
+	if strings.Contains(string(fetchOut), "[deleted]") {
+		t.Errorf("expected no [deleted] after rimba clean, got: %s", fetchOut)
+	}
+}
+
+func TestCleanPrunesCustomRefspec(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo, bareDir := setupRepoWithBareOrigin(t)
+
+	// Add a custom fetch refspec mapping refs/heads/custom/* → refs/remotes/origin/custom/*.
+	testutil.GitCmd(t, repo, "config", "--add", "remote.origin.fetch", "+refs/heads/custom/*:refs/remotes/origin/custom/*")
+
+	// Create and push a branch matching the custom refspec namespace.
+	testutil.GitCmd(t, repo, "checkout", "-b", "custom/feature")
+	testutil.GitCmd(t, repo, "push", "-u", "origin", "custom/feature")
+	testutil.GitCmd(t, repo, "checkout", "main")
+
+	// Fetch so the tracking ref exists under refs/remotes/origin/custom/feature.
+	testutil.GitCmd(t, repo, "fetch", "origin")
+
+	// Delete the branch from the bare remote so the tracking ref becomes stale.
+	gitBare(t, bareDir, "branch", "-D", "custom/feature")
+
+	r := rimbaSuccess(t, repo, "clean")
+	assertContains(t, r.Stdout, "origin/custom/feature")
+
+	// Verify a subsequent fetch --prune emits no "[deleted]" line.
+	fetchCmd := exec.Command("git", "-C", repo, "fetch", "--prune")
+	fetchOut, _ := fetchCmd.CombinedOutput()
+	if strings.Contains(string(fetchOut), "[deleted]") {
+		t.Errorf("expected no [deleted] after rimba clean, got: %s", fetchOut)
+	}
 }
