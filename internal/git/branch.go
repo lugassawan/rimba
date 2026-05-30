@@ -25,6 +25,7 @@ func DeleteBranch(r Runner, branch string, force bool) error {
 		flag = "-D"
 	}
 	_, err := r.Run("branch", flag, branch)
+	// git emits "error: branch 'X' not found." — assumes LC_ALL=C or English git.
 	if err != nil && strings.Contains(err.Error(), "branch '") && strings.Contains(err.Error(), "not found") {
 		return nil // already gone — idempotent
 	}

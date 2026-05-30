@@ -10,8 +10,6 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-const mcpRemoteOrigin = "origin"
-
 func registerCleanTool(s *server.MCPServer, hctx *HandlerContext) {
 	tool := mcp.NewTool("clean",
 		mcp.WithDescription("Clean up stale worktree references, merged branches, or stale worktrees"),
@@ -92,8 +90,8 @@ func mcpCleanMerged(r git.Runner, hctx *HandlerContext, dryRun bool) (*mcp.CallT
 
 	// Fetch latest (non-fatal)
 	mergeRef := mainBranch
-	if err := git.Fetch(r, mcpRemoteOrigin); err == nil {
-		mergeRef = mcpRemoteOrigin + "/" + mainBranch
+	if err := git.Fetch(r, git.DefaultRemote); err == nil {
+		mergeRef = git.DefaultRemote + "/" + mainBranch
 	}
 
 	mergedResult, err := operations.FindMergedCandidates(r, mergeRef, mainBranch)
@@ -121,7 +119,7 @@ func mcpCleanMerged(r git.Runner, hctx *HandlerContext, dryRun bool) (*mcp.CallT
 	for i, item := range opItems {
 		items[i] = cleanedItem{Branch: item.Branch, Path: item.Path, RemoteDeleted: item.RemoteDeleted}
 		if item.RemoteError != nil {
-			warnings = append(warnings, fmt.Sprintf("failed to delete remote branch %s/%s: %v", mcpRemoteOrigin, item.Branch, item.RemoteError))
+			warnings = append(warnings, fmt.Sprintf("failed to delete remote branch %s/%s: %v", git.DefaultRemote, item.Branch, item.RemoteError))
 		}
 	}
 	return marshalResult(cleanResult{

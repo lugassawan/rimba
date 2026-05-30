@@ -13,6 +13,9 @@ type RemoteFailure struct {
 	Err    error
 }
 
+// DefaultRemote is the conventional name for the primary upstream remote.
+const DefaultRemote = "origin"
+
 // RemoteExists reports whether a remote with the given name is configured.
 func RemoteExists(r Runner, name string) bool {
 	_, err := r.Run("remote", "get-url", name)

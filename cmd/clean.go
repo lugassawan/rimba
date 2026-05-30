@@ -21,8 +21,6 @@ const (
 	hintDryRunPrune = "Preview what would be pruned without making changes"
 	hintDryRunClean = "Preview what would be removed without making changes"
 	hintForce       = "Skip confirmation prompt"
-
-	remoteOrigin = "origin"
 )
 
 var cleanCmd = &cobra.Command{
@@ -215,7 +213,7 @@ func cleanMerged(cmd *cobra.Command, r git.Runner) error {
 		return err
 	}
 
-	remotePresent := git.RemoteExists(r, remoteOrigin)
+	remotePresent := git.RemoteExists(r, git.DefaultRemote)
 	var mergeRef string
 	return runClean(cmd, r, cleanStrategy{
 		label:        "merged",
@@ -276,12 +274,12 @@ func cleanStale(cmd *cobra.Command, r git.Runner) error {
 // Falls back to mainBranch with a warning if fetch fails.
 func cleanFetchMergeRef(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, mainBranch string) string {
 	s.Start("Fetching from origin...")
-	if err := git.Fetch(r, remoteOrigin); err != nil {
+	if err := git.Fetch(r, git.DefaultRemote); err != nil {
 		s.Stop()
 		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: fetch failed (no remote?): continuing with local state\n")
 		return mainBranch
 	}
-	return remoteOrigin + "/" + mainBranch
+	return git.DefaultRemote + "/" + mainBranch
 }
 
 func cleanRemoveCandidates(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, candidates []operations.CleanCandidate, deleteRemote bool) int {
@@ -309,7 +307,7 @@ func printMergedCandidates(cmd *cobra.Command, candidates []operations.CleanCand
 		task, _ := resolver.PureTaskFromBranch(c.Branch, prefixes)
 		fmt.Fprintf(cmd.OutOrStdout(), "  %s (%s)\n", task, c.Branch)
 		if remotePresent {
-			fmt.Fprintf(cmd.OutOrStdout(), "    will delete remote: %s/%s\n", remoteOrigin, c.Branch)
+			fmt.Fprintf(cmd.OutOrStdout(), "    will delete remote: %s/%s\n", git.DefaultRemote, c.Branch)
 		}
 	}
 }
@@ -347,14 +345,14 @@ func printCleanedItems(cmd *cobra.Command, items []operations.CleanedItem) {
 		fmt.Fprintf(cmd.OutOrStdout(), "Removed worktree: %s\n", item.Path)
 		if item.BranchDeleted {
 			fmt.Fprintf(cmd.OutOrStdout(), "Deleted branch: %s\n", item.Branch)
-		} else {
+		} else if item.Error != nil {
 			fmt.Fprintln(cmd.OutOrStdout(), item.Error)
 		}
 		if item.RemoteDeleted {
-			fmt.Fprintf(cmd.OutOrStdout(), "Deleted remote branch: %s/%s\n", remoteOrigin, item.Branch)
+			fmt.Fprintf(cmd.OutOrStdout(), "Deleted remote branch: %s/%s\n", git.DefaultRemote, item.Branch)
 		} else if item.RemoteError != nil {
 			fmt.Fprintf(cmd.OutOrStdout(), "Failed to delete remote branch %s/%s\nTo delete remote: git push %s --delete %s\n",
-				remoteOrigin, item.Branch, remoteOrigin, item.Branch)
+				git.DefaultRemote, item.Branch, git.DefaultRemote, item.Branch)
 		}
 	}
 }

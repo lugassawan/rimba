@@ -44,8 +44,6 @@ type StaleResult struct {
 	Warnings   []string
 }
 
-const remoteOrigin = "origin"
-
 // FindMergedCandidates returns worktrees whose branches are merged into mergeRef.
 // It checks both regular merges and squash-merges.
 func FindMergedCandidates(r git.Runner, mergeRef, mainBranch string) (MergedResult, error) {
@@ -118,6 +116,9 @@ func FindStaleCandidates(r git.Runner, mainBranch string, staleDays int) (StaleR
 // When deleteRemote is true (merged mode), it also deletes the branch on origin after
 // the worktree is successfully removed.
 func RemoveCandidates(r git.Runner, candidates []CleanCandidate, deleteRemote bool, onProgress progress.Func) []CleanedItem {
+	// Probe origin once before the loop — eliminates N redundant git remote get-url
+	// calls and closes the TOCTOU gap between the CLI dry-run preview and actual deletion.
+	originPresent := deleteRemote && git.RemoteExists(r, git.DefaultRemote)
 	items := make([]CleanedItem, 0, len(candidates))
 	for _, c := range candidates {
 		progress.Notifyf(onProgress, "Removing %s...", c.Branch)
@@ -129,7 +130,7 @@ func RemoveCandidates(r git.Runner, candidates []CleanCandidate, deleteRemote bo
 			BranchDeleted:   brDeleted,
 			Error:           err,
 		}
-		if deleteRemote && wtRemoved {
+		if originPresent && wtRemoved {
 			deleteRemoteForItem(r, c.Branch, &item)
 		}
 		items = append(items, item)
@@ -137,12 +138,10 @@ func RemoveCandidates(r git.Runner, candidates []CleanCandidate, deleteRemote bo
 	return items
 }
 
-// deleteRemoteForItem deletes the remote branch for an item, if origin exists.
+// deleteRemoteForItem deletes the remote branch on git.DefaultRemote.
+// Caller must verify the remote exists before invoking.
 func deleteRemoteForItem(r git.Runner, branch string, item *CleanedItem) {
-	if !git.RemoteExists(r, remoteOrigin) {
-		return
-	}
-	if err := git.DeleteRemoteBranch(r, remoteOrigin, branch); err != nil {
+	if err := git.DeleteRemoteBranch(r, git.DefaultRemote, branch); err != nil {
 		item.RemoteError = err
 		return
 	}
