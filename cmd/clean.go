@@ -26,7 +26,7 @@ const (
 var cleanCmd = &cobra.Command{
 	Use:   "clean",
 	Short: "Prune stale worktree references or remove merged worktrees",
-	Long:  "Runs git worktree prune to clean up stale references and prunes stale remote-tracking refs from origin. Use --merged to detect and remove worktrees whose branches have been merged into main.",
+	Long:  "Runs git worktree prune to clean up stale references and prunes stale remote-tracking refs across all remotes. Use --merged to detect and remove worktrees whose branches have been merged into main.",
 	Example: `  rimba clean
   rimba clean --dry-run
   rimba clean --merged
@@ -90,29 +90,32 @@ func cleanPrune(cmd *cobra.Command, r git.Runner) error {
 	return cleanRemotePrune(cmd, r, s, dryRun)
 }
 
-// cleanRemotePrune prunes stale origin remote-tracking refs, skipping gracefully
-// when there is no origin remote.
+// cleanRemotePrune prunes stale remote-tracking refs across all configured remotes.
+// Skips gracefully when there are no remotes; warns and continues on per-remote failure.
 func cleanRemotePrune(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, dryRun bool) error {
 	s.Start("Pruning remote-tracking refs...")
-	if !git.RemoteExists(r, "origin") {
-		s.Stop()
-		fmt.Fprintln(cmd.OutOrStdout(), "No 'origin' remote; skipped remote-ref prune.")
-		return nil
-	}
-	s.Update("Pruning remote-tracking refs...")
-	refs, err := git.RemotePrune(r, "origin", dryRun)
+	remotes, err := git.ListRemotes(r)
 	if err != nil {
+		s.Stop()
 		return err
 	}
+	if len(remotes) == 0 {
+		s.Stop()
+		fmt.Fprintln(cmd.OutOrStdout(), "No remotes; skipped remote-ref prune.")
+		return nil
+	}
+	pruned, failures := git.PruneRemotes(r, remotes, dryRun)
 	s.Stop()
-
+	for _, f := range failures {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: failed to prune %s: %v\n", f.Remote, f.Err)
+	}
 	switch {
-	case len(refs) == 0:
+	case len(pruned) == 0:
 		fmt.Fprintln(cmd.OutOrStdout(), "No stale remote-tracking refs to prune.")
 	case dryRun:
-		fmt.Fprintf(cmd.OutOrStdout(), "Would prune remote-tracking refs: %s\n", strings.Join(refs, ", "))
+		fmt.Fprintf(cmd.OutOrStdout(), "Would prune remote-tracking refs: %s\n", strings.Join(pruned, ", "))
 	default:
-		fmt.Fprintf(cmd.OutOrStdout(), "Pruned remote-tracking refs: %s\n", strings.Join(refs, ", "))
+		fmt.Fprintf(cmd.OutOrStdout(), "Pruned remote-tracking refs: %s\n", strings.Join(pruned, ", "))
 	}
 	return nil
 }

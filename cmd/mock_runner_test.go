@@ -48,6 +48,7 @@ const (
 	cmdList               = "list"
 	cmdDiff               = "diff"
 	cmdFetch              = "fetch"
+	cmdRemote             = "remote"
 	cmdRemove             = "remove"
 	gitSubcmdWorktreeAdd  = "add"
 	cmdSymbolicRef        = "symbolic-ref"

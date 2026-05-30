@@ -16,6 +16,89 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func TestCleanRemotePruneMultiRemote(t *testing.T) {
+	cmd, buf := newCleanPruneCmd()
+	var calls []string
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) == 1 && args[0] == cmdRemote {
+				return "origin\nupstream\n", nil
+			}
+			if len(args) >= 3 && args[0] == cmdRemote && args[1] == "prune" {
+				remote := args[len(args)-1]
+				calls = append(calls, remote)
+				return " * [pruned] " + remote + "/gone\n", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+	if err := cleanPrune(cmd, r); err != nil {
+		t.Fatalf("cleanPrune: %v", err)
+	}
+	if len(calls) != 2 {
+		t.Fatalf("expected 2 prune calls, got %d: %v", len(calls), calls)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "origin/gone") {
+		t.Errorf("output = %q, want origin/gone", out)
+	}
+	if !strings.Contains(out, "upstream/gone") {
+		t.Errorf("output = %q, want upstream/gone", out)
+	}
+}
+
+func TestCleanRemotePrunePartialFailure(t *testing.T) {
+	cmd, buf := newCleanPruneCmd()
+	var errBuf bytes.Buffer
+	cmd.SetErr(&errBuf)
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) == 1 && args[0] == cmdRemote {
+				return "origin\nupstream\n", nil
+			}
+			if len(args) >= 3 && args[0] == cmdRemote && args[1] == "prune" {
+				remote := args[len(args)-1]
+				if remote == "upstream" {
+					return "", errors.New("connection refused")
+				}
+				return " * [pruned] origin/gone\n", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+	err := cleanPrune(cmd, r)
+	if err != nil {
+		t.Fatalf("cleanPrune should return nil on partial failure, got: %v", err)
+	}
+	if !strings.Contains(buf.String(), "origin/gone") {
+		t.Errorf("stdout = %q, want origin/gone", buf.String())
+	}
+	if !strings.Contains(errBuf.String(), "Warning: failed to prune upstream:") {
+		t.Errorf("stderr = %q, want 'Warning: failed to prune upstream:'", errBuf.String())
+	}
+}
+
+func TestCleanRemotePruneNoRemotes(t *testing.T) {
+	cmd, buf := newCleanPruneCmd()
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) == 1 && args[0] == cmdRemote {
+				return "", nil // no remotes
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+	if err := cleanPrune(cmd, r); err != nil {
+		t.Fatalf("cleanPrune: %v", err)
+	}
+	if !strings.Contains(buf.String(), "No remotes; skipped remote-ref prune.") {
+		t.Errorf("output = %q, want 'No remotes; skipped remote-ref prune.'", buf.String())
+	}
+}
+
 func TestCleanMergedFetchFails(t *testing.T) {
 	worktreeOut := cleanMergedWorktreeOut()
 	cmd, outBuf := newCleanMergedCmd()

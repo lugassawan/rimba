@@ -573,7 +573,7 @@ rimba clean --stale --dry-run            # Show stale worktrees without removing
 | `--stale-days` | Number of days to consider a worktree stale (default: 14, used with `--stale`) |
 | `--force` | Skip confirmation prompt when used with `--merged` or `--stale` |
 
-> **Note:** `--merged` and `--stale` are mutually exclusive. `--merged` works with or without `rimba init`. Without a config file, it falls back to auto-detecting the default branch.
+> **Note:** `--merged` and `--stale` are mutually exclusive. `--merged` works with or without `rimba init`. Without a config file, it falls back to auto-detecting the default branch. By default, `rimba clean` prunes stale remote-tracking refs across all configured remotes (not just `origin`).
 
 ---
 

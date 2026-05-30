@@ -37,6 +37,49 @@ func AddRemote(r Runner, name, url string) error {
 	return err
 }
 
+// ListRemotes returns the names of all configured remotes by running `git remote`.
+// It returns an empty (non-nil) slice when there are no remotes configured.
+func ListRemotes(r Runner) ([]string, error) {
+	out, err := r.Run("remote")
+	if err != nil {
+		return nil, errhint.WithFix(
+			fmt.Errorf("list remotes: %w", err),
+			"check the repository, then run: git remote -v",
+		)
+	}
+	remotes := []string{}
+	for line := range strings.SplitSeq(out, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			remotes = append(remotes, line)
+		}
+	}
+	return remotes, nil
+}
+
+// RemoteFailure records a prune error for a single remote.
+type RemoteFailure struct {
+	Remote string
+	Err    error
+}
+
+// PruneRemotes calls RemotePrune for each remote in order. Pruned refs from all
+// successful remotes are collected and returned. Any remote that fails is
+// recorded in the failures slice; iteration continues regardless of errors.
+// Both return values are initialized as non-nil empty slices.
+func PruneRemotes(r Runner, remotes []string, dryRun bool) ([]string, []RemoteFailure) {
+	pruned := []string{}
+	failures := []RemoteFailure{}
+	for _, remote := range remotes {
+		refs, err := RemotePrune(r, remote, dryRun)
+		if err != nil {
+			failures = append(failures, RemoteFailure{Remote: remote, Err: err})
+			continue
+		}
+		pruned = append(pruned, refs...)
+	}
+	return pruned, failures
+}
+
 // parsePrunedRefs extracts ref names from `git remote prune` output lines like
 // ` * [pruned] origin/x` (live) and ` * [would prune] origin/x` (dry-run).
 func parsePrunedRefs(out string) []string {

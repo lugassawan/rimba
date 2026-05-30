@@ -60,10 +60,15 @@ func mcpCleanPrune(r git.Runner, dryRun bool) (*mcp.CallToolResult, error) {
 	}
 
 	var remotePruned []string
-	if git.RemoteExists(r, "origin") {
-		remotePruned, err = git.RemotePrune(r, "origin", dryRun)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+	var warnings []string
+	remotes, err := git.ListRemotes(r)
+	if err != nil {
+		warnings = append(warnings, fmt.Sprintf("failed to list remotes: %v", err))
+	} else {
+		var failures []git.RemoteFailure
+		remotePruned, failures = git.PruneRemotes(r, remotes, dryRun)
+		for _, f := range failures {
+			warnings = append(warnings, fmt.Sprintf("failed to prune %s: %v", f.Remote, f.Err))
 		}
 	}
 
@@ -73,6 +78,7 @@ func mcpCleanPrune(r git.Runner, dryRun bool) (*mcp.CallToolResult, error) {
 		Removed:      make([]cleanedItem, 0),
 		Output:       output,
 		RemotePruned: remotePruned,
+		Warnings:     warnings,
 	})
 }
 
