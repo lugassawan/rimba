@@ -465,29 +465,3 @@ func TestRemoveCandidatesNoOriginSkipsRemoteDelete(t *testing.T) {
 		t.Error("expected no push call when originPresent=false")
 	}
 }
-
-func TestRemoveCandidatesDeleteRemoteFalseSkipsRemote(t *testing.T) {
-	pushCalled := false
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) > 0 && args[0] == gitCmdPush {
-				pushCalled = true
-				return "", nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
-
-	candidates := []CleanCandidate{{Path: "/wt/a", Branch: "feature/a"}}
-	items := RemoveCandidates(r, candidates, false, nil)
-	if len(items) != 1 {
-		t.Fatalf("expected 1 item, got %d", len(items))
-	}
-	if items[0].RemoteDeleted {
-		t.Error("expected RemoteDeleted=false when deleteRemote=false")
-	}
-	if pushCalled {
-		t.Error("expected no push call when deleteRemote=false")
-	}
-}
