@@ -5,11 +5,10 @@ import (
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/operations"
-	"github.com/lugassawan/rimba/testutil"
 )
 
 func TestBuildDiskFootprint(t *testing.T) {
-	sizes := []*int64{testutil.Ptr(int64(1000)), testutil.Ptr(int64(500)), nil}
+	sizes := []*int64{new(int64(1000)), new(int64(500)), nil}
 	fp := operations.BuildDiskFootprint(sizes, 10_000, nil)
 
 	if fp.MainBytes != 10_000 || fp.WorktreesBytes != 1500 || fp.TotalBytes != 11_500 {
@@ -22,7 +21,7 @@ func TestBuildDiskFootprint(t *testing.T) {
 
 func TestBuildDiskFootprintMainError(t *testing.T) {
 	want := errors.New("permission denied")
-	fp := operations.BuildDiskFootprint([]*int64{testutil.Ptr(int64(200))}, 0, want)
+	fp := operations.BuildDiskFootprint([]*int64{new(int64(200))}, 0, want)
 
 	if fp.MainBytes != 0 {
 		t.Errorf("MainBytes = %d, want 0 when MainErr != nil", fp.MainBytes)
