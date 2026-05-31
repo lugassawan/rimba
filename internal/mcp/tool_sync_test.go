@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -543,5 +544,32 @@ func TestSyncSingleStatusCheckError(t *testing.T) {
 	}
 	if !strings.Contains(sr.SkipReason, "could not check status") {
 		t.Errorf("expected skip reason about status check, got %q", sr.SkipReason)
+	}
+}
+
+func TestMcpFetchNonFatalCancelled(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			return "", context.Canceled
+		},
+	}
+	warn, err := mcpFetchNonFatal(context.Background(), r)
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled, got err=%v warn=%q", err, warn)
+	}
+}
+
+func TestMcpFetchNonFatalConnectivityFailure(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			return "", errors.New("no remote configured")
+		},
+	}
+	warn, err := mcpFetchNonFatal(context.Background(), r)
+	if err != nil {
+		t.Errorf("connectivity failure should not return error, got %v", err)
+	}
+	if warn == "" {
+		t.Error("expected non-empty warning for connectivity failure")
 	}
 }

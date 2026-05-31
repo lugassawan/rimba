@@ -40,6 +40,24 @@ func (m *ctxMockRunner) RunInDirContext(ctx context.Context, dir string, args ..
 
 type ctxKey struct{}
 
+func TestFetchContextCancelledReturnsFast(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // pre-cancel — Fetch should return immediately without launching git
+
+	r := &ExecRunner{}
+	start := time.Now()
+	err := Fetch(ctx, r, "origin")
+	if time.Since(start) > time.Second {
+		t.Errorf("Fetch with cancelled ctx took too long: %v", time.Since(start))
+	}
+	if err == nil {
+		t.Fatal("expected error from cancelled Fetch, got nil")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled, got: %v", err)
+	}
+}
+
 func TestFetchPassesContext(t *testing.T) {
 	sentinel := context.WithValue(context.Background(), ctxKey{}, "sentinel")
 	r := &ctxMockRunner{}

@@ -31,3 +31,14 @@ func TestRunDelegatesToContext(t *testing.T) {
 		t.Errorf("expected git version output, got: %q", out)
 	}
 }
+
+func TestRunContextDelegatesToRunInDirContext(t *testing.T) {
+	r := &ExecRunner{}
+	out, err := r.RunContext(context.Background(), "--version")
+	if err != nil {
+		t.Fatalf("RunContext: %v", err)
+	}
+	if !strings.Contains(out, "git") {
+		t.Errorf("expected git version output, got: %q", out)
+	}
+}

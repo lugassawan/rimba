@@ -778,3 +778,22 @@ func TestPrintCleanedItemsAllBranches(t *testing.T) {
 		}
 	}
 }
+
+func TestCleanFetchMergeRefCancelled(t *testing.T) {
+	cmd, _ := newTestCmd()
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == cmdFetch {
+				return "", context.Canceled
+			}
+			return "", nil
+		},
+	}
+	s := spinner.New(spinnerOpts(cmd))
+	defer s.Stop()
+
+	ref, err := cleanFetchMergeRef(context.Background(), cmd, r, s, branchMain)
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled, got err=%v ref=%q", err, ref)
+	}
+}

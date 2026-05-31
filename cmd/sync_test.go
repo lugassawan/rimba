@@ -593,3 +593,24 @@ func TestSyncWorktreeSkipWarningOnStderr(t *testing.T) {
 		t.Errorf("stderr = %q, want warning", errBuf.String())
 	}
 }
+
+func TestSyncAllCancelledSkipsSummary(t *testing.T) {
+	worktrees := testSyncWorktrees()
+	cmd, buf := newTestCmd()
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return "", nil },
+		runInDir: noopRunInDir,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // pre-cancel so syncAll exits without goroutines doing work
+	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
+
+	err := syncAll(ctx, sc, worktrees, testSyncPrefixes(), false, false, false)
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("syncAll with cancelled ctx: err = %v, want context.Canceled", err)
+	}
+	if strings.Contains(buf.String(), "worktree(s)") {
+		t.Errorf("partial summary should not be printed on cancellation: %q", buf.String())
+	}
+}

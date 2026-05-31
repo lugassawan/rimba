@@ -67,7 +67,7 @@ func handleSync(hctx *HandlerContext) server.ToolHandlerFunc {
 		r := hctx.Runner
 
 		// Fetch (non-fatal; cancellation propagated as a tool error)
-		fetchWarning, fetchErr := mcpFetchNonFatal(ctx, r, "origin")
+		fetchWarning, fetchErr := mcpFetchNonFatal(ctx, r)
 		if fetchErr != nil {
 			return mcp.NewToolResultError(fetchErr.Error()), nil
 		}
@@ -116,10 +116,11 @@ func syncMultiple(ctx context.Context, r git.Runner, worktrees []resolver.Worktr
 	return marshalResult(syncResult{FetchWarning: opts.fetchWarning, Results: results})
 }
 
-// mcpFetchNonFatal runs git fetch and returns a warning string on connectivity failure.
-// Cancellation is returned as a hard error so callers can propagate it.
-func mcpFetchNonFatal(ctx context.Context, r git.Runner, remote string) (warning string, err error) {
-	if fetchErr := git.Fetch(ctx, r, remote); fetchErr != nil {
+// mcpFetchNonFatal fetches from git.DefaultRemote ("origin") and returns a
+// warning string on connectivity failure. Cancellation is returned as a hard
+// error so callers can propagate it.
+func mcpFetchNonFatal(ctx context.Context, r git.Runner) (warning string, err error) {
+	if fetchErr := git.Fetch(ctx, r, git.DefaultRemote); fetchErr != nil {
 		if errors.Is(fetchErr, context.Canceled) || errors.Is(fetchErr, context.DeadlineExceeded) {
 			return "", fetchErr
 		}
