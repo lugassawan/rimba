@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"strings"
 	"sync"
 	"testing"
@@ -21,6 +22,14 @@ func (m *benchMockRunner) RunInDir(_ string, args ...string) (string, error) {
 		return aheadBehindZero, nil
 	}
 	return "", nil
+}
+
+func (m *benchMockRunner) RunContext(_ context.Context, _ ...string) (string, error) {
+	return "", nil
+}
+
+func (m *benchMockRunner) RunInDirContext(_ context.Context, _ string, args ...string) (string, error) {
+	return m.RunInDir("", args...)
 }
 
 func makeBenchEntries(n int) []git.WorktreeEntry { //nolint:unparam // n is parameterized for benchmark flexibility

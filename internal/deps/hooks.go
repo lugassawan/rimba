@@ -2,6 +2,7 @@ package deps
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -16,13 +17,16 @@ type HookResult struct {
 }
 
 // RunPostCreateHooks executes shell commands in the worktree directory.
-// It collects errors but does not stop on failure — all hooks run regardless.
-func RunPostCreateHooks(worktreeDir string, hooks []string, onProgress progress.Func) []HookResult {
+// It stops launching new hooks if ctx is cancelled, but does not stop an already-running hook.
+func RunPostCreateHooks(ctx context.Context, worktreeDir string, hooks []string, onProgress progress.Func) []HookResult {
 	results := make([]HookResult, 0, len(hooks))
 	for i, hook := range hooks {
+		if ctx.Err() != nil {
+			break
+		}
 		progress.Notifyf(onProgress, "%s (%d/%d)", hook, i+1, len(hooks))
 
-		cmd := exec.Command("sh", "-c", hook) //nolint:gosec // hook commands come from user config
+		cmd := exec.CommandContext(ctx, "sh", "-c", hook) //nolint:gosec // hook commands come from user config
 		cmd.Dir = worktreeDir
 
 		var buf bytes.Buffer

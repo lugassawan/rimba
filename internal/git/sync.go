@@ -1,18 +1,21 @@
 package git
 
+import "context"
+
 // Fetch runs `git fetch <remote>` to update remote tracking branches.
-func Fetch(r Runner, remote string) error {
-	_, err := r.Run("fetch", remote)
+func Fetch(ctx context.Context, r Runner, remote string) error {
+	_, err := r.RunContext(ctx, "fetch", remote)
 	return err
 }
 
 // Rebase runs `git rebase <branch>` inside the given directory.
-func Rebase(r Runner, dir, branch string) error {
-	_, err := r.RunInDir(dir, "rebase", branch)
+func Rebase(ctx context.Context, r Runner, dir, branch string) error {
+	_, err := r.RunInDirContext(ctx, dir, "rebase", branch)
 	return err
 }
 
 // AbortRebase runs `git rebase --abort` inside the given directory.
+// Intentionally non-cancellable: rebase recovery must succeed even after Ctrl-C.
 func AbortRebase(r Runner, dir string) error {
 	_, err := r.RunInDir(dir, "rebase", "--abort")
 	return err
@@ -37,13 +40,13 @@ func HasUpstream(r Runner, dir string) bool {
 }
 
 // Push runs `git push` inside the given directory.
-func Push(r Runner, dir string) error {
-	_, err := r.RunInDir(dir, "push")
+func Push(ctx context.Context, r Runner, dir string) error {
+	_, err := r.RunInDirContext(ctx, dir, "push")
 	return err
 }
 
 // PushForceWithLease runs `git push --force-with-lease` inside the given directory.
-func PushForceWithLease(r Runner, dir string) error {
-	_, err := r.RunInDir(dir, "push", "--force-with-lease")
+func PushForceWithLease(ctx context.Context, r Runner, dir string) error {
+	_, err := r.RunInDirContext(ctx, dir, "push", "--force-with-lease")
 	return err
 }

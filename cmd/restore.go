@@ -73,7 +73,7 @@ to see available archived branches.`,
 			configModules = cfg.Deps.Modules
 		}
 
-		pcResult, err := operations.PostCreateSetup(r, operations.PostCreateParams{
+		pcResult, err := operations.PostCreateSetup(cmd.Context(), r, operations.PostCreateParams{
 			RepoRoot:      repoRoot,
 			WtPath:        wtPath,
 			Task:          task,

@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"errors"
 	"path/filepath"
 	"slices"
@@ -41,6 +42,14 @@ func (m *mockRunner) Run(args ...string) (string, error) {
 }
 
 func (m *mockRunner) RunInDir(dir string, args ...string) (string, error) {
+	return m.runInDir(dir, args...)
+}
+
+func (m *mockRunner) RunContext(_ context.Context, args ...string) (string, error) {
+	return m.run(args...)
+}
+
+func (m *mockRunner) RunInDirContext(_ context.Context, dir string, args ...string) (string, error) {
 	return m.runInDir(dir, args...)
 }
 

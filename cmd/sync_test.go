@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -48,7 +49,7 @@ func TestSyncOneSuccess(t *testing.T) {
 		}
 		sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
-		err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false, false)
+		err := syncOne(context.Background(), sc, "login", worktrees, testSyncPrefixes(), false, false)
 		if err != nil {
 			t.Fatalf("syncOne: %v", err)
 		}
@@ -65,7 +66,7 @@ func TestSyncOneSuccess(t *testing.T) {
 		}
 		sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
-		err := syncOne(sc, "login", worktrees, testSyncPrefixes(), true, false)
+		err := syncOne(context.Background(), sc, "login", worktrees, testSyncPrefixes(), true, false)
 		if err != nil {
 			t.Fatalf("syncOne: %v", err)
 		}
@@ -84,7 +85,7 @@ func TestSyncOneNotFound(t *testing.T) {
 	}
 	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
-	err := syncOne(sc, "nonexistent", worktrees, testSyncPrefixes(), false, false)
+	err := syncOne(context.Background(), sc, "nonexistent", worktrees, testSyncPrefixes(), false, false)
 	if err == nil {
 		t.Fatal("expected error for unknown task")
 	}
@@ -104,7 +105,7 @@ func TestSyncOneDirty(t *testing.T) {
 	}
 	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
-	err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false, false)
+	err := syncOne(context.Background(), sc, "login", worktrees, testSyncPrefixes(), false, false)
 	if err == nil {
 		t.Fatal("expected error for dirty worktree")
 	}
@@ -126,7 +127,7 @@ func TestSyncOneErrorPaths(t *testing.T) {
 		}
 		sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
-		err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false, false)
+		err := syncOne(context.Background(), sc, "login", worktrees, testSyncPrefixes(), false, false)
 		if err == nil {
 			t.Fatal("expected error from IsDirty failure")
 		}
@@ -145,7 +146,7 @@ func TestSyncOneErrorPaths(t *testing.T) {
 		}
 		sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
-		err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false, false)
+		err := syncOne(context.Background(), sc, "login", worktrees, testSyncPrefixes(), false, false)
 		if err == nil {
 			t.Fatal("expected error from doSync failure")
 		}
@@ -166,7 +167,7 @@ func TestSyncOnePushSuccess(t *testing.T) {
 	}
 	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
-	err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false, true)
+	err := syncOne(context.Background(), sc, "login", worktrees, testSyncPrefixes(), false, true)
 	if err != nil {
 		t.Fatalf("syncOne: %v", err)
 	}
@@ -190,7 +191,7 @@ func TestSyncOnePushSkippedNoUpstream(t *testing.T) {
 	}
 	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
-	err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false, true)
+	err := syncOne(context.Background(), sc, "login", worktrees, testSyncPrefixes(), false, true)
 	if err != nil {
 		t.Fatalf("syncOne: %v", err)
 	}
@@ -217,7 +218,7 @@ func TestSyncOnePushFailure(t *testing.T) {
 	}
 	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
-	err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false, true)
+	err := syncOne(context.Background(), sc, "login", worktrees, testSyncPrefixes(), false, true)
 	if err == nil {
 		t.Fatal("expected error from push failure")
 	}
@@ -238,7 +239,7 @@ func TestSyncAllClean(t *testing.T) {
 	}
 	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
-	err := syncAll(sc, worktrees, testSyncPrefixes(), false, false, false)
+	err := syncAll(context.Background(), sc, worktrees, testSyncPrefixes(), false, false, false)
 	if err != nil {
 		t.Fatalf(fatalSyncAll, err)
 	}
@@ -263,7 +264,7 @@ func TestSyncAllDirtySkip(t *testing.T) {
 	}
 	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
-	err := syncAll(sc, worktrees, testSyncPrefixes(), false, false, false)
+	err := syncAll(context.Background(), sc, worktrees, testSyncPrefixes(), false, false, false)
 	if err != nil {
 		t.Fatalf(fatalSyncAll, err)
 	}
@@ -282,7 +283,7 @@ func TestSyncAllInherited(t *testing.T) {
 	}
 	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
-	err := syncAll(sc, worktrees, testSyncPrefixes(), false, true, false)
+	err := syncAll(context.Background(), sc, worktrees, testSyncPrefixes(), false, true, false)
 	if err != nil {
 		t.Fatalf(fatalSyncAll, err)
 	}
@@ -302,7 +303,7 @@ func TestSyncAllPushDefault(t *testing.T) {
 	}
 	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
-	err := syncAll(sc, worktrees, testSyncPrefixes(), false, false, true)
+	err := syncAll(context.Background(), sc, worktrees, testSyncPrefixes(), false, false, true)
 	if err != nil {
 		t.Fatalf(fatalSyncAll, err)
 	}
@@ -329,7 +330,7 @@ func TestSyncAllPushFailure(t *testing.T) {
 	}
 	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
 
-	err := syncAll(sc, worktrees, testSyncPrefixes(), false, false, true)
+	err := syncAll(context.Background(), sc, worktrees, testSyncPrefixes(), false, false, true)
 	if err != nil {
 		t.Fatalf(fatalSyncAll, err)
 	}
@@ -348,7 +349,7 @@ func TestSyncWorktreeClean(t *testing.T) {
 
 	sc := &syncContext{cmd: cmd, r: r, res: &syncResult{}}
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	syncWorktree(sc, branchMain, wt, false, false)
+	syncWorktree(context.Background(), sc, branchMain, wt, false, false)
 
 	if sc.res.synced != 1 {
 		t.Errorf("synced = %d, want 1", sc.res.synced)
@@ -370,7 +371,7 @@ func TestSyncWorktreeDirtyAndError(t *testing.T) {
 
 		sc := &syncContext{cmd: cmd, r: r, res: &syncResult{}}
 		wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-		syncWorktree(sc, branchMain, wt, false, false)
+		syncWorktree(context.Background(), sc, branchMain, wt, false, false)
 
 		if sc.res.skippedDirty != 1 {
 			t.Errorf("skippedDirty = %d, want 1", sc.res.skippedDirty)
@@ -391,7 +392,7 @@ func TestSyncWorktreeDirtyAndError(t *testing.T) {
 
 		sc := &syncContext{cmd: cmd, r: r, res: &syncResult{}}
 		wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-		syncWorktree(sc, branchMain, wt, false, false)
+		syncWorktree(context.Background(), sc, branchMain, wt, false, false)
 
 		if sc.res.skippedDirty != 1 {
 			t.Errorf("skippedDirty = %d, want 1", sc.res.skippedDirty)
@@ -416,7 +417,7 @@ func TestSyncWorktreeDoSyncFailure(t *testing.T) {
 
 	sc := &syncContext{cmd: cmd, r: r, res: &syncResult{}}
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	syncWorktree(sc, branchMain, wt, false, false)
+	syncWorktree(context.Background(), sc, branchMain, wt, false, false)
 
 	if sc.res.failed != 1 {
 		t.Errorf("failed = %d, want 1", sc.res.failed)
@@ -440,7 +441,7 @@ func TestSyncWorktreeMergeFailure(t *testing.T) {
 
 	sc := &syncContext{cmd: cmd, r: r, res: &syncResult{}}
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	syncWorktree(sc, branchMain, wt, true, false)
+	syncWorktree(context.Background(), sc, branchMain, wt, true, false)
 
 	if sc.res.failed != 1 {
 		t.Errorf("failed = %d, want 1", sc.res.failed)
@@ -530,7 +531,7 @@ func TestSyncOneDryRun(t *testing.T) {
 	}
 	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd), dryRun: true}
 
-	if err := syncOne(sc, "login", worktrees, testSyncPrefixes(), false, true); err != nil {
+	if err := syncOne(context.Background(), sc, "login", worktrees, testSyncPrefixes(), false, true); err != nil {
 		t.Fatalf("syncOne: %v", err)
 	}
 	if rebaseCalled {
@@ -554,7 +555,7 @@ func TestSyncAllDryRun(t *testing.T) {
 	}
 	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd), dryRun: true}
 
-	if err := syncAll(sc, worktrees, testSyncPrefixes(), false, false, true); err != nil {
+	if err := syncAll(context.Background(), sc, worktrees, testSyncPrefixes(), false, false, true); err != nil {
 		t.Fatalf("syncAll: %v", err)
 	}
 	out := buf.String()
@@ -583,7 +584,7 @@ func TestSyncWorktreeSkipWarningOnStderr(t *testing.T) {
 
 	sc := &syncContext{cmd: cmd, r: r, res: &syncResult{}}
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	syncWorktree(sc, branchMain, wt, false, false)
+	syncWorktree(context.Background(), sc, branchMain, wt, false, false)
 
 	if strings.Contains(outBuf.String(), "Warning") {
 		t.Errorf("warning leaked to stdout: %q", outBuf.String())

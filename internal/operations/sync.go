@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/lugassawan/rimba/internal/git"
@@ -24,11 +25,11 @@ type SyncWorktreeResult struct {
 
 // SyncBranch synchronises a worktree with the main branch using rebase or merge.
 // On rebase failure the failed rebase is aborted so the worktree stays clean.
-func SyncBranch(r git.Runner, dir, mainBranch string, useMerge bool) error {
+func SyncBranch(ctx context.Context, r git.Runner, dir, mainBranch string, useMerge bool) error {
 	if useMerge {
-		return git.Merge(r, dir, mainBranch, false)
+		return git.Merge(ctx, r, dir, mainBranch, false)
 	}
-	if err := git.Rebase(r, dir, mainBranch); err != nil {
+	if err := git.Rebase(ctx, r, dir, mainBranch); err != nil {
 		_ = git.AbortRebase(r, dir)
 		return err
 	}
@@ -38,15 +39,15 @@ func SyncBranch(r git.Runner, dir, mainBranch string, useMerge bool) error {
 // PushBranch pushes the current branch after a successful sync.
 // Uses force-with-lease after rebase, regular push after merge.
 // Returns (pushed, skipped, error). pushed is true only on success.
-func PushBranch(r git.Runner, dir string, useMerge bool) (bool, bool, error) {
+func PushBranch(ctx context.Context, r git.Runner, dir string, useMerge bool) (bool, bool, error) {
 	if !git.HasUpstream(r, dir) {
 		return false, true, nil
 	}
 	var err error
 	if useMerge {
-		err = git.Push(r, dir)
+		err = git.Push(ctx, r, dir)
 	} else {
-		err = git.PushForceWithLease(r, dir)
+		err = git.PushForceWithLease(ctx, r, dir)
 	}
 	return err == nil, false, err
 }
@@ -80,7 +81,7 @@ func FilterEligible(worktrees []resolver.WorktreeInfo, prefixes []string, mainBr
 
 // SyncWorktree checks a worktree's status and syncs it with the main branch.
 // It returns a result describing what happened rather than writing to stdout.
-func SyncWorktree(r git.Runner, mainBranch string, wt resolver.WorktreeInfo, useMerge, push bool) SyncWorktreeResult {
+func SyncWorktree(ctx context.Context, r git.Runner, mainBranch string, wt resolver.WorktreeInfo, useMerge, push bool) SyncWorktreeResult {
 	res := SyncWorktreeResult{Branch: wt.Branch}
 
 	dirty, err := git.IsDirty(r, wt.Path)
@@ -95,7 +96,7 @@ func SyncWorktree(r git.Runner, mainBranch string, wt resolver.WorktreeInfo, use
 		return res
 	}
 
-	if err := SyncBranch(r, wt.Path, mainBranch, useMerge); err != nil {
+	if err := SyncBranch(ctx, r, wt.Path, mainBranch, useMerge); err != nil {
 		verb := "rebase"
 		if useMerge {
 			verb = "merge"
@@ -108,7 +109,7 @@ func SyncWorktree(r git.Runner, mainBranch string, wt resolver.WorktreeInfo, use
 	res.Synced = true
 
 	if push {
-		pushed, skipped, pushErr := PushBranch(r, wt.Path, useMerge)
+		pushed, skipped, pushErr := PushBranch(ctx, r, wt.Path, useMerge)
 		res.Pushed = pushed
 		res.PushSkipped = skipped
 		if pushErr != nil {

@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"context"
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/git"
@@ -94,7 +95,7 @@ func TestInstallDepsNoModules(t *testing.T) {
 		run:      func(args ...string) (string, error) { return "", nil },
 		runInDir: noopRunInDir,
 	}
-	result := InstallDeps(r, DepsParams{WtPath: tmpDir}, nil)
+	result := InstallDeps(context.Background(), r, DepsParams{WtPath: tmpDir}, nil)
 	if result != nil {
 		t.Errorf("expected nil result for no modules, got %v", result)
 	}
@@ -106,7 +107,7 @@ func TestInstallDepsPreferSourceNoModules(t *testing.T) {
 		run:      func(args ...string) (string, error) { return "", nil },
 		runInDir: noopRunInDir,
 	}
-	result := InstallDepsPreferSource(r, "/other/wt", DepsParams{WtPath: tmpDir}, nil)
+	result := InstallDepsPreferSource(context.Background(), r, "/other/wt", DepsParams{WtPath: tmpDir}, nil)
 	if result != nil {
 		t.Errorf("expected nil result for no modules, got %v", result)
 	}
@@ -114,7 +115,7 @@ func TestInstallDepsPreferSourceNoModules(t *testing.T) {
 
 func TestRunPostCreateHooksEmpty(t *testing.T) {
 	tmpDir := t.TempDir()
-	results := RunPostCreateHooks(tmpDir, nil, nil)
+	results := RunPostCreateHooks(context.Background(), tmpDir, nil, nil)
 	if len(results) != 0 {
 		t.Errorf("expected 0 results for empty hooks, got %d", len(results))
 	}
@@ -122,7 +123,7 @@ func TestRunPostCreateHooksEmpty(t *testing.T) {
 
 func TestRunPostCreateHooksInvalidCommand(t *testing.T) {
 	tmpDir := t.TempDir()
-	results := RunPostCreateHooks(tmpDir, []string{"nonexistent-command-xyz"}, nil)
+	results := RunPostCreateHooks(context.Background(), tmpDir, []string{"nonexistent-command-xyz"}, nil)
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}

@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -130,7 +131,7 @@ func TestSyncBranchRebaseSuccess(t *testing.T) {
 		run:      func(_ ...string) (string, error) { return "", nil },
 		runInDir: noopRunInDir,
 	}
-	if err := SyncBranch(r, "/worktree", branchMain, false); err != nil {
+	if err := SyncBranch(context.Background(), r, "/worktree", branchMain, false); err != nil {
 		t.Fatalf("SyncBranch rebase: %v", err)
 	}
 }
@@ -151,7 +152,7 @@ func TestSyncBranchRebaseFailTriggersAbort(t *testing.T) {
 		},
 	}
 
-	if err := SyncBranch(r, "/worktree", branchMain, false); err == nil {
+	if err := SyncBranch(context.Background(), r, "/worktree", branchMain, false); err == nil {
 		t.Fatal("expected rebase error")
 	}
 	if !abortCalled {
@@ -164,7 +165,7 @@ func TestSyncBranchMergeSuccess(t *testing.T) {
 		run:      func(_ ...string) (string, error) { return "", nil },
 		runInDir: noopRunInDir,
 	}
-	if err := SyncBranch(r, "/worktree", branchMain, true); err != nil {
+	if err := SyncBranch(context.Background(), r, "/worktree", branchMain, true); err != nil {
 		t.Fatalf("SyncBranch merge: %v", err)
 	}
 }
@@ -175,7 +176,7 @@ func TestSyncWorktreeClean(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	res := SyncWorktree(r, branchMain, wt, false, false)
+	res := SyncWorktree(context.Background(), r, branchMain, wt, false, false)
 
 	if !res.Synced {
 		t.Error("expected Synced=true")
@@ -199,7 +200,7 @@ func TestSyncWorktreeDirty(t *testing.T) {
 		},
 	}
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	res := SyncWorktree(r, branchMain, wt, false, false)
+	res := SyncWorktree(context.Background(), r, branchMain, wt, false, false)
 
 	if !res.Skipped {
 		t.Error("expected Skipped=true for dirty worktree")
@@ -217,7 +218,7 @@ func TestSyncWorktreeIsDirtyError(t *testing.T) {
 		},
 	}
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	res := SyncWorktree(r, branchMain, wt, false, false)
+	res := SyncWorktree(context.Background(), r, branchMain, wt, false, false)
 
 	if !res.Skipped {
 		t.Error("expected Skipped=true for IsDirty error")
@@ -238,7 +239,7 @@ func TestSyncWorktreeSyncFailure(t *testing.T) {
 		},
 	}
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	res := SyncWorktree(r, branchMain, wt, false, false)
+	res := SyncWorktree(context.Background(), r, branchMain, wt, false, false)
 
 	if !res.Failed {
 		t.Error("expected Failed=true")
@@ -259,7 +260,7 @@ func TestSyncWorktreeMergeFailure(t *testing.T) {
 		},
 	}
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	res := SyncWorktree(r, branchMain, wt, true, false)
+	res := SyncWorktree(context.Background(), r, branchMain, wt, true, false)
 
 	if !res.Failed {
 		t.Error("expected Failed=true")
@@ -282,7 +283,7 @@ func TestPushBranchRebase(t *testing.T) {
 		},
 	}
 
-	pushed, skipped, err := PushBranch(r, pathWtFeatureLogin, false)
+	pushed, skipped, err := PushBranch(context.Background(), r, pathWtFeatureLogin, false)
 	if err != nil {
 		t.Fatalf("PushBranch: %v", err)
 	}
@@ -307,7 +308,7 @@ func TestPushBranchMerge(t *testing.T) {
 		},
 	}
 
-	pushed, skipped, err := PushBranch(r, pathWtFeatureLogin, true)
+	pushed, skipped, err := PushBranch(context.Background(), r, pathWtFeatureLogin, true)
 	if err != nil {
 		t.Fatalf("PushBranch: %v", err)
 	}
@@ -327,7 +328,7 @@ func TestPushBranchNoUpstream(t *testing.T) {
 		},
 	}
 
-	pushed, skipped, err := PushBranch(r, pathWtFeatureLogin, false)
+	pushed, skipped, err := PushBranch(context.Background(), r, pathWtFeatureLogin, false)
 	if err != nil {
 		t.Fatalf("PushBranch: %v", err)
 	}
@@ -347,7 +348,7 @@ func TestPushBranchError(t *testing.T) {
 		},
 	}
 
-	pushed, _, err := PushBranch(r, pathWtFeatureLogin, false)
+	pushed, _, err := PushBranch(context.Background(), r, pathWtFeatureLogin, false)
 	if err == nil {
 		t.Fatal("expected error from PushBranch")
 	}
@@ -370,7 +371,7 @@ func TestSyncWorktreePushSuccess(t *testing.T) {
 		},
 	}
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	res := SyncWorktree(r, branchMain, wt, false, true)
+	res := SyncWorktree(context.Background(), r, branchMain, wt, false, true)
 
 	if !res.Synced {
 		t.Error("expected Synced=true")
@@ -394,7 +395,7 @@ func TestSyncWorktreePushSkipped(t *testing.T) {
 		},
 	}
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	res := SyncWorktree(r, branchMain, wt, false, true)
+	res := SyncWorktree(context.Background(), r, branchMain, wt, false, true)
 
 	if !res.Synced {
 		t.Error("expected Synced=true")
@@ -421,7 +422,7 @@ func TestSyncWorktreePushFailed(t *testing.T) {
 		},
 	}
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	res := SyncWorktree(r, branchMain, wt, false, true)
+	res := SyncWorktree(context.Background(), r, branchMain, wt, false, true)
 
 	if !res.Synced {
 		t.Error("expected Synced=true")

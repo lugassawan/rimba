@@ -1,6 +1,7 @@
 package deps
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -39,6 +40,14 @@ func (m *mockRunner) Run(args ...string) (string, error) {
 }
 
 func (m *mockRunner) RunInDir(dir string, args ...string) (string, error) {
+	return m.Run(args...)
+}
+
+func (m *mockRunner) RunContext(_ context.Context, args ...string) (string, error) {
+	return m.Run(args...)
+}
+
+func (m *mockRunner) RunInDirContext(_ context.Context, dir string, args ...string) (string, error) {
 	return m.Run(args...)
 }
 
@@ -81,7 +90,7 @@ func TestManagerInstallClone(t *testing.T) {
 		},
 	}
 
-	results := mgr.Install(newWT, modules, nil, nil)
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedResults, len(results))
 	}
@@ -116,7 +125,7 @@ func TestManagerInstallNoMatchCloneOnly(t *testing.T) {
 		},
 	}
 
-	results := mgr.Install(newWT, modules, nil, nil)
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedResults, len(results))
 	}
@@ -143,7 +152,7 @@ func TestManagerInstallNoLockfile(t *testing.T) {
 		},
 	}
 
-	results := mgr.Install(newWT, modules, nil, nil)
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedResults, len(results))
 	}
@@ -179,7 +188,7 @@ func TestManagerInstallHashMismatch(t *testing.T) {
 		},
 	}
 
-	results := mgr.Install(newWT, modules, nil, nil)
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
 
 	r := results[0]
 	if r.Cloned {
@@ -211,7 +220,7 @@ func TestManagerInstallPreferSource(t *testing.T) {
 		{Dir: DirNodeModules, Lockfile: LockfilePnpm},
 	}
 
-	results := mgr.InstallPreferSource(newWT, sourceWT, modules, nil, nil)
+	results := mgr.InstallPreferSource(context.Background(), newWT, sourceWT, modules, nil, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedResults, len(results))
 	}
@@ -329,7 +338,7 @@ func TestManagerInstallHashError(t *testing.T) {
 		{Dir: DirNodeModules, Lockfile: LockfilePnpm},
 	}
 
-	results := mgr.Install(newWT, modules, nil, nil)
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedOneResult, len(results))
 	}
@@ -348,7 +357,7 @@ func TestManagerInstallModuleNoHash(t *testing.T) {
 		{Dir: DirNodeModules, Lockfile: LockfilePnpm},
 	}
 
-	results := mgr.Install(newWT, modules, nil, nil)
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedOneResult, len(results))
 	}
@@ -380,7 +389,7 @@ func TestManagerInstallPreferSourceHashError(t *testing.T) {
 		{Dir: DirNodeModules, Lockfile: LockfilePnpm},
 	}
 
-	results := mgr.InstallPreferSource(newWT, sourceWT, modules, nil, nil)
+	results := mgr.InstallPreferSource(context.Background(), newWT, sourceWT, modules, nil, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedOneResult, len(results))
 	}
@@ -412,7 +421,7 @@ func TestManagerInstallFallbackToInstallCmd(t *testing.T) {
 		},
 	}
 
-	results := mgr.Install(newWT, modules, nil, nil)
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedOneResult, len(results))
 	}
@@ -441,7 +450,7 @@ func TestManagerInstallSingleWorktree(t *testing.T) {
 		},
 	}
 
-	results := mgr.Install(newWT, modules, nil, nil)
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedResults, len(results))
 	}
@@ -478,7 +487,7 @@ func TestManagerInstallCloneOnlyNoModDir(t *testing.T) {
 		},
 	}
 
-	results := mgr.Install(newWT, modules, nil, nil)
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedResults, len(results))
 	}
@@ -503,7 +512,7 @@ func TestManagerInstallPreferSourceNoLockfile(t *testing.T) {
 		{Dir: DirNodeModules, Lockfile: LockfilePnpm},
 	}
 
-	results := mgr.InstallPreferSource(newWT, sourceWT, modules, nil, nil)
+	results := mgr.InstallPreferSource(context.Background(), newWT, sourceWT, modules, nil, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedResults, len(results))
 	}
@@ -538,7 +547,7 @@ func TestManagerInstallWithInstallCmd(t *testing.T) {
 		},
 	}
 
-	results := mgr.Install(newWT, modules, nil, nil)
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedResults, len(results))
 	}
@@ -558,8 +567,12 @@ type errorRunner struct {
 	err error
 }
 
-func (e *errorRunner) Run(_ ...string) (string, error)                { return "", e.err }
-func (e *errorRunner) RunInDir(_ string, _ ...string) (string, error) { return "", e.err }
+func (e *errorRunner) Run(_ ...string) (string, error)                           { return "", e.err }
+func (e *errorRunner) RunInDir(_ string, _ ...string) (string, error)            { return "", e.err }
+func (e *errorRunner) RunContext(_ context.Context, _ ...string) (string, error) { return "", e.err }
+func (e *errorRunner) RunInDirContext(_ context.Context, _ string, _ ...string) (string, error) {
+	return "", e.err
+}
 
 func TestInstallListWorktreesError(t *testing.T) {
 	newWT := t.TempDir()
@@ -570,7 +583,7 @@ func TestInstallListWorktreesError(t *testing.T) {
 		{Dir: DirNodeModules, Lockfile: LockfilePnpm},
 	}
 
-	results := mgr.Install(newWT, modules, nil, nil)
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedOneResult, len(results))
 	}
@@ -592,7 +605,7 @@ func TestInstallPreferSourceListWorktreesError(t *testing.T) {
 		{Dir: DirNodeModules, Lockfile: LockfilePnpm},
 	}
 
-	results := mgr.InstallPreferSource(newWT, sourceWT, modules, nil, nil)
+	results := mgr.InstallPreferSource(context.Background(), newWT, sourceWT, modules, nil, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedOneResult, len(results))
 	}
@@ -638,7 +651,7 @@ func TestManagerInstallCloneFailFallback(t *testing.T) {
 		modules := []Module{
 			{Dir: DirNodeModules, Lockfile: LockfilePnpm, CloneOnly: true},
 		}
-		results := mgr.Install(newWT, modules, nil, nil)
+		results := mgr.Install(context.Background(), newWT, modules, nil, nil)
 		if len(results) != 1 {
 			t.Fatalf(fmtExpectedOneResult, len(results))
 		}
@@ -652,7 +665,7 @@ func TestManagerInstallCloneFailFallback(t *testing.T) {
 		modules := []Module{
 			{Dir: DirNodeModules, Lockfile: LockfilePnpm, InstallCmd: "echo fallback"},
 		}
-		results := mgr.Install(newWT, modules, nil, nil)
+		results := mgr.Install(context.Background(), newWT, modules, nil, nil)
 		if len(results) != 1 {
 			t.Fatalf(fmtExpectedOneResult, len(results))
 		}
@@ -689,7 +702,7 @@ func TestManagerInstallWithWorkDir(t *testing.T) {
 		},
 	}
 
-	results := mgr.Install(newWT, modules, nil, nil)
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedOneResult, len(results))
 	}
@@ -716,7 +729,7 @@ func TestManagerInstallNoInstallCmd(t *testing.T) {
 		{Dir: DirNodeModules, Lockfile: LockfilePnpm}, // no InstallCmd
 	}
 
-	results := mgr.Install(newWT, modules, nil, nil)
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedOneResult, len(results))
 	}
@@ -736,7 +749,7 @@ func TestRunInstallError(t *testing.T) {
 		InstallCmd: "/nonexistent-command-xyz",
 	}
 
-	err := runInstall(dir, mod)
+	err := runInstall(context.Background(), dir, mod)
 	if err == nil {
 		t.Fatal("expected error from runInstall with invalid command")
 	}
@@ -765,7 +778,7 @@ func TestInstallProgressCallback(t *testing.T) {
 		calls = append(calls, progressCall{msg})
 	}
 
-	mgr.Install(newWT, modules, nil, onProgress)
+	mgr.Install(context.Background(), newWT, modules, nil, onProgress)
 
 	if len(calls) != 2 {
 		t.Fatalf("expected 2 progress calls, got %d", len(calls))
@@ -804,7 +817,7 @@ func TestInstallPreservesOrderWhenParallel(t *testing.T) {
 		}
 	}
 
-	results := mgr.Install(newWT, modules, nil, nil)
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
 
 	if len(results) != len(modules) {
 		t.Fatalf("expected %d results, got %d", len(modules), len(results))
@@ -840,7 +853,7 @@ func TestInstallParallelErrorIsolation(t *testing.T) {
 		{Dir: "c", Lockfile: LockfilePnpm, InstallCmd: "echo ok-c", WorkDir: "c"},
 	}
 
-	results := mgr.Install(newWT, modules, nil, nil)
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
 
 	if len(results) != 3 {
 		t.Fatalf("expected 3 results, got %d", len(results))
@@ -878,7 +891,7 @@ func TestInstallOutputCapture(t *testing.T) {
 		InstallCmd: "echo captured-output && exit 1",
 	}
 
-	err := runInstall(dir, mod)
+	err := runInstall(context.Background(), dir, mod)
 	if err == nil {
 		t.Fatal("expected error from runInstall")
 	}

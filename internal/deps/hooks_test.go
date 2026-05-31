@@ -1,6 +1,7 @@
 package deps
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,7 +11,7 @@ import (
 func TestRunPostCreateHooksSuccess(t *testing.T) {
 	dir := t.TempDir()
 
-	results := RunPostCreateHooks(dir, []string{"touch marker.txt"}, nil)
+	results := RunPostCreateHooks(context.Background(), dir, []string{"touch marker.txt"}, nil)
 
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedOneResult, len(results))
@@ -28,7 +29,7 @@ func TestRunPostCreateHooksSuccess(t *testing.T) {
 func TestRunPostCreateHooksPartialFailure(t *testing.T) {
 	dir := t.TempDir()
 
-	results := RunPostCreateHooks(dir, []string{
+	results := RunPostCreateHooks(context.Background(), dir, []string{
 		"touch good.txt",
 		"false", // always fails
 		"touch also-good.txt",
@@ -60,7 +61,7 @@ func TestRunPostCreateHooksPartialFailure(t *testing.T) {
 func TestRunPostCreateHooksEmpty(t *testing.T) {
 	dir := t.TempDir()
 
-	results := RunPostCreateHooks(dir, nil, nil)
+	results := RunPostCreateHooks(context.Background(), dir, nil, nil)
 
 	if len(results) != 0 {
 		t.Errorf("expected 0 results, got %d", len(results))
@@ -71,7 +72,7 @@ func TestRunPostCreateHooksShellFeatures(t *testing.T) {
 	dir := t.TempDir()
 
 	// Test shell features: pipes and quoting
-	results := RunPostCreateHooks(dir, []string{
+	results := RunPostCreateHooks(context.Background(), dir, []string{
 		"echo 'hello world' > output.txt",
 	}, nil)
 
@@ -97,7 +98,7 @@ func TestRunPostCreateHooksProgressCallback(t *testing.T) {
 	}
 
 	hooks := []string{"touch a.txt", "touch b.txt"}
-	RunPostCreateHooks(dir, hooks, onProgress)
+	RunPostCreateHooks(context.Background(), dir, hooks, onProgress)
 
 	if len(calls) != 2 {
 		t.Fatalf("expected 2 progress calls, got %d", len(calls))
@@ -113,7 +114,7 @@ func TestRunPostCreateHooksProgressCallback(t *testing.T) {
 func TestRunPostCreateHooksOutputCapture(t *testing.T) {
 	dir := t.TempDir()
 
-	results := RunPostCreateHooks(dir, []string{
+	results := RunPostCreateHooks(context.Background(), dir, []string{
 		"echo hook-output-captured && exit 1",
 	}, nil)
 

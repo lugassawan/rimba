@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -117,7 +118,7 @@ func FindStaleCandidates(r git.Runner, mainBranch string, staleDays int) (StaleR
 // removed. Callers are responsible for probing RemoteExists before invoking — passing
 // a pre-resolved boolean avoids redundant git remote get-url calls per candidate and
 // ensures the CLI dry-run preview and actual deletion share a single probe result.
-func RemoveCandidates(r git.Runner, candidates []CleanCandidate, originPresent bool, onProgress progress.Func) []CleanedItem {
+func RemoveCandidates(ctx context.Context, r git.Runner, candidates []CleanCandidate, originPresent bool, onProgress progress.Func) []CleanedItem {
 	items := make([]CleanedItem, 0, len(candidates))
 	for _, c := range candidates {
 		progress.Notifyf(onProgress, "Removing %s...", c.Branch)
@@ -130,7 +131,7 @@ func RemoveCandidates(r git.Runner, candidates []CleanCandidate, originPresent b
 			Error:           err,
 		}
 		if originPresent && wtRemoved {
-			deleteRemoteForItem(r, c.Branch, &item)
+			deleteRemoteForItem(ctx, r, c.Branch, &item)
 		}
 		items = append(items, item)
 	}
@@ -139,8 +140,8 @@ func RemoveCandidates(r git.Runner, candidates []CleanCandidate, originPresent b
 
 // deleteRemoteForItem deletes the remote branch on git.DefaultRemote.
 // Caller must verify the remote exists before invoking.
-func deleteRemoteForItem(r git.Runner, branch string, item *CleanedItem) {
-	if err := git.DeleteRemoteBranch(r, git.DefaultRemote, branch); err != nil {
+func deleteRemoteForItem(ctx context.Context, r git.Runner, branch string, item *CleanedItem) {
+	if err := git.DeleteRemoteBranch(ctx, r, git.DefaultRemote, branch); err != nil {
 		item.RemoteError = err
 		return
 	}

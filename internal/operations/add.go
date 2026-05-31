@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -48,7 +49,7 @@ type AddResult struct {
 }
 
 // AddWorktree creates a new worktree, copies files, installs deps, and runs hooks.
-func AddWorktree(r git.Runner, params AddParams, onProgress progress.Func) (AddResult, error) {
+func AddWorktree(ctx context.Context, r git.Runner, params AddParams, onProgress progress.Func) (AddResult, error) {
 	branch := resolver.FullBranchName(params.Service, params.Prefix, params.Task)
 	wtPath := resolver.WorktreePath(params.WorktreeDir, branch)
 
@@ -81,7 +82,7 @@ func AddWorktree(r git.Runner, params AddParams, onProgress progress.Func) (AddR
 	}
 
 	// Post-create setup: copy files, deps, hooks
-	pcResult, err := PostCreateSetup(r, PostCreateParams{
+	pcResult, err := PostCreateSetup(ctx, r, PostCreateParams{
 		RepoRoot:      params.RepoRoot,
 		WtPath:        wtPath,
 		Task:          params.Task,

@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -30,7 +31,7 @@ func TestAddWorktreeSuccess(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	result, err := AddWorktree(r, AddParams{
+	result, err := AddWorktree(context.Background(), r, AddParams{
 		Task:   "login",
 		Prefix: "feature/",
 		Source: branchMain,
@@ -70,7 +71,7 @@ func TestAddWorktreeBranchExists(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	_, err := AddWorktree(r, AddParams{
+	_, err := AddWorktree(context.Background(), r, AddParams{
 		Task:   "login",
 		Prefix: "feature/",
 		Source: branchMain,
@@ -104,7 +105,7 @@ func TestAddWorktreePathExists(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	_, err := AddWorktree(r, AddParams{
+	_, err := AddWorktree(context.Background(), r, AddParams{
 		Task:   "login",
 		Prefix: "feature/",
 		Source: branchMain,
@@ -137,7 +138,7 @@ func TestAddWorktreeCreateFails(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	_, err := AddWorktree(r, AddParams{
+	_, err := AddWorktree(context.Background(), r, AddParams{
 		Task:   "login",
 		Prefix: "feature/",
 		Source: branchMain,
@@ -176,7 +177,7 @@ func TestAddWorktreeProgressCallbacks(t *testing.T) {
 	var messages []string
 	onProgress := progress.Func(func(msg string) { messages = append(messages, msg) })
 
-	_, err := AddWorktree(r, AddParams{
+	_, err := AddWorktree(context.Background(), r, AddParams{
 		Task:   "login",
 		Prefix: "feature/",
 		Source: branchMain,
@@ -217,7 +218,7 @@ func TestAddWorktreeWithDeps(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	result, err := AddWorktree(r, AddParams{
+	result, err := AddWorktree(context.Background(), r, AddParams{
 		Task:   "login",
 		Prefix: "feature/",
 		Source: branchMain,
@@ -256,7 +257,7 @@ func TestAddWorktreeWithHooks(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	result, err := AddWorktree(r, AddParams{
+	result, err := AddWorktree(context.Background(), r, AddParams{
 		Task:   "login",
 		Prefix: "feature/",
 		Source: branchMain,

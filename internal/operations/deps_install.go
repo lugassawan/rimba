@@ -1,6 +1,8 @@
 package operations
 
 import (
+	"context"
+
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/deps"
 	"github.com/lugassawan/rimba/internal/git"
@@ -18,7 +20,7 @@ type DepsParams struct {
 }
 
 // InstallDeps detects modules and installs dependencies.
-func InstallDeps(r git.Runner, p DepsParams, onProgress progress.Func) []deps.InstallResult {
+func InstallDeps(ctx context.Context, r git.Runner, p DepsParams, onProgress progress.Func) []deps.InstallResult {
 	existingPaths := WorktreePathsExcluding(p.Entries, p.WtPath)
 
 	modules, err := deps.ResolveModules(p.WtPath, p.Service, p.AutoDetect, p.ConfigModules, existingPaths)
@@ -27,11 +29,11 @@ func InstallDeps(r git.Runner, p DepsParams, onProgress progress.Func) []deps.In
 	}
 
 	mgr := &deps.Manager{Runner: r, Concurrency: p.Concurrency}
-	return mgr.Install(p.WtPath, modules, p.Entries, onProgress)
+	return mgr.Install(ctx, p.WtPath, modules, p.Entries, onProgress)
 }
 
 // InstallDepsPreferSource is like InstallDeps but prefers cloning from sourceWT.
-func InstallDepsPreferSource(r git.Runner, sourceWT string, p DepsParams, onProgress progress.Func) []deps.InstallResult {
+func InstallDepsPreferSource(ctx context.Context, r git.Runner, sourceWT string, p DepsParams, onProgress progress.Func) []deps.InstallResult {
 	existingPaths := WorktreePathsExcluding(p.Entries, p.WtPath)
 
 	modules, err := deps.ResolveModules(p.WtPath, p.Service, p.AutoDetect, p.ConfigModules, existingPaths)
@@ -40,12 +42,12 @@ func InstallDepsPreferSource(r git.Runner, sourceWT string, p DepsParams, onProg
 	}
 
 	mgr := &deps.Manager{Runner: r, Concurrency: p.Concurrency}
-	return mgr.InstallPreferSource(p.WtPath, sourceWT, modules, p.Entries, onProgress)
+	return mgr.InstallPreferSource(ctx, p.WtPath, sourceWT, modules, p.Entries, onProgress)
 }
 
 // RunPostCreateHooks executes post-create hooks and returns the results.
-func RunPostCreateHooks(wtPath string, hooks []string, onProgress progress.Func) []deps.HookResult {
-	return deps.RunPostCreateHooks(wtPath, hooks, onProgress)
+func RunPostCreateHooks(ctx context.Context, wtPath string, hooks []string, onProgress progress.Func) []deps.HookResult {
+	return deps.RunPostCreateHooks(ctx, wtPath, hooks, onProgress)
 }
 
 // WorktreePathsExcluding returns paths from entries, excluding the given path.

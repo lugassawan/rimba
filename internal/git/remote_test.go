@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"strings"
@@ -15,7 +16,7 @@ func TestDeleteRemoteBranchSuccess(t *testing.T) {
 			return "", nil
 		},
 	}
-	if err := DeleteRemoteBranch(r, "origin", "feature/done"); err != nil {
+	if err := DeleteRemoteBranch(context.Background(), r, "origin", "feature/done"); err != nil {
 		t.Fatalf("DeleteRemoteBranch: %v", err)
 	}
 	want := []string{"push", "origin", "--delete", "feature/done"}
@@ -35,7 +36,7 @@ func TestDeleteRemoteBranchRefGoneIsIdempotent(t *testing.T) {
 			return "", errors.New("error: remote ref does not exist")
 		},
 	}
-	if err := DeleteRemoteBranch(r, "origin", "gone-branch"); err != nil {
+	if err := DeleteRemoteBranch(context.Background(), r, "origin", "gone-branch"); err != nil {
 		t.Fatalf("expected nil for already-gone remote ref, got: %v", err)
 	}
 }
@@ -46,7 +47,7 @@ func TestDeleteRemoteBranchFailure(t *testing.T) {
 			return "", errors.New("connection refused")
 		},
 	}
-	err := DeleteRemoteBranch(r, "origin", "feature/x")
+	err := DeleteRemoteBranch(context.Background(), r, "origin", "feature/x")
 	if err == nil {
 		t.Fatal("expected non-nil error for remote failure")
 	}
@@ -121,7 +122,7 @@ func TestRemotePruneNormal(t *testing.T) {
 			return "", nil
 		},
 	}
-	if _, err := RemotePrune(r, "origin", false); err != nil {
+	if _, err := RemotePrune(context.Background(), r, "origin", false); err != nil {
 		t.Fatalf("RemotePrune: %v", err)
 	}
 	want := []string{"remote", "prune", "origin"}
@@ -146,7 +147,7 @@ func TestRemotePruneDryRun(t *testing.T) {
 			return "", nil
 		},
 	}
-	if _, err := RemotePrune(r, "origin", true); err != nil {
+	if _, err := RemotePrune(context.Background(), r, "origin", true); err != nil {
 		t.Fatalf("RemotePrune dry-run: %v", err)
 	}
 	want := []string{"remote", "prune", "--dry-run", "origin"}
@@ -167,7 +168,7 @@ func TestRemotePruneParsesRefs(t *testing.T) {
 			return output, nil
 		},
 	}
-	refs, err := RemotePrune(r, "origin", false)
+	refs, err := RemotePrune(context.Background(), r, "origin", false)
 	if err != nil {
 		t.Fatalf("RemotePrune: %v", err)
 	}
@@ -189,7 +190,7 @@ func TestRemotePruneDryRunParsesRefs(t *testing.T) {
 			return output, nil
 		},
 	}
-	refs, err := RemotePrune(r, "origin", true)
+	refs, err := RemotePrune(context.Background(), r, "origin", true)
 	if err != nil {
 		t.Fatalf("RemotePrune dry-run: %v", err)
 	}
@@ -205,7 +206,7 @@ func TestRemotePruneNoRefs(t *testing.T) {
 			return output, nil
 		},
 	}
-	refs, err := RemotePrune(r, "origin", false)
+	refs, err := RemotePrune(context.Background(), r, "origin", false)
 	if err != nil {
 		t.Fatalf("RemotePrune: %v", err)
 	}
@@ -220,7 +221,7 @@ func TestRemotePruneErrorWrapping(t *testing.T) {
 			return "", errors.New("connection refused")
 		},
 	}
-	_, err := RemotePrune(r, "origin", false)
+	_, err := RemotePrune(context.Background(), r, "origin", false)
 	if err == nil {
 		t.Fatal("expected error from RemotePrune")
 	}
@@ -294,7 +295,7 @@ func TestPruneRemotesBothSucceed(t *testing.T) {
 			return calls[remote], nil
 		},
 	}
-	pruned, failures := PruneRemotes(r, []string{"origin", "upstream"}, false)
+	pruned, failures := PruneRemotes(context.Background(), r, []string{"origin", "upstream"}, false)
 	if len(failures) != 0 {
 		t.Fatalf("expected no failures, got %v", failures)
 	}
@@ -319,7 +320,7 @@ func TestPruneRemotesPartialFailure(t *testing.T) {
 			return " * [pruned] origin/old\n", nil
 		},
 	}
-	pruned, failures := PruneRemotes(r, []string{"origin", "upstream"}, false)
+	pruned, failures := PruneRemotes(context.Background(), r, []string{"origin", "upstream"}, false)
 	if len(failures) != 1 {
 		t.Fatalf("expected 1 failure, got %d: %v", len(failures), failures)
 	}
@@ -341,7 +342,7 @@ func TestPruneRemotesEmptyInput(t *testing.T) {
 			return "", nil
 		},
 	}
-	pruned, failures := PruneRemotes(r, []string{}, false)
+	pruned, failures := PruneRemotes(context.Background(), r, []string{}, false)
 	if pruned == nil {
 		t.Error("expected non-nil pruned slice")
 	}

@@ -1,6 +1,7 @@
 package debug
 
 import (
+	"context"
 	"io"
 	"os"
 	"strings"
@@ -8,8 +9,10 @@ import (
 )
 
 type stubRunner struct {
-	runCalled      bool
-	runInDirCalled bool
+	runCalled         bool
+	runInDirCalled    bool
+	runContextCalled  bool
+	runInDirCtxCalled bool
 }
 
 func (s *stubRunner) Run(args ...string) (string, error) {
@@ -19,6 +22,16 @@ func (s *stubRunner) Run(args ...string) (string, error) {
 
 func (s *stubRunner) RunInDir(dir string, args ...string) (string, error) {
 	s.runInDirCalled = true
+	return "ok", nil
+}
+
+func (s *stubRunner) RunContext(_ context.Context, args ...string) (string, error) {
+	s.runContextCalled = true
+	return "ok", nil
+}
+
+func (s *stubRunner) RunInDirContext(_ context.Context, dir string, args ...string) (string, error) {
+	s.runInDirCtxCalled = true
 	return "ok", nil
 }
 

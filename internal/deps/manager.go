@@ -2,6 +2,7 @@ package deps
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -41,13 +42,13 @@ type InstallResult struct {
 
 // Install clones or installs deps for each module.
 // Pass existingEntries to skip an extra git.ListWorktrees call; nil fetches its own.
-func (m *Manager) Install(worktreePath string, modules []Module, existingEntries []git.WorktreeEntry, onProgress progress.Func) []InstallResult {
-	return m.install(worktreePath, "", modules, existingEntries, onProgress)
+func (m *Manager) Install(ctx context.Context, worktreePath string, modules []Module, existingEntries []git.WorktreeEntry, onProgress progress.Func) []InstallResult {
+	return m.install(ctx, worktreePath, "", modules, existingEntries, onProgress)
 }
 
 // InstallPreferSource is like Install but tries sourceWT first when cloning.
-func (m *Manager) InstallPreferSource(worktreePath, sourceWT string, modules []Module, existingEntries []git.WorktreeEntry, onProgress progress.Func) []InstallResult {
-	return m.install(worktreePath, sourceWT, modules, existingEntries, onProgress)
+func (m *Manager) InstallPreferSource(ctx context.Context, worktreePath, sourceWT string, modules []Module, existingEntries []git.WorktreeEntry, onProgress progress.Func) []InstallResult {
+	return m.install(ctx, worktreePath, sourceWT, modules, existingEntries, onProgress)
 }
 
 // ResolveModules detects and merges modules, filtering clone-only ones.
@@ -75,7 +76,7 @@ func ResolveModules(worktreePath, service string, autoDetect bool, configModules
 	return modules, nil
 }
 
-func (m *Manager) install(worktreePath, sourceWT string, modules []Module, existingEntries []git.WorktreeEntry, onProgress progress.Func) []InstallResult {
+func (m *Manager) install(ctx context.Context, worktreePath, sourceWT string, modules []Module, existingEntries []git.WorktreeEntry, onProgress progress.Func) []InstallResult {
 	defer debug.StartTimer("installing dependencies")()
 	results := make([]InstallResult, 0, len(modules))
 
@@ -105,7 +106,7 @@ func (m *Manager) install(worktreePath, sourceWT string, modules []Module, exist
 	total := len(hashed)
 
 	results = parallel.Collect(total, concurrency, func(i int) InstallResult {
-		res := m.installModule(worktreePath, hashed[i], existingPaths)
+		res := m.installModule(ctx, worktreePath, hashed[i], existingPaths)
 		completed := done.Add(1)
 		progress.Notifyf(onProgress, "%d/%d complete", completed, total)
 		return res
@@ -134,14 +135,14 @@ func buildExistingPaths(entries []git.WorktreeEntry, exclude, preferred string) 
 	return paths
 }
 
-func (m *Manager) installModule(worktreePath string, mh ModuleWithHash, existingPaths []string) InstallResult {
+func (m *Manager) installModule(ctx context.Context, worktreePath string, mh ModuleWithHash, existingPaths []string) InstallResult {
 	mod := mh.Module
 
 	if mh.Hash == "" {
 		return InstallResult{Module: mod}
 	}
 
-	if result, ok := tryCloneFromExisting(worktreePath, mh, existingPaths); ok {
+	if result, ok := tryCloneFromExisting(ctx, worktreePath, mh, existingPaths); ok {
 		return result
 	}
 
@@ -150,7 +151,7 @@ func (m *Manager) installModule(worktreePath string, mh ModuleWithHash, existing
 	}
 
 	if mod.InstallCmd != "" {
-		err := runInstall(worktreePath, mod)
+		err := runInstall(ctx, worktreePath, mod)
 		return InstallResult{Module: mod, Error: err}
 	}
 
@@ -158,7 +159,7 @@ func (m *Manager) installModule(worktreePath string, mh ModuleWithHash, existing
 }
 
 // tryCloneFromExisting attempts to clone the module from an existing worktree with matching lockfile.
-func tryCloneFromExisting(worktreePath string, mh ModuleWithHash, existingPaths []string) (InstallResult, bool) {
+func tryCloneFromExisting(ctx context.Context, worktreePath string, mh ModuleWithHash, existingPaths []string) (InstallResult, bool) {
 	mod := mh.Module
 	for _, wtPath := range existingPaths {
 		otherHash, err := HashLockfile(wtPath, mod.Lockfile)
@@ -173,7 +174,7 @@ func tryCloneFromExisting(worktreePath string, mh ModuleWithHash, existingPaths 
 
 		if err := CloneModule(wtPath, worktreePath, mod); err != nil {
 			if !mod.CloneOnly {
-				installErr := runInstall(worktreePath, mod)
+				installErr := runInstall(ctx, worktreePath, mod)
 				return InstallResult{Module: mod, Error: installErr}, true
 			}
 			return InstallResult{Module: mod, Error: fmt.Errorf("clone from %s: %w", wtPath, err)}, true
@@ -184,13 +185,13 @@ func tryCloneFromExisting(worktreePath string, mh ModuleWithHash, existingPaths 
 	return InstallResult{}, false
 }
 
-func runInstall(worktreePath string, mod Module) error {
+func runInstall(ctx context.Context, worktreePath string, mod Module) error {
 	dir := worktreePath
 	if mod.WorkDir != "" {
 		dir = filepath.Join(worktreePath, mod.WorkDir)
 	}
 
-	cmd := exec.Command("sh", "-c", mod.InstallCmd) //nolint:gosec // install commands come from user config
+	cmd := exec.CommandContext(ctx, "sh", "-c", mod.InstallCmd) //nolint:gosec // install commands come from user config
 	cmd.Dir = dir
 
 	var buf bytes.Buffer

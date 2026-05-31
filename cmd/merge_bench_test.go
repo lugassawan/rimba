@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"sync"
 	"testing"
 
@@ -12,6 +13,12 @@ type mergeBenchMockRunner struct{}
 
 func (m *mergeBenchMockRunner) Run(_ ...string) (string, error)                { return "", nil }
 func (m *mergeBenchMockRunner) RunInDir(_ string, _ ...string) (string, error) { return "", nil }
+func (m *mergeBenchMockRunner) RunContext(_ context.Context, _ ...string) (string, error) {
+	return "", nil
+}
+func (m *mergeBenchMockRunner) RunInDirContext(_ context.Context, _ string, _ ...string) (string, error) {
+	return "", nil
+}
 
 func BenchmarkDirtyChecksSequential(b *testing.B) {
 	r := &mergeBenchMockRunner{}

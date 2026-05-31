@@ -1,6 +1,7 @@
 package debug
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -48,6 +49,22 @@ func (r *TimedRunner) RunInDir(dir string, args ...string) (string, error) {
 	label := fmt.Sprintf("git %s [%s]", strings.Join(args, " "), filepath.Base(dir))
 	start := time.Now()
 	out, err := r.Inner.RunInDir(dir, args...)
+	logf("%s: %s", label, time.Since(start).Round(time.Millisecond))
+	return out, err
+}
+
+func (r *TimedRunner) RunContext(ctx context.Context, args ...string) (string, error) {
+	label := "git " + strings.Join(args, " ")
+	start := time.Now()
+	out, err := r.Inner.RunContext(ctx, args...)
+	logf("%s: %s", label, time.Since(start).Round(time.Millisecond))
+	return out, err
+}
+
+func (r *TimedRunner) RunInDirContext(ctx context.Context, dir string, args ...string) (string, error) {
+	label := fmt.Sprintf("git %s [%s]", strings.Join(args, " "), filepath.Base(dir))
+	start := time.Now()
+	out, err := r.Inner.RunInDirContext(ctx, dir, args...)
 	logf("%s: %s", label, time.Since(start).Round(time.Millisecond))
 	return out, err
 }
