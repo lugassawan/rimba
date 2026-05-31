@@ -93,6 +93,11 @@ type execOpts struct {
 	concurrency int
 }
 
+type dirtyResult struct {
+	dirty   bool
+	warning string
+}
+
 func execReadFlags(cmd *cobra.Command) execOpts {
 	all, _ := cmd.Flags().GetBool(flagAll)
 	typeFilter, _ := cmd.Flags().GetString(flagType)
@@ -223,11 +228,6 @@ func init() {
 	_ = execCmd.RegisterFlagCompletionFunc(flagType, typeFilterCompletion())
 
 	rootCmd.AddCommand(execCmd)
-}
-
-type dirtyResult struct {
-	dirty   bool
-	warning string
 }
 
 // filterDirtyWorktrees filters worktrees to only those with uncommitted changes.
