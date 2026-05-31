@@ -22,14 +22,27 @@ func goreleaserField(content, key string) string {
 	return ""
 }
 
-// archiveNameTemplate returns the first name_template line that contains "{{",
-// distinguishing the archive template from the checksum name_template.
+// archiveNameTemplate extracts the name_template from the archives: section of
+// goreleaser YAML. It enters the section on the "archives:" top-level key and
+// stops at the next non-blank, non-indented line — making it resilient to other
+// name_template entries (e.g. the checksum block) that appear elsewhere in the file.
 func archiveNameTemplate(content string) string {
+	inArchives := false
 	prefix := "name_template:"
 	for line := range strings.SplitSeq(content, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if after, ok := strings.CutPrefix(trimmed, prefix); ok && strings.Contains(trimmed, "{{") {
-			return strings.Trim(strings.TrimSpace(after), `"'`)
+		if line == "archives:" {
+			inArchives = true
+			continue
+		}
+		if inArchives {
+			// A non-blank, non-indented line signals a new top-level YAML key.
+			if len(line) > 0 && line[0] != ' ' {
+				break
+			}
+			trimmed := strings.TrimSpace(line)
+			if after, ok := strings.CutPrefix(trimmed, prefix); ok && strings.Contains(trimmed, "{{") {
+				return strings.Trim(strings.TrimSpace(after), `"'`)
+			}
 		}
 	}
 	return ""

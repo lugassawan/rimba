@@ -354,6 +354,9 @@ func assetNameFor(goos, goarch, version string) string {
 
 // findReleaseAssets scans release assets for the platform archive and checksums file.
 // Returns empty strings for any asset not found.
+// BrowserDownloadURL values are used verbatim; checksum verification (issue #222) is
+// the intended mitigation against redirected-URL attacks rather than host-prefix
+// validation, which would need to enumerate all valid GitHub CDN hostnames.
 func findReleaseAssets(assetName string, assets []Asset) (downloadURL, checksumsURL string) {
 	for _, a := range assets {
 		if a.Name == assetName {

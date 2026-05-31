@@ -18,13 +18,6 @@ const (
 	testCurrentBinary = "/usr/local/bin/rimba"
 )
 
-// fakeDownloadResult is the DownloadResult returned by the default test download seam.
-var fakeDownloadResult = &DownloadResult{
-	ArchivePath: "/tmp/rimba-test/archive.tar.gz",
-	BinaryPath:  "/tmp/rimba-test/rimba",
-	SHA256:      "aabbcc",
-}
-
 // newTestRunner returns a Runner wired with fake seams that all succeed, plus a
 // buffer capturing stdout. Tests override individual seams to exercise one failure path.
 func newTestRunner(t *testing.T) (*Runner, *bytes.Buffer) {
@@ -45,7 +38,11 @@ func newTestRunner(t *testing.T) (*Runner, *bytes.Buffer) {
 		}, nil
 	}
 	r.download = func(_ context.Context, url string) (*DownloadResult, error) {
-		return fakeDownloadResult, nil
+		return &DownloadResult{
+			ArchivePath: "/tmp/rimba-test/archive.tar.gz",
+			BinaryPath:  "/tmp/rimba-test/rimba",
+			SHA256:      "aabbcc",
+		}, nil
 	}
 	r.verifyChecksum = func(_ context.Context, _ *CheckResult, _ *DownloadResult) error { return nil }
 	r.prepareBinary = func(path string) error { return nil }

@@ -99,7 +99,9 @@ func writeBinary(dst string, r io.Reader) (_ string, retErr error) {
 		return "", fmt.Errorf("extracting binary: %w", err)
 	}
 	if n > maxBinarySize {
-		_ = os.Remove(dst)
+		// Do not call os.Remove here — the FD is still open via the deferred Close,
+		// and on Windows os.Remove fails on open handles. CleanupTempDir removes the
+		// entire temp directory on the Download error path.
 		return "", fmt.Errorf("binary exceeds max allowed size of %d bytes", maxBinarySize)
 	}
 	return dst, nil

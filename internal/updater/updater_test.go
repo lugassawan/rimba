@@ -1425,6 +1425,23 @@ func TestFetchChecksumsNetworkError(t *testing.T) {
 	}
 }
 
+func TestFetchChecksumsExceedsMaxSize(t *testing.T) {
+	orig := maxChecksumSize
+	maxChecksumSize = 5
+	t.Cleanup(func() { maxChecksumSize = orig })
+
+	srv := serveChecksums(t, "aabbccdd  rimba_2.0.0_linux_amd64.tar.gz\n") // >5 bytes
+	u := newTestUpdater(srv)
+
+	_, err := u.FetchChecksums(context.Background(), srv.URL+"/checksums.txt")
+	if err == nil {
+		t.Fatal("expected error when checksums response exceeds size limit")
+	}
+	if !strings.Contains(err.Error(), "exceeds") {
+		t.Errorf("error = %q, want to contain 'exceeds'", err.Error())
+	}
+}
+
 func TestFetchChecksumsRequestError(t *testing.T) {
 	u := &Updater{
 		CurrentVersion: testVersion,
