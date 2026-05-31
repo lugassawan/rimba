@@ -51,7 +51,7 @@ func handleMerge(hctx *HandlerContext) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(cfgErr.Error()), nil
 		}
 
-		result, err := operations.MergeWorktree(hctx.Runner, operations.MergeParams{
+		result, err := operations.MergeWorktree(ctx, hctx.Runner, operations.MergeParams{
 			SourceTask:    sourceTask,
 			SourceService: sourceService,
 			IntoTask:      intoTask,

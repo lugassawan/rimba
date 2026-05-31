@@ -68,7 +68,7 @@ var mergeCmd = &cobra.Command{
 		defer s.Stop()
 
 		s.Start("Checking for uncommitted changes...")
-		result, err := operations.MergeWorktree(r, operations.MergeParams{
+		result, err := operations.MergeWorktree(cmd.Context(), r, operations.MergeParams{
 			SourceTask:    sourceTask,
 			SourceService: sourceService,
 			IntoTask:      intoTask,

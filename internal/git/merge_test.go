@@ -1,6 +1,7 @@
 package git_test
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -27,7 +28,7 @@ func TestMergeBasic(t *testing.T) {
 	testutil.GitCmd(t, wtPath, "commit", "-m", "add new.txt")
 
 	// Merge into main repo
-	if err := git.Merge(r, repo, "feat/merge-basic", false); err != nil {
+	if err := git.Merge(context.Background(), r, repo, "feat/merge-basic", false); err != nil {
 		t.Fatalf("Merge: %v", err)
 	}
 
@@ -53,7 +54,7 @@ func TestMergeNoFF(t *testing.T) {
 	testutil.GitCmd(t, wtPath, "add", ".")
 	testutil.GitCmd(t, wtPath, "commit", "-m", "add noff.txt")
 
-	if err := git.Merge(r, repo, "feat/merge-noff", true); err != nil {
+	if err := git.Merge(context.Background(), r, repo, "feat/merge-noff", true); err != nil {
 		t.Fatalf("Merge --no-ff: %v", err)
 	}
 
@@ -73,7 +74,7 @@ func TestMergeError(t *testing.T) {
 	r := &git.ExecRunner{Dir: repo}
 
 	// Merge a nonexistent branch should fail
-	if err := git.Merge(r, repo, "nonexistent-branch", false); err == nil {
+	if err := git.Merge(context.Background(), r, repo, "nonexistent-branch", false); err == nil {
 		t.Error("expected error merging nonexistent branch")
 	}
 }
@@ -110,7 +111,7 @@ func TestMergeInProgress(t *testing.T) {
 	testutil.GitCmd(t, repo, "commit", "-m", "main change")
 
 	// Attempt the conflicting merge — it should fail.
-	if err := git.Merge(r, repo, "feat/conflict-source", false); err == nil {
+	if err := git.Merge(context.Background(), r, repo, "feat/conflict-source", false); err == nil {
 		t.Fatal("expected conflict error from Merge")
 	}
 
@@ -145,7 +146,7 @@ func TestMergeAbort(t *testing.T) {
 	testutil.GitCmd(t, repo, "add", ".")
 	testutil.GitCmd(t, repo, "commit", "-m", "main change")
 
-	if err := git.Merge(r, repo, "feat/abort-source", false); err == nil {
+	if err := git.Merge(context.Background(), r, repo, "feat/abort-source", false); err == nil {
 		t.Fatal("expected conflict error from Merge")
 	}
 

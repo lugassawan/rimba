@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"testing"
@@ -27,7 +28,7 @@ func TestFetch(t *testing.T) {
 		},
 	}
 
-	if err := Fetch(r, remoteOrigin); err != nil {
+	if err := Fetch(context.Background(), r, remoteOrigin); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 
@@ -43,7 +44,7 @@ func TestFetchError(t *testing.T) {
 		},
 	}
 
-	err := Fetch(r, remoteOrigin)
+	err := Fetch(context.Background(), r, remoteOrigin)
 	if err == nil {
 		t.Fatal("expected error from Fetch")
 	}
@@ -61,7 +62,7 @@ func TestRebase(t *testing.T) {
 		},
 	}
 
-	if err := Rebase(r, fakeDir, branchMain); err != nil {
+	if err := Rebase(context.Background(), r, fakeDir, branchMain); err != nil {
 		t.Fatalf("Rebase: %v", err)
 	}
 
@@ -80,7 +81,7 @@ func TestRebaseError(t *testing.T) {
 		},
 	}
 
-	err := Rebase(r, fakeDir, branchMain)
+	err := Rebase(context.Background(), r, fakeDir, branchMain)
 	if err == nil {
 		t.Fatal("expected error from Rebase")
 	}
@@ -207,7 +208,7 @@ func TestPush(t *testing.T) {
 		},
 	}
 
-	if err := Push(r, fakeDir); err != nil {
+	if err := Push(context.Background(), r, fakeDir); err != nil {
 		t.Fatalf("Push: %v", err)
 	}
 
@@ -226,7 +227,7 @@ func TestPushError(t *testing.T) {
 		},
 	}
 
-	err := Push(r, fakeDir)
+	err := Push(context.Background(), r, fakeDir)
 	if err == nil {
 		t.Fatal("expected error from Push")
 	}
@@ -244,7 +245,7 @@ func TestPushForceWithLease(t *testing.T) {
 		},
 	}
 
-	if err := PushForceWithLease(r, fakeDir); err != nil {
+	if err := PushForceWithLease(context.Background(), r, fakeDir); err != nil {
 		t.Fatalf("PushForceWithLease: %v", err)
 	}
 
@@ -263,7 +264,7 @@ func TestPushForceWithLeaseError(t *testing.T) {
 		},
 	}
 
-	err := PushForceWithLease(r, fakeDir)
+	err := PushForceWithLease(context.Background(), r, fakeDir)
 	if err == nil {
 		t.Fatal("expected error from PushForceWithLease")
 	}

@@ -42,6 +42,14 @@ func (m *mockRunner) RunInDir(dir string, args ...string) (string, error) {
 	return m.runInDir(dir, args...)
 }
 
+func (m *mockRunner) RunContext(ctx context.Context, args ...string) (string, error) {
+	return m.Run(args...)
+}
+
+func (m *mockRunner) RunInDirContext(ctx context.Context, dir string, args ...string) (string, error) {
+	return m.RunInDir(dir, args...)
+}
+
 // testConfig returns a minimal config suitable for testing.
 func testConfig() *config.Config {
 	return &config.Config{

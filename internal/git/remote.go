@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -24,13 +25,13 @@ func RemoteExists(r Runner, name string) bool {
 
 // RemotePrune runs `git remote prune <remote>`, deleting stale remote-tracking
 // refs, and returns the names of the refs that were (or would be) pruned.
-func RemotePrune(r Runner, remote string, dryRun bool) ([]string, error) {
+func RemotePrune(ctx context.Context, r Runner, remote string, dryRun bool) ([]string, error) {
 	args := []string{"remote", "prune"}
 	if dryRun {
 		args = append(args, "--dry-run")
 	}
 	args = append(args, remote)
-	out, err := r.Run(args...)
+	out, err := r.RunContext(ctx, args...)
 	if err != nil {
 		return nil, errhint.WithFix(
 			fmt.Errorf("remote prune: %w", err),
@@ -42,8 +43,8 @@ func RemotePrune(r Runner, remote string, dryRun bool) ([]string, error) {
 
 // DeleteRemoteBranch deletes a branch on the given remote.
 // An already-gone remote ref is treated as success (idempotent).
-func DeleteRemoteBranch(r Runner, remote, branch string) error {
-	_, err := r.Run("push", remote, "--delete", branch)
+func DeleteRemoteBranch(ctx context.Context, r Runner, remote, branch string) error {
+	_, err := r.RunContext(ctx, "push", remote, "--delete", branch)
 	if err == nil {
 		return nil
 	}
@@ -86,11 +87,11 @@ func ListRemotes(r Runner) ([]string, error) {
 // successful remotes are collected and returned. Any remote that fails is
 // recorded in the failures slice; iteration continues regardless of errors.
 // Both return values are initialized as non-nil empty slices.
-func PruneRemotes(r Runner, remotes []string, dryRun bool) ([]string, []RemoteFailure) {
+func PruneRemotes(ctx context.Context, r Runner, remotes []string, dryRun bool) ([]string, []RemoteFailure) {
 	pruned := []string{}
 	failures := []RemoteFailure{}
 	for _, remote := range remotes {
-		refs, err := RemotePrune(r, remote, dryRun)
+		refs, err := RemotePrune(ctx, r, remote, dryRun)
 		if err != nil {
 			failures = append(failures, RemoteFailure{Remote: remote, Err: err})
 			continue

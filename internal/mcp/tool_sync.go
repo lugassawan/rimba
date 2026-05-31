@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
@@ -65,10 +66,10 @@ func handleSync(hctx *HandlerContext) server.ToolHandlerFunc {
 
 		r := hctx.Runner
 
-		// Fetch (non-fatal)
-		var fetchWarning string
-		if err := git.Fetch(r, "origin"); err != nil {
-			fetchWarning = "fetch failed (no remote?): continuing with local state"
+		// Fetch (non-fatal; cancellation propagated as a tool error)
+		fetchWarning, fetchErr := mcpFetchNonFatal(ctx, r)
+		if fetchErr != nil {
+			return mcp.NewToolResultError(fetchErr.Error()), nil
 		}
 
 		worktrees, err := operations.ListWorktreeInfos(r)
@@ -85,34 +86,47 @@ func handleSync(hctx *HandlerContext) server.ToolHandlerFunc {
 		}
 
 		if !all {
-			return syncSingle(r, service, task, worktrees, prefixes, opts)
+			return syncSingle(ctx, r, service, task, worktrees, prefixes, opts)
 		}
-		return syncMultiple(r, worktrees, prefixes, opts, includeInherited)
+		return syncMultiple(ctx, r, worktrees, prefixes, opts, includeInherited)
 	}
 }
 
-func syncSingle(r git.Runner, service, task string, worktrees []resolver.WorktreeInfo, prefixes []string, opts syncOpts) (*mcp.CallToolResult, error) {
+func syncSingle(ctx context.Context, r git.Runner, service, task string, worktrees []resolver.WorktreeInfo, prefixes []string, opts syncOpts) (*mcp.CallToolResult, error) {
 	wt, found := resolver.FindBranchForTask(service, task, worktrees, prefixes)
 	if !found {
 		return mcp.NewToolResultError("worktree not found for task \"" + task + "\""), nil
 	}
 
-	sr := operations.SyncWorktree(r, opts.mainBranch, wt, opts.useMerge, opts.push)
+	sr := operations.SyncWorktree(ctx, r, opts.mainBranch, wt, opts.useMerge, opts.push)
 
 	results := []syncWorktreeResult{convertSyncResult(sr)}
 
 	return marshalResult(syncResult{FetchWarning: opts.fetchWarning, Results: results})
 }
 
-func syncMultiple(r git.Runner, worktrees []resolver.WorktreeInfo, prefixes []string, opts syncOpts, includeInherited bool) (*mcp.CallToolResult, error) {
+func syncMultiple(ctx context.Context, r git.Runner, worktrees []resolver.WorktreeInfo, prefixes []string, opts syncOpts, includeInherited bool) (*mcp.CallToolResult, error) {
 	allTasks := operations.CollectTasks(worktrees, prefixes)
 	eligible := operations.FilterEligible(worktrees, prefixes, opts.mainBranch, allTasks, includeInherited)
 
 	results := parallel.Collect(len(eligible), 4, func(i int) syncWorktreeResult {
-		return convertSyncResult(operations.SyncWorktree(r, opts.mainBranch, eligible[i], opts.useMerge, opts.push))
+		return convertSyncResult(operations.SyncWorktree(ctx, r, opts.mainBranch, eligible[i], opts.useMerge, opts.push))
 	})
 
 	return marshalResult(syncResult{FetchWarning: opts.fetchWarning, Results: results})
+}
+
+// mcpFetchNonFatal fetches from git.DefaultRemote ("origin") and returns a
+// warning string on connectivity failure. Cancellation is returned as a hard
+// error so callers can propagate it.
+func mcpFetchNonFatal(ctx context.Context, r git.Runner) (warning string, err error) {
+	if fetchErr := git.Fetch(ctx, r, git.DefaultRemote); fetchErr != nil {
+		if errors.Is(fetchErr, context.Canceled) || errors.Is(fetchErr, context.DeadlineExceeded) {
+			return "", fetchErr
+		}
+		return "fetch failed (no remote?): continuing with local state", nil
+	}
+	return "", nil
 }
 
 func convertSyncResult(sr operations.SyncWorktreeResult) syncWorktreeResult {

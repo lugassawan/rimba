@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"context"
 	"testing"
 )
 
@@ -18,7 +19,7 @@ func TestPostRenameSetupSkipAll(t *testing.T) {
 		SkipHooks:  true,
 		PostRename: []string{"echo hook"},
 	}
-	res, err := PostRenameSetup(newNoopRunner(), params, nil)
+	res, err := PostRenameSetup(context.Background(), newNoopRunner(), params, nil)
 	if err != nil {
 		t.Fatalf("PostRenameSetup: %v", err)
 	}
@@ -38,7 +39,7 @@ func TestPostRenameSetupRunsHooks(t *testing.T) {
 		SkipHooks:  false,
 		PostRename: []string{"echo hook-ran"},
 	}
-	res, err := PostRenameSetup(newNoopRunner(), params, nil)
+	res, err := PostRenameSetup(context.Background(), newNoopRunner(), params, nil)
 	if err != nil {
 		t.Fatalf("PostRenameSetup: %v", err)
 	}
@@ -57,7 +58,7 @@ func TestPostRenameSetupNoHooksWhenEmpty(t *testing.T) {
 		SkipHooks:  false,
 		PostRename: nil,
 	}
-	res, err := PostRenameSetup(newNoopRunner(), params, nil)
+	res, err := PostRenameSetup(context.Background(), newNoopRunner(), params, nil)
 	if err != nil {
 		t.Fatalf("PostRenameSetup: %v", err)
 	}
@@ -74,7 +75,7 @@ func TestPostRenameSetupHookFailure(t *testing.T) {
 		SkipHooks:  false,
 		PostRename: []string{"false"},
 	}
-	res, err := PostRenameSetup(newNoopRunner(), params, nil)
+	res, err := PostRenameSetup(context.Background(), newNoopRunner(), params, nil)
 	if err != nil {
 		t.Fatalf("PostRenameSetup: %v", err)
 	}
@@ -94,7 +95,7 @@ func TestPostRenameSetupDepsNoop(t *testing.T) {
 		AutoDetect: true,
 		SkipHooks:  true,
 	}
-	res, err := PostRenameSetup(newNoopRunner(), params, nil)
+	res, err := PostRenameSetup(context.Background(), newNoopRunner(), params, nil)
 	if err != nil {
 		t.Fatalf("PostRenameSetup: %v", err)
 	}

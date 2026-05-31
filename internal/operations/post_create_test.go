@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -25,7 +26,7 @@ func TestPostCreateSetupCopiesFiles(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	result, err := PostCreateSetup(r, PostCreateParams{
+	result, err := PostCreateSetup(context.Background(), r, PostCreateParams{
 		RepoRoot:  tmpDir,
 		WtPath:    wtPath,
 		Task:      "test-task",
@@ -66,7 +67,7 @@ func TestPostCreateSetupSkipDepsAndHooks(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	result, err := PostCreateSetup(r, PostCreateParams{
+	result, err := PostCreateSetup(context.Background(), r, PostCreateParams{
 		RepoRoot:   tmpDir,
 		WtPath:     wtPath,
 		Task:       "test-task",
@@ -99,7 +100,7 @@ func TestPostCreateSetupProgressCallbacks(t *testing.T) {
 	}
 
 	var messages []string
-	_, err := PostCreateSetup(r, PostCreateParams{
+	_, err := PostCreateSetup(context.Background(), r, PostCreateParams{
 		RepoRoot:  tmpDir,
 		WtPath:    wtPath,
 		Task:      "test-task",
@@ -137,7 +138,7 @@ func TestPostCreateSetupListWorktreesError(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	_, err := PostCreateSetup(r, PostCreateParams{
+	_, err := PostCreateSetup(context.Background(), r, PostCreateParams{
 		RepoRoot: tmpDir,
 		WtPath:   wtPath,
 		Task:     "test-task",

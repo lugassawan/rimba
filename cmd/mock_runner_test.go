@@ -94,6 +94,14 @@ func (m *mockRunner) RunInDir(dir string, args ...string) (string, error) {
 	return m.runInDir(dir, args...)
 }
 
+func (m *mockRunner) RunContext(_ context.Context, args ...string) (string, error) {
+	return m.run(args...)
+}
+
+func (m *mockRunner) RunInDirContext(_ context.Context, dir string, args ...string) (string, error) {
+	return m.runInDir(dir, args...)
+}
+
 // noopRunInDir is a default runInDir that returns empty output.
 func noopRunInDir(_ string, _ ...string) (string, error) {
 	return "", nil

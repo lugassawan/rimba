@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -258,7 +259,7 @@ func TestRemoveCandidatesMixedResults(t *testing.T) {
 		{Path: "/wt/c", Branch: "feature/c"},
 	}
 
-	items := RemoveCandidates(r, candidates, false, nil)
+	items := RemoveCandidates(context.Background(), r, candidates, false, nil)
 	if len(items) != 3 {
 		t.Fatalf("expected 3 items, got %d", len(items))
 	}
@@ -288,7 +289,7 @@ func TestRemoveCandidatesProgressCallbacks(t *testing.T) {
 		{Path: "/wt/b", Branch: "feature/b"},
 	}
 
-	RemoveCandidates(r, candidates, false, onProgress)
+	RemoveCandidates(context.Background(), r, candidates, false, onProgress)
 	if len(messages) != 2 {
 		t.Fatalf("expected 2 progress messages, got %d", len(messages))
 	}
@@ -397,7 +398,7 @@ func TestRemoveCandidatesRemoteDeleteSuccess(t *testing.T) {
 	}
 
 	candidates := []CleanCandidate{{Path: "/wt/a", Branch: "feature/a"}}
-	items := RemoveCandidates(r, candidates, true, nil) // originPresent=true passed by caller
+	items := RemoveCandidates(context.Background(), r, candidates, true, nil) // originPresent=true passed by caller
 	if len(items) != 1 {
 		t.Fatalf("expected 1 item, got %d", len(items))
 	}
@@ -424,7 +425,7 @@ func TestRemoveCandidatesRemoteDeleteFailureStillCountsItem(t *testing.T) {
 	}
 
 	candidates := []CleanCandidate{{Path: "/wt/a", Branch: "feature/a"}}
-	items := RemoveCandidates(r, candidates, true, nil)
+	items := RemoveCandidates(context.Background(), r, candidates, true, nil)
 	if len(items) != 1 {
 		t.Fatalf("expected 1 item, got %d", len(items))
 	}
@@ -454,7 +455,7 @@ func TestRemoveCandidatesNoOriginSkipsRemoteDelete(t *testing.T) {
 	}
 
 	candidates := []CleanCandidate{{Path: "/wt/a", Branch: "feature/a"}}
-	items := RemoveCandidates(r, candidates, false, nil) // originPresent=false → no push
+	items := RemoveCandidates(context.Background(), r, candidates, false, nil) // originPresent=false → no push
 	if len(items) != 1 {
 		t.Fatalf("expected 1 item, got %d", len(items))
 	}

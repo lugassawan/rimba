@@ -44,12 +44,12 @@ func AddPRWorktree(
 		task = "review/" + strconv.Itoa(meta.Number) + "-" + resolver.Slugify(meta.Title)
 	}
 
-	source, err := resolveSource(gitR, meta, onProgress)
+	source, err := resolveSource(ctx, gitR, meta, onProgress)
 	if err != nil {
 		return AddResult{}, err
 	}
 
-	return AddWorktree(gitR, AddParams{
+	return AddWorktree(ctx, gitR, AddParams{
 		Task:              task,
 		Source:            source,
 		PostCreateOptions: params.PostCreateOptions,
@@ -58,10 +58,10 @@ func AddPRWorktree(
 
 // resolveSource fetches the appropriate remote ref and returns the source ref
 // for use with git worktree add -b <branch> <path> <source>.
-func resolveSource(gitR git.Runner, meta gh.PRMeta, onProgress progress.Func) (string, error) {
+func resolveSource(ctx context.Context, gitR git.Runner, meta gh.PRMeta, onProgress progress.Func) (string, error) {
 	if !meta.IsCrossRepository {
 		progress.Notify(onProgress, "Fetching origin...")
-		if err := git.Fetch(gitR, "origin"); err != nil {
+		if err := git.Fetch(ctx, gitR, "origin"); err != nil {
 			return "", errhint.WithFix(err, "check network connectivity")
 		}
 		return "origin/" + meta.HeadRefName, nil
@@ -78,7 +78,7 @@ func resolveSource(gitR git.Runner, meta gh.PRMeta, onProgress progress.Func) (s
 	}
 
 	progress.Notify(onProgress, fmt.Sprintf("Fetching %s...", remoteName))
-	if err := git.Fetch(gitR, remoteName); err != nil {
+	if err := git.Fetch(ctx, gitR, remoteName); err != nil {
 		return "", errhint.WithFix(err, "check network and fork visibility")
 	}
 

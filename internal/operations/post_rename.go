@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/lugassawan/rimba/internal/config"
@@ -28,7 +29,7 @@ type PostRenameResult struct {
 }
 
 // PostRenameSetup runs the post-rename sequence: refresh deps and run hooks.
-func PostRenameSetup(r git.Runner, params PostRenameParams, onProgress progress.Func) (PostRenameResult, error) {
+func PostRenameSetup(ctx context.Context, r git.Runner, params PostRenameParams, onProgress progress.Func) (PostRenameResult, error) {
 	var result PostRenameResult
 
 	if !params.SkipDeps {
@@ -45,12 +46,12 @@ func PostRenameSetup(r git.Runner, params PostRenameParams, onProgress progress.
 			Entries:       wtEntries,
 			Concurrency:   params.Concurrency,
 		}
-		result.DepsResults = InstallDeps(r, dp, onProgress)
+		result.DepsResults = InstallDeps(ctx, r, dp, onProgress)
 	}
 
 	if !params.SkipHooks && len(params.PostRename) > 0 {
 		progress.Notify(onProgress, "Running post-rename hooks...")
-		result.HookResults = RunPostCreateHooks(params.WtPath, params.PostRename, onProgress)
+		result.HookResults = RunPostCreateHooks(ctx, params.WtPath, params.PostRename, onProgress)
 	}
 
 	return result, nil

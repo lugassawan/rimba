@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"bufio"
+	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -39,11 +41,11 @@ var cleanCmd = &cobra.Command{
 
 		switch {
 		case merged:
-			return cleanMerged(cmd, r)
+			return cleanMerged(cmd.Context(), cmd, r)
 		case stale:
-			return cleanStale(cmd, r)
+			return cleanStale(cmd.Context(), cmd, r)
 		default:
-			return cleanPrune(cmd, r)
+			return cleanPrune(cmd.Context(), cmd, r)
 		}
 	},
 }
@@ -60,7 +62,7 @@ func init() {
 	rootCmd.AddCommand(cleanCmd)
 }
 
-func cleanPrune(cmd *cobra.Command, r git.Runner) error {
+func cleanPrune(ctx context.Context, cmd *cobra.Command, r git.Runner) error {
 	dryRun, _ := cmd.Flags().GetBool(flagDryRun)
 
 	hint.New(cmd, hintPainter(cmd)).
@@ -87,12 +89,12 @@ func cleanPrune(cmd *cobra.Command, r git.Runner) error {
 		fmt.Fprintln(cmd.OutOrStdout(), "Pruned stale worktree references.")
 	}
 
-	return cleanRemotePrune(cmd, r, s, dryRun)
+	return cleanRemotePrune(ctx, cmd, r, s, dryRun)
 }
 
 // cleanRemotePrune prunes stale remote-tracking refs across all configured remotes.
 // Skips gracefully when there are no remotes; warns and continues on per-remote failure.
-func cleanRemotePrune(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, dryRun bool) error {
+func cleanRemotePrune(ctx context.Context, cmd *cobra.Command, r git.Runner, s *spinner.Spinner, dryRun bool) error {
 	s.Start("Pruning remote-tracking refs...")
 	remotes, err := git.ListRemotes(r)
 	if err != nil {
@@ -104,7 +106,7 @@ func cleanRemotePrune(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, dryR
 		fmt.Fprintln(cmd.OutOrStdout(), "No remotes; skipped remote-ref prune.")
 		return nil
 	}
-	pruned, failures := git.PruneRemotes(r, remotes, dryRun)
+	pruned, failures := git.PruneRemotes(ctx, r, remotes, dryRun)
 	s.Stop()
 	failureMsgs := make([]string, len(failures))
 	for i, f := range failures {
@@ -162,7 +164,7 @@ type cleanStrategy struct {
 }
 
 // runClean runs the shared clean pipeline using the given strategy.
-func runClean(cmd *cobra.Command, r git.Runner, s cleanStrategy) error {
+func runClean(ctx context.Context, cmd *cobra.Command, r git.Runner, s cleanStrategy) error {
 	dryRun, _ := cmd.Flags().GetBool(flagDryRun)
 	force, _ := cmd.Flags().GetBool(flagForce)
 
@@ -199,12 +201,12 @@ func runClean(cmd *cobra.Command, r git.Runner, s cleanStrategy) error {
 		return nil
 	}
 
-	removed := cleanRemoveCandidates(cmd, r, sp, candidates, s.originPresent)
+	removed := cleanRemoveCandidates(ctx, cmd, r, sp, candidates, s.originPresent)
 	fmt.Fprintf(cmd.OutOrStdout(), s.summaryFmt, removed)
 	return nil
 }
 
-func cleanMerged(cmd *cobra.Command, r git.Runner) error {
+func cleanMerged(ctx context.Context, cmd *cobra.Command, r git.Runner) error {
 	mainBranch, err := cleanResolveAndHint(cmd, r, []hintEntry{
 		{flagDryRun, hintDryRunClean},
 		{flagForce, hintForce},
@@ -215,15 +217,16 @@ func cleanMerged(cmd *cobra.Command, r git.Runner) error {
 
 	remotePresent := git.RemoteExists(r, git.DefaultRemote)
 	var mergeRef string
-	return runClean(cmd, r, cleanStrategy{
+	return runClean(ctx, cmd, r, cleanStrategy{
 		label:         "merged",
 		spinnerMsg:    "Analyzing branches...",
 		emptyMsg:      "No merged worktrees found.",
 		summaryFmt:    "Cleaned %d merged worktree(s).\n",
 		originPresent: remotePresent, // shared with printMergedCandidates — single probe
 		preFind: func(c *cobra.Command, rr git.Runner, sp *spinner.Spinner) error {
-			mergeRef = cleanFetchMergeRef(c, rr, sp, mainBranch)
-			return nil
+			var err error
+			mergeRef, err = cleanFetchMergeRef(ctx, c, rr, sp, mainBranch)
+			return err
 		},
 		find: func(rr git.Runner) ([]operations.CleanCandidate, []string, error) {
 			result, err := operations.FindMergedCandidates(rr, mergeRef, mainBranch)
@@ -238,7 +241,7 @@ func cleanMerged(cmd *cobra.Command, r git.Runner) error {
 	})
 }
 
-func cleanStale(cmd *cobra.Command, r git.Runner) error {
+func cleanStale(ctx context.Context, cmd *cobra.Command, r git.Runner) error {
 	mainBranch, err := cleanResolveAndHint(cmd, r, []hintEntry{
 		{flagDryRun, hintDryRunClean},
 		{flagForce, hintForce},
@@ -250,7 +253,7 @@ func cleanStale(cmd *cobra.Command, r git.Runner) error {
 
 	staleDays, _ := cmd.Flags().GetInt(flagStaleDays)
 	var staleCandidates []operations.StaleCandidate
-	return runClean(cmd, r, cleanStrategy{
+	return runClean(ctx, cmd, r, cleanStrategy{
 		label:         "stale",
 		spinnerMsg:    "Analyzing worktree activity...",
 		emptyMsg:      "No stale worktrees found.",
@@ -271,20 +274,24 @@ func cleanStale(cmd *cobra.Command, r git.Runner) error {
 }
 
 // cleanFetchMergeRef fetches from origin and returns the ref to diff against.
-// Falls back to mainBranch with a warning if fetch fails.
-func cleanFetchMergeRef(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, mainBranch string) string {
+// Returns an error on cancellation; falls back to mainBranch with a warning on
+// other fetch failures (e.g. no remote configured).
+func cleanFetchMergeRef(ctx context.Context, cmd *cobra.Command, r git.Runner, s *spinner.Spinner, mainBranch string) (string, error) {
 	s.Start("Fetching from " + git.DefaultRemote + "...")
-	if err := git.Fetch(r, git.DefaultRemote); err != nil {
+	if err := git.Fetch(ctx, r, git.DefaultRemote); err != nil {
 		s.Stop()
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return "", err
+		}
 		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: fetch failed (no remote?): continuing with local state\n")
-		return mainBranch
+		return mainBranch, nil
 	}
-	return git.DefaultRemote + "/" + mainBranch
+	return git.DefaultRemote + "/" + mainBranch, nil
 }
 
-func cleanRemoveCandidates(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, candidates []operations.CleanCandidate, originPresent bool) int {
+func cleanRemoveCandidates(ctx context.Context, cmd *cobra.Command, r git.Runner, s *spinner.Spinner, candidates []operations.CleanCandidate, originPresent bool) int {
 	s.Start("Removing worktrees...")
-	items := operations.RemoveCandidates(r, candidates, originPresent, func(msg string) {
+	items := operations.RemoveCandidates(ctx, r, candidates, originPresent, func(msg string) {
 		s.Update(msg)
 	})
 	s.Stop()

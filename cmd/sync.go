@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -91,8 +92,11 @@ var syncCmd = &cobra.Command{
 			fmt.Fprintln(cmd.OutOrStdout(), "[dry-run] would fetch origin")
 		} else {
 			s.Start("Fetching from origin...")
-			if err := git.Fetch(r, "origin"); err != nil {
+			if err := git.Fetch(cmd.Context(), r, "origin"); err != nil {
 				s.Stop()
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					return err
+				}
 				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: fetch failed (no remote?): continuing with local state\n")
 			}
 		}
@@ -111,9 +115,9 @@ var syncCmd = &cobra.Command{
 		sc := &syncContext{cmd: cmd, r: r, cfg: cfg, s: s, repoRoot: repoRoot, dryRun: dryRun}
 
 		if all {
-			return syncAll(sc, worktrees, prefixes, useMerge, includeInherited, push)
+			return syncAll(cmd.Context(), sc, worktrees, prefixes, useMerge, includeInherited, push)
 		}
-		return syncOne(sc, args[0], worktrees, prefixes, useMerge, push)
+		return syncOne(cmd.Context(), sc, args[0], worktrees, prefixes, useMerge, push)
 	},
 }
 
@@ -127,7 +131,7 @@ func init() {
 	rootCmd.AddCommand(syncCmd)
 }
 
-func syncOne(sc *syncContext, input string, worktrees []resolver.WorktreeInfo, prefixes []string, useMerge, push bool) error {
+func syncOne(ctx context.Context, sc *syncContext, input string, worktrees []resolver.WorktreeInfo, prefixes []string, useMerge, push bool) error {
 	service, task := operations.ResolveTaskInput(input, sc.repoRoot)
 	wt, found := resolver.FindBranchForTask(service, task, worktrees, prefixes)
 	if !found {
@@ -155,7 +159,7 @@ func syncOne(sc *syncContext, input string, worktrees []resolver.WorktreeInfo, p
 		verb = "Merging"
 	}
 	sc.s.Update(fmt.Sprintf("%s onto %s...", verb, sc.cfg.DefaultSource))
-	if err := operations.SyncBranch(sc.r, wt.Path, sc.cfg.DefaultSource, useMerge); err != nil {
+	if err := operations.SyncBranch(ctx, sc.r, wt.Path, sc.cfg.DefaultSource, useMerge); err != nil {
 		return err
 	}
 
@@ -164,7 +168,7 @@ func syncOne(sc *syncContext, input string, worktrees []resolver.WorktreeInfo, p
 
 	if push {
 		sc.s.Start("Pushing to origin...")
-		pushed, _, pushErr := operations.PushBranch(sc.r, wt.Path, useMerge)
+		pushed, _, pushErr := operations.PushBranch(ctx, sc.r, wt.Path, useMerge)
 		sc.s.Stop()
 		if pushErr != nil {
 			pushHint := fmt.Sprintf("cd %s && git push --force-with-lease", wt.Path)
@@ -184,7 +188,7 @@ func syncOne(sc *syncContext, input string, worktrees []resolver.WorktreeInfo, p
 	return nil
 }
 
-func syncAll(sc *syncContext, worktrees []resolver.WorktreeInfo, prefixes []string, useMerge, includeInherited, push bool) error { //nolint:unparam // error return matches RunE contract
+func syncAll(ctx context.Context, sc *syncContext, worktrees []resolver.WorktreeInfo, prefixes []string, useMerge, includeInherited, push bool) error { //nolint:unparam // error return matches RunE contract
 	allTasks := operations.CollectTasks(worktrees, prefixes)
 	eligible := operations.FilterEligible(worktrees, prefixes, sc.cfg.DefaultSource, allTasks, includeInherited)
 
@@ -200,7 +204,7 @@ func syncAll(sc *syncContext, worktrees []resolver.WorktreeInfo, prefixes []stri
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			syncWorktree(sc, sc.cfg.DefaultSource, wt, useMerge, push)
+			syncWorktree(ctx, sc, sc.cfg.DefaultSource, wt, useMerge, push)
 
 			sc.mu.Lock()
 			completed++
@@ -211,13 +215,16 @@ func syncAll(sc *syncContext, worktrees []resolver.WorktreeInfo, prefixes []stri
 	wg.Wait()
 
 	sc.s.Stop()
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	if !sc.dryRun {
 		printSyncSummary(sc.cmd, sc.cfg.DefaultSource, useMerge, sc.res)
 	}
 	return nil
 }
 
-func syncWorktree(sc *syncContext, mainBranch string, wt resolver.WorktreeInfo, useMerge, push bool) {
+func syncWorktree(ctx context.Context, sc *syncContext, mainBranch string, wt resolver.WorktreeInfo, useMerge, push bool) {
 	if sc.dryRun {
 		sc.mu.Lock()
 		defer sc.mu.Unlock()
@@ -225,7 +232,7 @@ func syncWorktree(sc *syncContext, mainBranch string, wt resolver.WorktreeInfo, 
 		return
 	}
 
-	sr := operations.SyncWorktree(sc.r, mainBranch, wt, useMerge, push)
+	sr := operations.SyncWorktree(ctx, sc.r, mainBranch, wt, useMerge, push)
 
 	sc.mu.Lock()
 	defer sc.mu.Unlock()

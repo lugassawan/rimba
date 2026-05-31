@@ -135,7 +135,7 @@ func runAddTask(cmd *cobra.Command, r git.Runner, arg string, cfg *config.Config
 		Show()
 
 	s.Start("Creating worktree...")
-	result, err := operations.AddWorktree(r, operations.AddParams{
+	result, err := operations.AddWorktree(cmd.Context(), r, operations.AddParams{
 		Task:              task,
 		Service:           service,
 		Prefix:            prefix,

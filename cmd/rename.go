@@ -73,7 +73,7 @@ var renameCmd = &cobra.Command{
 		if cfg.Deps != nil {
 			configModules = cfg.Deps.Modules
 		}
-		if _, err := operations.PostRenameSetup(r, operations.PostRenameParams{
+		if _, err := operations.PostRenameSetup(cmd.Context(), r, operations.PostRenameParams{
 			WtPath:        result.NewPath,
 			Service:       svc,
 			SkipDeps:      skipDeps,

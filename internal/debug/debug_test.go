@@ -1,6 +1,7 @@
 package debug
 
 import (
+	"context"
 	"io"
 	"os"
 	"strings"
@@ -8,8 +9,10 @@ import (
 )
 
 type stubRunner struct {
-	runCalled      bool
-	runInDirCalled bool
+	runCalled         bool
+	runInDirCalled    bool
+	runContextCalled  bool
+	runInDirCtxCalled bool
 }
 
 func (s *stubRunner) Run(args ...string) (string, error) {
@@ -19,6 +22,16 @@ func (s *stubRunner) Run(args ...string) (string, error) {
 
 func (s *stubRunner) RunInDir(dir string, args ...string) (string, error) {
 	s.runInDirCalled = true
+	return "ok", nil
+}
+
+func (s *stubRunner) RunContext(_ context.Context, args ...string) (string, error) {
+	s.runContextCalled = true
+	return "ok", nil
+}
+
+func (s *stubRunner) RunInDirContext(_ context.Context, dir string, args ...string) (string, error) {
+	s.runInDirCtxCalled = true
 	return "ok", nil
 }
 
@@ -120,5 +133,41 @@ func TestStartTimerDisabled(t *testing.T) {
 
 	if len(output) != 0 {
 		t.Errorf("expected no output when disabled, got %q", output)
+	}
+}
+
+func TestTimedRunnerRunContext(t *testing.T) {
+	t.Setenv("RIMBA_DEBUG", "1")
+
+	stub := &stubRunner{}
+	wrapped := WrapRunner(stub)
+
+	out, err := wrapped.RunContext(context.Background(), "status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != "ok" {
+		t.Errorf("expected ok, got %s", out)
+	}
+	if !stub.runContextCalled {
+		t.Error("inner runner RunContext was not called")
+	}
+}
+
+func TestTimedRunnerRunInDirContext(t *testing.T) {
+	t.Setenv("RIMBA_DEBUG", "1")
+
+	stub := &stubRunner{}
+	wrapped := WrapRunner(stub)
+
+	out, err := wrapped.RunInDirContext(context.Background(), "/tmp/test", "status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != "ok" {
+		t.Errorf("expected ok, got %s", out)
+	}
+	if !stub.runInDirCtxCalled {
+		t.Error("inner runner RunInDirContext was not called")
 	}
 }

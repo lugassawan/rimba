@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"path/filepath"
 	"strconv"
@@ -33,7 +34,7 @@ func TestCleanRemotePruneMultiRemote(t *testing.T) {
 		},
 		runInDir: noopRunInDir,
 	}
-	if err := cleanPrune(cmd, r); err != nil {
+	if err := cleanPrune(context.Background(), cmd, r); err != nil {
 		t.Fatalf("cleanPrune: %v", err)
 	}
 	if len(calls) != 2 {
@@ -68,7 +69,7 @@ func TestCleanRemotePrunePartialFailure(t *testing.T) {
 		},
 		runInDir: noopRunInDir,
 	}
-	err := cleanPrune(cmd, r)
+	err := cleanPrune(context.Background(), cmd, r)
 	if err != nil {
 		t.Fatalf("cleanPrune should return nil on partial failure, got: %v", err)
 	}
@@ -96,7 +97,7 @@ func TestCleanRemotePruneAllFail(t *testing.T) {
 		},
 		runInDir: noopRunInDir,
 	}
-	if err := cleanPrune(cmd, r); err != nil {
+	if err := cleanPrune(context.Background(), cmd, r); err != nil {
 		t.Fatalf("cleanPrune should return nil on all-remote failure, got: %v", err)
 	}
 	// stdout must NOT contain the false-positive "No stale" message
@@ -122,7 +123,7 @@ func TestCleanRemotePruneNoRemotes(t *testing.T) {
 		},
 		runInDir: noopRunInDir,
 	}
-	if err := cleanPrune(cmd, r); err != nil {
+	if err := cleanPrune(context.Background(), cmd, r); err != nil {
 		t.Fatalf("cleanPrune: %v", err)
 	}
 	if !strings.Contains(buf.String(), "No remotes; skipped remote-ref prune.") {
@@ -161,7 +162,7 @@ func TestCleanMergedFetchFails(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	err := cleanMerged(cmd, r)
+	err := cleanMerged(context.Background(), cmd, r)
 	if err != nil {
 		t.Fatalf(fatalCleanMerged, err)
 	}
@@ -205,7 +206,7 @@ func TestCleanMergedFetchSucceeds(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	err := cleanMerged(cmd, r)
+	err := cleanMerged(context.Background(), cmd, r)
 	if err != nil {
 		t.Fatalf(fatalCleanMerged, err)
 	}
@@ -282,7 +283,7 @@ func TestCleanPruneSuccess(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	err := cleanPrune(cmd, r)
+	err := cleanPrune(context.Background(), cmd, r)
 	if err != nil {
 		t.Fatalf(fatalCleanPrune, err)
 	}
@@ -299,7 +300,7 @@ func TestCleanPruneDryRunEmpty(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	err := cleanPrune(cmd, r)
+	err := cleanPrune(context.Background(), cmd, r)
 	if err != nil {
 		t.Fatalf(fatalCleanPrune, err)
 	}
@@ -315,7 +316,7 @@ func TestCleanPruneNoDryRunEmpty(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	err := cleanPrune(cmd, r)
+	err := cleanPrune(context.Background(), cmd, r)
 	if err != nil {
 		t.Fatalf(fatalCleanPrune, err)
 	}
@@ -336,7 +337,7 @@ func TestCleanPruneError(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	err := cleanPrune(cmd, r)
+	err := cleanPrune(context.Background(), cmd, r)
 	if err == nil {
 		t.Fatal("expected error from prune failure")
 	}
@@ -394,7 +395,7 @@ func TestCleanMergedNoCandidates(t *testing.T) {
 	cmd, buf := newCleanMergedCmd()
 	r := cleanMergedTestRunner(t, "", worktreeOut)
 
-	err := cleanMerged(cmd, r)
+	err := cleanMerged(context.Background(), cmd, r)
 	if err != nil {
 		t.Fatalf(fatalCleanMerged, err)
 	}
@@ -409,7 +410,7 @@ func TestCleanMergedDryRun(t *testing.T) {
 	_ = cmd.Flags().Set(flagDryRun, "true")
 	r := cleanMergedTestRunner(t, "  "+branchDone, worktreeOut)
 
-	err := cleanMerged(cmd, r)
+	err := cleanMerged(context.Background(), cmd, r)
 	if err != nil {
 		t.Fatalf(fatalCleanMerged, err)
 	}
@@ -428,7 +429,7 @@ func TestCleanMergedAbort(t *testing.T) {
 	cmd.SetIn(strings.NewReader("n\n"))
 	r := cleanMergedTestRunner(t, "  "+branchDone, worktreeOut)
 
-	err := cleanMerged(cmd, r)
+	err := cleanMerged(context.Background(), cmd, r)
 	if err != nil {
 		t.Fatalf(fatalCleanMerged, err)
 	}
@@ -443,7 +444,7 @@ func TestCleanMergedForce(t *testing.T) {
 	_ = cmd.Flags().Set(flagForce, "true")
 	r := cleanMergedTestRunner(t, "  "+branchDone, worktreeOut)
 
-	err := cleanMerged(cmd, r)
+	err := cleanMerged(context.Background(), cmd, r)
 	if err != nil {
 		t.Fatalf(fatalCleanMerged, err)
 	}
@@ -460,7 +461,7 @@ func TestCleanMergedResolveError(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	err := cleanMerged(cmd, r)
+	err := cleanMerged(context.Background(), cmd, r)
 	if err == nil {
 		t.Fatal("expected error from resolveMainBranch failure")
 	}
@@ -503,7 +504,7 @@ func TestCleanStaleDryRun(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	err := cleanStale(cmd, r)
+	err := cleanStale(context.Background(), cmd, r)
 	if err != nil {
 		t.Fatalf("cleanStale: %v", err)
 	}
@@ -543,7 +544,7 @@ func TestCleanStaleNoCandidates(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	err := cleanStale(cmd, r)
+	err := cleanStale(context.Background(), cmd, r)
 	if err != nil {
 		t.Fatalf("cleanStale: %v", err)
 	}
@@ -580,7 +581,7 @@ func TestCleanStaleAbort(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	err := cleanStale(cmd, r)
+	err := cleanStale(context.Background(), cmd, r)
 	if err != nil {
 		t.Fatalf("cleanStale: %v", err)
 	}
@@ -596,7 +597,7 @@ func TestCleanStaleResolveError(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	err := cleanStale(cmd, r)
+	err := cleanStale(context.Background(), cmd, r)
 	if err == nil {
 		t.Fatal("expected error from resolveMainBranch failure")
 	}
@@ -621,7 +622,7 @@ func TestCleanMergedFindCandidatesError(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	err := cleanMerged(cmd, r)
+	err := cleanMerged(context.Background(), cmd, r)
 	if err == nil {
 		t.Fatal("expected error from findMergedCandidates failure")
 	}
@@ -643,7 +644,7 @@ func TestCleanStaleFindCandidatesError(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	err := cleanStale(cmd, r)
+	err := cleanStale(context.Background(), cmd, r)
 	if err == nil {
 		t.Fatal("expected error from findStaleCandidates failure")
 	}
@@ -677,7 +678,7 @@ func TestCleanStaleForce(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	err := cleanStale(cmd, r)
+	err := cleanStale(context.Background(), cmd, r)
 	if err != nil {
 		t.Fatalf("cleanStale: %v", err)
 	}
@@ -728,7 +729,10 @@ func TestCleanFetchMergeRefWarningOnStderr(t *testing.T) {
 	s := spinner.New(spinnerOpts(cmd))
 	defer s.Stop()
 
-	ref := cleanFetchMergeRef(cmd, r, s, branchMain)
+	ref, err := cleanFetchMergeRef(context.Background(), cmd, r, s, branchMain)
+	if err != nil {
+		t.Fatalf("cleanFetchMergeRef: %v", err)
+	}
 	if ref != branchMain {
 		t.Errorf("ref = %q, want %q (local fallback)", ref, branchMain)
 	}
@@ -772,5 +776,24 @@ func TestPrintCleanedItemsAllBranches(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in output: %s", want, out)
 		}
+	}
+}
+
+func TestCleanFetchMergeRefCancelled(t *testing.T) {
+	cmd, _ := newTestCmd()
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == cmdFetch {
+				return "", context.Canceled
+			}
+			return "", nil
+		},
+	}
+	s := spinner.New(spinnerOpts(cmd))
+	defer s.Stop()
+
+	ref, err := cleanFetchMergeRef(context.Background(), cmd, r, s, branchMain)
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled, got err=%v ref=%q", err, ref)
 	}
 }

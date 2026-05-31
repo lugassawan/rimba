@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/lugassawan/rimba/internal/config"
@@ -37,7 +38,7 @@ type PostCreateResult struct {
 
 // PostCreateSetup runs the post-create sequence: copy files, install deps, run hooks.
 // This is used after creating a worktree via git.AddWorktree, git.AddWorktreeFromBranch, etc.
-func PostCreateSetup(r git.Runner, params PostCreateParams, onProgress progress.Func) (PostCreateResult, error) {
+func PostCreateSetup(ctx context.Context, r git.Runner, params PostCreateParams, onProgress progress.Func) (PostCreateResult, error) {
 	var result PostCreateResult
 
 	// Copy files
@@ -66,16 +67,16 @@ func PostCreateSetup(r git.Runner, params PostCreateParams, onProgress progress.
 			Concurrency:   params.Concurrency,
 		}
 		if params.SourcePath != "" {
-			result.DepsResults = InstallDepsPreferSource(r, params.SourcePath, dp, onProgress)
+			result.DepsResults = InstallDepsPreferSource(ctx, r, params.SourcePath, dp, onProgress)
 		} else {
-			result.DepsResults = InstallDeps(r, dp, onProgress)
+			result.DepsResults = InstallDeps(ctx, r, dp, onProgress)
 		}
 	}
 
 	// Post-create hooks
 	if !params.SkipHooks && len(params.PostCreate) > 0 {
 		progress.Notify(onProgress, "Running hooks...")
-		result.HookResults = RunPostCreateHooks(params.WtPath, params.PostCreate, onProgress)
+		result.HookResults = RunPostCreateHooks(ctx, params.WtPath, params.PostCreate, onProgress)
 	}
 
 	return result, nil

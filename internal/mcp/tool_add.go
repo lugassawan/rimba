@@ -68,7 +68,7 @@ func handleAdd(hctx *HandlerContext) server.ToolHandlerFunc {
 			configModules = cfg.Deps.Modules
 		}
 
-		result, err := operations.AddWorktree(hctx.Runner, operations.AddParams{
+		result, err := operations.AddWorktree(ctx, hctx.Runner, operations.AddParams{
 			Task:    task,
 			Service: service,
 			Prefix:  prefix,

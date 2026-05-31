@@ -2,9 +2,11 @@ package deps
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
+	"syscall"
 
 	"github.com/lugassawan/rimba/internal/progress"
 )
@@ -16,14 +18,27 @@ type HookResult struct {
 }
 
 // RunPostCreateHooks executes shell commands in the worktree directory.
-// It collects errors but does not stop on failure — all hooks run regardless.
-func RunPostCreateHooks(worktreeDir string, hooks []string, onProgress progress.Func) []HookResult {
+// Skips launching new hooks when ctx is already cancelled; kills any in-flight
+// hook subprocess when ctx is cancelled (via exec.CommandContext).
+func RunPostCreateHooks(ctx context.Context, worktreeDir string, hooks []string, onProgress progress.Func) []HookResult {
 	results := make([]HookResult, 0, len(hooks))
 	for i, hook := range hooks {
+		if ctx.Err() != nil {
+			break
+		}
 		progress.Notifyf(onProgress, "%s (%d/%d)", hook, i+1, len(hooks))
 
-		cmd := exec.Command("sh", "-c", hook) //nolint:gosec // hook commands come from user config
+		cmd := exec.CommandContext(ctx, "sh", "-c", hook) //nolint:gosec // hook commands come from user config
 		cmd.Dir = worktreeDir
+		// Put the subprocess in its own process group so that cancellation kills
+		// sh and all children it may have forked (e.g. sh -c sleep 30 on Linux).
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		cmd.Cancel = func() error {
+			if cmd.Process != nil {
+				_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+			}
+			return nil
+		}
 
 		var buf bytes.Buffer
 		cmd.Stdout = &buf

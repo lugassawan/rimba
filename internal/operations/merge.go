@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -44,7 +45,7 @@ type dirtyResult struct {
 
 // MergeWorktree merges a source worktree branch into main or another worktree.
 // It handles worktree resolution, concurrent dirty checks, merge execution, and cleanup.
-func MergeWorktree(r git.Runner, params MergeParams, onProgress progress.Func) (MergeResult, error) {
+func MergeWorktree(ctx context.Context, r git.Runner, params MergeParams, onProgress progress.Func) (MergeResult, error) {
 	worktrees, err := ListWorktreeInfos(r)
 	if err != nil {
 		return MergeResult{}, err
@@ -93,7 +94,7 @@ func MergeWorktree(r git.Runner, params MergeParams, onProgress progress.Func) (
 	progress.Notify(onProgress, "Merging...")
 	mergeDesc := fmt.Sprintf("merge %s into %s", source.Branch, targetLabel)
 	if err := plan.Do(mergeDesc, func() error {
-		return git.Merge(r, targetDir, source.Branch, params.NoFF)
+		return git.Merge(ctx, r, targetDir, source.Branch, params.NoFF)
 	}); err != nil {
 		return result, abortFailedMerge(r, targetDir, targetLabel, source.Branch, err)
 	}

@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -58,7 +59,7 @@ func mergeRunner(mergeErr error) *mockRunner {
 func TestMergeWorktreeMergeToMain(t *testing.T) {
 	r := mergeRunner(nil)
 
-	result, err := MergeWorktree(r, MergeParams{
+	result, err := MergeWorktree(context.Background(), r, MergeParams{
 		SourceTask: "login",
 		RepoRoot:   "/repo",
 		MainBranch: "main",
@@ -83,7 +84,7 @@ func TestMergeWorktreeMergeToMain(t *testing.T) {
 func TestMergeWorktreeMergeToMainKeep(t *testing.T) {
 	r := mergeRunner(nil)
 
-	result, err := MergeWorktree(r, MergeParams{
+	result, err := MergeWorktree(context.Background(), r, MergeParams{
 		SourceTask: "login",
 		RepoRoot:   "/repo",
 		MainBranch: "main",
@@ -100,7 +101,7 @@ func TestMergeWorktreeMergeToMainKeep(t *testing.T) {
 func TestMergeWorktreeMergeToWorktree(t *testing.T) {
 	r := mergeRunner(nil)
 
-	result, err := MergeWorktree(r, MergeParams{
+	result, err := MergeWorktree(context.Background(), r, MergeParams{
 		SourceTask: "login",
 		IntoTask:   "dashboard",
 		RepoRoot:   "/repo",
@@ -126,7 +127,7 @@ func TestMergeWorktreeMergeToWorktree(t *testing.T) {
 func TestMergeWorktreeMergeToWorktreeWithDelete(t *testing.T) {
 	r := mergeRunner(nil)
 
-	result, err := MergeWorktree(r, MergeParams{
+	result, err := MergeWorktree(context.Background(), r, MergeParams{
 		SourceTask: "login",
 		IntoTask:   "dashboard",
 		RepoRoot:   "/repo",
@@ -144,7 +145,7 @@ func TestMergeWorktreeMergeToWorktreeWithDelete(t *testing.T) {
 func TestMergeWorktreeSourceNotFound(t *testing.T) {
 	r := mergeRunner(nil)
 
-	_, err := MergeWorktree(r, MergeParams{
+	_, err := MergeWorktree(context.Background(), r, MergeParams{
 		SourceTask: "nonexistent",
 		RepoRoot:   "/repo",
 		MainBranch: "main",
@@ -160,7 +161,7 @@ func TestMergeWorktreeSourceNotFound(t *testing.T) {
 func TestMergeWorktreeTargetNotFound(t *testing.T) {
 	r := mergeRunner(nil)
 
-	_, err := MergeWorktree(r, MergeParams{
+	_, err := MergeWorktree(context.Background(), r, MergeParams{
 		SourceTask: "login",
 		IntoTask:   "nonexistent",
 		RepoRoot:   "/repo",
@@ -191,7 +192,7 @@ func TestMergeWorktreeSourceDirty(t *testing.T) {
 		},
 	}
 
-	_, err := MergeWorktree(r, MergeParams{
+	_, err := MergeWorktree(context.Background(), r, MergeParams{
 		SourceTask: "login",
 		RepoRoot:   "/repo",
 		MainBranch: "main",
@@ -221,7 +222,7 @@ func TestMergeWorktreeTargetDirty(t *testing.T) {
 		},
 	}
 
-	_, err := MergeWorktree(r, MergeParams{
+	_, err := MergeWorktree(context.Background(), r, MergeParams{
 		SourceTask: "login",
 		RepoRoot:   "/repo",
 		MainBranch: "main",
@@ -237,7 +238,7 @@ func TestMergeWorktreeTargetDirty(t *testing.T) {
 func TestMergeWorktreeMergeConflict(t *testing.T) {
 	r := mergeRunner(errors.New("conflict"))
 
-	_, err := MergeWorktree(r, MergeParams{
+	_, err := MergeWorktree(context.Background(), r, MergeParams{
 		SourceTask: "login",
 		RepoRoot:   "/repo",
 		MainBranch: "main",
@@ -277,7 +278,7 @@ func TestMergeWorktreeCleanupPartialFailure(t *testing.T) {
 		},
 	}
 
-	result, err := MergeWorktree(r, MergeParams{
+	result, err := MergeWorktree(context.Background(), r, MergeParams{
 		SourceTask: "login",
 		RepoRoot:   "/repo",
 		MainBranch: "main",
@@ -299,7 +300,7 @@ func TestMergeWorktreeProgressCallbacks(t *testing.T) {
 	var messages []string
 	onProgress := progress.Func(func(msg string) { messages = append(messages, msg) })
 
-	_, err := MergeWorktree(r, MergeParams{
+	_, err := MergeWorktree(context.Background(), r, MergeParams{
 		SourceTask: "login",
 		RepoRoot:   "/repo",
 		MainBranch: "main",
@@ -321,7 +322,7 @@ func TestMergeWorktreeListWorktreesFails(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	_, err := MergeWorktree(r, MergeParams{
+	_, err := MergeWorktree(context.Background(), r, MergeParams{
 		SourceTask: "login",
 		RepoRoot:   "/repo",
 		MainBranch: "main",
@@ -349,7 +350,7 @@ func TestMergeWorktreeSourceDirtyCheckError(t *testing.T) {
 		},
 	}
 
-	_, err := MergeWorktree(r, MergeParams{
+	_, err := MergeWorktree(context.Background(), r, MergeParams{
 		SourceTask: "login",
 		RepoRoot:   "/repo",
 		MainBranch: branchMain,
@@ -365,7 +366,7 @@ func TestMergeWorktreeSourceDirtyCheckError(t *testing.T) {
 func TestMergeWorktreeDryRun(t *testing.T) {
 	r := mergeRunner(nil)
 
-	result, err := MergeWorktree(r, MergeParams{
+	result, err := MergeWorktree(context.Background(), r, MergeParams{
 		SourceTask: "login",
 		RepoRoot:   "/repo",
 		MainBranch: "main",
@@ -413,7 +414,7 @@ func TestMergeWorktreeTargetDirtyCheckError(t *testing.T) {
 		},
 	}
 
-	_, err := MergeWorktree(r, MergeParams{
+	_, err := MergeWorktree(context.Background(), r, MergeParams{
 		SourceTask: "login",
 		RepoRoot:   "/repo",
 		MainBranch: branchMain,
@@ -453,7 +454,7 @@ func TestMergeWorktreeMergeFailsAbortAlsoFails(t *testing.T) {
 		},
 	}
 
-	_, err := MergeWorktree(r, MergeParams{
+	_, err := MergeWorktree(context.Background(), r, MergeParams{
 		SourceTask: "login",
 		RepoRoot:   "/repo",
 		MainBranch: "main",
@@ -490,7 +491,7 @@ func TestMergeWorktreeMergeFailsNoMergeInProgress(t *testing.T) {
 		},
 	}
 
-	_, err := MergeWorktree(r, MergeParams{
+	_, err := MergeWorktree(context.Background(), r, MergeParams{
 		SourceTask: "login",
 		RepoRoot:   "/repo",
 		MainBranch: "main",
@@ -539,7 +540,7 @@ func mergeCleanupBranchDeleteFailsRunner(wt string) *mockRunner {
 func TestMergeWorktreeCleanupBranchDeleteFails(t *testing.T) {
 	r := mergeCleanupBranchDeleteFailsRunner(mergeWorktreeList())
 
-	result, err := MergeWorktree(r, MergeParams{
+	result, err := MergeWorktree(context.Background(), r, MergeParams{
 		SourceTask: "login",
 		RepoRoot:   "/repo",
 		MainBranch: "main",
@@ -578,7 +579,7 @@ func TestMergeWorktreeTargetDirtyToWorktree(t *testing.T) {
 		},
 	}
 
-	_, err := MergeWorktree(r, MergeParams{
+	_, err := MergeWorktree(context.Background(), r, MergeParams{
 		SourceTask: "login",
 		IntoTask:   "dashboard",
 		RepoRoot:   "/repo",
