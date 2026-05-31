@@ -94,6 +94,9 @@ var syncCmd = &cobra.Command{
 			s.Start("Fetching from origin...")
 			if err := git.Fetch(cmd.Context(), r, "origin"); err != nil {
 				s.Stop()
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					return err
+				}
 				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: fetch failed (no remote?): continuing with local state\n")
 			}
 		}
@@ -212,6 +215,9 @@ func syncAll(ctx context.Context, sc *syncContext, worktrees []resolver.Worktree
 	wg.Wait()
 
 	sc.s.Stop()
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	if !sc.dryRun {
 		printSyncSummary(sc.cmd, sc.cfg.DefaultSource, useMerge, sc.res)
 	}

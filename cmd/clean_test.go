@@ -729,7 +729,10 @@ func TestCleanFetchMergeRefWarningOnStderr(t *testing.T) {
 	s := spinner.New(spinnerOpts(cmd))
 	defer s.Stop()
 
-	ref := cleanFetchMergeRef(context.Background(), cmd, r, s, branchMain)
+	ref, err := cleanFetchMergeRef(context.Background(), cmd, r, s, branchMain)
+	if err != nil {
+		t.Fatalf("cleanFetchMergeRef: %v", err)
+	}
 	if ref != branchMain {
 		t.Errorf("ref = %q, want %q (local fallback)", ref, branchMain)
 	}

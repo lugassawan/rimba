@@ -3,6 +3,7 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -223,8 +224,9 @@ func cleanMerged(ctx context.Context, cmd *cobra.Command, r git.Runner) error {
 		summaryFmt:    "Cleaned %d merged worktree(s).\n",
 		originPresent: remotePresent, // shared with printMergedCandidates — single probe
 		preFind: func(c *cobra.Command, rr git.Runner, sp *spinner.Spinner) error {
-			mergeRef = cleanFetchMergeRef(ctx, c, rr, sp, mainBranch)
-			return nil
+			var err error
+			mergeRef, err = cleanFetchMergeRef(ctx, c, rr, sp, mainBranch)
+			return err
 		},
 		find: func(rr git.Runner) ([]operations.CleanCandidate, []string, error) {
 			result, err := operations.FindMergedCandidates(rr, mergeRef, mainBranch)
@@ -272,15 +274,19 @@ func cleanStale(ctx context.Context, cmd *cobra.Command, r git.Runner) error {
 }
 
 // cleanFetchMergeRef fetches from origin and returns the ref to diff against.
-// Falls back to mainBranch with a warning if fetch fails.
-func cleanFetchMergeRef(ctx context.Context, cmd *cobra.Command, r git.Runner, s *spinner.Spinner, mainBranch string) string {
+// Returns an error on cancellation; falls back to mainBranch with a warning on
+// other fetch failures (e.g. no remote configured).
+func cleanFetchMergeRef(ctx context.Context, cmd *cobra.Command, r git.Runner, s *spinner.Spinner, mainBranch string) (string, error) {
 	s.Start("Fetching from " + git.DefaultRemote + "...")
 	if err := git.Fetch(ctx, r, git.DefaultRemote); err != nil {
 		s.Stop()
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return "", err
+		}
 		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: fetch failed (no remote?): continuing with local state\n")
-		return mainBranch
+		return mainBranch, nil
 	}
-	return git.DefaultRemote + "/" + mainBranch
+	return git.DefaultRemote + "/" + mainBranch, nil
 }
 
 func cleanRemoveCandidates(ctx context.Context, cmd *cobra.Command, r git.Runner, s *spinner.Spinner, candidates []operations.CleanCandidate, originPresent bool) int {

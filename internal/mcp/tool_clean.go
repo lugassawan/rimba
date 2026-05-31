@@ -88,9 +88,11 @@ func mcpCleanMerged(ctx context.Context, r git.Runner, hctx *HandlerContext, dry
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	// Fetch latest (non-fatal)
+	// Fetch latest (non-fatal; cancellation propagated as a tool error)
 	mergeRef := mainBranch
-	if err := git.Fetch(ctx, r, git.DefaultRemote); err == nil {
+	if fetchWarn, fetchErr := mcpFetchNonFatal(ctx, r, git.DefaultRemote); fetchErr != nil {
+		return mcp.NewToolResultError(fetchErr.Error()), nil
+	} else if fetchWarn == "" {
 		mergeRef = git.DefaultRemote + "/" + mainBranch
 	}
 

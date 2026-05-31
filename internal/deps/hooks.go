@@ -17,7 +17,8 @@ type HookResult struct {
 }
 
 // RunPostCreateHooks executes shell commands in the worktree directory.
-// It stops launching new hooks if ctx is cancelled, but does not stop an already-running hook.
+// Skips launching new hooks when ctx is already cancelled; kills any in-flight
+// hook subprocess when ctx is cancelled (via exec.CommandContext).
 func RunPostCreateHooks(ctx context.Context, worktreeDir string, hooks []string, onProgress progress.Func) []HookResult {
 	results := make([]HookResult, 0, len(hooks))
 	for i, hook := range hooks {
