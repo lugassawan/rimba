@@ -371,6 +371,9 @@ func TestExecValidateFlagsNegativeConcurrency(t *testing.T) {
 	if !strings.Contains(err.Error(), "concurrency") {
 		t.Errorf("error %q does not mention 'concurrency'", err.Error())
 	}
+	if !strings.Contains(err.Error(), "To fix:") {
+		t.Errorf("error %q missing actionable fix hint", err.Error())
+	}
 }
 
 func TestExecBuildTargets(t *testing.T) {

@@ -238,11 +238,10 @@ func filterDirtyWorktrees(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, 
 	var done atomic.Int32
 
 	results := parallel.Collect[dirtyResult](n, 8, func(i int) dirtyResult {
-		count := done.Add(1)
-		s.Update(fmt.Sprintf("Checking dirty status... (%d/%d)", count, n))
-
 		path := worktrees[i].Path
 		dirty, err := git.IsDirty(r, path)
+		count := done.Add(1)
+		s.Update(fmt.Sprintf("Checking dirty status... (%d/%d)", count, n))
 		if err != nil {
 			return dirtyResult{dirty: true, warning: fmt.Sprintf("Warning: cannot check dirty status for %s: %v", path, err)}
 		}

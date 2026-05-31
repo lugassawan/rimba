@@ -50,6 +50,11 @@ func TestCollectAutoConcurrency(t *testing.T) {
 	if len(results2) != 3 {
 		t.Fatalf("got %d results, want 3", len(results2))
 	}
+	for i, v := range results2 {
+		if v != i*10 {
+			t.Errorf("results2[%d] = %d, want %d", i, v, i*10)
+		}
+	}
 }
 
 func TestCollectBoundsConcurrency(t *testing.T) {
