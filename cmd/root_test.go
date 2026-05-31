@@ -284,7 +284,8 @@ func TestRootHelpFunctionRoot(t *testing.T) {
 		_, _ = w.Write([]byte(`{
 			"tag_name":"v99.0.0",
 			"assets":[
-				{"name":"rimba_99.0.0_linux_amd64.tar.gz","browser_download_url":"https://example.com/download"}
+				{"name":"rimba_99.0.0_linux_amd64.tar.gz","browser_download_url":"https://example.com/download"},
+				{"name":"checksums.txt","browser_download_url":"https://example.com/checksums.txt"}
 			]
 		}`))
 	}))

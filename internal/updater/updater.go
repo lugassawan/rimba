@@ -1,10 +1,10 @@
 package updater
 
 import (
-	"archive/tar"
 	"bufio"
-	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,11 +22,17 @@ const (
 	repoPath           = "/repos/lugassawan/rimba/releases/latest"
 	binaryName         = "rimba"
 	localBinSubdir     = ".local"
+	checksumsFileName  = "checksums.txt"
+	goosWindows        = "windows"
 )
 
 // maxBinarySize is the decompressed size limit for the extracted binary (100 MiB).
 // Tests may override this to exercise the size-limit path.
 var maxBinarySize int64 = 100 << 20
+
+// maxArchiveSize is the download size limit for the archive (100 MiB).
+// Tests may override this to exercise the size-limit path.
+var maxArchiveSize int64 = 100 << 20
 
 // HTTPClient abstracts HTTP requests for testability.
 type HTTPClient interface {
@@ -51,6 +57,15 @@ type CheckResult struct {
 	LatestVersion  string
 	UpToDate       bool
 	DownloadURL    string
+	AssetName      string
+	ChecksumsURL   string
+}
+
+// DownloadResult holds the paths and digest produced by Download.
+type DownloadResult struct {
+	ArchivePath string
+	BinaryPath  string
+	SHA256      string
 }
 
 // Updater checks for and applies updates from GitHub releases.
@@ -79,6 +94,8 @@ func IsDevVersion(v string) bool {
 }
 
 // Check queries the GitHub API for the latest release and compares versions.
+// It is fail-closed: if checksums.txt is absent from the release assets, it
+// returns an error rather than allowing an unverified download.
 func (u *Updater) Check(ctx context.Context) (*CheckResult, error) {
 	url := u.APIEndpoint + repoPath
 
@@ -113,51 +130,86 @@ func (u *Updater) Check(ctx context.Context) (*CheckResult, error) {
 	}
 
 	if !result.UpToDate {
-		assetName := fmt.Sprintf("%s_%s_%s_%s.tar.gz", binaryName, latest, u.GOOS, u.GOARCH)
-		for _, a := range release.Assets {
-			if a.Name == assetName {
-				result.DownloadURL = a.BrowserDownloadURL
-				break
-			}
-		}
-		if result.DownloadURL == "" {
+		assetName := assetNameFor(u.GOOS, u.GOARCH, latest)
+		downloadURL, checksumsURL := findReleaseAssets(assetName, release.Assets)
+		if downloadURL == "" {
 			return nil, fmt.Errorf("no matching asset for %s/%s in release %s", u.GOOS, u.GOARCH, release.TagName)
 		}
+		if checksumsURL == "" {
+			return nil, fmt.Errorf("%s not found in release %s", checksumsFileName, release.TagName)
+		}
+		result.DownloadURL = downloadURL
+		result.AssetName = assetName
+		result.ChecksumsURL = checksumsURL
 	}
 
 	return result, nil
 }
 
-// Download fetches a tar.gz archive from the given URL and extracts the binary
-// to a temporary directory. Returns the path to the extracted binary.
-func (u *Updater) Download(ctx context.Context, url string) (string, error) {
+// Download fetches the release archive from url, streams it to a temp file while
+// computing its SHA-256, then extracts the platform binary. Returns a DownloadResult
+// with paths to both the archive and the extracted binary.
+func (u *Updater) Download(ctx context.Context, url string) (*DownloadResult, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return "", fmt.Errorf("creating download request: %w", err)
+		return nil, fmt.Errorf("creating download request: %w", err)
 	}
 
 	resp, err := u.Client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("downloading release: %w", err)
+		return nil, fmt.Errorf("downloading release: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("download returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("download returned status %d", resp.StatusCode)
 	}
 
 	tmpDir, err := os.MkdirTemp("", "rimba-update-*")
 	if err != nil {
-		return "", fmt.Errorf("creating temp dir: %w", err)
+		return nil, fmt.Errorf("creating temp dir: %w", err)
 	}
 
-	dst, err := extractBinary(resp.Body, tmpDir)
+	isWindows := u.GOOS == goosWindows
+	archiveName := "archive.tar.gz"
+	if isWindows {
+		archiveName = "archive.zip"
+	}
+	archivePath := filepath.Join(tmpDir, archiveName)
+
+	archiveFile, err := os.Create(archivePath) //nolint:gosec // path is under controlled temp dir
 	if err != nil {
 		_ = os.RemoveAll(tmpDir)
-		return "", err
+		return nil, fmt.Errorf("creating archive file: %w", err)
 	}
 
-	return dst, nil
+	h := sha256.New()
+	mw := io.MultiWriter(archiveFile, h)
+
+	lr := io.LimitReader(resp.Body, maxArchiveSize+1)
+	n, copyErr := io.Copy(mw, lr)
+	_ = archiveFile.Close()
+
+	if copyErr != nil {
+		_ = os.RemoveAll(tmpDir)
+		return nil, fmt.Errorf("downloading archive: %w", copyErr)
+	}
+	if n > maxArchiveSize {
+		_ = os.RemoveAll(tmpDir)
+		return nil, fmt.Errorf("archive exceeds max allowed size of %d bytes", maxArchiveSize)
+	}
+
+	binaryPath, err := dispatchExtract(archivePath, tmpDir, isWindows)
+	if err != nil {
+		_ = os.RemoveAll(tmpDir)
+		return nil, err
+	}
+
+	return &DownloadResult{
+		ArchivePath: archivePath,
+		BinaryPath:  binaryPath,
+		SHA256:      hex.EncodeToString(h.Sum(nil)),
+	}, nil
 }
 
 // Replace atomically swaps the current binary with a new one via
@@ -211,7 +263,7 @@ func Replace(currentBinary, newBinary string) error {
 	}
 
 	// Atomic rename: new inode replaces old one
-	if err := os.Rename(tmpPath, resolved); err != nil { //nolint:gosec // resolved is the current binary path, not user input
+	if err := swapBinary(tmpPath, resolved); err != nil {
 		return fmt.Errorf("replacing binary: %w", err)
 	}
 
@@ -291,56 +343,28 @@ func EnsurePath(dir string) error {
 	return nil
 }
 
-// extractBinary decompresses a tar.gz stream and extracts the rimba binary to dstDir.
-func extractBinary(r io.Reader, dstDir string) (string, error) {
-	gz, err := gzip.NewReader(r)
-	if err != nil {
-		return "", fmt.Errorf("decompressing archive: %w", err)
+// assetNameFor builds the release archive filename for the given platform and version.
+func assetNameFor(goos, goarch, version string) string {
+	ext := ".tar.gz"
+	if goos == goosWindows {
+		ext = ".zip"
 	}
-	defer func() { _ = gz.Close() }()
-
-	tr := tar.NewReader(gz)
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return "", fmt.Errorf("reading archive: %w", err)
-		}
-
-		if hdr.Typeflag != tar.TypeReg {
-			continue
-		}
-		if hdr.Name == binaryName {
-			return writeBinary(filepath.Join(dstDir, binaryName), tr)
-		}
-	}
-
-	return "", fmt.Errorf("binary %q not found in archive", binaryName)
+	return fmt.Sprintf("%s_%s_%s_%s%s", binaryName, version, goos, goarch, ext)
 }
 
-// writeBinary writes the tar entry contents to dst with executable permissions.
-// It enforces maxBinarySize to guard against zip-bomb payloads.
-func writeBinary(dst string, r io.Reader) (_ string, retErr error) {
-	f, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY, 0755) //nolint:gosec // executable binary requires 0755
-	if err != nil {
-		return "", fmt.Errorf("creating binary file: %w", err)
-	}
-	defer func() {
-		if cerr := f.Close(); retErr == nil {
-			retErr = cerr
+// findReleaseAssets scans release assets for the platform archive and checksums file.
+// Returns empty strings for any asset not found.
+// BrowserDownloadURL values are used verbatim; checksum verification (issue #222) is
+// the intended mitigation against redirected-URL attacks rather than host-prefix
+// validation, which would need to enumerate all valid GitHub CDN hostnames.
+func findReleaseAssets(assetName string, assets []Asset) (downloadURL, checksumsURL string) {
+	for _, a := range assets {
+		if a.Name == assetName {
+			downloadURL = a.BrowserDownloadURL
 		}
-	}()
-
-	lr := io.LimitReader(r, maxBinarySize+1)
-	n, err := io.Copy(f, lr)
-	if err != nil {
-		return "", fmt.Errorf("extracting binary: %w", err)
+		if a.Name == checksumsFileName {
+			checksumsURL = a.BrowserDownloadURL
+		}
 	}
-	if n > maxBinarySize {
-		return "", fmt.Errorf("binary exceeds max allowed size of %d bytes", maxBinarySize)
-	}
-
-	return dst, nil
+	return
 }

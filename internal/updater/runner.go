@@ -31,7 +31,8 @@ type Runner struct {
 	OnSuccess func()
 
 	check          func(ctx context.Context) (*CheckResult, error)
-	download       func(ctx context.Context, url string) (string, error)
+	download       func(ctx context.Context, url string) (*DownloadResult, error)
+	verifyChecksum func(ctx context.Context, result *CheckResult, dl *DownloadResult) error
 	prepareBinary  func(path string) error
 	executable     func() (string, error)
 	evalSymlinks   func(path string) (string, error)
@@ -56,6 +57,13 @@ func NewRunner(version string) *Runner {
 	}
 	r.check = u.Check
 	r.download = u.Download
+	r.verifyChecksum = func(ctx context.Context, result *CheckResult, dl *DownloadResult) error {
+		sums, err := u.FetchChecksums(ctx, result.ChecksumsURL)
+		if err != nil {
+			return fmt.Errorf("fetching checksums: %w", err)
+		}
+		return verifyChecksumMatch(sums, result.AssetName, dl.SHA256)
+	}
 	r.prepareBinary = PrepareBinary
 	r.executable = os.Executable
 	r.evalSymlinks = filepath.EvalSymlinks
@@ -75,8 +83,11 @@ func defaultExecCommand(ctx context.Context, name string, args ...string) ([]byt
 	return exec.CommandContext(ctx, filepath.Clean(name), args...).Output() //nolint:gosec // G204: name is installedBinary, written by this process
 }
 
-// Run executes the full update pipeline: check → download → prepare → locate →
-// install → verify. ctx is checked before the destructive install stage.
+// Run executes the full update pipeline:
+// check → download → verifyChecksum → prepare → locate → install → verify.
+// verifyChecksum is placed before prepare/install: a checksum failure aborts
+// before any binary is swapped (fail-closed).
+// ctx is checked before the destructive install stage.
 func (r *Runner) Run(ctx context.Context) error {
 	if r.Spinner == nil {
 		r.Spinner = spinner.New(spinner.Options{Writer: io.Discard})
@@ -103,16 +114,25 @@ func (r *Runner) Run(ctx context.Context) error {
 	fmt.Fprintf(r.Out, "New version available: %s → %s\n", result.CurrentVersion, result.LatestVersion)
 
 	r.Spinner.Start("Downloading...")
-	newBinary, err := r.download(ctx, result.DownloadURL)
+	dl, err := r.download(ctx, result.DownloadURL)
 	if err != nil {
 		return errhint.WithFix(
 			fmt.Errorf("downloading update: %w", err),
 			"check network connectivity and retry: rimba update",
 		)
 	}
-	defer r.cleanupTempDir(newBinary)
+	defer r.cleanupTempDir(dl.BinaryPath)
 
-	if err := r.prepareBinary(newBinary); err != nil {
+	// Verify integrity before touching the installed binary (fail-closed).
+	if err := r.verifyChecksum(ctx, result, dl); err != nil {
+		return errhint.WithFix(
+			fmt.Errorf("integrity check failed: %w", err),
+			"the downloaded release failed integrity verification — do not retry blindly; "+
+				"check https://github.com/lugassawan/rimba/releases for the expected checksums",
+		)
+	}
+
+	if err := r.prepareBinary(dl.BinaryPath); err != nil {
 		return errhint.WithFix(fmt.Errorf("preparing binary: %w", err), retryUpdateHint)
 	}
 
@@ -126,7 +146,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	}
 
 	r.Spinner.Update("Installing...")
-	installedBinary, err := r.install(currentBinary, newBinary)
+	installedBinary, err := r.install(currentBinary, dl.BinaryPath)
 	if err != nil {
 		return err
 	}
