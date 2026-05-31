@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"sync"
+	"sync/atomic"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/errhint"
@@ -14,6 +14,7 @@ import (
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/output"
+	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/lugassawan/rimba/internal/termcolor"
@@ -92,6 +93,11 @@ type execOpts struct {
 	concurrency int
 }
 
+type dirtyResult struct {
+	dirty   bool
+	warning string
+}
+
 func execReadFlags(cmd *cobra.Command) execOpts {
 	all, _ := cmd.Flags().GetBool(flagAll)
 	typeFilter, _ := cmd.Flags().GetString(flagType)
@@ -116,6 +122,12 @@ func execValidateFlags(opts execOpts) error {
 	}
 	if err := validateTypeFilter(opts.typeFilter); err != nil {
 		return err
+	}
+	if opts.concurrency < 0 {
+		return errhint.WithFix(
+			errors.New("--concurrency must be >= 0"),
+			"run: rimba exec --concurrency <n>  (n >= 0; 0 = unlimited)",
+		)
 	}
 	return nil
 }
@@ -222,42 +234,30 @@ func init() {
 // If IsDirty returns an error for a worktree, it is treated as dirty (included)
 // and a warning is emitted to cmd.ErrOrStderr() so the error is visible.
 func filterDirtyWorktrees(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, worktrees []resolver.WorktreeInfo) []resolver.WorktreeInfo {
-	isDirty := make([]bool, len(worktrees))
-	warnings := make([]string, len(worktrees))
-	var wg sync.WaitGroup
-	sem := make(chan struct{}, 8)
+	n := len(worktrees)
+	var done atomic.Int32
 
-	for i, wt := range worktrees {
-		s.Update(fmt.Sprintf("Checking dirty status... (%d/%d)", i+1, len(worktrees)))
-		wg.Add(1)
-		go func(idx int, path string) {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
+	results := parallel.Collect[dirtyResult](n, 8, func(i int) dirtyResult {
+		path := worktrees[i].Path
+		dirty, err := git.IsDirty(r, path)
+		count := done.Add(1)
+		s.Update(fmt.Sprintf("Checking dirty status... (%d/%d)", count, n))
+		if err != nil {
+			return dirtyResult{dirty: true, warning: fmt.Sprintf("Warning: cannot check dirty status for %s: %v", path, err)}
+		}
+		return dirtyResult{dirty: dirty}
+	})
 
-			dirty, err := git.IsDirty(r, path)
-			if err != nil {
-				warnings[idx] = fmt.Sprintf("Warning: cannot check dirty status for %s: %v", path, err)
-				isDirty[idx] = true
-				return
-			}
-			if dirty {
-				isDirty[idx] = true
-			}
-		}(i, wt.Path)
-	}
-	wg.Wait()
-
-	for _, w := range warnings {
-		if w != "" {
-			fmt.Fprintln(cmd.ErrOrStderr(), w)
+	for _, res := range results {
+		if res.warning != "" {
+			fmt.Fprintln(cmd.ErrOrStderr(), res.warning)
 		}
 	}
 
 	var out []resolver.WorktreeInfo
-	for i, wt := range worktrees {
-		if isDirty[i] {
-			out = append(out, wt)
+	for i, res := range results {
+		if res.dirty {
+			out = append(out, worktrees[i])
 		}
 	}
 	return out

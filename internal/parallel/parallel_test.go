@@ -33,6 +33,30 @@ func TestCollectZeroItems(t *testing.T) {
 	}
 }
 
+func TestCollectAutoConcurrency(t *testing.T) {
+	// concurrency=0 must not deadlock; treat as n (auto).
+	results := parallel.Collect(5, 0, func(i int) int { return i })
+	if len(results) != 5 {
+		t.Fatalf("got %d results, want 5", len(results))
+	}
+	for i, v := range results {
+		if v != i {
+			t.Errorf("results[%d] = %d, want %d", i, v, i)
+		}
+	}
+
+	// negative concurrency also treated as auto.
+	results2 := parallel.Collect(3, -1, func(i int) int { return i * 10 })
+	if len(results2) != 3 {
+		t.Fatalf("got %d results, want 3", len(results2))
+	}
+	for i, v := range results2 {
+		if v != i*10 {
+			t.Errorf("results2[%d] = %d, want %d", i, v, i*10)
+		}
+	}
+}
+
 func TestCollectBoundsConcurrency(t *testing.T) {
 	const maxConcurrency = 2
 	var running atomic.Int32
