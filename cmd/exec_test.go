@@ -353,6 +353,27 @@ func TestExecValidateFlagsOK(t *testing.T) {
 	if err := execValidateFlags(execOpts{typeFilter: "feature"}); err != nil {
 		t.Errorf("unexpected error for valid type: %v", err)
 	}
+	// zero concurrency is valid (unlimited)
+	if err := execValidateFlags(execOpts{all: true, concurrency: 0}); err != nil {
+		t.Errorf("unexpected error for concurrency=0: %v", err)
+	}
+	// positive concurrency is valid
+	if err := execValidateFlags(execOpts{all: true, concurrency: 4}); err != nil {
+		t.Errorf("unexpected error for concurrency=4: %v", err)
+	}
+}
+
+func TestExecValidateFlagsNegativeConcurrency(t *testing.T) {
+	err := execValidateFlags(execOpts{all: true, concurrency: -1})
+	if err == nil {
+		t.Fatal("expected error for negative concurrency")
+	}
+	if !strings.Contains(err.Error(), "concurrency") {
+		t.Errorf("error %q does not mention 'concurrency'", err.Error())
+	}
+	if !strings.Contains(err.Error(), "To fix:") {
+		t.Errorf("error %q missing actionable fix hint", err.Error())
+	}
 }
 
 func TestExecBuildTargets(t *testing.T) {
