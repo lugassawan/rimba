@@ -2,9 +2,12 @@ package updater
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -34,6 +37,10 @@ const (
 	valNewContent = "new content"
 	testRcZshrc   = ".zshrc"
 	testShellZsh  = "/bin/zsh"
+
+	// checksum test constants
+	testChecksumHex  = "aabbccdd"
+	testChecksumFile = "rimba_2.0.0_linux_amd64.tar.gz"
 )
 
 // newTestUpdater creates an Updater wired to the given test server.
@@ -77,6 +84,16 @@ func serveOctetStream(t *testing.T, data []byte) *httptest.Server {
 	return srv
 }
 
+// releaseJSON builds a GitHub release JSON body with the given assets appended.
+func releaseJSON(tagName string, extras ...string) string {
+	assets := make([]string, 0, 1+len(extras))
+	assets = append(assets,
+		`{"name":"checksums.txt","browser_download_url":"https://example.com/checksums.txt"}`,
+	)
+	assets = append(assets, extras...)
+	return fmt.Sprintf(`{"tag_name":%q,"assets":[%s]}`, tagName, strings.Join(assets, ","))
+}
+
 func TestCheckUpToDate(t *testing.T) {
 	srv := serveJSON(t, `{"tag_name":"`+testVersion+`","assets":[]}`)
 	u := newTestUpdater(srv)
@@ -92,12 +109,9 @@ func TestCheckUpToDate(t *testing.T) {
 }
 
 func TestCheckNewVersionAvailable(t *testing.T) {
-	srv := serveJSON(t, `{
-		"tag_name":"`+testVersionNew+`",
-		"assets":[
-			{"name":"rimba_2.0.0_linux_amd64.tar.gz","browser_download_url":"https://example.com/rimba_2.0.0_linux_amd64.tar.gz"}
-		]
-	}`)
+	srv := serveJSON(t, releaseJSON(testVersionNew,
+		`{"name":"rimba_2.0.0_linux_amd64.tar.gz","browser_download_url":"https://example.com/rimba_2.0.0_linux_amd64.tar.gz"}`,
+	))
 	u := newTestUpdater(srv)
 
 	result, err := u.Check(context.Background())
@@ -109,6 +123,16 @@ func TestCheckNewVersionAvailable(t *testing.T) {
 	wantURL := "https://example.com/rimba_2.0.0_linux_amd64.tar.gz"
 	if result.DownloadURL != wantURL {
 		t.Errorf("download URL = %q, want %q", result.DownloadURL, wantURL)
+	}
+
+	wantAsset := "rimba_2.0.0_linux_amd64.tar.gz"
+	if result.AssetName != wantAsset {
+		t.Errorf("AssetName = %q, want %q", result.AssetName, wantAsset)
+	}
+
+	wantChecksums := "https://example.com/checksums.txt"
+	if result.ChecksumsURL != wantChecksums {
+		t.Errorf("ChecksumsURL = %q, want %q", result.ChecksumsURL, wantChecksums)
 	}
 }
 
@@ -129,6 +153,50 @@ func TestCheckNoMatchingAsset(t *testing.T) {
 	want := "no matching asset for linux/amd64 in release " + testVersionNew
 	if got := err.Error(); got != want {
 		t.Errorf(errWantFmt, got, want)
+	}
+}
+
+func TestCheckMissingChecksums(t *testing.T) {
+	srv := serveJSON(t, fmt.Sprintf(`{
+		"tag_name":%q,
+		"assets":[
+			{"name":"rimba_2.0.0_linux_amd64.tar.gz","browser_download_url":"https://example.com/rimba_2.0.0_linux_amd64.tar.gz"}
+		]
+	}`, testVersionNew))
+	u := newTestUpdater(srv)
+
+	_, err := u.Check(context.Background())
+	if err == nil {
+		t.Fatal("expected error when checksums.txt is absent")
+	}
+	if !strings.Contains(err.Error(), "checksums.txt not found") {
+		t.Errorf("error = %q, want to contain 'checksums.txt not found'", err.Error())
+	}
+}
+
+func TestCheckWindowsAsset(t *testing.T) {
+	srv := serveJSON(t, releaseJSON(testVersionNew,
+		`{"name":"rimba_2.0.0_windows_amd64.zip","browser_download_url":"https://example.com/rimba_2.0.0_windows_amd64.zip"}`,
+	))
+	u := &Updater{
+		CurrentVersion: testVersion,
+		GOOS:           goosWindows,
+		GOARCH:         testArch,
+		Client:         srv.Client(),
+		APIEndpoint:    srv.URL,
+	}
+
+	result, err := u.Check(context.Background())
+	requireNoError(t, err)
+	if result.UpToDate {
+		t.Error("expected not up to date")
+	}
+	wantAssetWin := assetNameFor(goosWindows, testArch, "2.0.0")
+	if result.AssetName != wantAssetWin {
+		t.Errorf("AssetName = %q, want %q", result.AssetName, wantAssetWin)
+	}
+	if result.ChecksumsURL == "" {
+		t.Error("ChecksumsURL should be set")
 	}
 }
 
@@ -177,11 +245,11 @@ func TestDownloadValidArchive(t *testing.T) {
 
 	u := newTestUpdater(srv)
 
-	binaryPath, err := u.Download(context.Background(), srv.URL+"/rimba_1.0.0_linux_amd64.tar.gz")
+	dl, err := u.Download(context.Background(), srv.URL+"/rimba_1.0.0_linux_amd64.tar.gz")
 	requireNoError(t, err)
-	t.Cleanup(func() { CleanupTempDir(binaryPath) })
+	t.Cleanup(func() { CleanupTempDir(dl.BinaryPath) })
 
-	content, err := os.ReadFile(binaryPath)
+	content, err := os.ReadFile(dl.BinaryPath)
 	if err != nil {
 		t.Fatalf("reading extracted binary: %v", err)
 	}
@@ -191,12 +259,55 @@ func TestDownloadValidArchive(t *testing.T) {
 		t.Errorf("binary content = %q, want %q", content, want)
 	}
 
-	info, err := os.Stat(binaryPath)
+	info, err := os.Stat(dl.BinaryPath)
 	if err != nil {
 		t.Fatalf("stat binary: %v", err)
 	}
 	if info.Mode()&0111 == 0 {
 		t.Error("expected binary to be executable")
+	}
+
+	// SHA256 must be non-empty and match the archive bytes.
+	if dl.SHA256 == "" {
+		t.Error("SHA256 should not be empty")
+	}
+	h := sha256.Sum256(archiveData)
+	want256 := hex.EncodeToString(h[:])
+	if dl.SHA256 != want256 {
+		t.Errorf("SHA256 = %q, want %q", dl.SHA256, want256)
+	}
+}
+
+func TestDownloadZipArchive(t *testing.T) {
+	archiveData := buildTestZipArchive(t, "rimba.exe", "exe content")
+	srv := serveOctetStream(t, archiveData)
+
+	u := &Updater{
+		CurrentVersion: testVersion,
+		GOOS:           goosWindows,
+		GOARCH:         testArch,
+		Client:         srv.Client(),
+		APIEndpoint:    srv.URL,
+	}
+
+	dl, err := u.Download(context.Background(), srv.URL+"/rimba_1.0.0_windows_amd64.zip")
+	requireNoError(t, err)
+	t.Cleanup(func() { CleanupTempDir(dl.BinaryPath) })
+
+	if !strings.HasSuffix(dl.BinaryPath, "rimba.exe") {
+		t.Errorf("BinaryPath = %q, want suffix 'rimba.exe'", dl.BinaryPath)
+	}
+
+	content, err := os.ReadFile(dl.BinaryPath)
+	if err != nil {
+		t.Fatalf("reading extracted binary: %v", err)
+	}
+	if string(content) != "exe content" {
+		t.Errorf("binary content = %q, want %q", content, "exe content")
+	}
+
+	if dl.SHA256 == "" {
+		t.Error("SHA256 should not be empty")
 	}
 }
 
@@ -614,7 +725,7 @@ func buildTestArchiveTypeflag(t *testing.T, name, content string, typeflag byte)
 	return buf.Bytes()
 }
 
-func TestExtractBinarySkipsNonRegularFiles(t *testing.T) {
+func TestExtractTarGzSkipsNonRegularFiles(t *testing.T) {
 	tests := []struct {
 		name     string
 		typeflag byte
@@ -625,8 +736,13 @@ func TestExtractBinarySkipsNonRegularFiles(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			archiveData := buildTestArchiveTypeflag(t, binaryName, "", tt.typeflag)
+			// Write archive to temp file for extractTarGz
 			tmpDir := t.TempDir()
-			_, err := extractBinary(bytes.NewReader(archiveData), tmpDir)
+			archivePath := filepath.Join(tmpDir, "archive.tar.gz")
+			if err := os.WriteFile(archivePath, archiveData, 0644); err != nil {
+				t.Fatal(err)
+			}
+			_, err := extractTarGz(archivePath, tmpDir, binaryName)
 			if err == nil {
 				t.Fatal("expected error when rimba entry is not a regular file")
 			}
@@ -652,6 +768,23 @@ func TestWriteBinaryExceedsMaxSize(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "exceeds max") {
 		t.Errorf("error = %q, want to contain 'exceeds max'", err.Error())
+	}
+}
+
+func TestDownloadExceedsMaxArchiveSize(t *testing.T) {
+	orig := maxArchiveSize
+	maxArchiveSize = 5
+	t.Cleanup(func() { maxArchiveSize = orig })
+
+	srv := serveOctetStream(t, []byte("this is more than 5 bytes"))
+	u := newTestUpdater(srv)
+
+	_, err := u.Download(context.Background(), srv.URL+"/archive.tar.gz")
+	if err == nil {
+		t.Fatal("expected error when archive exceeds size limit")
+	}
+	if !strings.Contains(err.Error(), "exceeds max allowed size") {
+		t.Errorf("error = %q, want to contain 'exceeds max allowed size'", err.Error())
 	}
 }
 
@@ -727,6 +860,24 @@ func buildTestArchive(t *testing.T, name, content string) []byte {
 		t.Fatal(err)
 	}
 	return data
+}
+
+// buildTestZipArchive creates a zip archive containing a single file.
+func buildTestZipArchive(t *testing.T, name, content string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	fw, err := zw.Create(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fw.Write([]byte(content)); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
 }
 
 func TestReplaceSubdirectory(t *testing.T) {
@@ -1180,16 +1331,16 @@ func TestDownloadValidArchiveCleanup(t *testing.T) {
 
 	u := newTestUpdater(srv)
 
-	binaryPath, err := u.Download(context.Background(), srv.URL+"/rimba_1.0.0_linux_amd64.tar.gz")
+	dl, err := u.Download(context.Background(), srv.URL+"/rimba_1.0.0_linux_amd64.tar.gz")
 	requireNoError(t, err)
 
 	// Verify the binary exists
-	if _, err := os.Stat(binaryPath); err != nil {
-		t.Fatalf("binary should exist at %s: %v", binaryPath, err)
+	if _, err := os.Stat(dl.BinaryPath); err != nil {
+		t.Fatalf("binary should exist at %s: %v", dl.BinaryPath, err)
 	}
 
 	// Verify content
-	content, err := os.ReadFile(binaryPath)
+	content, err := os.ReadFile(dl.BinaryPath)
 	if err != nil {
 		t.Fatalf("reading binary: %v", err)
 	}
@@ -1199,10 +1350,170 @@ func TestDownloadValidArchiveCleanup(t *testing.T) {
 	}
 
 	// Now clean up and verify temp dir is removed
-	tmpDir := filepath.Dir(binaryPath)
-	CleanupTempDir(binaryPath)
+	tmpDir := filepath.Dir(dl.BinaryPath)
+	CleanupTempDir(dl.BinaryPath)
 
 	if _, err := os.Stat(tmpDir); !os.IsNotExist(err) {
 		t.Errorf("expected temp dir %s to be removed after CleanupTempDir", tmpDir)
+	}
+}
+
+// ---- FetchChecksums tests ----
+
+func serveChecksums(t *testing.T, body string) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(contentTypeHdr, "text/plain")
+		_, _ = w.Write([]byte(body))
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func TestFetchChecksumsHappyPath(t *testing.T) {
+	body := "aabbccdd  rimba_2.0.0_linux_amd64.tar.gz\n" +
+		"eeff0011  rimba_2.0.0_darwin_amd64.tar.gz\n"
+	srv := serveChecksums(t, body)
+	u := newTestUpdater(srv)
+
+	sums, err := u.FetchChecksums(context.Background(), srv.URL+"/checksums.txt")
+	requireNoError(t, err)
+
+	if got := sums["rimba_2.0.0_linux_amd64.tar.gz"]; got != "aabbccdd" {
+		t.Errorf("linux sum = %q, want %q", got, "aabbccdd")
+	}
+	if got := sums["rimba_2.0.0_darwin_amd64.tar.gz"]; got != "eeff0011" {
+		t.Errorf("darwin sum = %q, want %q", got, "eeff0011")
+	}
+}
+
+func TestFetchChecksumsHTTPError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	t.Cleanup(srv.Close)
+	u := newTestUpdater(srv)
+
+	_, err := u.FetchChecksums(context.Background(), srv.URL+"/checksums.txt")
+	if err == nil {
+		t.Fatal("expected error for HTTP error response")
+	}
+	if !strings.Contains(err.Error(), "403") {
+		t.Errorf("error = %q, want to contain '403'", err.Error())
+	}
+}
+
+func TestFetchChecksumsNetworkError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		conn, _, err := hj.Hijack()
+		if err != nil {
+			return
+		}
+		conn.Close()
+	}))
+	t.Cleanup(srv.Close)
+	u := newTestUpdater(srv)
+
+	_, err := u.FetchChecksums(context.Background(), srv.URL+"/checksums.txt")
+	if err == nil {
+		t.Fatal("expected error for network failure")
+	}
+}
+
+func TestFetchChecksumsRequestError(t *testing.T) {
+	u := &Updater{
+		CurrentVersion: testVersion,
+		GOOS:           testOS,
+		GOARCH:         testArch,
+		Client:         http.DefaultClient,
+	}
+
+	_, err := u.FetchChecksums(context.Background(), "\x7f://invalid")
+	if err == nil {
+		t.Fatal("expected error for invalid URL")
+	}
+	if !strings.Contains(err.Error(), "creating checksums request") {
+		t.Errorf("error = %q, want 'creating checksums request'", err.Error())
+	}
+}
+
+func TestFetchChecksumsLowercasesHex(t *testing.T) {
+	body := "AABBCCDD  rimba_2.0.0_linux_amd64.tar.gz\n"
+	srv := serveChecksums(t, body)
+	u := newTestUpdater(srv)
+
+	sums, err := u.FetchChecksums(context.Background(), srv.URL+"/checksums.txt")
+	requireNoError(t, err)
+
+	if got := sums["rimba_2.0.0_linux_amd64.tar.gz"]; got != "aabbccdd" {
+		t.Errorf("sum = %q, want lowercase %q", got, "aabbccdd")
+	}
+}
+
+// ---- verifyChecksumMatch tests ----
+
+func TestVerifyChecksumMatchHappyPath(t *testing.T) {
+	sums := map[string]string{testChecksumFile: testChecksumHex}
+	if err := verifyChecksumMatch(sums, testChecksumFile, testChecksumHex); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestVerifyChecksumMatchCaseInsensitive(t *testing.T) {
+	sums := map[string]string{testChecksumFile: testChecksumHex}
+	if err := verifyChecksumMatch(sums, testChecksumFile, strings.ToUpper(testChecksumHex)); err != nil {
+		t.Errorf("unexpected error for uppercase input: %v", err)
+	}
+}
+
+func TestVerifyChecksumMatchMismatch(t *testing.T) {
+	sums := map[string]string{testChecksumFile: testChecksumHex}
+	err := verifyChecksumMatch(sums, testChecksumFile, "deadbeef")
+	if err == nil {
+		t.Fatal("expected error for checksum mismatch")
+	}
+	if !strings.Contains(err.Error(), "checksum mismatch") {
+		t.Errorf("error = %q, want to contain 'checksum mismatch'", err.Error())
+	}
+}
+
+func TestVerifyChecksumMatchAbsentRow(t *testing.T) {
+	sums := map[string]string{"other_file.tar.gz": testChecksumHex}
+	err := verifyChecksumMatch(sums, testChecksumFile, testChecksumHex)
+	if err == nil {
+		t.Fatal("expected error for absent asset row (fail-closed)")
+	}
+	if !strings.Contains(err.Error(), "not found in checksums.txt") {
+		t.Errorf("error = %q, want to contain 'not found in checksums.txt'", err.Error())
+	}
+}
+
+// ---- assetNameFor tests ----
+
+func TestAssetNameFor(t *testing.T) {
+	tests := []struct {
+		goos   string
+		goarch string
+		want   string
+	}{
+		{"linux", "amd64", "rimba_1.0.0_linux_amd64.tar.gz"},
+		{"linux", "arm64", "rimba_1.0.0_linux_arm64.tar.gz"},
+		{"darwin", "amd64", "rimba_1.0.0_darwin_amd64.tar.gz"},
+		{"darwin", "arm64", "rimba_1.0.0_darwin_arm64.tar.gz"},
+		{goosWindows, "amd64", "rimba_1.0.0_windows_amd64.zip"},
+		{goosWindows, "arm64", "rimba_1.0.0_windows_arm64.zip"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.goos+"_"+tt.goarch, func(t *testing.T) {
+			got := assetNameFor(tt.goos, tt.goarch, "1.0.0")
+			if got != tt.want {
+				t.Errorf("assetNameFor(%q, %q, %q) = %q, want %q", tt.goos, tt.goarch, "1.0.0", got, tt.want)
+			}
+		})
 	}
 }

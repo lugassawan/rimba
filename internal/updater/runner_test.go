@@ -18,6 +18,13 @@ const (
 	testCurrentBinary = "/usr/local/bin/rimba"
 )
 
+// fakeDownloadResult is the DownloadResult returned by the default test download seam.
+var fakeDownloadResult = &DownloadResult{
+	ArchivePath: "/tmp/rimba-test/archive.tar.gz",
+	BinaryPath:  "/tmp/rimba-test/rimba",
+	SHA256:      "aabbcc",
+}
+
 // newTestRunner returns a Runner wired with fake seams that all succeed, plus a
 // buffer capturing stdout. Tests override individual seams to exercise one failure path.
 func newTestRunner(t *testing.T) (*Runner, *bytes.Buffer) {
@@ -33,9 +40,14 @@ func newTestRunner(t *testing.T) (*Runner, *bytes.Buffer) {
 			CurrentVersion: "1.0.0",
 			LatestVersion:  "v1.1.0",
 			DownloadURL:    "http://fake/download",
+			AssetName:      "rimba_1.1.0_linux_amd64.tar.gz",
+			ChecksumsURL:   "http://fake/checksums.txt",
 		}, nil
 	}
-	r.download = func(_ context.Context, url string) (string, error) { return "/tmp/rimba-test/rimba", nil }
+	r.download = func(_ context.Context, url string) (*DownloadResult, error) {
+		return fakeDownloadResult, nil
+	}
+	r.verifyChecksum = func(_ context.Context, _ *CheckResult, _ *DownloadResult) error { return nil }
 	r.prepareBinary = func(path string) error { return nil }
 	r.executable = func() (string, error) { return testCurrentBinary, nil }
 	r.evalSymlinks = func(path string) (string, error) { return path, nil }
@@ -82,7 +94,7 @@ func statExists(t *testing.T) func(string) (os.FileInfo, error) {
 	return func(path string) (os.FileInfo, error) { return info, nil }
 }
 
-// TestHintSurfaces verifies all 13 errhint.WithFix surfaces in Runner.Run.
+// TestHintSurfaces verifies all errhint.WithFix surfaces in Runner.Run.
 // Each test case starts from a fully-mocked-success runner and overrides exactly
 // one seam to fail, then asserts the wrapped error prefix and hint fragment.
 func TestHintSurfaces(t *testing.T) {
@@ -105,12 +117,22 @@ func TestHintSurfaces(t *testing.T) {
 		{
 			name: "download fails",
 			setupFn: func(_ *testing.T, r *Runner) {
-				r.download = func(_ context.Context, url string) (string, error) {
-					return "", errors.New("connection refused")
+				r.download = func(_ context.Context, url string) (*DownloadResult, error) {
+					return nil, errors.New("connection refused")
 				}
 			},
 			wantPrefix: "downloading update:",
 			wantHint:   "check network connectivity and retry: rimba update",
+		},
+		{
+			name: "verifyChecksum fails",
+			setupFn: func(_ *testing.T, r *Runner) {
+				r.verifyChecksum = func(_ context.Context, _ *CheckResult, _ *DownloadResult) error {
+					return errors.New("checksum mismatch: got aaa, want bbb")
+				}
+			},
+			wantPrefix: "integrity check failed:",
+			wantHint:   "the downloaded release failed integrity verification",
 		},
 		{
 			name: "prepareBinary fails",
@@ -336,6 +358,26 @@ func TestRunCtxCancelledBeforeInstall(t *testing.T) {
 	}
 	if replaceCalled {
 		t.Error("replace should not be called after ctx cancellation")
+	}
+}
+
+// TestRunReplaceNotCalledOnChecksumFailure asserts that a checksum mismatch is
+// fail-closed: no swap ever reaches the installed binary.
+func TestRunReplaceNotCalledOnChecksumFailure(t *testing.T) {
+	r, _ := newTestRunner(t)
+	replaceCalled := false
+	r.replace = func(_, _ string) error {
+		replaceCalled = true
+		return nil
+	}
+	r.verifyChecksum = func(_ context.Context, _ *CheckResult, _ *DownloadResult) error {
+		return errors.New("checksum mismatch: got aaa, want bbb")
+	}
+
+	err := r.Run(context.Background())
+	requireErrContains(t, err, "integrity check failed:", "checksum mismatch")
+	if replaceCalled {
+		t.Error("replace should not be called after checksum failure (fail-closed)")
 	}
 }
 
