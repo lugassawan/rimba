@@ -8,10 +8,8 @@ import (
 	"testing"
 )
 
-const osWindows = "windows"
-
 func TestRelocateVenvRewritesTextFiles(t *testing.T) {
-	if runtime.GOOS == osWindows {
+	if runtime.GOOS == goosWindows {
 		t.Skip("relocation not supported on Windows")
 	}
 
@@ -75,7 +73,7 @@ func TestRelocateVenvRewritesTextFiles(t *testing.T) {
 }
 
 func TestRelocateVenvPreservesMode(t *testing.T) {
-	if runtime.GOOS == osWindows {
+	if runtime.GOOS == goosWindows {
 		t.Skip("relocation not supported on Windows")
 	}
 
@@ -108,7 +106,7 @@ func TestRelocateVenvPreservesMode(t *testing.T) {
 }
 
 func TestRelocateVenvWindowsUnsupported(t *testing.T) {
-	if runtime.GOOS != osWindows {
+	if runtime.GOOS != goosWindows {
 		t.Skip("Windows-only test")
 	}
 	mod := Module{Dir: ".venv"}
@@ -119,7 +117,7 @@ func TestRelocateVenvWindowsUnsupported(t *testing.T) {
 }
 
 func TestRelocateVenvNoBinDir(t *testing.T) {
-	if runtime.GOOS == osWindows {
+	if runtime.GOOS == goosWindows {
 		t.Skip("relocation not supported on Windows")
 	}
 
@@ -147,7 +145,7 @@ func TestRelocateVenvNoBinDir(t *testing.T) {
 }
 
 func TestRelocateVenvBinDirWithSubdir(t *testing.T) {
-	if runtime.GOOS == osWindows {
+	if runtime.GOOS == goosWindows {
 		t.Skip("relocation not supported on Windows")
 	}
 
@@ -244,7 +242,7 @@ func TestRewriteTextFileReadError(t *testing.T) {
 }
 
 func TestRewriteAllPathsError(t *testing.T) {
-	if runtime.GOOS == osWindows {
+	if runtime.GOOS == goosWindows {
 		t.Skip("chmod not applicable on Windows")
 	}
 
@@ -272,7 +270,7 @@ func TestRewriteAllPathsError(t *testing.T) {
 }
 
 func TestRelocateVenvBinRewriteError(t *testing.T) {
-	if runtime.GOOS == osWindows {
+	if runtime.GOOS == goosWindows {
 		t.Skip("chmod not applicable on Windows")
 	}
 
@@ -302,7 +300,7 @@ func TestRelocateVenvBinRewriteError(t *testing.T) {
 }
 
 func TestRelocateVenvCfgRewriteError(t *testing.T) {
-	if runtime.GOOS == osWindows {
+	if runtime.GOOS == goosWindows {
 		t.Skip("chmod not applicable on Windows")
 	}
 
@@ -330,7 +328,7 @@ func TestRelocateVenvCfgRewriteError(t *testing.T) {
 }
 
 func TestAtomicWriteCreateTempError(t *testing.T) {
-	if runtime.GOOS == osWindows {
+	if runtime.GOOS == goosWindows {
 		t.Skip("chmod not applicable on Windows")
 	}
 
@@ -377,7 +375,7 @@ func TestWriteTmpWriteError(t *testing.T) {
 }
 
 func TestWriteTmpChmodError(t *testing.T) {
-	if runtime.GOOS == osWindows {
+	if runtime.GOOS == goosWindows {
 		t.Skip("chmod not applicable on Windows")
 	}
 	// Create a temp file in a dir, then write successfully but fail Chmod.

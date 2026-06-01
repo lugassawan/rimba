@@ -12,7 +12,7 @@ import (
 // relocateVenv rewrites source-worktree absolute paths baked into a cloned .venv.
 // It is the PostClone hook for Python presets.
 func relocateVenv(srcWT, dstWT string, mod Module) error {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == goosWindows {
 		return errors.New("venv relocation not supported on Windows")
 	}
 
