@@ -1,6 +1,7 @@
 package fileutil_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -617,6 +618,9 @@ func TestCopyEntriesRejectsTraversal(t *testing.T) {
 	copied, _, err := fileutil.CopyEntries(src, dst, []string{"../escape"})
 	if err == nil {
 		t.Fatalf("CopyEntries with traversal path: expected error, got nil (copied=%v)", copied)
+	}
+	if !errors.Is(err, fileutil.ErrPathEscapes) {
+		t.Fatalf("error %v does not wrap fileutil.ErrPathEscapes", err)
 	}
 	if !strings.Contains(err.Error(), "contains ..") {
 		t.Fatalf("error %q does not contain %q", err.Error(), "contains ..")

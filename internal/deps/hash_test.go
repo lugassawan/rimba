@@ -1,8 +1,11 @@
 package deps
 
 import (
+	"errors"
 	"strings"
 	"testing"
+
+	"github.com/lugassawan/rimba/internal/fileutil"
 )
 
 const testLockfile = "lock.yaml"
@@ -64,6 +67,9 @@ func TestHashLockfileRejectsTraversal(t *testing.T) {
 	_, err := HashLockfile(dir, "../outside")
 	if err == nil {
 		t.Fatal("HashLockfile with traversal path: expected error, got nil")
+	}
+	if !errors.Is(err, fileutil.ErrPathEscapes) {
+		t.Fatalf("error %v does not wrap fileutil.ErrPathEscapes", err)
 	}
 	if !strings.Contains(err.Error(), "contains ..") {
 		t.Fatalf("error %q does not contain %q", err.Error(), "contains ..")
