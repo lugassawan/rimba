@@ -80,6 +80,18 @@ jobs:
           cache: true
       - run: make test-race
 
+  build-cross:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: GOOS=windows GOARCH=amd64 go build ./...
+      - run: GOOS=windows GOARCH=arm64 go build ./...
+
   vuln:
     runs-on: ubuntu-latest
     timeout-minutes: 15
