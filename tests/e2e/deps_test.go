@@ -23,10 +23,10 @@ const (
 	taskDupSrc      = "dup-src"
 )
 
-func commitLockfile(t *testing.T, repo string) {
+func commitLockfile(t *testing.T, repo, name string) {
 	t.Helper()
-	testutil.CreateFile(t, repo, deps.LockfilePnpm, testLockContent)
-	testutil.GitCmd(t, repo, "add", deps.LockfilePnpm)
+	testutil.CreateFile(t, repo, name, testLockContent)
+	testutil.GitCmd(t, repo, "add", name)
 	testutil.GitCmd(t, repo, "commit", "-m", commitAddLock)
 }
 
@@ -47,7 +47,7 @@ func TestAddWithDepsClone(t *testing.T) {
 	}
 
 	repo := setupInitializedRepo(t)
-	commitLockfile(t, repo)
+	commitLockfile(t, repo, deps.LockfilePnpm)
 
 	// Create first worktree
 	rimbaSuccess(t, repo, "add", "task-deps-1")
@@ -155,7 +155,7 @@ func TestAddWithDepsSkipFlag(t *testing.T) {
 	}
 
 	repo := setupInitializedRepo(t)
-	commitLockfile(t, repo)
+	commitLockfile(t, repo, deps.LockfilePnpm)
 
 	rimbaSuccess(t, repo, "add", "skip-1")
 
@@ -194,7 +194,7 @@ func TestDepsStatus(t *testing.T) {
 	}
 
 	repo := setupInitializedRepo(t)
-	commitLockfile(t, repo)
+	commitLockfile(t, repo, deps.LockfilePnpm)
 
 	rimbaSuccess(t, repo, "add", "status-task")
 
@@ -209,7 +209,7 @@ func TestDepsInstall(t *testing.T) {
 	}
 
 	repo := setupInitializedRepo(t)
-	commitLockfile(t, repo)
+	commitLockfile(t, repo, deps.LockfilePnpm)
 
 	rimbaSuccess(t, repo, "add", "install-src")
 
@@ -281,7 +281,7 @@ func TestDuplicateWithDepsClone(t *testing.T) {
 	}
 
 	repo := setupInitializedRepo(t)
-	commitLockfile(t, repo)
+	commitLockfile(t, repo, deps.LockfilePnpm)
 
 	rimbaSuccess(t, repo, "add", taskDupSrc)
 
@@ -335,7 +335,7 @@ func TestAddWithDepsAutoDetectDisabled(t *testing.T) {
 	}
 
 	repo := setupInitializedRepo(t)
-	commitLockfile(t, repo)
+	commitLockfile(t, repo, deps.LockfilePnpm)
 
 	cfg := loadConfig(t, repo)
 	f := false
@@ -354,4 +354,108 @@ func TestAddWithDepsAutoDetectDisabled(t *testing.T) {
 
 	_ = strings.TrimSpace(r.Stdout)
 	assertNotContains(t, r.Stdout, msgDependencies)
+}
+
+func TestAddWithDepsCloneRust(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	commitLockfile(t, repo, deps.LockfileCargo)
+
+	rimbaSuccess(t, repo, "add", "cargo-1")
+
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch1 := resolver.BranchName(defaultPrefix, "cargo-1")
+	wt1Path := resolver.WorktreePath(wtDir, branch1)
+
+	targetDir := filepath.Join(wt1Path, deps.DirTarget)
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	testutil.CreateFile(t, targetDir, "cargo-marker.txt", "built")
+
+	r := rimbaSuccess(t, repo, "add", "cargo-2")
+
+	branch2 := resolver.BranchName(defaultPrefix, "cargo-2")
+	wt2Path := resolver.WorktreePath(wtDir, branch2)
+
+	assertFileExists(t, filepath.Join(wt2Path, deps.DirTarget, "cargo-marker.txt"))
+	assertContains(t, r.Stdout, msgClonedFrom)
+}
+
+func TestAddWithDepsCloneVenv(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+	assertVenvCloneRewritesPaths(t, deps.LockfileUv, "venv-1", "venv-2")
+}
+
+func TestAddWithDepsCloneVenvPoetry(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+	assertVenvCloneRewritesPaths(t, deps.LockfilePoetry, "poetry-1", "poetry-2")
+}
+
+// assertVenvCloneRewritesPaths verifies that rimba clones .venv from wt1 to wt2 and
+// rewrites baked absolute paths in bin/ scripts to point at the destination worktree.
+func assertVenvCloneRewritesPaths(t *testing.T, lockfile, task1, task2 string) {
+	t.Helper()
+
+	repo := setupInitializedRepo(t)
+	commitLockfile(t, repo, lockfile)
+
+	rimbaSuccess(t, repo, "add", task1)
+
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch1 := resolver.BranchName(defaultPrefix, task1)
+	wt1Path := resolver.WorktreePath(wtDir, branch1)
+
+	// Fabricate a .venv with a bin/ script that embeds wt1's absolute path.
+	// Use the symlink-resolved path so the script matches what Python tools
+	// actually embed (e.g. on macOS /tmp resolves to /private/tmp via git).
+	realWt1Path := wt1Path
+	if resolved, err := filepath.EvalSymlinks(wt1Path); err == nil {
+		realWt1Path = resolved
+	}
+	venvBinDir := filepath.Join(wt1Path, deps.DirVenv, "bin")
+	if err := os.MkdirAll(venvBinDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	scriptContent := "#!" + filepath.Join(realWt1Path, deps.DirVenv) + "/bin/python3\nprint('hi')\n"
+	scriptPath := filepath.Join(venvBinDir, "myapp")
+	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	r := rimbaSuccess(t, repo, "add", task2)
+
+	branch2 := resolver.BranchName(defaultPrefix, task2)
+	wt2Path := resolver.WorktreePath(wtDir, branch2)
+
+	clonedScript := filepath.Join(wt2Path, deps.DirVenv, "bin", "myapp")
+	assertFileExists(t, clonedScript)
+
+	// Path in cloned script must reference wt2, not wt1.
+	// Use resolved paths to match what the rimba binary uses (git resolves symlinks).
+	realWt2Path := wt2Path
+	if resolved, err := filepath.EvalSymlinks(wt2Path); err == nil {
+		realWt2Path = resolved
+	}
+	data, err := os.ReadFile(clonedScript)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wt2Venv := filepath.Join(realWt2Path, deps.DirVenv)
+	if !strings.Contains(string(data), wt2Venv) {
+		t.Errorf("cloned script should contain wt2 venv path %q, got:\n%s", wt2Venv, data)
+	}
+	if strings.Contains(string(data), filepath.Join(realWt1Path, deps.DirVenv)) {
+		t.Error("cloned script should NOT contain wt1 venv path")
+	}
+	assertContains(t, r.Stdout, msgClonedFrom)
 }

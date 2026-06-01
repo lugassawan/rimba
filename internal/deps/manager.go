@@ -173,17 +173,29 @@ func tryCloneFromExisting(ctx context.Context, worktreePath string, mh ModuleWit
 			continue
 		}
 
-		if err := CloneModule(wtPath, worktreePath, mod); err != nil {
-			if !mod.CloneOnly {
-				installErr := runInstall(ctx, worktreePath, mod)
-				return InstallResult{Module: mod, Error: installErr}, true
-			}
-			return InstallResult{Module: mod, Error: fmt.Errorf("clone from %s: %w", wtPath, err)}, true
-		}
-
-		return InstallResult{Module: mod, Source: wtPath, Cloned: true}, true
+		return cloneAndPost(ctx, worktreePath, wtPath, mod), true
 	}
 	return InstallResult{}, false
+}
+
+// cloneAndPost clones the module from srcWT to dstWT and runs the PostClone hook.
+func cloneAndPost(ctx context.Context, dstWT, srcWT string, mod Module) InstallResult {
+	if err := CloneModule(srcWT, dstWT, mod); err != nil {
+		if !mod.CloneOnly {
+			installErr := runInstall(ctx, dstWT, mod)
+			return InstallResult{Module: mod, Error: installErr}
+		}
+		return InstallResult{Module: mod, Error: fmt.Errorf("clone from %s: %w", srcWT, err)}
+	}
+
+	if mod.PostClone != nil {
+		if err := mod.PostClone(srcWT, dstWT, mod); err != nil {
+			_ = os.RemoveAll(filepath.Join(dstWT, mod.Dir))
+			return InstallResult{Module: mod, Error: fmt.Errorf("post-clone %s: %w", mod.Dir, err)}
+		}
+	}
+
+	return InstallResult{Module: mod, Source: srcWT, Cloned: true}
 }
 
 func runInstall(ctx context.Context, worktreePath string, mod Module) error {

@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	goosDarwin = "darwin"
-	goosLinux  = "linux"
+	goosDarwin  = "darwin"
+	goosLinux   = "linux"
+	goosWindows = "windows"
 )
 
 // cowCopyCmd builds the copy-on-write copy command for the host OS.

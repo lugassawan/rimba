@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/lugassawan/rimba/internal/deps"
 )
 
 // parseEnvelope parses a JSON envelope from stdout and returns the data field.
@@ -321,7 +323,7 @@ func TestDepsStatusJSON(t *testing.T) {
 	}
 
 	repo := setupInitializedRepo(t)
-	commitLockfile(t, repo)
+	commitLockfile(t, repo, deps.LockfilePnpm)
 	rimbaSuccess(t, repo, "add", "deps-json")
 
 	r := rimbaSuccess(t, repo, "deps", "status", "--json")
