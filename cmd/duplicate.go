@@ -168,6 +168,9 @@ var duplicateCmd = &cobra.Command{
 		if len(pcResult.Skipped) > 0 {
 			fmt.Fprintf(out, "  Skipped (not found): %v\n", pcResult.Skipped)
 		}
+		if len(pcResult.SkippedSymlinks) > 0 {
+			fmt.Fprintf(out, "  Skipped (symlinks): %v\n", pcResult.SkippedSymlinks)
+		}
 
 		printInstallResults(out, pcResult.DepsResults)
 		printHookResultsList(out, pcResult.HookResults)

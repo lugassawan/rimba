@@ -422,6 +422,34 @@ func TestAddShowsSkippedFiles(t *testing.T) {
 	assertContains(t, r.Stdout, "Skipped (not found): [.nonexistent .also-missing]")
 }
 
+func TestAddShowsSkippedSymlinks(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupRepo(t)
+
+	// Create a directory with a real file and a nested symlink
+	cfgDir := filepath.Join(repo, ".config")
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	testutil.CreateFile(t, repo, ".config/real.toml", "content")
+	if err := os.Symlink("/dev/null", filepath.Join(cfgDir, "link.toml")); err != nil {
+		t.Fatal(err)
+	}
+
+	rimbaSuccess(t, repo, "init")
+
+	cfg := loadConfig(t, repo)
+	cfg.CopyFiles = []string{".config"}
+	saveConfig(t, repo, cfg)
+
+	r := rimbaSuccess(t, repo, "add", "symlink-test")
+	assertContains(t, r.Stdout, "Copied: [.config]")
+	assertContains(t, r.Stdout, "Skipped (symlinks):")
+}
+
 // loadConfig is a test helper that loads the rimba config from a repo.
 // It calls FillDefaults to auto-derive missing fields (worktree_dir, default_source).
 func loadConfig(t *testing.T, repo string) *config.Config {

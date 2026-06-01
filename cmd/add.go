@@ -187,6 +187,9 @@ func printWorktreeResult(cmd *cobra.Command, header string, result operations.Ad
 	if len(result.Skipped) > 0 {
 		fmt.Fprintf(out, "  Skipped (not found): %v\n", result.Skipped)
 	}
+	if len(result.SkippedSymlinks) > 0 {
+		fmt.Fprintf(out, "  Skipped (symlinks): %v\n", result.SkippedSymlinks)
+	}
 	printInstallResults(out, result.DepsResults)
 	printHookResultsList(out, result.HookResults)
 }

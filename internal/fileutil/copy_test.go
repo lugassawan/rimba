@@ -36,9 +36,12 @@ func TestCopyEntries(t *testing.T) {
 	// .env.local does NOT exist — should be silently skipped
 
 	files := []string{".env", ".env.local", dotEnvrc, ".tool-versions"}
-	copied, err := fileutil.CopyEntries(src, dst, files)
+	copied, skippedSymlinks, err := fileutil.CopyEntries(src, dst, files)
 	if err != nil {
 		t.Fatalf(msgCopyErr, err)
+	}
+	if len(skippedSymlinks) != 0 {
+		t.Errorf("skippedSymlinks = %v, want empty", skippedSymlinks)
 	}
 
 	want := []string{".env", dotEnvrc}
@@ -71,9 +74,12 @@ func TestCopyEntriesNestedFile(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(subDir, "file.json"), []byte(`{"key":"val"}`), 0644)
 
 	// Copy the nested file path (not the directory)
-	copied, err := fileutil.CopyEntries(src, dst, []string{"sub/file.json"})
+	copied, skippedSymlinks, err := fileutil.CopyEntries(src, dst, []string{"sub/file.json"})
 	if err != nil {
 		t.Fatalf(msgCopyErr, err)
+	}
+	if len(skippedSymlinks) != 0 {
+		t.Errorf("skippedSymlinks = %v, want empty", skippedSymlinks)
 	}
 
 	want := []string{"sub/file.json"}
@@ -120,7 +126,7 @@ func TestCopyEntriesPreservesPermissions(t *testing.T) {
 
 	_ = os.WriteFile(filepath.Join(src, dotEnvrc), []byte("use nix"), 0755)
 
-	copied, err := fileutil.CopyEntries(src, dst, []string{dotEnvrc})
+	copied, _, err := fileutil.CopyEntries(src, dst, []string{dotEnvrc})
 	if err != nil {
 		t.Fatalf(msgCopyErr, err)
 	}
@@ -141,12 +147,15 @@ func TestCopyEntriesEmptyList(t *testing.T) {
 	src := t.TempDir()
 	dst := t.TempDir()
 
-	copied, err := fileutil.CopyEntries(src, dst, []string{})
+	copied, skippedSymlinks, err := fileutil.CopyEntries(src, dst, []string{})
 	if err != nil {
 		t.Fatalf("CopyEntries with empty list: %v", err)
 	}
 	if len(copied) != 0 {
 		t.Errorf("expected empty copied list, got %v", copied)
+	}
+	if len(skippedSymlinks) != 0 {
+		t.Errorf("skippedSymlinks = %v, want empty", skippedSymlinks)
 	}
 }
 
@@ -161,7 +170,7 @@ func TestCopyEntriesDstError(t *testing.T) {
 	// which is not an os.IsNotExist error and triggers the wrapped error return.
 	_ = os.Mkdir(filepath.Join(dst, ".env"), 0755)
 
-	_, err := fileutil.CopyEntries(src, dst, []string{".env"})
+	_, _, err := fileutil.CopyEntries(src, dst, []string{".env"})
 	if err == nil {
 		t.Fatal("expected error when dst path is a directory")
 	}
@@ -180,7 +189,7 @@ func TestCopyEntriesCopiesDirectory(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(vscodeDir, settingsJSON), []byte(`{"go.formatTool":"goimports"}`), 0644)
 	_ = os.WriteFile(filepath.Join(vscodeDir, "extensions.json"), []byte(`{"recommendations":[]}`), 0644)
 
-	copied, err := fileutil.CopyEntries(src, dst, []string{dotVscode})
+	copied, _, err := fileutil.CopyEntries(src, dst, []string{dotVscode})
 	if err != nil {
 		t.Fatalf(msgCopyErr, err)
 	}
@@ -214,7 +223,7 @@ func TestCopyEntriesCopiesNestedDirectory(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(src, dotConfig, "top.toml"), []byte("top"), 0644)
 	_ = os.WriteFile(filepath.Join(deepDir, "nested.toml"), []byte("nested"), 0644)
 
-	copied, err := fileutil.CopyEntries(src, dst, []string{dotConfig})
+	copied, _, err := fileutil.CopyEntries(src, dst, []string{dotConfig})
 	if err != nil {
 		t.Fatalf(msgCopyErr, err)
 	}
@@ -254,7 +263,7 @@ func TestCopyEntriesMixedFilesAndDirs(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(configDir, appTOML), []byte("app"), 0644)
 
 	// .missing does NOT exist — should be skipped
-	copied, err := fileutil.CopyEntries(src, dst, []string{".env", dotConfig, ".missing"})
+	copied, _, err := fileutil.CopyEntries(src, dst, []string{".env", dotConfig, ".missing"})
 	if err != nil {
 		t.Fatalf(msgCopyErr, err)
 	}
@@ -285,7 +294,7 @@ func TestCopyEntriesEmptyDirectory(t *testing.T) {
 	// Create an empty directory
 	_ = os.Mkdir(filepath.Join(src, dotEmpty), 0755)
 
-	copied, err := fileutil.CopyEntries(src, dst, []string{dotEmpty})
+	copied, _, err := fileutil.CopyEntries(src, dst, []string{dotEmpty})
 	if err != nil {
 		t.Fatalf(msgCopyErr, err)
 	}
@@ -312,7 +321,7 @@ func TestCopyEntriesDirPreservesPermissions(t *testing.T) {
 	_ = os.Mkdir(srcDir, 0700)
 	_ = os.WriteFile(filepath.Join(srcDir, "key.pem"), []byte("key"), 0600)
 
-	copied, err := fileutil.CopyEntries(src, dst, []string{dotSecret})
+	copied, _, err := fileutil.CopyEntries(src, dst, []string{dotSecret})
 	if err != nil {
 		t.Fatalf(msgCopyErr, err)
 	}
@@ -349,12 +358,18 @@ func TestCopyEntriesSkipsSymlinksInDir(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(srcDir, "real.toml"), []byte("real"), 0644)
 	_ = os.Symlink("/dev/null", filepath.Join(srcDir, "link.toml"))
 
-	copied, err := fileutil.CopyEntries(src, dst, []string{dotConfig})
+	copied, skippedSymlinks, err := fileutil.CopyEntries(src, dst, []string{dotConfig})
 	if err != nil {
 		t.Fatalf(msgCopyErr, err)
 	}
 	if len(copied) != 1 {
 		t.Fatalf(msgExpect1Entry, len(copied))
+	}
+
+	// Skipped symlink reported relative to repo root
+	wantSkipped := []string{dotConfig + "/link.toml"}
+	if !reflect.DeepEqual(skippedSymlinks, wantSkipped) {
+		t.Errorf("skippedSymlinks = %v, want %v", skippedSymlinks, wantSkipped)
 	}
 
 	// Real file should exist
@@ -364,6 +379,56 @@ func TestCopyEntriesSkipsSymlinksInDir(t *testing.T) {
 	// Symlink should NOT exist
 	if _, err := os.Lstat(filepath.Join(dst, dotConfig, "link.toml")); !os.IsNotExist(err) {
 		t.Error("link.toml (symlink) should not exist in dst")
+	}
+}
+
+func TestCopyEntriesSkipsNestedSymlink(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+
+	// .config/sub/ with a real file and a deeper symlink
+	subDir := filepath.Join(src, dotConfig, "sub")
+	_ = os.MkdirAll(subDir, 0755)
+	_ = os.WriteFile(filepath.Join(subDir, "real.toml"), []byte("deep"), 0644)
+	_ = os.Symlink("/dev/null", filepath.Join(subDir, "link.toml"))
+
+	copied, skippedSymlinks, err := fileutil.CopyEntries(src, dst, []string{dotConfig})
+	if err != nil {
+		t.Fatalf(msgCopyErr, err)
+	}
+	if len(copied) != 1 {
+		t.Fatalf(msgExpect1Entry, len(copied))
+	}
+
+	wantSkipped := []string{dotConfig + "/sub/link.toml"}
+	if !reflect.DeepEqual(skippedSymlinks, wantSkipped) {
+		t.Errorf("skippedSymlinks = %v, want %v", skippedSymlinks, wantSkipped)
+	}
+
+	// Real nested file should exist
+	if _, err := os.Stat(filepath.Join(dst, dotConfig, "sub", "real.toml")); os.IsNotExist(err) {
+		t.Error("sub/real.toml should exist in dst")
+	}
+	// Nested symlink should NOT exist
+	if _, err := os.Lstat(filepath.Join(dst, dotConfig, "sub", "link.toml")); !os.IsNotExist(err) {
+		t.Error("sub/link.toml (symlink) should not exist in dst")
+	}
+}
+
+func TestCopyEntriesNoSymlinksReturnsEmpty(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+
+	srcDir := filepath.Join(src, dotConfig)
+	_ = os.Mkdir(srcDir, 0755)
+	_ = os.WriteFile(filepath.Join(srcDir, "app.toml"), []byte("app"), 0644)
+
+	_, skippedSymlinks, err := fileutil.CopyEntries(src, dst, []string{dotConfig})
+	if err != nil {
+		t.Fatalf(msgCopyErr, err)
+	}
+	if len(skippedSymlinks) != 0 {
+		t.Errorf("skippedSymlinks = %v, want empty", skippedSymlinks)
 	}
 }
 
@@ -380,7 +445,7 @@ func TestCopyEntriesStatError(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(src, 0755) })
 
-	_, err := fileutil.CopyEntries(src, dst, []string{".env"})
+	_, _, err := fileutil.CopyEntries(src, dst, []string{".env"})
 	if err == nil {
 		t.Fatal("expected error when source dir is not readable")
 	}
@@ -402,7 +467,7 @@ func TestCopyEntriesDirCopyError(t *testing.T) {
 	// This causes MkdirAll for the nested file to fail.
 	_ = os.WriteFile(filepath.Join(dst, dotConfig), []byte("conflict"), 0644)
 
-	_, err := fileutil.CopyEntries(src, dst, []string{dotConfig})
+	_, _, err := fileutil.CopyEntries(src, dst, []string{dotConfig})
 	if err == nil {
 		t.Fatal("expected error when dst path conflicts")
 	}
@@ -426,7 +491,7 @@ func TestCopyEntriesReadDirError(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(srcDir, 0755) })
 
-	_, err := fileutil.CopyEntries(src, dst, []string{dotConfig})
+	_, _, err := fileutil.CopyEntries(src, dst, []string{dotConfig})
 	if err == nil {
 		t.Fatal("expected error when source directory is unreadable")
 	}
@@ -448,7 +513,7 @@ func TestCopyEntriesCopyFileError(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(dst, 0755) })
 
-	_, err := fileutil.CopyEntries(src, dst, []string{".env"})
+	_, _, err := fileutil.CopyEntries(src, dst, []string{".env"})
 	if err == nil {
 		t.Fatal("expected error when destination is read-only")
 	}
@@ -469,7 +534,7 @@ func TestCopyEntriesNestedFileMkdirError(t *testing.T) {
 	// Block parent creation: place a regular file where "deep" dir needs to be
 	_ = os.WriteFile(filepath.Join(dst, "deep"), []byte("conflict"), 0644)
 
-	_, err := fileutil.CopyEntries(src, dst, []string{"deep/sub/file.json"})
+	_, _, err := fileutil.CopyEntries(src, dst, []string{"deep/sub/file.json"})
 	if err == nil {
 		t.Fatal("expected error when MkdirAll for nested file fails")
 	}
@@ -490,7 +555,7 @@ func TestCopyEntriesCopyFileOpenError(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(srcFile, 0644) })
 
-	_, err := fileutil.CopyEntries(src, dst, []string{".env"})
+	_, _, err := fileutil.CopyEntries(src, dst, []string{".env"})
 	if err == nil {
 		t.Fatal("expected error when source file is unreadable")
 	}
@@ -515,7 +580,7 @@ func TestCopyEntriesDirStatError(t *testing.T) {
 	_ = os.MkdirAll(filepath.Join(dst, dotConfig), 0755)
 	_ = os.WriteFile(filepath.Join(dst, dotConfig, "sub"), []byte("conflict"), 0644)
 
-	_, err := fileutil.CopyEntries(src, dst, []string{dotConfig})
+	_, _, err := fileutil.CopyEntries(src, dst, []string{dotConfig})
 	if err == nil {
 		t.Fatal("expected error when nested destination path conflicts")
 	}
@@ -536,7 +601,7 @@ func TestCopyEntriesDirCopyFileError(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(unreadable, 0644) })
 
-	_, err := fileutil.CopyEntries(src, dst, []string{dotConfig})
+	_, _, err := fileutil.CopyEntries(src, dst, []string{dotConfig})
 	if err == nil {
 		t.Fatal("expected error when file inside directory is unreadable")
 	}
@@ -562,7 +627,7 @@ func TestCopyEntriesRecursiveCopyDirError(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(dstConfig, 0755) })
 
-	_, err := fileutil.CopyEntries(src, dst, []string{dotConfig})
+	_, _, err := fileutil.CopyEntries(src, dst, []string{dotConfig})
 	if err == nil {
 		t.Fatal("expected error when nested directory copy fails")
 	}

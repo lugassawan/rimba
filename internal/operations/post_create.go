@@ -30,10 +30,11 @@ type PostCreateParams struct {
 
 // PostCreateResult holds the outcome of the post-create setup sequence.
 type PostCreateResult struct {
-	Copied      []string
-	Skipped     []string
-	DepsResults []deps.InstallResult
-	HookResults []deps.HookResult
+	Copied          []string
+	Skipped         []string
+	SkippedSymlinks []string
+	DepsResults     []deps.InstallResult
+	HookResults     []deps.HookResult
 }
 
 // PostCreateSetup runs the post-create sequence: copy files, install deps, run hooks.
@@ -43,12 +44,13 @@ func PostCreateSetup(ctx context.Context, r git.Runner, params PostCreateParams,
 
 	// Copy files
 	progress.Notify(onProgress, "Copying files...")
-	copied, err := fileutil.CopyEntries(params.RepoRoot, params.WtPath, params.CopyFiles)
+	copied, skippedSymlinks, err := fileutil.CopyEntries(params.RepoRoot, params.WtPath, params.CopyFiles)
 	if err != nil {
 		return result, fmt.Errorf("failed to copy files: %w\nTo retry, manually copy files to: %s\nTo remove the worktree: rimba remove %s", err, params.WtPath, params.Task)
 	}
 	result.Copied = copied
 	result.Skipped = fileutil.SkippedEntries(params.CopyFiles, copied)
+	result.SkippedSymlinks = skippedSymlinks
 
 	// Dependencies
 	if !params.SkipDeps {
