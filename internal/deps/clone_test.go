@@ -3,7 +3,9 @@ package deps
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -458,6 +460,9 @@ func TestCloneExtraDirsCloneError(t *testing.T) {
 }
 
 func TestCloneDirRemoveAllError(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("chmod-based removal-block does not apply when running as root")
+	}
 	src := t.TempDir()
 	writeFile(t, src, testDataTxt, "hello")
 
@@ -567,6 +572,101 @@ func TestCloneModuleRecursiveExtraDirError(t *testing.T) {
 	err := CloneModule(srcWT, dstWT, mod)
 	if err == nil {
 		t.Fatal("expected error when ExtraDir clone fails in recursive mode")
+	}
+}
+
+// TestCowCopyFallbackNotNested verifies that a partial CoW failure (debris left at dst)
+// is corrected before the fallback: dst is re-cleaned so src lands AS dst, not nested.
+func TestCowCopyFallbackNotNested(t *testing.T) {
+	if runtime.GOOS != goosDarwin && runtime.GOOS != goosLinux {
+		t.Skip("CoW fallback only attempted on darwin/linux")
+	}
+	src := t.TempDir()
+	dst := filepath.Join(t.TempDir(), "dst")
+	writeFile(t, src, "file.txt", "source-content")
+
+	// Pre-create dst with debris to simulate a partially-written CoW copy.
+	if err := os.MkdirAll(dst, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dst, "debris"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	orig := cowCopyCmd
+	cowCopyCmd = func(s, d string) *exec.Cmd { return exec.Command("false") }
+	t.Cleanup(func() { cowCopyCmd = orig })
+
+	if err := cowCopy(src, dst); err != nil {
+		t.Fatalf("cowCopy returned unexpected error: %v", err)
+	}
+
+	// src's file must land directly at dst/file.txt, not nested as dst/<base(src)>/file.txt.
+	assertFileContent(t, filepath.Join(dst, "file.txt"), "source-content")
+
+	// Debris left by the partial CoW copy must be gone (dst was re-cleaned before fallback).
+	if _, err := os.Stat(filepath.Join(dst, "debris")); !os.IsNotExist(err) {
+		t.Error("expected debris to be removed (dst was not re-cleaned before fallback)")
+	}
+
+	// Nested layout dst/<basename(src)>/* must not exist.
+	if _, err := os.Stat(filepath.Join(dst, filepath.Base(src))); !os.IsNotExist(err) {
+		t.Error("expected fallback to place src contents AS dst, not nested inside dst/<base(src)>")
+	}
+}
+
+// TestCowCopyDoubleFailurePreservesBothCauses verifies that when both the CoW attempt
+// and the fallback cp fail, the returned error names both causes.
+func TestCowCopyDoubleFailurePreservesBothCauses(t *testing.T) {
+	if runtime.GOOS != goosDarwin && runtime.GOOS != goosLinux {
+		t.Skip("CoW fallback only attempted on darwin/linux")
+	}
+	dst := filepath.Join(t.TempDir(), "dst")
+
+	orig := cowCopyCmd
+	cowCopyCmd = func(s, d string) *exec.Cmd { return exec.Command("false") }
+	t.Cleanup(func() { cowCopyCmd = orig })
+
+	// /nonexistent/... is guaranteed absent on any POSIX host; cp -R will fail,
+	// exercising the fallback-failure branch and the double-cause error chain.
+	err := cowCopy("/nonexistent/does/not/exist/src", dst)
+	if err == nil {
+		t.Fatal("expected error when both CoW and fallback copy fail")
+	}
+	if !strings.Contains(err.Error(), "cow copy") {
+		t.Errorf("expected 'cow copy' in error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "fallback copy") {
+		t.Errorf("expected 'fallback copy' in error, got: %v", err)
+	}
+}
+
+// TestCowCopyRemoveAllError covers the branch where dst cleanup fails after a CoW failure.
+func TestCowCopyRemoveAllError(t *testing.T) {
+	if runtime.GOOS != goosDarwin && runtime.GOOS != goosLinux {
+		t.Skip("CoW fallback only attempted on darwin/linux")
+	}
+	if os.Getuid() == 0 {
+		t.Skip("chmod-based removal-block does not apply when running as root")
+	}
+	parent := t.TempDir()
+	dst := filepath.Join(parent, "target")
+	if err := os.MkdirAll(dst, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Make parent read-only so os.RemoveAll(dst) fails.
+	if err := os.Chmod(parent, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(parent, 0755) })
+
+	orig := cowCopyCmd
+	cowCopyCmd = func(s, d string) *exec.Cmd { return exec.Command("false") }
+	t.Cleanup(func() { cowCopyCmd = orig })
+
+	if err := cowCopy("/some/src", dst); err == nil {
+		t.Fatal("expected error when RemoveAll cannot delete dst")
 	}
 }
 

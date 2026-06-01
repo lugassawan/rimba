@@ -8,7 +8,26 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
+
+const (
+	goosDarwin = "darwin"
+	goosLinux  = "linux"
+)
+
+// cowCopyCmd builds the copy-on-write copy command for the host OS.
+// A package var so tests can inject a failing first-copy seam.
+var cowCopyCmd = func(src, dst string) *exec.Cmd {
+	switch runtime.GOOS {
+	case goosDarwin:
+		return exec.Command("cp", "-c", "-R", src, dst)
+	case goosLinux:
+		return exec.Command("cp", "--reflink=auto", "-R", src, dst)
+	default:
+		return exec.Command("cp", "-R", src, dst)
+	}
+}
 
 // CloneDir copies a directory from src to dst using CoW (copy-on-write) when available.
 // Falls back to regular copy if CoW is not supported.
@@ -119,23 +138,35 @@ func cloneExtraDirs(srcWT, dstWT string, extraDirs []string) error {
 	return nil
 }
 
+func cmdErr(prefix string, out []byte, err error) error {
+	if msg := strings.TrimSpace(string(out)); msg != "" {
+		return fmt.Errorf("%s: %s: %w", prefix, msg, err)
+	}
+	return fmt.Errorf("%s: %w", prefix, err)
+}
+
 func cowCopy(src, dst string) error {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("cp", "-c", "-R", src, dst)
-	case "linux":
-		cmd = exec.Command("cp", "--reflink=auto", "-R", src, dst)
-	default:
-		cmd = exec.Command("cp", "-R", src, dst)
+	out, err := cowCopyCmd(src, dst).CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	cowErr := cmdErr("cow copy", out, err)
+
+	// Only attempt the fallback on platforms where CoW was actually tried.
+	// On the default branch cowCopyCmd already emits a plain cp -R, so
+	// retrying an identical command on failure adds no value.
+	if runtime.GOOS != goosDarwin && runtime.GOOS != goosLinux {
+		return cowErr
 	}
 
-	if err := cmd.Run(); err != nil {
-		if runtime.GOOS == "darwin" || runtime.GOOS == "linux" {
-			fallback := exec.Command("cp", "-R", src, dst)
-			return fallback.Run()
-		}
-		return err
+	// A failed CoW cp can leave a partially written dst; remove it so the
+	// fallback lands src's contents AS dst rather than nested inside dst/<base>.
+	if rmErr := os.RemoveAll(dst); rmErr != nil {
+		return errors.Join(cowErr, fmt.Errorf("clean dst before fallback: %w", rmErr))
+	}
+
+	if out, fbErr := exec.Command("cp", "-R", src, dst).CombinedOutput(); fbErr != nil {
+		return errors.Join(cowErr, cmdErr("fallback copy", out, fbErr))
 	}
 	return nil
 }
