@@ -53,7 +53,7 @@ func CurrentBranch(r Runner, dir string) (string, error) {
 
 // Checkout switches the working tree in dir to the given branch.
 func Checkout(r Runner, dir, branch string) error {
-	_, err := r.RunInDir(dir, "switch", branch)
+	_, err := r.RunInDir(dir, "switch", "--", branch)
 	return err
 }
 

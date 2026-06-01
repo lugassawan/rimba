@@ -38,9 +38,9 @@ func promoteRunFn(repoRoot string, makeWtDir bool) func(args ...string) (string,
 			return "", nil // BranchExists → true
 		case len(args) >= 2 && args[0] == gitCmdWorktree && args[1] == gitSubcmdList:
 			return porcelain, nil
-		case len(args) >= 2 && args[0] == gitCmdWorktree && args[1] == gitSubcmdAdd:
+		case len(args) >= 4 && args[0] == gitCmdWorktree && args[1] == gitSubcmdAdd && args[2] == "--":
 			if makeWtDir {
-				_ = os.MkdirAll(args[2], 0o755)
+				_ = os.MkdirAll(args[3], 0o755)
 			}
 			return "", nil
 		}
@@ -69,7 +69,7 @@ func promoteRunInDirStashA(args []string) (string, bool) {
 		return "", true
 	case len(args) >= 2 && args[0] == cmdRevParse && args[1] == "stash@{0}":
 		return stashSHATest, true
-	case len(args) >= 2 && args[0] == gitCmdSwitch:
+	case len(args) >= 3 && args[0] == gitCmdSwitch && args[1] == "--":
 		return "", true
 	}
 	return "", false
@@ -324,8 +324,8 @@ func wtAddFailsRunInDirFn(ops *[]string) func(dir string, args ...string) (strin
 		if out, ok := promoteRunInDirIdentity(true, args); ok {
 			return out, nil
 		}
-		if len(args) >= 2 && args[0] == gitCmdSwitch {
-			*ops = append(*ops, "switch:"+args[1])
+		if len(args) >= 3 && args[0] == gitCmdSwitch && args[1] == "--" {
+			*ops = append(*ops, "switch:"+args[2])
 		}
 		if len(args) >= 2 && args[0] == gitCmdStash && args[1] == gitSubcmdApply {
 			*ops = append(*ops, "stash:apply")
@@ -400,7 +400,7 @@ func stashOutcomeDispatchA(args []string) (string, bool) {
 		return "", true
 	case len(args) >= 2 && args[0] == cmdRevParse && args[1] == "stash@{0}":
 		return stashSHATest, true
-	case len(args) >= 2 && args[0] == gitCmdSwitch:
+	case len(args) >= 3 && args[0] == gitCmdSwitch && args[1] == "--":
 		return "", true
 	}
 	return "", false
