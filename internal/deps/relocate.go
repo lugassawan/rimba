@@ -80,6 +80,11 @@ func rewriteAllPaths(path string, oldPaths []string, newPath string) error {
 // rewriteTextFile does a byte replace of oldBytes → newBytes in path.
 // Skips symlinks (lstat check) and binary files (NUL byte heuristic).
 // Writes atomically with mode preserved.
+//
+// Note: there is a narrow TOCTOU window between the Lstat and ReadFile calls.
+// A symlink created in that window would be followed by ReadFile. This is
+// acceptable because the files live in a freshly-cloned .venv whose concurrent
+// mutation is not part of the threat model.
 func rewriteTextFile(path string, oldBytes, newBytes []byte) error {
 	info, err := os.Lstat(path)
 	if err != nil {
@@ -146,14 +151,9 @@ func atomicWrite(path string, data []byte, mode os.FileMode) error {
 
 // writeTmp writes data to tmp, sets mode bits, and closes the file.
 func writeTmp(tmp *os.File, data []byte, mode os.FileMode) error {
-	_, writeErr := tmp.Write(data)
-	chmodErr := tmp.Chmod(mode)
-	closeErr := tmp.Close()
-	if writeErr != nil {
-		return writeErr
+	defer tmp.Close()
+	if _, err := tmp.Write(data); err != nil {
+		return err
 	}
-	if chmodErr != nil {
-		return chmodErr
-	}
-	return closeErr
+	return tmp.Chmod(mode)
 }
