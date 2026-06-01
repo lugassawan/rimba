@@ -37,15 +37,16 @@ type AddParams struct {
 
 // AddResult holds the outcome of creating a worktree.
 type AddResult struct {
-	Task        string
-	Service     string
-	Branch      string
-	Path        string
-	Source      string
-	Copied      []string
-	Skipped     []string // copy_files entries not found
-	DepsResults []deps.InstallResult
-	HookResults []deps.HookResult
+	Task            string
+	Service         string
+	Branch          string
+	Path            string
+	Source          string
+	Copied          []string
+	Skipped         []string // copy_files entries not found
+	SkippedSymlinks []string // nested symlinks inside copied directories
+	DepsResults     []deps.InstallResult
+	HookResults     []deps.HookResult
 }
 
 // AddWorktree creates a new worktree, copies files, installs deps, and runs hooks.
@@ -100,6 +101,7 @@ func AddWorktree(ctx context.Context, r git.Runner, params AddParams, onProgress
 	}
 	result.Copied = pcResult.Copied
 	result.Skipped = pcResult.Skipped
+	result.SkippedSymlinks = pcResult.SkippedSymlinks
 	result.DepsResults = pcResult.DepsResults
 	result.HookResults = pcResult.HookResults
 

@@ -10,22 +10,30 @@ import (
 const copyErrFmt = "copy %s: %w"
 
 // CopyEntries copies the listed files or directories from src directory to dst directory.
-// Missing source entries are silently skipped. Returns the list of entries actually copied.
-func CopyEntries(src, dst string, entries []string) ([]string, error) {
-	copied := make([]string, 0, len(entries))
+// Missing source entries are silently skipped. Returns the list of entries actually copied
+// and the list of nested symlink paths (relative to src) that were skipped without being copied.
+func CopyEntries(src, dst string, entries []string) (copied []string, skippedSymlinks []string, err error) {
+	copied = make([]string, 0, len(entries))
 	for _, name := range entries {
 		srcPath := filepath.Join(src, name)
 		dstPath := filepath.Join(dst, name)
 
-		ok, err := copyEntry(srcPath, dstPath, name)
-		if err != nil {
-			return copied, err
+		ok, syms, copyErr := copyEntry(srcPath, dstPath, name)
+		if copyErr != nil {
+			return copied, skippedSymlinks, copyErr
 		}
 		if ok {
 			copied = append(copied, name)
 		}
+		for _, p := range syms {
+			rel, relErr := filepath.Rel(src, p)
+			if relErr != nil {
+				rel = p
+			}
+			skippedSymlinks = append(skippedSymlinks, rel)
+		}
 	}
-	return copied, nil
+	return copied, skippedSymlinks, nil
 }
 
 // SkippedEntries returns the entries from requested that are not in copied.
@@ -44,61 +52,65 @@ func SkippedEntries(requested, copied []string) []string {
 }
 
 // copyEntry copies a single file or directory. Returns false if the source does not exist.
-func copyEntry(srcPath, dstPath, name string) (bool, error) {
+func copyEntry(srcPath, dstPath, name string) (bool, []string, error) {
 	info, err := os.Stat(srcPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return false, nil
+			return false, nil, nil
 		}
-		return false, fmt.Errorf(copyErrFmt, name, err)
+		return false, nil, fmt.Errorf(copyErrFmt, name, err)
 	}
 
 	if info.IsDir() {
-		if err := copyDir(srcPath, dstPath); err != nil {
-			return false, fmt.Errorf(copyErrFmt, name, err)
+		syms, err := copyDir(srcPath, dstPath)
+		if err != nil {
+			return false, nil, fmt.Errorf(copyErrFmt, name, err)
 		}
-		return true, nil
+		return true, syms, nil
 	}
 
 	if err := os.MkdirAll(filepath.Dir(dstPath), 0750); err != nil {
-		return false, fmt.Errorf(copyErrFmt, name, err)
+		return false, nil, fmt.Errorf(copyErrFmt, name, err)
 	}
 	if err := copyFile(srcPath, dstPath); err != nil {
-		return false, fmt.Errorf(copyErrFmt, name, err)
+		return false, nil, fmt.Errorf(copyErrFmt, name, err)
 	}
-	return true, nil
+	return true, nil, nil
 }
 
-func copyDir(src, dst string) error {
+func copyDir(src, dst string) ([]string, error) {
 	srcInfo, err := os.Stat(src)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := os.MkdirAll(dst, srcInfo.Mode().Perm()); err != nil {
-		return err
+		return nil, err
 	}
 	entries, err := os.ReadDir(src)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	var skippedSymlinks []string
 	for _, entry := range entries {
-		if err := copyDirEntry(src, dst, entry); err != nil {
-			return err
+		syms, err := copyDirEntry(src, dst, entry)
+		if err != nil {
+			return nil, err
 		}
+		skippedSymlinks = append(skippedSymlinks, syms...)
 	}
-	return nil
+	return skippedSymlinks, nil
 }
 
-func copyDirEntry(src, dst string, entry os.DirEntry) error {
+func copyDirEntry(src, dst string, entry os.DirEntry) ([]string, error) {
 	if entry.Type()&os.ModeSymlink != 0 {
-		return nil // skip symlinks
+		return []string{filepath.Join(src, entry.Name())}, nil
 	}
 	srcPath := filepath.Join(src, entry.Name())
 	dstPath := filepath.Join(dst, entry.Name())
 	if entry.IsDir() {
 		return copyDir(srcPath, dstPath)
 	}
-	return copyFile(srcPath, dstPath)
+	return nil, copyFile(srcPath, dstPath)
 }
 
 func copyFile(src, dst string) (retErr error) {

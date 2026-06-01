@@ -9,6 +9,51 @@ import (
 	"testing"
 )
 
+func TestPostCreateSetupReportsSkippedSymlinks(t *testing.T) {
+	tmpDir := t.TempDir()
+	wtPath := filepath.Join(tmpDir, "worktree")
+	if err := os.MkdirAll(wtPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// .config/ dir with a real file and a nested symlink
+	cfgDir := filepath.Join(tmpDir, ".config")
+	if err := os.Mkdir(cfgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cfgDir, "real.toml"), []byte("real"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("/dev/null", filepath.Join(cfgDir, "link.toml")); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &mockRunner{
+		run:      func(args ...string) (string, error) { return "", nil },
+		runInDir: noopRunInDir,
+	}
+
+	result, err := PostCreateSetup(context.Background(), r, PostCreateParams{
+		RepoRoot:  tmpDir,
+		WtPath:    wtPath,
+		Task:      "test-task",
+		CopyFiles: []string{".config"},
+		SkipDeps:  true,
+		SkipHooks: true,
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result.Copied) != 1 || result.Copied[0] != ".config" {
+		t.Errorf("copied = %v, want [.config]", result.Copied)
+	}
+	wantSymlinks := []string{".config/link.toml"}
+	if len(result.SkippedSymlinks) != 1 || result.SkippedSymlinks[0] != wantSymlinks[0] {
+		t.Errorf("skippedSymlinks = %v, want %v", result.SkippedSymlinks, wantSymlinks)
+	}
+}
+
 func TestPostCreateSetupCopiesFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 	wtPath := filepath.Join(tmpDir, "worktree")
