@@ -22,6 +22,7 @@
 - [Quick Start](#quick-start)
 - [Commands](#commands)
 - [Configuration](#configuration)
+- [Trust model](#trust-model)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](CONTRIBUTING.md)
 - [License](#license)
@@ -140,6 +141,17 @@ agent = 'claude'
 > See [docs/configuration.md](docs/configuration.md) for the full field reference, dependency management, and environment variables.
 
 Running `rimba init --agents` or `rimba init -g` additionally creates or patches MCP server config files in client tools (`.mcp.json`, `.cursor/mcp.json`, `~/.claude/settings.json`, and others). See [docs/configuration.md#mcp-server-registration](docs/configuration.md#mcp-server-registration) for the full list of patched files and entry format.
+
+## Trust model
+
+**`.rimba/settings.toml` is trusted-author input.** The following fields execute shell commands verbatim via `sh -c`:
+
+- `post_create` — runs after a worktree is created (e.g. `rimba add`)
+- `deps.modules[].install` — runs when installing dependencies into a worktree
+
+**Cloning an untrusted repository and running `rimba add` executes that repo's `post_create` and `install` shell scripts.** Always review `.rimba/settings.toml` before running rimba in a repository you do not control.
+
+As a defense-in-depth measure, the `copy_files` entries and `deps.modules[].lockfile` paths are validated to stay within the worktree directory — paths that escape via `..` are rejected with an error. Note that `worktree_dir` is intentionally not subject to this constraint, because its default value (`../<repo>-worktrees`) is itself a `../`-relative path.
 
 ## Global flags
 

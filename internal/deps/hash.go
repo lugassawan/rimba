@@ -4,7 +4,8 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
-	"path/filepath"
+
+	"github.com/lugassawan/rimba/internal/fileutil"
 )
 
 // ModuleWithHash pairs a Module with its lockfile hash.
@@ -16,7 +17,11 @@ type ModuleWithHash struct {
 // HashLockfile computes the SHA-256 hex digest of a lockfile.
 // Returns an empty string if the file doesn't exist.
 func HashLockfile(worktreePath, lockfile string) (string, error) {
-	data, err := os.ReadFile(filepath.Join(worktreePath, lockfile))
+	path, err := fileutil.ContainedJoin(worktreePath, lockfile)
+	if err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return "", nil

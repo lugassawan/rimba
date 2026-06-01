@@ -15,8 +15,14 @@ const copyErrFmt = "copy %s: %w"
 func CopyEntries(src, dst string, entries []string) (copied []string, skippedSymlinks []string, err error) {
 	copied = make([]string, 0, len(entries))
 	for _, name := range entries {
-		srcPath := filepath.Join(src, name)
-		dstPath := filepath.Join(dst, name)
+		srcPath, err := ContainedJoin(src, name)
+		if err != nil {
+			return copied, skippedSymlinks, fmt.Errorf(copyErrFmt, name, err)
+		}
+		dstPath, err := ContainedJoin(dst, name)
+		if err != nil {
+			return copied, skippedSymlinks, fmt.Errorf(copyErrFmt, name, err)
+		}
 
 		ok, syms, copyErr := copyEntry(srcPath, dstPath, name)
 		if copyErr != nil {
@@ -125,7 +131,7 @@ func copyFile(src, dst string) (retErr error) {
 		return err
 	}
 
-	out, err := os.OpenFile(filepath.Clean(dst), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode()) //nolint:gosec // dst is derived from config copy_files, not user input
+	out, err := os.OpenFile(filepath.Clean(dst), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode()) //nolint:gosec // dst validated by ContainedJoin before copyEntry is called
 	if err != nil {
 		return err
 	}

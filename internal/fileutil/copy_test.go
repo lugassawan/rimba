@@ -1,6 +1,7 @@
 package fileutil_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -607,6 +608,25 @@ func TestCopyEntriesDirCopyFileError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "copy "+dotConfig+":") {
 		t.Errorf(errContainsFmt, err, "copy "+dotConfig+":")
+	}
+}
+
+func TestCopyEntriesRejectsTraversal(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+
+	copied, _, err := fileutil.CopyEntries(src, dst, []string{"../escape"})
+	if err == nil {
+		t.Fatalf("CopyEntries with traversal path: expected error, got nil (copied=%v)", copied)
+	}
+	if !errors.Is(err, fileutil.ErrPathEscapes) {
+		t.Fatalf("error %v does not wrap fileutil.ErrPathEscapes", err)
+	}
+	if !strings.Contains(err.Error(), "contains ..") {
+		t.Fatalf("error %q does not contain %q", err.Error(), "contains ..")
+	}
+	if len(copied) != 0 {
+		t.Errorf("copied = %v, want empty on traversal error", copied)
 	}
 }
 
