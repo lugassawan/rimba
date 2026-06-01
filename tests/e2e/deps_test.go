@@ -473,6 +473,7 @@ func TestAddWithDepsCloneGradle(t *testing.T) {
 		{deps.LockfileGradle, "gradle-1", "gradle-2"},
 		{deps.LockfileGradleKts, "gradle-kts-1", "gradle-kts-2"},
 		{deps.LockfileGradleSettings, "gradle-settings-1", "gradle-settings-2"},
+		{deps.LockfileGradleSettingsKts, "gradle-settings-kts-1", "gradle-settings-kts-2"},
 	}
 
 	for _, tc := range cases {

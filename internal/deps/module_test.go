@@ -512,6 +512,10 @@ func TestDetectModulesGradleNestedSubdir(t *testing.T) {
 	if !m.CloneOnly {
 		t.Error("expected CloneOnly=true for nested Gradle")
 	}
+	wantExtra := filepath.Join(subproject, DirGradleBuildOutput)
+	if len(m.ExtraDirs) != 1 || m.ExtraDirs[0] != wantExtra {
+		t.Errorf("expected ExtraDirs=[%s], got %v", wantExtra, m.ExtraDirs)
+	}
 }
 
 func assertModuleCount(t *testing.T, modules []Module, expected int) {
