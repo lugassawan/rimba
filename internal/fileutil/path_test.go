@@ -1,6 +1,7 @@
 package fileutil_test
 
 import (
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -30,6 +31,9 @@ func TestContainedJoin(t *testing.T) {
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("ContainedJoin(%q, %q) = %q, nil; want error", base, tc.input, got)
+				}
+				if !errors.Is(err, fileutil.ErrPathEscapes) {
+					t.Fatalf("error %v is not ErrPathEscapes", err)
 				}
 				if !strings.Contains(err.Error(), "contains ..") {
 					t.Fatalf("error %q does not contain %q", err.Error(), "contains ..")
