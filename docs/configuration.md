@@ -91,8 +91,13 @@ When `auto_detect` is enabled (default), rimba recognizes these lockfiles automa
 | `yarn.lock` | `node_modules` | `yarn install` | Recursive clone + `.yarn/cache` |
 | `package-lock.json` | `node_modules` | `npm ci` | Recursive clone + install fallback |
 | `go.sum` | `vendor` | `go mod vendor` | Clone only (skip if no match) |
+| `Cargo.lock` | `target` | — | Clone only (skip if no match) |
+| `uv.lock` / `poetry.lock` | `.venv` | — | Clone only + path relocation |
+| `settings.gradle` / `build.gradle` (+ `.kts`) | `.gradle` (+ `build/`) | — | Clone only (skip if no match) |
 
 > **Note:** Dependencies are shared using copy-on-write clones (`cp -c` on macOS, `cp --reflink=auto` on Linux) for near-instant copies on supported filesystems (APFS, Btrfs). Falls back to regular copy on other systems.
+
+> **Gradle design note:** rimba clones project-local build state (`.gradle/` and `build/`) from a sibling worktree when lockfile content hashes match. A stale clone is a harmless warm cache — Gradle re-validates via content hashes on next invocation. Global caches (`~/.gradle/caches`) and Maven's `~/.m2` are **not** cloned; rimba's CoW model is scoped to project-local directories only. Maven support (project-local `target/`) is deferred.
 
 ## Environment Variables
 
