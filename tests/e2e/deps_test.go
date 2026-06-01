@@ -459,3 +459,54 @@ func assertVenvCloneRewritesPaths(t *testing.T, lockfile, task1, task2 string) {
 	}
 	assertContains(t, r.Stdout, msgClonedFrom)
 }
+
+func TestAddWithDepsCloneGradle(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	cases := []struct {
+		lockfile string
+		task1    string
+		task2    string
+	}{
+		{deps.LockfileGradle, "gradle-1", "gradle-2"},
+		{deps.LockfileGradleKts, "gradle-kts-1", "gradle-kts-2"},
+		{deps.LockfileGradleSettings, "gradle-settings-1", "gradle-settings-2"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.lockfile, func(t *testing.T) {
+			repo := setupInitializedRepo(t)
+			commitLockfile(t, repo, tc.lockfile)
+
+			rimbaSuccess(t, repo, "add", tc.task1)
+
+			cfg := loadConfig(t, repo)
+			wtDir := filepath.Join(repo, cfg.WorktreeDir)
+			branch1 := resolver.BranchName(defaultPrefix, tc.task1)
+			wt1Path := resolver.WorktreePath(wtDir, branch1)
+
+			gradleDir := filepath.Join(wt1Path, deps.DirGradle)
+			if err := os.MkdirAll(gradleDir, 0755); err != nil {
+				t.Fatal(err)
+			}
+			testutil.CreateFile(t, gradleDir, "gradle-marker.txt", "cached")
+
+			buildDir := filepath.Join(wt1Path, deps.DirGradleBuildOutput)
+			if err := os.MkdirAll(buildDir, 0755); err != nil {
+				t.Fatal(err)
+			}
+			testutil.CreateFile(t, buildDir, "build-marker.txt", "compiled")
+
+			r := rimbaSuccess(t, repo, "add", tc.task2)
+
+			branch2 := resolver.BranchName(defaultPrefix, tc.task2)
+			wt2Path := resolver.WorktreePath(wtDir, branch2)
+
+			assertFileExists(t, filepath.Join(wt2Path, deps.DirGradle, "gradle-marker.txt"))
+			assertFileExists(t, filepath.Join(wt2Path, deps.DirGradleBuildOutput, "build-marker.txt"))
+			assertContains(t, r.Stdout, msgClonedFrom)
+		})
+	}
+}
