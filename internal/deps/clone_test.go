@@ -459,6 +459,9 @@ func TestCloneExtraDirsCloneError(t *testing.T) {
 }
 
 func TestCloneDirRemoveAllError(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("chmod-based removal-block does not apply when running as root")
+	}
 	src := t.TempDir()
 	writeFile(t, src, testDataTxt, "hello")
 
@@ -617,7 +620,8 @@ func TestCowCopyDoubleFailurePreservesBothCauses(t *testing.T) {
 	cowCopyCmd = func(s, d string) *exec.Cmd { return exec.Command("false") }
 	t.Cleanup(func() { cowCopyCmd = orig })
 
-	// Nonexistent src causes the fallback cp -R to also fail.
+	// /nonexistent/... is guaranteed absent on any POSIX host; cp -R will fail,
+	// exercising the fallback-failure branch and the double-cause error chain.
 	err := cowCopy("/nonexistent/does/not/exist/src", dst)
 	if err == nil {
 		t.Fatal("expected error when both CoW and fallback copy fail")
@@ -632,6 +636,9 @@ func TestCowCopyDoubleFailurePreservesBothCauses(t *testing.T) {
 
 // TestCowCopyRemoveAllError covers the branch where dst cleanup fails after a CoW failure.
 func TestCowCopyRemoveAllError(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("chmod-based removal-block does not apply when running as root")
+	}
 	parent := t.TempDir()
 	dst := filepath.Join(parent, "target")
 	if err := os.MkdirAll(dst, 0755); err != nil {
