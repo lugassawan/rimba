@@ -385,3 +385,64 @@ func TestAddWithDepsCloneRust(t *testing.T) {
 	assertFileExists(t, filepath.Join(wt2Path, deps.DirTarget, "cargo-marker.txt"))
 	assertContains(t, r.Stdout, msgClonedFrom)
 }
+
+func TestAddWithDepsCloneVenv(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	commitLockfile(t, repo, deps.LockfileUv)
+
+	rimbaSuccess(t, repo, "add", "venv-1")
+
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch1 := resolver.BranchName(defaultPrefix, "venv-1")
+	wt1Path := resolver.WorktreePath(wtDir, branch1)
+
+	// Fabricate a .venv with a bin/ script that embeds wt1's absolute path.
+	// Use the symlink-resolved path so the script matches what Python tools
+	// actually embed (e.g. on macOS /tmp resolves to /private/tmp via git).
+	realWt1Path := wt1Path
+	if resolved, err := filepath.EvalSymlinks(wt1Path); err == nil {
+		realWt1Path = resolved
+	}
+	venvBinDir := filepath.Join(wt1Path, deps.DirVenv, "bin")
+	if err := os.MkdirAll(venvBinDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	scriptContent := "#!" + filepath.Join(realWt1Path, deps.DirVenv) + "/bin/python3\nprint('hi')\n"
+	scriptPath := filepath.Join(venvBinDir, "myapp")
+	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create second worktree — should clone .venv and rewrite paths
+	r := rimbaSuccess(t, repo, "add", "venv-2")
+
+	branch2 := resolver.BranchName(defaultPrefix, "venv-2")
+	wt2Path := resolver.WorktreePath(wtDir, branch2)
+
+	clonedScript := filepath.Join(wt2Path, deps.DirVenv, "bin", "myapp")
+	assertFileExists(t, clonedScript)
+
+	// Path in cloned script must reference wt2, not wt1.
+	// Use resolved paths to match what the rimba binary uses (git resolves symlinks).
+	realWt2Path := wt2Path
+	if resolved, err := filepath.EvalSymlinks(wt2Path); err == nil {
+		realWt2Path = resolved
+	}
+	data, err := os.ReadFile(clonedScript)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wt2Venv := filepath.Join(realWt2Path, deps.DirVenv)
+	if !strings.Contains(string(data), wt2Venv) {
+		t.Errorf("cloned script should contain wt2 venv path %q, got:\n%s", wt2Venv, data)
+	}
+	if strings.Contains(string(data), filepath.Join(realWt1Path, deps.DirVenv)) {
+		t.Error("cloned script should NOT contain wt1 venv path")
+	}
+	assertContains(t, r.Stdout, msgClonedFrom)
+}

@@ -9,27 +9,31 @@ import (
 
 // Lockfile and directory constants used for ecosystem detection.
 const (
-	LockfilePnpm  = "pnpm-lock.yaml"
-	LockfileYarn  = "yarn.lock"
-	LockfileNpm   = "package-lock.json"
-	LockfileGo    = "go.sum"
-	LockfileCargo = "Cargo.lock"
+	LockfilePnpm   = "pnpm-lock.yaml"
+	LockfileYarn   = "yarn.lock"
+	LockfileNpm    = "package-lock.json"
+	LockfileGo     = "go.sum"
+	LockfileCargo  = "Cargo.lock"
+	LockfileUv     = "uv.lock"
+	LockfilePoetry = "poetry.lock"
 
 	DirNodeModules = "node_modules"
 	DirVendor      = "vendor"
 	DirYarnCache   = ".yarn/cache"
 	DirTarget      = "target"
+	DirVenv        = ".venv"
 )
 
 // Module represents a detected or configured dependency module.
 type Module struct {
-	Dir        string   `json:"dir"`                   // Primary dir: "node_modules" or "service-api/vendor"
-	Lockfile   string   `json:"lockfile"`              // "pnpm-lock.yaml" or "service-api/go.sum"
-	InstallCmd string   `json:"install_cmd,omitempty"` // "pnpm install --frozen-lockfile" or "go mod vendor"
-	WorkDir    string   `json:"work_dir,omitempty"`    // Subdir to run install in: "" (root) or "service-api"
-	Recursive  bool     `json:"recursive,omitempty"`   // If true, clone ALL dirs named Dir found recursively (monorepo)
-	ExtraDirs  []string `json:"extra_dirs,omitempty"`  // Additional dirs to clone (e.g., ".yarn/cache")
-	CloneOnly  bool     `json:"clone_only,omitempty"`  // If true, only clone (don't run install if no match). For Go vendor.
+	Dir        string                                      `json:"dir"`                   // Primary dir: "node_modules" or "service-api/vendor"
+	Lockfile   string                                      `json:"lockfile"`              // "pnpm-lock.yaml" or "service-api/go.sum"
+	InstallCmd string                                      `json:"install_cmd,omitempty"` // "pnpm install --frozen-lockfile" or "go mod vendor"
+	WorkDir    string                                      `json:"work_dir,omitempty"`    // Subdir to run install in: "" (root) or "service-api"
+	Recursive  bool                                        `json:"recursive,omitempty"`   // If true, clone ALL dirs named Dir found recursively (monorepo)
+	ExtraDirs  []string                                    `json:"extra_dirs,omitempty"`  // Additional dirs to clone (e.g., ".yarn/cache")
+	CloneOnly  bool                                        `json:"clone_only,omitempty"`  // If true, only clone (don't run install if no match). For Go vendor.
+	PostClone  func(srcWT, dstWT string, mod Module) error `json:"-"`                     // Optional hook run after successful clone.
 }
 
 type preset struct {
@@ -39,6 +43,7 @@ type preset struct {
 	Recursive  bool
 	ExtraDirs  []string
 	CloneOnly  bool
+	Relocate   bool
 }
 
 // presets defines built-in ecosystem detection rules, ordered by priority.
@@ -73,6 +78,18 @@ var presets = []preset{
 		Lockfile:  LockfileCargo,
 		Dir:       DirTarget,
 		CloneOnly: true,
+	},
+	{
+		Lockfile:  LockfileUv,
+		Dir:       DirVenv,
+		CloneOnly: true,
+		Relocate:  true,
+	},
+	{
+		Lockfile:  LockfilePoetry,
+		Dir:       DirVenv,
+		CloneOnly: true,
+		Relocate:  true,
 	},
 }
 
@@ -192,25 +209,24 @@ func matchPresetsInSubdir(worktreePath, subdir string, modules []Module, seenDir
 }
 
 func moduleFromPreset(p preset, subdir, depDir string) Module {
-	if subdir == "" {
-		return Module{
-			Dir:        p.Dir,
-			Lockfile:   p.Lockfile,
-			InstallCmd: p.InstallCmd,
-			Recursive:  p.Recursive,
-			ExtraDirs:  p.ExtraDirs,
-			CloneOnly:  p.CloneOnly,
-		}
-	}
-	return Module{
-		Dir:        depDir,
-		Lockfile:   filepath.Join(subdir, p.Lockfile),
+	mod := Module{
+		Dir:        p.Dir,
+		Lockfile:   p.Lockfile,
 		InstallCmd: p.InstallCmd,
-		WorkDir:    subdir,
 		Recursive:  p.Recursive,
-		ExtraDirs:  prefixDirs(subdir, p.ExtraDirs),
+		ExtraDirs:  p.ExtraDirs,
 		CloneOnly:  p.CloneOnly,
 	}
+	if subdir != "" {
+		mod.Dir = depDir
+		mod.Lockfile = filepath.Join(subdir, p.Lockfile)
+		mod.WorkDir = subdir
+		mod.ExtraDirs = prefixDirs(subdir, p.ExtraDirs)
+	}
+	if p.Relocate {
+		mod.PostClone = relocateVenv
+	}
+	return mod
 }
 
 func moduleFromConfig(cm config.ModuleConfig) Module {

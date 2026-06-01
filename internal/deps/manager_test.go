@@ -109,6 +109,53 @@ func TestManagerInstallClone(t *testing.T) {
 	assertFileContent(t, filepath.Join(newWT, DirNodeModules, "package.json"), "{}")
 }
 
+func TestManagerInstallPostCloneError(t *testing.T) {
+	existingWT := t.TempDir()
+	newWT := t.TempDir()
+
+	writeFile(t, existingWT, LockfilePnpm, "lockfile-v6-content")
+	writeFile(t, newWT, LockfilePnpm, "lockfile-v6-content")
+
+	if err := os.MkdirAll(filepath.Join(existingWT, DirNodeModules), 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(existingWT, DirNodeModules), "package.json", "{}")
+
+	runner := &mockRunner{worktreeOutput: mockWorktreeList(existingWT, newWT)}
+	mgr := &Manager{Runner: runner}
+
+	postCloneErr := errors.New("post-clone failure")
+	modules := []Module{
+		{
+			Dir:      DirNodeModules,
+			Lockfile: LockfilePnpm,
+			PostClone: func(srcWT, dstWT string, mod Module) error {
+				return postCloneErr
+			},
+		},
+	}
+
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
+	if len(results) != 1 {
+		t.Fatalf(fmtExpectedResults, len(results))
+	}
+
+	r := results[0]
+	if r.Error == nil {
+		t.Error("expected error from PostClone")
+	}
+	if !errors.Is(r.Error, postCloneErr) {
+		t.Errorf("expected postCloneErr in error chain, got %v", r.Error)
+	}
+	if r.Cloned {
+		t.Error("expected Cloned=false on PostClone error")
+	}
+	// Verify dst dir was removed on PostClone error
+	if _, err := os.Stat(filepath.Join(newWT, DirNodeModules)); !os.IsNotExist(err) {
+		t.Error("expected cloned dir to be removed on PostClone error")
+	}
+}
+
 func TestManagerInstallNoMatchCloneOnly(t *testing.T) {
 	newWT := t.TempDir()
 	writeFile(t, newWT, LockfileGo, "go sum content")

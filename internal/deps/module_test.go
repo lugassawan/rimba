@@ -119,6 +119,58 @@ func TestDetectModulesRust(t *testing.T) {
 	}
 }
 
+func TestDetectModulesUv(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, LockfileUv, "uv-lock-content")
+
+	modules, err := DetectModules(dir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertModuleCount(t, modules, 1)
+
+	m := modules[0]
+	if m.Dir != DirVenv {
+		t.Errorf(fmtExpectedGot, DirVenv, m.Dir)
+	}
+	if m.Lockfile != LockfileUv {
+		t.Errorf(fmtExpectedGot, LockfileUv, m.Lockfile)
+	}
+	if !m.CloneOnly {
+		t.Error("CloneOnly should be true")
+	}
+	if m.PostClone == nil {
+		t.Error("PostClone should be set (non-nil)")
+	}
+}
+
+func TestDetectModulesPoetry(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, LockfilePoetry, "poetry-lock-content")
+
+	modules, err := DetectModules(dir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertModuleCount(t, modules, 1)
+
+	m := modules[0]
+	if m.Dir != DirVenv {
+		t.Errorf(fmtExpectedGot, DirVenv, m.Dir)
+	}
+	if m.Lockfile != LockfilePoetry {
+		t.Errorf(fmtExpectedGot, LockfilePoetry, m.Lockfile)
+	}
+	if !m.CloneOnly {
+		t.Error("CloneOnly should be true")
+	}
+	if m.PostClone == nil {
+		t.Error("PostClone should be set (non-nil)")
+	}
+}
+
 func TestDetectModulesPolyglot(t *testing.T) {
 	dir := t.TempDir()
 
