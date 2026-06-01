@@ -429,6 +429,95 @@ func TestMatchPresetsInSubdirSeenDirSkip(t *testing.T) {
 	}
 }
 
+func TestDetectModulesGradleEachTrigger(t *testing.T) {
+	triggers := []struct {
+		lockfile string
+	}{
+		{LockfileGradleSettings},
+		{LockfileGradleSettingsKts},
+		{LockfileGradle},
+		{LockfileGradleKts},
+	}
+
+	for _, tc := range triggers {
+		t.Run(tc.lockfile, func(t *testing.T) {
+			dir := t.TempDir()
+			writeFile(t, dir, tc.lockfile, "# gradle")
+
+			modules, err := DetectModules(dir, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			assertModuleCount(t, modules, 1)
+			m := modules[0]
+
+			if m.Dir != DirGradle {
+				t.Errorf(fmtExpectedGot, DirGradle, m.Dir)
+			}
+			if len(m.ExtraDirs) != 1 || m.ExtraDirs[0] != DirGradleBuildOutput {
+				t.Errorf("expected ExtraDirs=[%s], got %v", DirGradleBuildOutput, m.ExtraDirs)
+			}
+			if !m.CloneOnly {
+				t.Error("expected CloneOnly=true for Gradle")
+			}
+			if m.Recursive {
+				t.Error("expected Recursive=false for Gradle")
+			}
+			if m.InstallCmd != "" {
+				t.Errorf("expected empty InstallCmd, got %s", m.InstallCmd)
+			}
+		})
+	}
+}
+
+func TestDetectModulesGradleSettingsWinsOverBuild(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, LockfileGradleSettings, "# settings")
+	writeFile(t, dir, LockfileGradle, "# build")
+
+	modules, err := DetectModules(dir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertModuleCount(t, modules, 1)
+	if modules[0].Lockfile != LockfileGradleSettings {
+		t.Errorf("expected settings.gradle to win, got %s", modules[0].Lockfile)
+	}
+}
+
+func TestDetectModulesGradleNestedSubdir(t *testing.T) {
+	dir := t.TempDir()
+	subproject := "subproject"
+	if err := os.MkdirAll(filepath.Join(dir, subproject), 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(dir, subproject), LockfileGradleKts, "# kts")
+
+	modules, err := DetectModules(dir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertModuleCount(t, modules, 1)
+	m := modules[0]
+
+	if m.Dir != filepath.Join(subproject, DirGradle) {
+		t.Errorf("expected %s, got %s", filepath.Join(subproject, DirGradle), m.Dir)
+	}
+	if m.WorkDir != subproject {
+		t.Errorf("expected WorkDir=%s, got %s", subproject, m.WorkDir)
+	}
+	if !m.CloneOnly {
+		t.Error("expected CloneOnly=true for nested Gradle")
+	}
+	wantExtra := filepath.Join(subproject, DirGradleBuildOutput)
+	if len(m.ExtraDirs) != 1 || m.ExtraDirs[0] != wantExtra {
+		t.Errorf("expected ExtraDirs=[%s], got %v", wantExtra, m.ExtraDirs)
+	}
+}
+
 func assertModuleCount(t *testing.T, modules []Module, expected int) {
 	t.Helper()
 	if len(modules) != expected {

@@ -17,11 +17,18 @@ const (
 	LockfileUv     = "uv.lock"
 	LockfilePoetry = "poetry.lock"
 
-	DirNodeModules = "node_modules"
-	DirVendor      = "vendor"
-	DirYarnCache   = ".yarn/cache"
-	DirTarget      = "target"
-	DirVenv        = ".venv"
+	LockfileGradleSettings    = "settings.gradle"
+	LockfileGradleSettingsKts = "settings.gradle.kts"
+	LockfileGradle            = "build.gradle"
+	LockfileGradleKts         = "build.gradle.kts"
+
+	DirNodeModules       = "node_modules"
+	DirVendor            = "vendor"
+	DirYarnCache         = ".yarn/cache"
+	DirTarget            = "target"
+	DirVenv              = ".venv"
+	DirGradle            = ".gradle"
+	DirGradleBuildOutput = "build"
 )
 
 // Module represents a detected or configured dependency module.
@@ -91,6 +98,14 @@ var presets = []preset{
 		CloneOnly: true,
 		Relocate:  true,
 	},
+	// Gradle: clone project-local build state (.gradle/ + build/) from a sibling
+	// worktree. CloneOnly with no InstallCmd — rimba never invokes gradle; a stale
+	// clone is a harmless warm cache (Gradle re-validates via content hashes).
+	// settings.* ordered before build.* so a multi-project root is preferred.
+	{Lockfile: LockfileGradleSettings, Dir: DirGradle, ExtraDirs: []string{DirGradleBuildOutput}, CloneOnly: true},
+	{Lockfile: LockfileGradleSettingsKts, Dir: DirGradle, ExtraDirs: []string{DirGradleBuildOutput}, CloneOnly: true},
+	{Lockfile: LockfileGradle, Dir: DirGradle, ExtraDirs: []string{DirGradleBuildOutput}, CloneOnly: true},
+	{Lockfile: LockfileGradleKts, Dir: DirGradle, ExtraDirs: []string{DirGradleBuildOutput}, CloneOnly: true},
 }
 
 // DetectModules scans a worktree for known lockfiles. Root is always scanned.
