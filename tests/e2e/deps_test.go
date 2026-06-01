@@ -390,15 +390,29 @@ func TestAddWithDepsCloneVenv(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
 	}
+	assertVenvCloneRewritesPaths(t, deps.LockfileUv, "venv-1", "venv-2")
+}
+
+func TestAddWithDepsCloneVenvPoetry(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+	assertVenvCloneRewritesPaths(t, deps.LockfilePoetry, "poetry-1", "poetry-2")
+}
+
+// assertVenvCloneRewritesPaths verifies that rimba clones .venv from wt1 to wt2 and
+// rewrites baked absolute paths in bin/ scripts to point at the destination worktree.
+func assertVenvCloneRewritesPaths(t *testing.T, lockfile, task1, task2 string) {
+	t.Helper()
 
 	repo := setupInitializedRepo(t)
-	commitLockfile(t, repo, deps.LockfileUv)
+	commitLockfile(t, repo, lockfile)
 
-	rimbaSuccess(t, repo, "add", "venv-1")
+	rimbaSuccess(t, repo, "add", task1)
 
 	cfg := loadConfig(t, repo)
 	wtDir := filepath.Join(repo, cfg.WorktreeDir)
-	branch1 := resolver.BranchName(defaultPrefix, "venv-1")
+	branch1 := resolver.BranchName(defaultPrefix, task1)
 	wt1Path := resolver.WorktreePath(wtDir, branch1)
 
 	// Fabricate a .venv with a bin/ script that embeds wt1's absolute path.
@@ -418,10 +432,9 @@ func TestAddWithDepsCloneVenv(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create second worktree — should clone .venv and rewrite paths
-	r := rimbaSuccess(t, repo, "add", "venv-2")
+	r := rimbaSuccess(t, repo, "add", task2)
 
-	branch2 := resolver.BranchName(defaultPrefix, "venv-2")
+	branch2 := resolver.BranchName(defaultPrefix, task2)
 	wt2Path := resolver.WorktreePath(wtDir, branch2)
 
 	clonedScript := filepath.Join(wt2Path, deps.DirVenv, "bin", "myapp")

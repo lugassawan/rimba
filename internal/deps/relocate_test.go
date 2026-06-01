@@ -143,7 +143,7 @@ func TestRelocateVenvNoBinDir(t *testing.T) {
 	}
 
 	// pyvenv.cfg should still be rewritten
-	assertFileContains(t, cfgPath, filepath.Join(dstVenv, ""))
+	assertFileContains(t, cfgPath, dstVenv)
 }
 
 func TestRelocateVenvBinDirWithSubdir(t *testing.T) {
