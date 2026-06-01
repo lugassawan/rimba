@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -577,6 +578,9 @@ func TestCloneModuleRecursiveExtraDirError(t *testing.T) {
 // TestCowCopyFallbackNotNested verifies that a partial CoW failure (debris left at dst)
 // is corrected before the fallback: dst is re-cleaned so src lands AS dst, not nested.
 func TestCowCopyFallbackNotNested(t *testing.T) {
+	if runtime.GOOS != goosDarwin && runtime.GOOS != goosLinux {
+		t.Skip("CoW fallback only attempted on darwin/linux")
+	}
 	src := t.TempDir()
 	dst := filepath.Join(t.TempDir(), "dst")
 	writeFile(t, src, "file.txt", "source-content")
@@ -614,6 +618,9 @@ func TestCowCopyFallbackNotNested(t *testing.T) {
 // TestCowCopyDoubleFailurePreservesBothCauses verifies that when both the CoW attempt
 // and the fallback cp fail, the returned error names both causes.
 func TestCowCopyDoubleFailurePreservesBothCauses(t *testing.T) {
+	if runtime.GOOS != goosDarwin && runtime.GOOS != goosLinux {
+		t.Skip("CoW fallback only attempted on darwin/linux")
+	}
 	dst := filepath.Join(t.TempDir(), "dst")
 
 	orig := cowCopyCmd
@@ -636,6 +643,9 @@ func TestCowCopyDoubleFailurePreservesBothCauses(t *testing.T) {
 
 // TestCowCopyRemoveAllError covers the branch where dst cleanup fails after a CoW failure.
 func TestCowCopyRemoveAllError(t *testing.T) {
+	if runtime.GOOS != goosDarwin && runtime.GOOS != goosLinux {
+		t.Skip("CoW fallback only attempted on darwin/linux")
+	}
 	if os.Getuid() == 0 {
 		t.Skip("chmod-based removal-block does not apply when running as root")
 	}

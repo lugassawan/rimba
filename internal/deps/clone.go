@@ -11,13 +11,18 @@ import (
 	"strings"
 )
 
+const (
+	goosDarwin = "darwin"
+	goosLinux  = "linux"
+)
+
 // cowCopyCmd builds the copy-on-write copy command for the host OS.
 // A package var so tests can inject a failing first-copy seam.
 var cowCopyCmd = func(src, dst string) *exec.Cmd {
 	switch runtime.GOOS {
-	case "darwin":
+	case goosDarwin:
 		return exec.Command("cp", "-c", "-R", src, dst)
-	case "linux":
+	case goosLinux:
 		return exec.Command("cp", "--reflink=auto", "-R", src, dst)
 	default:
 		return exec.Command("cp", "-R", src, dst)
@@ -150,7 +155,7 @@ func cowCopy(src, dst string) error {
 	// Only attempt the fallback on platforms where CoW was actually tried.
 	// On the default branch cowCopyCmd already emits a plain cp -R, so
 	// retrying an identical command on failure adds no value.
-	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
+	if runtime.GOOS != goosDarwin && runtime.GOOS != goosLinux {
 		return cowErr
 	}
 
