@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
-	"syscall"
 
 	"github.com/lugassawan/rimba/internal/progress"
 )
@@ -30,15 +29,7 @@ func RunPostCreateHooks(ctx context.Context, worktreeDir string, hooks []string,
 
 		cmd := exec.CommandContext(ctx, "sh", "-c", hook) //nolint:gosec // hook commands come from user config
 		cmd.Dir = worktreeDir
-		// Put the subprocess in its own process group so that cancellation kills
-		// sh and all children it may have forked (e.g. sh -c sleep 30 on Linux).
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-		cmd.Cancel = func() error {
-			if cmd.Process != nil {
-				_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-			}
-			return nil
-		}
+		configureProcessGroup(cmd)
 
 		var buf bytes.Buffer
 		cmd.Stdout = &buf

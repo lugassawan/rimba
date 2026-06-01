@@ -10,7 +10,6 @@ import (
 	"runtime"
 	"strings"
 	"sync/atomic"
-	"syscall"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/debug"
@@ -206,16 +205,7 @@ func runInstall(ctx context.Context, worktreePath string, mod Module) error {
 
 	cmd := exec.CommandContext(ctx, "sh", "-c", mod.InstallCmd) //nolint:gosec // install commands come from user config
 	cmd.Dir = dir
-	// Put the subprocess in its own process group so cancellation kills sh and
-	// all children (e.g. npm spawns node children that would otherwise keep
-	// stdout/stderr pipes open and block cmd.Wait).
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error {
-		if cmd.Process != nil {
-			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		}
-		return nil
-	}
+	configureProcessGroup(cmd)
 
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
