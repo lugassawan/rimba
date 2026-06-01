@@ -9,14 +9,16 @@ import (
 
 // Lockfile and directory constants used for ecosystem detection.
 const (
-	LockfilePnpm = "pnpm-lock.yaml"
-	LockfileYarn = "yarn.lock"
-	LockfileNpm  = "package-lock.json"
-	LockfileGo   = "go.sum"
+	LockfilePnpm  = "pnpm-lock.yaml"
+	LockfileYarn  = "yarn.lock"
+	LockfileNpm   = "package-lock.json"
+	LockfileGo    = "go.sum"
+	LockfileCargo = "Cargo.lock"
 
 	DirNodeModules = "node_modules"
 	DirVendor      = "vendor"
 	DirYarnCache   = ".yarn/cache"
+	DirTarget      = "target"
 )
 
 // Module represents a detected or configured dependency module.
@@ -66,6 +68,11 @@ var presets = []preset{
 		Dir:        DirVendor,
 		InstallCmd: "go mod vendor",
 		CloneOnly:  true,
+	},
+	{
+		Lockfile:  LockfileCargo,
+		Dir:       DirTarget,
+		CloneOnly: true,
 	},
 }
 

@@ -90,6 +90,35 @@ func TestDetectModulesNestedLockfile(t *testing.T) {
 	}
 }
 
+func TestDetectModulesRust(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, LockfileCargo, "[package]")
+
+	modules, err := DetectModules(dir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertModuleCount(t, modules, 1)
+
+	m := modules[0]
+	if m.Dir != DirTarget {
+		t.Errorf(fmtExpectedGot, DirTarget, m.Dir)
+	}
+	if m.Lockfile != LockfileCargo {
+		t.Errorf(fmtExpectedGot, LockfileCargo, m.Lockfile)
+	}
+	if !m.CloneOnly {
+		t.Error("expected CloneOnly=true for Rust")
+	}
+	if m.Recursive {
+		t.Error("expected Recursive=false for Rust")
+	}
+	if m.InstallCmd != "" {
+		t.Errorf("expected empty InstallCmd, got %s", m.InstallCmd)
+	}
+}
+
 func TestDetectModulesPolyglot(t *testing.T) {
 	dir := t.TempDir()
 

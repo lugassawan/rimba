@@ -23,10 +23,10 @@ const (
 	taskDupSrc      = "dup-src"
 )
 
-func commitLockfile(t *testing.T, repo string) {
+func commitLockfile(t *testing.T, repo, name string) {
 	t.Helper()
-	testutil.CreateFile(t, repo, deps.LockfilePnpm, testLockContent)
-	testutil.GitCmd(t, repo, "add", deps.LockfilePnpm)
+	testutil.CreateFile(t, repo, name, testLockContent)
+	testutil.GitCmd(t, repo, "add", name)
 	testutil.GitCmd(t, repo, "commit", "-m", commitAddLock)
 }
 
@@ -47,7 +47,7 @@ func TestAddWithDepsClone(t *testing.T) {
 	}
 
 	repo := setupInitializedRepo(t)
-	commitLockfile(t, repo)
+	commitLockfile(t, repo, deps.LockfilePnpm)
 
 	// Create first worktree
 	rimbaSuccess(t, repo, "add", "task-deps-1")
@@ -155,7 +155,7 @@ func TestAddWithDepsSkipFlag(t *testing.T) {
 	}
 
 	repo := setupInitializedRepo(t)
-	commitLockfile(t, repo)
+	commitLockfile(t, repo, deps.LockfilePnpm)
 
 	rimbaSuccess(t, repo, "add", "skip-1")
 
@@ -194,7 +194,7 @@ func TestDepsStatus(t *testing.T) {
 	}
 
 	repo := setupInitializedRepo(t)
-	commitLockfile(t, repo)
+	commitLockfile(t, repo, deps.LockfilePnpm)
 
 	rimbaSuccess(t, repo, "add", "status-task")
 
@@ -209,7 +209,7 @@ func TestDepsInstall(t *testing.T) {
 	}
 
 	repo := setupInitializedRepo(t)
-	commitLockfile(t, repo)
+	commitLockfile(t, repo, deps.LockfilePnpm)
 
 	rimbaSuccess(t, repo, "add", "install-src")
 
@@ -281,7 +281,7 @@ func TestDuplicateWithDepsClone(t *testing.T) {
 	}
 
 	repo := setupInitializedRepo(t)
-	commitLockfile(t, repo)
+	commitLockfile(t, repo, deps.LockfilePnpm)
 
 	rimbaSuccess(t, repo, "add", taskDupSrc)
 
@@ -335,7 +335,7 @@ func TestAddWithDepsAutoDetectDisabled(t *testing.T) {
 	}
 
 	repo := setupInitializedRepo(t)
-	commitLockfile(t, repo)
+	commitLockfile(t, repo, deps.LockfilePnpm)
 
 	cfg := loadConfig(t, repo)
 	f := false
@@ -354,4 +354,34 @@ func TestAddWithDepsAutoDetectDisabled(t *testing.T) {
 
 	_ = strings.TrimSpace(r.Stdout)
 	assertNotContains(t, r.Stdout, msgDependencies)
+}
+
+func TestAddWithDepsCloneRust(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	commitLockfile(t, repo, deps.LockfileCargo)
+
+	rimbaSuccess(t, repo, "add", "cargo-1")
+
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch1 := resolver.BranchName(defaultPrefix, "cargo-1")
+	wt1Path := resolver.WorktreePath(wtDir, branch1)
+
+	targetDir := filepath.Join(wt1Path, deps.DirTarget)
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	testutil.CreateFile(t, targetDir, "cargo-marker.txt", "built")
+
+	r := rimbaSuccess(t, repo, "add", "cargo-2")
+
+	branch2 := resolver.BranchName(defaultPrefix, "cargo-2")
+	wt2Path := resolver.WorktreePath(wtDir, branch2)
+
+	assertFileExists(t, filepath.Join(wt2Path, deps.DirTarget, "cargo-marker.txt"))
+	assertContains(t, r.Stdout, msgClonedFrom)
 }
