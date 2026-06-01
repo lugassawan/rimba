@@ -957,3 +957,48 @@ func TestRepoNameError(t *testing.T) {
 	}
 	assertContains(t, err, errNotAGitRepo)
 }
+
+func TestCheckoutInsertsDashDash(t *testing.T) {
+	const branch = "my-branch"
+	var capturedDir string
+	var capturedArgs []string
+	r := &mockRunner{
+		runInDir: func(dir string, args ...string) (string, error) {
+			capturedDir = dir
+			capturedArgs = args
+			return "", nil
+		},
+	}
+
+	if err := Checkout(r, fakeDir, branch); err != nil {
+		t.Fatalf("Checkout: %v", err)
+	}
+
+	want := []string{"switch", "--", branch}
+	if !slices.Equal(capturedArgs, want) {
+		t.Errorf("args = %v, want %v", capturedArgs, want)
+	}
+	if capturedDir != fakeDir {
+		t.Errorf("dir = %q, want %q", capturedDir, fakeDir)
+	}
+}
+
+func TestAddWorktreeFromBranchInsertsDashDash(t *testing.T) {
+	const branch = "feature/some-task"
+	var capturedArgs []string
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			capturedArgs = args
+			return "", nil
+		},
+	}
+
+	if err := AddWorktreeFromBranch(r, fakePath, branch); err != nil {
+		t.Fatalf("AddWorktreeFromBranch: %v", err)
+	}
+
+	want := []string{cmdWorktree, "add", "--", fakePath, branch}
+	if !slices.Equal(capturedArgs, want) {
+		t.Errorf("args = %v, want %v", capturedArgs, want)
+	}
+}

@@ -33,7 +33,7 @@ func AddWorktree(r Runner, path, branch, source string) error {
 
 // AddWorktreeFromBranch creates a worktree from an existing branch (no -b flag).
 func AddWorktreeFromBranch(r Runner, path, branch string) error {
-	_, err := r.Run(cmdWorktree, "add", path, branch)
+	_, err := r.Run(cmdWorktree, "add", "--", path, branch)
 	return err
 }
 

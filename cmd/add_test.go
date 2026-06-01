@@ -360,8 +360,8 @@ func branchPromoteRunFn(repoDir string) func(args ...string) (string, error) {
 			return "", nil
 		case len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == cmdList:
 			return porcelain, nil
-		case len(args) >= 3 && args[0] == cmdWorktreeTest && args[1] == gitSubcmdWorktreeAdd:
-			_ = os.MkdirAll(args[2], 0o755)
+		case len(args) >= 4 && args[0] == cmdWorktreeTest && args[1] == gitSubcmdWorktreeAdd && args[2] == "--":
+			_ = os.MkdirAll(args[3], 0o755)
 			return "", nil
 		}
 		return "", nil
