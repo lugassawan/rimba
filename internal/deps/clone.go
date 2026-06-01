@@ -147,6 +147,13 @@ func cowCopy(src, dst string) error {
 	}
 	cowErr := cmdErr("cow copy", out, err)
 
+	// Only attempt the fallback on platforms where CoW was actually tried.
+	// On the default branch cowCopyCmd already emits a plain cp -R, so
+	// retrying an identical command on failure adds no value.
+	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
+		return cowErr
+	}
+
 	// A failed CoW cp can leave a partially written dst; remove it so the
 	// fallback lands src's contents AS dst rather than nested inside dst/<base>.
 	if rmErr := os.RemoveAll(dst); rmErr != nil {
