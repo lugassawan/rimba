@@ -6,9 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -45,6 +49,7 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -77,11 +82,12 @@ jobs:
 
   vuln:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
-      - run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - run: go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
       - run: govulncheck ./...
