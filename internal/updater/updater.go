@@ -262,7 +262,7 @@ func Replace(currentBinary, newBinary string) error {
 		return fmt.Errorf("closing temp file: %w", err)
 	}
 
-	// Atomic rename: new inode replaces old one
+	// Install the new binary in place: atomic os.Rename on Unix, rename-aside on Windows.
 	if err := swapBinary(tmpPath, resolved); err != nil {
 		return fmt.Errorf("replacing binary: %w", err)
 	}
