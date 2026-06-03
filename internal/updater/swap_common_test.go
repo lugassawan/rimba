@@ -3,6 +3,7 @@ package updater
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -180,6 +181,36 @@ func TestCopyFileMissingSource(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "opening source") {
 		t.Errorf("error = %q, want to contain 'opening source'", err.Error())
+	}
+}
+
+// TestCopyFileChmodError covers the os.Chmod error path: dst is a symlink to
+// /dev/null, which we can open and write to but cannot chmod (not our file).
+func TestCopyFileChmodError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no /dev/null on Windows")
+	}
+	if os.Getuid() == 0 {
+		t.Skip("chmod /dev/null succeeds as root")
+	}
+	tmpDir := t.TempDir()
+
+	src := filepath.Join(tmpDir, "src")
+	if err := os.WriteFile(src, []byte("content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	dst := filepath.Join(tmpDir, "dst")
+	if err := os.Symlink("/dev/null", dst); err != nil {
+		t.Fatal(err)
+	}
+
+	err := copyFile(src, dst, 0755)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "setting permissions") {
+		t.Errorf("error = %q, want to contain 'setting permissions'", err.Error())
 	}
 }
 
