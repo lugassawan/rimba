@@ -133,6 +133,7 @@ func CommandName() string {
 }
 
 func Execute() error {
+	updater.SweepOldBinary()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	return rootCmd.ExecuteContext(ctx)
