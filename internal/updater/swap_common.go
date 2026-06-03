@@ -11,6 +11,8 @@ const oldBinarySuffix = ".old"
 // renameAside installs newBinary at dst using the rename-aside dance:
 // move dst → dst.old, copy newBinary → dst, chmod to match.
 // On any copy/chmod failure it rolls back by restoring dst.old → dst.
+// If the rollback rename also fails the error is surfaced so the caller
+// knows the binary is absent and the original is recoverable from dst.old.
 func renameAside(tmpPath, dst string) error {
 	info, err := os.Stat(tmpPath)
 	if err != nil {
@@ -24,8 +26,10 @@ func renameAside(tmpPath, dst string) error {
 	}
 
 	if err := copyFile(tmpPath, dst, perm); err != nil {
-		_ = os.Remove(dst)
-		_ = os.Rename(old, dst)
+		_ = os.Remove(dst) // clear any partial write; on Windows Rename fails if dst exists
+		if rbErr := os.Rename(old, dst); rbErr != nil {
+			return fmt.Errorf("installing new binary: %w; rollback failed: %w — original binary is at %s", err, rbErr, old)
+		}
 		return fmt.Errorf("installing new binary: %w", err)
 	}
 
@@ -38,7 +42,9 @@ func copyFile(src, dst string, perm os.FileMode) error {
 		return fmt.Errorf("opening source: %w", err)
 	}
 
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm) //nolint:gosec // dst is the resolved current binary path, not user input
+	// Create with narrow permissions; Chmod below sets the final mode without
+	// relying on OpenFile's umask-adjusted result.
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600) //nolint:gosec // dst is the resolved current binary path, not user input
 	if err != nil {
 		_ = in.Close()
 		return fmt.Errorf("creating destination: %w", err)
