@@ -128,6 +128,47 @@ func TestRenameAsideMoveAsideError(t *testing.T) {
 	}
 }
 
+// TestRenameAsideRollbackDoubleFailSubcomponents confirms that copy failure and rollback
+// Rename failure can both occur in the same directory context, exercising the sub-errors
+// that feed into renameAside's compound "rollback failed" message.
+func TestRenameAsideRollbackDoubleFailSubcomponents(t *testing.T) {
+	binDir := t.TempDir()
+	dst := filepath.Join(binDir, "binary")
+	old := dst + oldBinarySuffix
+
+	if err := os.WriteFile(dst, []byte("original"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Simulate the move-aside that renameAside performs before the copy.
+	if err := os.Rename(dst, old); err != nil {
+		t.Fatal("setup move-aside:", err)
+	}
+
+	if err := os.Chmod(binDir, 0555); err != nil {
+		t.Fatal("chmod:", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(binDir, 0755) })
+
+	src := filepath.Join(t.TempDir(), "src")
+	if err := os.WriteFile(src, []byte("new content"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	copyErr := copyFile(src, dst, 0755)
+	if copyErr == nil {
+		t.Fatal("expected copyFile to fail in read-only dir")
+	}
+	if !strings.Contains(copyErr.Error(), "creating destination") {
+		t.Errorf("copyErr = %q, want to contain 'creating destination'", copyErr.Error())
+	}
+
+	rbErr := os.Rename(old, dst)
+	if rbErr == nil {
+		t.Fatal("expected rollback Rename to fail in read-only dir")
+	}
+}
+
 func TestCopyFileMissingSource(t *testing.T) {
 	tmpDir := t.TempDir()
 	src := filepath.Join(tmpDir, "nonexistent")

@@ -30,7 +30,8 @@ func TestSweepOldBinaryNoOldFile(t *testing.T) {
 	sweepOldBinary(exe)
 }
 
-func TestSweepOldBinaryExported(t *testing.T) {
-	// SweepOldBinary is a no-op on non-Windows; verify it does not panic.
+// TestSweepOldBinaryNonWindowsNoOp calls the no-op on non-Windows; sweep_windows.go
+// is compile-checked by the build-cross CI job, not run on Linux.
+func TestSweepOldBinaryNonWindowsNoOp(t *testing.T) {
 	SweepOldBinary()
 }

@@ -8,11 +8,10 @@ import (
 
 const oldBinarySuffix = ".old"
 
-// renameAside installs newBinary at dst using the rename-aside dance:
-// move dst → dst.old, copy newBinary → dst, chmod to match.
-// On any copy/chmod failure it rolls back by restoring dst.old → dst.
-// If the rollback rename also fails the error is surfaced so the caller
-// knows the binary is absent and the original is recoverable from dst.old.
+// renameAside installs tmpPath at dst: moves dst → dst.old, copies tmpPath → dst,
+// then chmods to match.  Rolls back (dst.old → dst) on failure; surfaces both the
+// copy error and the rollback error if restore also fails.
+// The caller must pre-set tmpPath permissions; renameAside reads them via Stat.
 func renameAside(tmpPath, dst string) error {
 	info, err := os.Stat(tmpPath)
 	if err != nil {
@@ -26,9 +25,9 @@ func renameAside(tmpPath, dst string) error {
 	}
 
 	if err := copyFile(tmpPath, dst, perm); err != nil {
-		_ = os.Remove(dst) // clear any partial write; on Windows Rename fails if dst exists
+		rmErr := os.Remove(dst) // clear any partial write; on Windows Rename fails if dst exists
 		if rbErr := os.Rename(old, dst); rbErr != nil {
-			return fmt.Errorf("installing new binary: %w; rollback failed: %w — original binary is at %s", err, rbErr, old)
+			return fmt.Errorf("installing new binary: %w; rollback failed (remove: %w, rename: %w) — original binary is at %s", err, rmErr, rbErr, old)
 		}
 		return fmt.Errorf("installing new binary: %w", err)
 	}
