@@ -27,7 +27,7 @@ type WorktreeEntry struct {
 
 // AddWorktree creates a new worktree at the given path with a new branch from source.
 func AddWorktree(r Runner, path, branch, source string) error {
-	_, err := r.Run(cmdWorktree, "add", "-b", branch, path, source)
+	_, err := r.Run(cmdWorktree, "add", "-b", branch, "--", path, source)
 	return err
 }
 
@@ -50,10 +50,11 @@ func RemoveWorktree(r Runner, path string, force bool) error {
 // MoveWorktree moves the worktree from oldPath to newPath.
 // When force is true, --force is passed twice so that even locked worktrees can be moved.
 func MoveWorktree(r Runner, oldPath, newPath string, force bool) error {
-	args := []string{cmdWorktree, "move", oldPath, newPath}
+	args := []string{cmdWorktree, "move"}
 	if force {
 		args = append(args, flagForce, flagForce)
 	}
+	args = append(args, "--", oldPath, newPath)
 	_, err := r.Run(args...)
 	return err
 }
