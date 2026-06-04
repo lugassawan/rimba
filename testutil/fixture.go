@@ -21,6 +21,7 @@ func LoadFixture(t fixtureT, relpath string) string {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("LoadFixture %s: %v", relpath, err)
+		return "" // unreachable under *testing.T (Fatalf calls runtime.Goexit); explicit for spy
 	}
 	return string(data)
 }

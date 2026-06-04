@@ -9,8 +9,6 @@ func TestCompletionShells(t *testing.T) {
 		t.Skip(skipE2E)
 	}
 
-	dir := t.TempDir()
-
 	tests := []struct {
 		shell  string
 		marker string
@@ -22,6 +20,7 @@ func TestCompletionShells(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.shell, func(t *testing.T) {
+			dir := t.TempDir()
 			r := rimbaSuccess(t, dir, "completion", tc.shell)
 			assertContains(t, r.Stdout, tc.marker)
 		})
