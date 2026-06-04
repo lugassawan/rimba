@@ -1,6 +1,7 @@
 package testutil_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,6 +9,18 @@ import (
 
 	"github.com/lugassawan/rimba/testutil"
 )
+
+type fixtureTSpy struct {
+	fatalfCalled bool
+	fatalfMsg    string
+}
+
+func (s *fixtureTSpy) Helper() {}
+
+func (s *fixtureTSpy) Fatalf(format string, args ...any) {
+	s.fatalfCalled = true
+	s.fatalfMsg = fmt.Sprintf(format, args...)
+}
 
 func TestPtr(t *testing.T) {
 	p := testutil.Ptr(42)
@@ -39,6 +52,20 @@ func TestCreateFile(t *testing.T) {
 	}
 	if string(data) != "world" {
 		t.Fatalf("content = %q, want %q", string(data), "world")
+	}
+}
+
+func TestLoadFixtureMissingFile(t *testing.T) {
+	spy := &fixtureTSpy{}
+	got := testutil.LoadFixture(spy, "testdata/does-not-exist.txt")
+	if !spy.fatalfCalled {
+		t.Fatal("expected Fatalf to be called for missing fixture")
+	}
+	if got != "" {
+		t.Fatalf("expected empty string on error, got %q", got)
+	}
+	if !strings.Contains(spy.fatalfMsg, "LoadFixture testdata/does-not-exist.txt") {
+		t.Fatalf("expected message to contain %q, got %q", "LoadFixture testdata/does-not-exist.txt", spy.fatalfMsg)
 	}
 }
 
