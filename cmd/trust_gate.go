@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/lugassawan/rimba/internal/config"
@@ -65,10 +64,10 @@ func promptTrust(cmd *cobra.Command, cfg *config.Config) bool {
 }
 
 // trustYesRequested returns true when --yes is set or RIMBA_TRUST_YES is truthy.
+// The env-var truthiness is defined by trust.TrustYesFromEnv.
 func trustYesRequested(cmd *cobra.Command) bool {
 	if yes, _ := cmd.Flags().GetBool(flagYes); yes {
 		return true
 	}
-	v, ok := os.LookupEnv("RIMBA_TRUST_YES")
-	return ok && v != "" && v != "0"
+	return trust.TrustYesFromEnv()
 }

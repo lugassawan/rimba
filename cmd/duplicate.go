@@ -97,10 +97,6 @@ var duplicateCmd = &cobra.Command{
 			return fmt.Errorf("worktree path already exists: %s", wtPath)
 		}
 
-		if err := ensureTrust(cmd, repoRoot, cfg); err != nil {
-			return err
-		}
-
 		dryRun, _ := cmd.Flags().GetBool(flagDryRun)
 		skipDeps, _ := cmd.Flags().GetBool(flagSkipDeps)
 		skipHooks, _ := cmd.Flags().GetBool(flagSkipHooks)
@@ -125,6 +121,10 @@ var duplicateCmd = &cobra.Command{
 				fmt.Fprintf(out, "[dry-run] would run post-create hooks\n")
 			}
 			return nil
+		}
+
+		if err := ensureTrust(cmd, repoRoot, cfg); err != nil {
+			return err
 		}
 
 		s := spinner.New(spinnerOpts(cmd))

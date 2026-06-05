@@ -342,6 +342,24 @@ func TestGateNonInteractiveEnvEscapeHatch(t *testing.T) {
 	}
 }
 
+func TestLoadNewerVersion(t *testing.T) {
+	dir := t.TempDir()
+	rimbaDir := filepath.Join(dir, ".rimba")
+	if err := os.MkdirAll(rimbaDir, 0750); err != nil {
+		t.Fatal(err)
+	}
+	// Write a store file with a future version number.
+	p := filepath.Join(rimbaDir, "trust.local.toml")
+	if err := os.WriteFile(p, []byte("version = 99\nhash = \"sha256:abc\"\napproved_at = \"2026-01-01T00:00:00Z\"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := trust.Load(dir)
+	if err == nil {
+		t.Error("Load with newer store version should return error")
+	}
+}
+
 func TestGateNonInteractiveEnvEscapeHatchZero(t *testing.T) {
 	dir := t.TempDir()
 	cfg := cfgWithCommands([]string{"make build"}, nil)

@@ -40,6 +40,9 @@ func Load(repoRoot string) (*Store, error) {
 	if err := toml.Unmarshal(data, &s); err != nil {
 		return nil, fmt.Errorf("parse trust store: %w", err)
 	}
+	if s.Version > storeVersion {
+		return nil, fmt.Errorf("trust store version %d is newer than supported (%d); upgrade rimba", s.Version, storeVersion)
+	}
 	return &s, nil
 }
 
@@ -99,7 +102,7 @@ func GateNonInteractive(repoRoot string, cfg *config.Config) error {
 	if ok {
 		return nil
 	}
-	if trustYesEnv() {
+	if TrustYesFromEnv() {
 		return Record(repoRoot, h)
 	}
 	return errhint.WithFix(
@@ -108,12 +111,14 @@ func GateNonInteractive(repoRoot string, cfg *config.Config) error {
 	)
 }
 
-func storePath(repoRoot string) string {
-	return filepath.Join(repoRoot, config.DirName, FileName)
-}
-
-// trustYesEnv returns true when RIMBA_TRUST_YES is set to a truthy value.
-func trustYesEnv() bool {
+// TrustYesFromEnv reports whether RIMBA_TRUST_YES is set to a truthy value.
+// It is the canonical definition of truthy for this environment variable;
+// cmd/trust_gate.go delegates to it to avoid duplicate semantics.
+func TrustYesFromEnv() bool {
 	v, ok := os.LookupEnv("RIMBA_TRUST_YES")
 	return ok && v != "" && v != "0"
+}
+
+func storePath(repoRoot string) string {
+	return filepath.Join(repoRoot, config.DirName, FileName)
 }
