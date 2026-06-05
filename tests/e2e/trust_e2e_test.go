@@ -80,7 +80,8 @@ func TestTrustAC3FlagYesRunsCommand(t *testing.T) {
 	testutil.GitCmd(t, repo, "add", ".")
 	testutil.GitCmd(t, repo, "commit", "-m", "add post_create hook")
 
-	rimbaWithEnv(t, repo, []string{"RIMBA_TRUST_YES=1"}, "add", "my-task", "--skip-deps", "--yes")
+	// --yes alone (without RIMBA_TRUST_YES) should be sufficient to auto-approve.
+	rimbaSuccess(t, repo, "add", "my-task", "--skip-deps", "--yes")
 
 	assertFileExists(t, markerFile)
 }

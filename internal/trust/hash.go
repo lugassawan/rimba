@@ -32,8 +32,16 @@ func HasCommands(cfg *config.Config) bool {
 }
 
 // Hash returns a canonical "sha256:<hex>" fingerprint of cfg's command set.
-// Returns "" when there are no commands. Reordering commands does not change
-// the hash; only new or changed content re-arms the consent gate.
+// Returns "" when there are no commands.
+//
+// The hash is field-blind: the field a command originates from (post_create,
+// post_rename, or deps install) does not affect the hash, only its string
+// value does. This means moving a command between fields without changing its
+// content does not require re-consent — restructuring config is not a new
+// threat. Conversely, adding the same command string to a second field (e.g.
+// adding an already-approved post_create string to post_rename) does not
+// re-arm the gate; re-consent is only required when the command content itself
+// is new or changed.
 func Hash(cfg *config.Config) string {
 	cmds := Commands(cfg)
 	if len(cmds) == 0 {
