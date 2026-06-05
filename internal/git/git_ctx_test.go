@@ -42,3 +42,36 @@ func TestRunContextDelegatesToRunInDirContext(t *testing.T) {
 		t.Errorf("expected git version output, got: %q", out)
 	}
 }
+
+func TestStableGitEnvForcesCLocale(t *testing.T) {
+	env := stableGitEnv([]string{
+		"PATH=/usr/bin",
+		"LANG=fr_FR.UTF-8",
+		"LC_ALL=de_DE.UTF-8",
+		"OTHER=value",
+	})
+
+	for _, entry := range env {
+		if strings.HasPrefix(entry, "LANG=") && entry != "LANG=C" {
+			t.Fatalf("unexpected LANG entry %q in %v", entry, env)
+		}
+		if strings.HasPrefix(entry, "LC_ALL=") && entry != "LC_ALL=C" {
+			t.Fatalf("unexpected LC_ALL entry %q in %v", entry, env)
+		}
+	}
+
+	for _, want := range []string{"PATH=/usr/bin", "OTHER=value", "LANG=C", "LC_ALL=C"} {
+		if !hasEnv(env, want) {
+			t.Fatalf("expected %q in %v", want, env)
+		}
+	}
+}
+
+func hasEnv(env []string, want string) bool {
+	for _, entry := range env {
+		if entry == want {
+			return true
+		}
+	}
+	return false
+}
