@@ -796,3 +796,27 @@ func TestCopyEntriesAncestorPermissionError(t *testing.T) {
 		t.Error("permission denied should not wrap ErrPathEscapes")
 	}
 }
+
+func TestCopyEntriesRejectsTopLevelDirSymlinkEscape(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+	outside := t.TempDir()
+
+	_ = os.Mkdir(filepath.Join(src, "mydir"), 0755)
+	_ = os.WriteFile(filepath.Join(src, "mydir", "f.txt"), []byte("data"), 0644)
+	if err := os.Symlink(outside, filepath.Join(dst, "mydir")); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err := fileutil.CopyEntries(src, dst, []string{"mydir"})
+	if err == nil {
+		t.Fatal("expected error when dst top-level entry is a symlink pointing outside")
+	}
+	if !errors.Is(err, fileutil.ErrPathEscapes) {
+		t.Fatalf("error %v does not wrap fileutil.ErrPathEscapes", err)
+	}
+	entries, _ := os.ReadDir(outside)
+	if len(entries) != 0 {
+		t.Errorf("outside dir should be empty after rejected copy, got %v", entries)
+	}
+}
