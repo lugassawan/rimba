@@ -304,6 +304,23 @@ func TestEnsureLocalGlobIgnoredMigration(t *testing.T) {
 	}
 }
 
+func TestEnsureLocalGlobIgnoredNoGitignore(t *testing.T) {
+	dir := t.TempDir()
+
+	added, err := EnsureLocalGlobIgnored(dir)
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+	if !added {
+		t.Error("expected added=true for fresh repo with no .gitignore")
+	}
+	content := readFile(t, filepath.Join(dir, gitignoreFile))
+	glob := config.DirName + "/" + config.LocalGlob
+	if !strings.Contains(content, glob) {
+		t.Errorf("expected glob %q in new .gitignore, got:\n%s", glob, content)
+	}
+}
+
 func readFile(t *testing.T, path string) string {
 	t.Helper()
 	data, err := os.ReadFile(path)

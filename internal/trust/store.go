@@ -16,7 +16,7 @@ import (
 
 const (
 	// FileName is the gitignored local trust record for a repo.
-	FileName     = "trust.local.toml"
+	FileName     = config.TrustFile
 	storeVersion = 1
 )
 
