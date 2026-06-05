@@ -48,6 +48,10 @@ to see available archived branches.`,
 			return err
 		}
 
+		if err := ensureTrust(cmd, repoRoot, cfg); err != nil {
+			return err
+		}
+
 		wtDir := filepath.Join(repoRoot, cfg.WorktreeDir)
 		wtPath := resolver.WorktreePath(wtDir, branch)
 

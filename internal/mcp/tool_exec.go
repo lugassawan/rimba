@@ -42,6 +42,12 @@ func registerExecTool(s *server.MCPServer, hctx *HandlerContext) {
 	s.AddTool(tool, handleExec(hctx))
 }
 
+// handleExec runs ad-hoc caller-supplied shell commands across worktrees.
+// The trust consent gate (GateNonInteractive) is intentionally absent here:
+// `exec` executes commands provided at call time by the MCP client, not
+// committed configuration hooks. Gating committed hooks is the threat model
+// for the trust system; ad-hoc operator commands are considered authorised by
+// the act of invoking the MCP server.
 func handleExec(hctx *HandlerContext) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		command := req.GetString("command", "")

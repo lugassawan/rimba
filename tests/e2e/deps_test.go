@@ -243,7 +243,10 @@ func TestPostCreateHooks(t *testing.T) {
 	cfg.PostCreate = []string{"touch hook-marker.txt"}
 	saveConfig(t, repo, cfg)
 
-	r := rimbaSuccess(t, repo, "add", "hook-task")
+	r := rimbaWithEnv(t, repo, []string{"RIMBA_TRUST_YES=1"}, "add", "hook-task")
+	if r.ExitCode != 0 {
+		t.Fatalf("rimba add hook-task: exit %d\nstdout: %s\nstderr: %s", r.ExitCode, r.Stdout, r.Stderr)
+	}
 
 	wtDir := filepath.Join(repo, cfg.WorktreeDir)
 	branch := resolver.BranchName(defaultPrefix, "hook-task")
@@ -265,7 +268,10 @@ func TestPostCreateHooksSkipFlag(t *testing.T) {
 	cfg.PostCreate = []string{"touch should-not-exist.txt"}
 	saveConfig(t, repo, cfg)
 
-	r := rimbaSuccess(t, repo, "add", flagSkipHooksE2E, "skip-hook-task")
+	r := rimbaWithEnv(t, repo, []string{"RIMBA_TRUST_YES=1"}, "add", flagSkipHooksE2E, "skip-hook-task")
+	if r.ExitCode != 0 {
+		t.Fatalf("rimba add --skip-hooks: exit %d\nstdout: %s\nstderr: %s", r.ExitCode, r.Stdout, r.Stderr)
+	}
 
 	wtDir := filepath.Join(repo, cfg.WorktreeDir)
 	branch := resolver.BranchName(defaultPrefix, "skip-hook-task")

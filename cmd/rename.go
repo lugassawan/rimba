@@ -47,6 +47,10 @@ var renameCmd = &cobra.Command{
 		_, task = operations.ResolveTaskInput(task, repoRoot)
 		_, newTask = operations.ResolveTaskInput(newTask, repoRoot)
 
+		if err := ensureTrust(cmd, repoRoot, cfg); err != nil {
+			return err
+		}
+
 		wtDir := filepath.Join(repoRoot, cfg.WorktreeDir)
 		skipDeps, _ := cmd.Flags().GetBool(flagSkipDeps)
 		skipHooks, _ := cmd.Flags().GetBool(flagSkipHooks)

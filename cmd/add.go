@@ -70,9 +70,13 @@ main repo and is not the default branch. --source is not valid in branch: mode.`
 
 		if m := prArgRe.FindStringSubmatch(args[0]); m != nil {
 			prNum, _ := strconv.Atoi(m[1])
+			if err := ensureTrust(cmd, repoRoot, cfg); err != nil {
+				return err
+			}
 			return runAddPR(cmd, r, newGHRunner(), prNum, postOpts, s)
 		}
 
+		// branch: mode promotes an existing branch without running hooks — no trust gate.
 		if m := branchArgRe.FindStringSubmatch(args[0]); m != nil {
 			if cmd.Flags().Changed(flagSource) {
 				return errhint.WithFix(
@@ -90,6 +94,9 @@ main repo and is not the default branch. --source is not valid in branch: mode.`
 			)
 		}
 
+		if err := ensureTrust(cmd, repoRoot, cfg); err != nil {
+			return err
+		}
 		return runAddTask(cmd, r, args[0], cfg, repoRoot, postOpts, s)
 	},
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/resolver"
+	"github.com/lugassawan/rimba/internal/trust"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -50,6 +51,10 @@ func handleAdd(hctx *HandlerContext) server.ToolHandlerFunc {
 		cfg, cfgErr := hctx.requireConfig()
 		if cfgErr != nil {
 			return mcp.NewToolResultError(cfgErr.Error()), nil
+		}
+
+		if err := trust.GateNonInteractive(hctx.RepoRoot, cfg); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		if !resolver.ValidPrefixType(prefixType) {
