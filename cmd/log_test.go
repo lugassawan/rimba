@@ -286,8 +286,8 @@ func TestLogJSON(t *testing.T) {
 	if err := json.Unmarshal(buf.Bytes(), &env); err != nil {
 		t.Fatalf("invalid JSON: %v\noutput: %s", err, buf.String())
 	}
-	if env.Command != "log" {
-		t.Errorf("command = %q, want %q", env.Command, "log")
+	if env.Command != cmdLog {
+		t.Errorf("command = %q, want %q", env.Command, cmdLog)
 	}
 
 	data, ok := env.Data.([]any)
@@ -315,6 +315,10 @@ func TestLogJSON(t *testing.T) {
 	}
 	if item["subject"] != "add login feature" {
 		t.Errorf("subject = %v, want %q", item["subject"], "add login feature")
+	}
+	lc, _ := item["last_commit"].(string)
+	if _, err := time.Parse(time.RFC3339, lc); err != nil {
+		t.Errorf("last_commit %q is not RFC3339: %v", lc, err)
 	}
 }
 
@@ -348,8 +352,8 @@ func TestLogJSONEmpty(t *testing.T) {
 	if err := json.Unmarshal(buf.Bytes(), &env); err != nil {
 		t.Fatalf("invalid JSON: %v\noutput: %s", err, buf.String())
 	}
-	if env.Command != "log" {
-		t.Errorf("command = %q, want %q", env.Command, "log")
+	if env.Command != cmdLog {
+		t.Errorf("command = %q, want %q", env.Command, cmdLog)
 	}
 
 	data, ok := env.Data.([]any)
@@ -358,5 +362,41 @@ func TestLogJSONEmpty(t *testing.T) {
 	}
 	if len(data) != 0 {
 		t.Errorf("expected empty data array, got %d items", len(data))
+	}
+}
+
+// TestLogJSONEmptyAfterFilter covers the post-filter JSON path (guard 2 in RunE):
+// worktrees exist but all entries are filtered out by --since.
+func TestLogJSONEmptyAfterFilter(t *testing.T) {
+	ts := strconv.FormatInt(time.Now().Add(-30*24*time.Hour).Unix(), 10)
+	restore := overrideNewRunner(logRunnerWithWorktree(func(_ string) (string, error) {
+		return ts + "\told commit", nil
+	}))
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	cmd.Flags().Int(flagLimit, 0, "")
+	cmd.Flags().String(flagSince, "", "")
+	_ = cmd.Flags().Set(flagSince, "1h")
+
+	if err := logCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("logCmd.RunE: %v", err)
+	}
+
+	var env output.Envelope
+	if err := json.Unmarshal(buf.Bytes(), &env); err != nil {
+		t.Fatalf("invalid JSON: %v\noutput: %s", err, buf.String())
+	}
+	if env.Command != cmdLog {
+		t.Errorf("command = %q, want %q", env.Command, cmdLog)
+	}
+
+	data, ok := env.Data.([]any)
+	if !ok {
+		t.Fatalf("data type = %T, want []any", env.Data)
+	}
+	if len(data) != 0 {
+		t.Errorf("expected empty data array after filter, got %d items", len(data))
 	}
 }

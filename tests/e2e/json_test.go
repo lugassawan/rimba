@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/lugassawan/rimba/internal/deps"
 	"github.com/lugassawan/rimba/internal/resolver"
@@ -161,6 +162,10 @@ func TestLogJSON(t *testing.T) {
 	}
 	if item["subject"] != "add log json work" {
 		t.Errorf("subject = %v, want 'add log json work'", item["subject"])
+	}
+	lc, _ := item["last_commit"].(string)
+	if _, err := time.Parse(time.RFC3339, lc); err != nil {
+		t.Errorf("last_commit %q is not RFC3339: %v", lc, err)
 	}
 
 	// No ANSI escape codes
