@@ -5,9 +5,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
 )
 
@@ -553,7 +555,7 @@ func TestMcpFetchNonFatalCancelled(t *testing.T) {
 			return "", context.Canceled
 		},
 	}
-	warn, err := mcpFetchNonFatal(context.Background(), r)
+	warn, err := mcpFetchNonFatal(context.Background(), r, git.FetchArgs{})
 	if !errors.Is(err, context.Canceled) {
 		t.Errorf("expected context.Canceled, got err=%v warn=%q", err, warn)
 	}
@@ -565,11 +567,37 @@ func TestMcpFetchNonFatalConnectivityFailure(t *testing.T) {
 			return "", errors.New("no remote configured")
 		},
 	}
-	warn, err := mcpFetchNonFatal(context.Background(), r)
+	warn, err := mcpFetchNonFatal(context.Background(), r, git.FetchArgs{})
 	if err != nil {
 		t.Errorf("connectivity failure should not return error, got %v", err)
 	}
 	if warn == "" {
 		t.Error("expected non-empty warning for connectivity failure")
+	}
+}
+
+func TestMcpFetchNonFatalPruneFlag(t *testing.T) {
+	cases := []struct {
+		name      string
+		args      git.FetchArgs
+		wantPrune bool
+	}{
+		{"no prune for sync", git.FetchArgs{}, false},
+		{"prune for merged clean", git.FetchArgs{Prune: true}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var fetchArgs []string
+			r := &mockRunner{
+				run: func(args ...string) (string, error) {
+					fetchArgs = append([]string(nil), args...)
+					return "", nil
+				},
+			}
+			_, _ = mcpFetchNonFatal(context.Background(), r, tc.args)
+			if slices.Contains(fetchArgs, "--prune") != tc.wantPrune {
+				t.Errorf("--prune present=%v, want %v; fetch args: %v", slices.Contains(fetchArgs, "--prune"), tc.wantPrune, fetchArgs)
+			}
+		})
 	}
 }

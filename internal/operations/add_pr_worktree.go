@@ -61,7 +61,7 @@ func AddPRWorktree(
 func resolveSource(ctx context.Context, gitR git.Runner, meta gh.PRMeta, onProgress progress.Func) (string, error) {
 	if !meta.IsCrossRepository {
 		progress.Notify(onProgress, "Fetching origin...")
-		if err := git.Fetch(ctx, gitR, "origin"); err != nil {
+		if err := git.Fetch(ctx, gitR, "origin", git.FetchArgs{}); err != nil {
 			return "", errhint.WithFix(err, "check network connectivity")
 		}
 		return "origin/" + meta.HeadRefName, nil
@@ -78,7 +78,7 @@ func resolveSource(ctx context.Context, gitR git.Runner, meta gh.PRMeta, onProgr
 	}
 
 	progress.Notify(onProgress, fmt.Sprintf("Fetching %s...", remoteName))
-	if err := git.Fetch(ctx, gitR, remoteName); err != nil {
+	if err := git.Fetch(ctx, gitR, remoteName, git.FetchArgs{}); err != nil {
 		return "", errhint.WithFix(err, "check network and fork visibility")
 	}
 

@@ -92,7 +92,7 @@ var syncCmd = &cobra.Command{
 			fmt.Fprintln(cmd.OutOrStdout(), "[dry-run] would fetch origin")
 		} else {
 			s.Start("Fetching from origin...")
-			if err := git.Fetch(cmd.Context(), r, "origin"); err != nil {
+			if err := git.Fetch(cmd.Context(), r, "origin", git.FetchArgs{}); err != nil {
 				s.Stop()
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 					return err
