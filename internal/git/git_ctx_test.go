@@ -47,6 +47,7 @@ func TestRunContextDelegatesToRunInDirContext(t *testing.T) {
 func TestStableGitEnvForcesCLocale(t *testing.T) {
 	env := stableGitEnv([]string{
 		"PATH=/usr/bin",
+		"NO_EQUALS",
 		"LANG=fr_FR.UTF-8",
 		"LC_ALL=de_DE.UTF-8",
 		"OTHER=value",
@@ -61,7 +62,7 @@ func TestStableGitEnvForcesCLocale(t *testing.T) {
 		}
 	}
 
-	for _, want := range []string{"PATH=/usr/bin", "OTHER=value", "LANG=C", "LC_ALL=C"} {
+	for _, want := range []string{"PATH=/usr/bin", "NO_EQUALS", "OTHER=value", "LANG=C", "LC_ALL=C"} {
 		if !hasEnv(env, want) {
 			t.Fatalf("expected %q in %v", want, env)
 		}
