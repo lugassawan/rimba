@@ -56,22 +56,6 @@ func IsTrusted(repoRoot, hash string) (bool, error) {
 	return s != nil && s.Hash == hash, nil
 }
 
-// EnsureLocalGlobIgnored consolidates the personal *.local.toml overrides
-// (settings.local.toml, trust.local.toml) under a single .rimba/*.local.toml
-// gitignore glob: it removes any pre-existing specific entries and adds the glob.
-// No-op when the whole .rimba/ directory is already ignored (--personal repos).
-// Returns whether the glob line was newly added.
-func EnsureLocalGlobIgnored(repoRoot string) (added bool, err error) {
-	hasDir, err := fileutil.HasGitignoreEntry(repoRoot, config.DirName+"/")
-	if err != nil || hasDir {
-		return false, err
-	}
-	// Best-effort cleanup: the glob below covers both files even if removal fails.
-	_, _ = fileutil.RemoveGitignoreEntry(repoRoot, filepath.Join(config.DirName, config.LocalFile))
-	_, _ = fileutil.RemoveGitignoreEntry(repoRoot, filepath.Join(config.DirName, FileName))
-	return fileutil.EnsureGitignore(repoRoot, filepath.Join(config.DirName, config.LocalGlob))
-}
-
 // Record persists approval of the given command-set hash for repoRoot.
 // It ensures .rimba/ exists and consolidates *.local.toml under a single
 // .rimba/*.local.toml gitignore glob, self-healing repos initialized before
@@ -82,7 +66,7 @@ func Record(repoRoot, hash string) error {
 		return fmt.Errorf("create .rimba dir: %w", err)
 	}
 
-	if _, err := EnsureLocalGlobIgnored(repoRoot); err != nil {
+	if _, err := fileutil.EnsureLocalGlobIgnored(repoRoot); err != nil {
 		return fmt.Errorf("update .gitignore: %w", err)
 	}
 

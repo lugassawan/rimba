@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/lugassawan/rimba/internal/config"
 )
 
 const (
@@ -253,6 +255,52 @@ func TestHasGitignoreEntryNotPresent(t *testing.T) {
 	}
 	if present {
 		t.Fatal("expected present=false when entry is not in .gitignore")
+	}
+}
+
+func TestEnsureLocalGlobIgnoredPersonalMode(t *testing.T) {
+	dir := t.TempDir()
+	original := ".rimba/\n"
+	writeFile(t, filepath.Join(dir, gitignoreFile), original)
+
+	added, err := EnsureLocalGlobIgnored(dir)
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+	if added {
+		t.Error("expected added=false in personal mode (.rimba/ already ignored)")
+	}
+	if got := readFile(t, filepath.Join(dir, gitignoreFile)); got != original {
+		t.Errorf(".gitignore should be unchanged in personal mode, got:\n%s", got)
+	}
+}
+
+func TestEnsureLocalGlobIgnoredMigration(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, gitignoreFile),
+		"node_modules\n.rimba/settings.local.toml\n.rimba/trust.local.toml\n")
+
+	added, err := EnsureLocalGlobIgnored(dir)
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+	if !added {
+		t.Error("expected added=true when glob was not yet present")
+	}
+
+	content := readFile(t, filepath.Join(dir, gitignoreFile))
+	glob := config.DirName + "/" + config.LocalGlob
+	if !strings.Contains(content, glob) {
+		t.Errorf(".gitignore should contain %q, got:\n%s", glob, content)
+	}
+	if strings.Contains(content, ".rimba/settings.local.toml") {
+		t.Errorf(".gitignore should not contain per-file settings entry, got:\n%s", content)
+	}
+	if strings.Contains(content, ".rimba/trust.local.toml") {
+		t.Errorf(".gitignore should not contain per-file trust entry, got:\n%s", content)
+	}
+	if !strings.Contains(content, "node_modules") {
+		t.Errorf(".gitignore should preserve other entries, got:\n%s", content)
 	}
 }
 

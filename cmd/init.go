@@ -10,7 +10,6 @@ import (
 	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/fileutil"
 	"github.com/lugassawan/rimba/internal/git"
-	"github.com/lugassawan/rimba/internal/trust"
 	"github.com/spf13/cobra"
 )
 
@@ -294,7 +293,7 @@ func ensureLocalIgnore(repoRoot, gitignoreEntry string, personal bool) (bool, er
 	if personal {
 		return fileutil.EnsureGitignore(repoRoot, gitignoreEntry)
 	}
-	return trust.EnsureLocalGlobIgnored(repoRoot)
+	return fileutil.EnsureLocalGlobIgnored(repoRoot)
 }
 
 // reconcileExistingIgnore migrates per-file .gitignore entries to the glob on
@@ -303,7 +302,7 @@ func reconcileExistingIgnore(cmd *cobra.Command, repoRoot string, personal bool)
 	if personal {
 		return nil
 	}
-	added, err := trust.EnsureLocalGlobIgnored(repoRoot)
+	added, err := fileutil.EnsureLocalGlobIgnored(repoRoot)
 	if err != nil {
 		return errhint.WithFix(fmt.Errorf("failed to update .gitignore: %w", err), gitignoreHint)
 	}

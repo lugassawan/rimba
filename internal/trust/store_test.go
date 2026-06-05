@@ -151,66 +151,6 @@ func TestRecordGitignoreEntry(t *testing.T) {
 	}
 }
 
-func TestEnsureLocalGlobIgnoredPersonalMode(t *testing.T) {
-	// When .rimba/ is in .gitignore (personal mode), EnsureLocalGlobIgnored is a no-op.
-	dir := t.TempDir()
-	original := ".rimba/\n"
-	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(original), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	added, err := trust.EnsureLocalGlobIgnored(dir)
-	if err != nil {
-		t.Fatalf("EnsureLocalGlobIgnored: %v", err)
-	}
-	if added {
-		t.Error("expected added=false in personal mode (.rimba/ already ignored)")
-	}
-
-	data, err := os.ReadFile(filepath.Join(dir, ".gitignore"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(data) != original {
-		t.Errorf(".gitignore should be unchanged in personal mode, got:\n%s", data)
-	}
-}
-
-func TestEnsureLocalGlobIgnoredMigration(t *testing.T) {
-	// Pre-existing per-file entries are removed and replaced by the glob.
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("node_modules\n.rimba/settings.local.toml\n.rimba/trust.local.toml\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	added, err := trust.EnsureLocalGlobIgnored(dir)
-	if err != nil {
-		t.Fatalf("EnsureLocalGlobIgnored: %v", err)
-	}
-	if !added {
-		t.Error("expected added=true when glob was not yet present")
-	}
-
-	data, err := os.ReadFile(filepath.Join(dir, ".gitignore"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	content := string(data)
-	glob := config.DirName + "/" + config.LocalGlob
-	if !strings.Contains(content, glob) {
-		t.Errorf(".gitignore should contain %q, got:\n%s", glob, content)
-	}
-	if strings.Contains(content, ".rimba/settings.local.toml") {
-		t.Errorf(".gitignore should not contain per-file entry, got:\n%s", content)
-	}
-	if strings.Contains(content, ".rimba/trust.local.toml") {
-		t.Errorf(".gitignore should not contain per-file entry, got:\n%s", content)
-	}
-	if !strings.Contains(content, "node_modules") {
-		t.Errorf(".gitignore should preserve other entries, got:\n%s", content)
-	}
-}
-
 func TestRecordOverwritesAndUpdatesApprovedAt(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), nil, 0644); err != nil {
