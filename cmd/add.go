@@ -61,6 +61,10 @@ main repo and is not the default branch. --source is not valid in branch: mode.`
 			return err
 		}
 
+		if err := ensureTrust(cmd, repoRoot, cfg); err != nil {
+			return err
+		}
+
 		skipDeps, _ := cmd.Flags().GetBool(flagSkipDeps)
 		skipHooks, _ := cmd.Flags().GetBool(flagSkipHooks)
 		postOpts := buildPostCreateOptions(cfg, repoRoot, skipDeps, skipHooks)

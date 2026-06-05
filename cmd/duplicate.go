@@ -97,6 +97,10 @@ var duplicateCmd = &cobra.Command{
 			return fmt.Errorf("worktree path already exists: %s", wtPath)
 		}
 
+		if err := ensureTrust(cmd, repoRoot, cfg); err != nil {
+			return err
+		}
+
 		dryRun, _ := cmd.Flags().GetBool(flagDryRun)
 		skipDeps, _ := cmd.Flags().GetBool(flagSkipDeps)
 		skipHooks, _ := cmd.Flags().GetBool(flagSkipHooks)

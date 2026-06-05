@@ -193,8 +193,8 @@ func TestRenamePostRenameHookRuns(t *testing.T) {
 	cfg.PostRename = []string{"touch " + marker}
 	saveConfig(t, repo, cfg)
 
-	rimbaSuccess(t, repo, "add", "hook-src", flagSkipDepsE2E, flagSkipHooksE2E)
-	rimbaSuccess(t, repo, "rename", "hook-src", "hook-dst", flagSkipDepsE2E)
+	rimbaWithEnv(t, repo, []string{"RIMBA_TRUST_YES=1"}, "add", "hook-src", flagSkipDepsE2E, flagSkipHooksE2E)
+	rimbaWithEnv(t, repo, []string{"RIMBA_TRUST_YES=1"}, "rename", "hook-src", "hook-dst", flagSkipDepsE2E)
 
 	assertFileExists(t, marker)
 }
@@ -210,8 +210,8 @@ func TestRenameSkipHooksSkipsPostRenameHook(t *testing.T) {
 	cfg.PostRename = []string{"touch " + marker}
 	saveConfig(t, repo, cfg)
 
-	rimbaSuccess(t, repo, "add", "hook-skip-src", flagSkipDepsE2E, flagSkipHooksE2E)
-	rimbaSuccess(t, repo, "rename", "hook-skip-src", "hook-skip-dst",
+	rimbaWithEnv(t, repo, []string{"RIMBA_TRUST_YES=1"}, "add", "hook-skip-src", flagSkipDepsE2E, flagSkipHooksE2E)
+	rimbaWithEnv(t, repo, []string{"RIMBA_TRUST_YES=1"}, "rename", "hook-skip-src", "hook-skip-dst",
 		flagSkipDepsE2E, flagSkipHooksE2E)
 
 	assertFileNotExists(t, marker)

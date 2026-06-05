@@ -144,12 +144,40 @@ Running `rimba init --agents` or `rimba init -g` additionally creates or patches
 
 ## Trust model
 
-**`.rimba/settings.toml` is trusted-author input.** The following fields execute shell commands verbatim via `sh -c`:
+**`.rimba/settings.toml` is committed and team-shared.** The following fields execute shell commands verbatim via `sh -c`:
 
-- `post_create` — runs after a worktree is created (e.g. `rimba add`)
+- `post_create` — runs after a worktree is created (e.g. `rimba add`, `rimba duplicate`, `rimba restore`)
+- `post_rename` — runs after a worktree is renamed (`rimba rename`)
 - `deps.modules[].install` — runs when installing dependencies into a worktree
 
-**Cloning an untrusted repository and running `rimba add` executes that repo's `post_create` and `install` shell scripts.** Always review `.rimba/settings.toml` before running rimba in a repository you do not control.
+### Consent gate
+
+rimba will **not** execute committed shell commands until you have explicitly approved them. On the first run in a new clone (or whenever the command set changes), rimba prints the commands and prompts for consent:
+
+```
+This repo's .rimba/settings.toml will run shell commands that have not been approved:
+  pnpm install
+  ./scripts/setup.sh
+
+Run these commands? [y/N]
+```
+
+Approval is stored locally in `.rimba/trust.local.toml` (gitignored — each user consents independently). The approval is keyed by a hash of the command set; changing any command re-arms the gate.
+
+**Pre-approve without prompting** (e.g. for `rimba trust` after reviewing settings, or in CI):
+
+```sh
+rimba trust           # review and approve interactively
+rimba trust --yes     # approve without prompt (non-interactive)
+rimba trust --show    # inspect commands and current approval status
+```
+
+**CI / non-interactive environments:** pass `--yes` or set `RIMBA_TRUST_YES=1`:
+
+```sh
+RIMBA_TRUST_YES=1 rimba add my-task
+rimba add my-task --yes
+```
 
 As a defense-in-depth measure, the `copy_files` entries and `deps.modules[].lockfile` paths are validated to stay within the worktree directory — paths that escape via `..` are rejected with an error. Note that `worktree_dir` is intentionally not subject to this constraint, because its default value (`../<repo>-worktrees`) is itself a `../`-relative path.
 
