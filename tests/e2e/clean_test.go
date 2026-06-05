@@ -156,6 +156,7 @@ func TestCleanMergedForceDirtyWorktree(t *testing.T) {
 
 	r := rimbaSuccess(t, repo, "clean", flagMergedE2E, flagForceE2E)
 	assertContains(t, r.Stdout, msgRemovedWorktree)
+	assertContains(t, r.Stdout, msgDeletedBranch)
 	assertContains(t, r.Stdout, "Cleaned 1 merged worktree(s)")
 	assertFileNotExists(t, wtPath)
 }

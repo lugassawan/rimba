@@ -2,6 +2,7 @@ package operations
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -244,10 +245,9 @@ func TestRemoveAndCleanupForceFlag(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			joined := strings.Join(capturedArgs, " ")
-			hasForce := strings.Contains(joined, "--force")
+			hasForce := slices.Contains(capturedArgs, "--force")
 			if hasForce != tt.wantForce {
-				t.Errorf("git worktree args %q: --force present=%v, want %v", joined, hasForce, tt.wantForce)
+				t.Errorf("git worktree args %v: --force present=%v, want %v", capturedArgs, hasForce, tt.wantForce)
 			}
 		})
 	}

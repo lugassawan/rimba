@@ -21,6 +21,9 @@ func registerCleanTool(s *server.MCPServer, hctx *HandlerContext) {
 		mcp.WithBoolean("dry_run",
 			mcp.Description("Preview what would be cleaned without making changes"),
 		),
+		mcp.WithBoolean("force",
+			mcp.Description("Force-remove dirty worktrees even if they contain uncommitted changes (used with mode=merged or mode=stale)"),
+		),
 		mcp.WithNumber("stale_days",
 			mcp.Description("Number of days to consider a worktree stale (default: 14, used with mode=stale)"),
 		),
@@ -36,6 +39,7 @@ func handleClean(hctx *HandlerContext) server.ToolHandlerFunc {
 		}
 
 		dryRun := req.GetBool("dry_run", false)
+		force := req.GetBool("force", false)
 		staleDays := req.GetInt("stale_days", 14)
 
 		r := hctx.Runner
@@ -44,9 +48,9 @@ func handleClean(hctx *HandlerContext) server.ToolHandlerFunc {
 		case "prune":
 			return mcpCleanPrune(ctx, r, dryRun)
 		case "merged":
-			return mcpCleanMerged(ctx, r, hctx, dryRun)
+			return mcpCleanMerged(ctx, r, hctx, dryRun, force)
 		case "stale":
-			return mcpCleanStale(ctx, r, hctx, dryRun, staleDays)
+			return mcpCleanStale(ctx, r, hctx, dryRun, staleDays, force)
 		default:
 			return mcp.NewToolResultError(fmt.Sprintf("invalid mode %q; use prune, merged, or stale", mode)), nil
 		}
@@ -82,7 +86,7 @@ func mcpCleanPrune(ctx context.Context, r git.Runner, dryRun bool) (*mcp.CallToo
 	})
 }
 
-func mcpCleanMerged(ctx context.Context, r git.Runner, hctx *HandlerContext, dryRun bool) (*mcp.CallToolResult, error) {
+func mcpCleanMerged(ctx context.Context, r git.Runner, hctx *HandlerContext, dryRun bool, force bool) (*mcp.CallToolResult, error) {
 	mainBranch, err := operations.ResolveMainBranch(r, configDefault(hctx))
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -114,10 +118,9 @@ func mcpCleanMerged(ctx context.Context, r git.Runner, hctx *HandlerContext, dry
 		})
 	}
 
-	// Force mode: no confirmation prompts. Probe origin once and pass the result
-	// directly so RemoveCandidates does not re-issue git remote get-url per candidate.
+	// Probe origin once so RemoveCandidates does not re-issue git remote get-url per candidate.
 	originPresent := git.RemoteExists(r, git.DefaultRemote)
-	opItems := operations.RemoveCandidates(ctx, r, mergedResult.Candidates, originPresent, true, nil)
+	opItems := operations.RemoveCandidates(ctx, r, mergedResult.Candidates, originPresent, force, nil)
 	warnings := mergedResult.Warnings
 	items := make([]cleanedItem, len(opItems))
 	for i, item := range opItems {
@@ -134,7 +137,7 @@ func mcpCleanMerged(ctx context.Context, r git.Runner, hctx *HandlerContext, dry
 	})
 }
 
-func mcpCleanStale(ctx context.Context, r git.Runner, hctx *HandlerContext, dryRun bool, staleDays int) (*mcp.CallToolResult, error) {
+func mcpCleanStale(ctx context.Context, r git.Runner, hctx *HandlerContext, dryRun bool, staleDays int, force bool) (*mcp.CallToolResult, error) {
 	mainBranch, err := operations.ResolveMainBranch(r, configDefault(hctx))
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -163,7 +166,7 @@ func mcpCleanStale(ctx context.Context, r git.Runner, hctx *HandlerContext, dryR
 		toRemove[i] = c.CleanCandidate
 	}
 
-	opItems := operations.RemoveCandidates(ctx, r, toRemove, false, true, nil)
+	opItems := operations.RemoveCandidates(ctx, r, toRemove, false, force, nil)
 	items := make([]cleanedItem, len(opItems))
 	for i, item := range opItems {
 		items[i] = cleanedItem{Branch: item.Branch, Path: item.Path}

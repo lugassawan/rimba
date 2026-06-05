@@ -3,6 +3,7 @@ package operations
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -490,10 +491,9 @@ func TestRemoveCandidatesForceFlag(t *testing.T) {
 			}
 			candidates := []CleanCandidate{{Path: "/wt/a", Branch: "feature/a"}}
 			RemoveCandidates(context.Background(), r, candidates, false, tt.force, nil)
-			joined := strings.Join(capturedArgs, " ")
-			hasForce := strings.Contains(joined, "--force")
+			hasForce := slices.Contains(capturedArgs, "--force")
 			if hasForce != tt.wantForce {
-				t.Errorf("git worktree args %q: --force present=%v, want %v", joined, hasForce, tt.wantForce)
+				t.Errorf("git worktree args %v: --force present=%v, want %v", capturedArgs, hasForce, tt.wantForce)
 			}
 		})
 	}
