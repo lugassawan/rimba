@@ -655,3 +655,144 @@ func TestCopyEntriesRecursiveCopyDirError(t *testing.T) {
 		t.Errorf(errContainsFmt, err, "copy "+dotConfig+":")
 	}
 }
+
+func TestCopyEntriesRejectsSymlinkedDstEscape(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+	outside := t.TempDir()
+
+	if err := os.Symlink(outside, filepath.Join(dst, "sub")); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.MkdirAll(filepath.Join(src, "sub"), 0755)
+	_ = os.WriteFile(filepath.Join(src, "sub", "secret.txt"), []byte("secret"), 0644)
+
+	_, _, err := fileutil.CopyEntries(src, dst, []string{"sub/secret.txt"})
+	if err == nil {
+		t.Fatal("expected error when dst has top-level symlink pointing outside")
+	}
+	if !errors.Is(err, fileutil.ErrPathEscapes) {
+		t.Fatalf("error %v does not wrap fileutil.ErrPathEscapes", err)
+	}
+	if !strings.Contains(err.Error(), "resolves outside") {
+		t.Errorf("error %q should mention resolves outside", err.Error())
+	}
+	if _, statErr := os.Stat(filepath.Join(outside, "secret.txt")); !os.IsNotExist(statErr) {
+		t.Error("secret.txt must not have been written to outside")
+	}
+}
+
+func TestCopyEntriesRejectsNestedSymlinkEscape(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+	outside := t.TempDir()
+
+	_ = os.MkdirAll(filepath.Join(src, "d", "deep"), 0755)
+	_ = os.WriteFile(filepath.Join(src, "d", "deep", "f.txt"), []byte("data"), 0644)
+
+	_ = os.MkdirAll(filepath.Join(dst, "d"), 0755)
+	if err := os.Symlink(outside, filepath.Join(dst, "d", "deep")); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err := fileutil.CopyEntries(src, dst, []string{"d"})
+	if err == nil {
+		t.Fatal("expected error when nested dir in dst is a symlink pointing outside")
+	}
+	if !errors.Is(err, fileutil.ErrPathEscapes) {
+		t.Fatalf("error %v does not wrap fileutil.ErrPathEscapes", err)
+	}
+	entries, _ := os.ReadDir(outside)
+	if len(entries) != 0 {
+		t.Errorf("outside dir should be empty after rejected copy, got %v", entries)
+	}
+}
+
+func TestCopyEntriesBenignSymlinkInsideDst(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+
+	realDir := filepath.Join(dst, "real")
+	_ = os.MkdirAll(realDir, 0755)
+	if err := os.Symlink(realDir, filepath.Join(dst, "link")); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = os.MkdirAll(filepath.Join(src, "link"), 0755)
+	_ = os.WriteFile(filepath.Join(src, "link", "file.txt"), []byte("benign"), 0644)
+
+	copied, _, err := fileutil.CopyEntries(src, dst, []string{"link/file.txt"})
+	if err != nil {
+		t.Fatalf("in-dst symlink should not be rejected: %v", err)
+	}
+	if len(copied) != 1 {
+		t.Fatalf("expected 1 copied entry, got %d", len(copied))
+	}
+}
+
+func TestCopyEntriesNonExistentDst(t *testing.T) {
+	src := t.TempDir()
+	dst := filepath.Join(t.TempDir(), "missing")
+
+	_ = os.WriteFile(filepath.Join(src, ".env"), []byte("x"), 0644)
+	// Non-existent dst is allowed: no symlinks possible inside it, MkdirAll creates it.
+	copied, _, err := fileutil.CopyEntries(src, dst, []string{".env"})
+	if err != nil {
+		t.Fatalf("CopyEntries with non-existent dst should succeed: %v", err)
+	}
+	if len(copied) != 1 || copied[0] != ".env" {
+		t.Errorf("copied = %v, want [.env]", copied)
+	}
+}
+
+func TestCopyEntriesDstResolvePermissionError(t *testing.T) {
+	src := t.TempDir()
+	lockedParent := t.TempDir()
+
+	// Create dst inside a directory that will be locked.
+	dst := filepath.Join(lockedParent, "worktree")
+	if err := os.Mkdir(dst, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(lockedParent, 0000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(lockedParent, 0755) })
+
+	_ = os.WriteFile(filepath.Join(src, ".env"), []byte("x"), 0644)
+
+	_, _, err := fileutil.CopyEntries(src, dst, []string{".env"})
+	if err == nil {
+		t.Skip("permission error on dst did not surface (likely running as root)")
+	}
+	if !strings.Contains(err.Error(), "resolve dst") {
+		t.Errorf("error %q should mention resolve dst", err.Error())
+	}
+	if errors.Is(err, fileutil.ErrPathEscapes) {
+		t.Error("dst permission error should not wrap ErrPathEscapes")
+	}
+}
+
+func TestCopyEntriesAncestorPermissionError(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+
+	lockedSrc := filepath.Join(src, "locked")
+	_ = os.MkdirAll(lockedSrc, 0755)
+	_ = os.WriteFile(filepath.Join(lockedSrc, "secret.txt"), []byte("data"), 0644)
+
+	lockedDst := filepath.Join(dst, "locked")
+	_ = os.MkdirAll(lockedDst, 0755)
+	if err := os.Chmod(lockedDst, 0000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(lockedDst, 0755) })
+
+	_, _, err := fileutil.CopyEntries(src, dst, []string{"locked/secret.txt"})
+	if err == nil {
+		t.Skip("permission error did not surface (likely running as root)")
+	}
+	if errors.Is(err, fileutil.ErrPathEscapes) {
+		t.Error("permission denied should not wrap ErrPathEscapes")
+	}
+}
