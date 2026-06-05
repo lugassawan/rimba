@@ -53,7 +53,7 @@ rimba init --agents --uninstall   # Remove project-team agent files and MCP regi
 | `-g`, `--global` | Install agent files at user level (`~/`) — works outside a git repo |
 | `--local` | Install agent files gitignored (personal overrides; requires `--agents`) |
 | `--uninstall` | Remove agent files and MCP registration (requires `-g` or `--agents`) |
-| `--personal` | Gitignore the entire `.rimba/` directory instead of just the local config file |
+| `--personal` | Gitignore the entire `.rimba/` directory instead of the `.rimba/*.local.toml` glob |
 
 ---
 

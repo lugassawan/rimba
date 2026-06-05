@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/lugassawan/rimba/internal/config"
 )
 
 // EnsureGitignore ensures that entry is present as a line in the .gitignore
@@ -49,6 +51,40 @@ func EnsureGitignore(repoRoot string, entry string) (added bool, retErr error) {
 	}
 
 	return true, nil
+}
+
+// HasGitignoreEntry reports whether entry is present as a trimmed line in the
+// .gitignore file at repoRoot. Returns false (not error) when the file is absent.
+func HasGitignoreEntry(repoRoot, entry string) (bool, error) {
+	path := filepath.Join(repoRoot, ".gitignore")
+	data, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	for line := range strings.SplitSeq(string(data), "\n") {
+		if strings.TrimSpace(line) == entry {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// EnsureLocalGlobIgnored consolidates *.local.toml overrides under a single
+// .rimba/*.local.toml gitignore glob, removing any pre-existing per-file entries.
+// No-op when .rimba/ is already ignored (--personal repos).
+// Returns whether the glob line was newly added.
+func EnsureLocalGlobIgnored(repoRoot string) (added bool, err error) {
+	hasDir, err := HasGitignoreEntry(repoRoot, config.DirName+"/")
+	if err != nil || hasDir {
+		return false, err
+	}
+	// Best-effort cleanup: the glob below covers both files even if removal fails.
+	_, _ = RemoveGitignoreEntry(repoRoot, filepath.Join(config.DirName, config.LocalFile))
+	_, _ = RemoveGitignoreEntry(repoRoot, filepath.Join(config.DirName, config.TrustFile))
+	return EnsureGitignore(repoRoot, filepath.Join(config.DirName, config.LocalGlob))
 }
 
 // RemoveGitignoreEntry removes entry from the .gitignore file at repoRoot.

@@ -162,7 +162,7 @@ This repo's .rimba/settings.toml will run shell commands that have not been appr
 Run these commands? [y/N]
 ```
 
-Approval is stored locally in `.rimba/trust.local.toml` (gitignored — each user consents independently). The approval is keyed by a hash of the command set; changing any command re-arms the gate.
+Approval is stored locally in `.rimba/trust.local.toml` (covered by the `.rimba/*.local.toml` gitignore glob — each user consents independently). The approval is keyed by a hash of the command set; changing any command re-arms the gate.
 
 **Pre-approve without prompting** (e.g. for `rimba trust` after reviewing settings, or in CI):
 

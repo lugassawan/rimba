@@ -112,9 +112,9 @@ func TestInitMigrationFromLegacy(t *testing.T) {
 	if strings.Contains(content, config.FileName) {
 		t.Error(".gitignore should not contain legacy entry after migration")
 	}
-	localEntry := filepath.Join(config.DirName, config.LocalFile)
-	if !strings.Contains(content, localEntry) {
-		t.Errorf(".gitignore should contain %q, got:\n%s", localEntry, content)
+	globEntry := filepath.Join(config.DirName, config.LocalGlob)
+	if !strings.Contains(content, globEntry) {
+		t.Errorf(".gitignore should contain %q, got:\n%s", globEntry, content)
 	}
 }
 
@@ -343,8 +343,8 @@ func TestInitMigrateConflictingDir(t *testing.T) {
 func TestInitFreshGitignoreAlreadyPresent(t *testing.T) {
 	repoDir := t.TempDir()
 
-	// Pre-seed .gitignore with the entry that rimba would add
-	gitignoreEntry := filepath.Join(config.DirName, config.LocalFile)
+	// Pre-seed .gitignore with the glob entry that rimba now writes
+	gitignoreEntry := filepath.Join(config.DirName, config.LocalGlob)
 	if err := os.WriteFile(filepath.Join(repoDir, ".gitignore"), []byte(gitignoreEntry+"\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -366,5 +366,50 @@ func TestInitFreshGitignoreAlreadyPresent(t *testing.T) {
 	out := buf.String()
 	if !strings.Contains(out, "already in .gitignore") {
 		t.Errorf("output should say 'already in .gitignore', got:\n%s", out)
+	}
+}
+
+func TestInitReInitMigratesPerFileEntries(t *testing.T) {
+	repoDir := t.TempDir()
+
+	// Pre-create .rimba/ (already initialized) with per-file gitignore entries
+	rimbaDir := filepath.Join(repoDir, config.DirName)
+	if err := os.MkdirAll(rimbaDir, 0750); err != nil {
+		t.Fatal(err)
+	}
+	perFileEntries := filepath.Join(config.DirName, config.LocalFile) + "\n" +
+		filepath.Join(config.DirName, config.TrustFile) + "\n"
+	if err := os.WriteFile(filepath.Join(repoDir, ".gitignore"), []byte(perFileEntries), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	r := repoRootRunner(repoDir, func(_ ...string) (string, error) { return "", nil })
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	if err := initCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("initCmd.RunE on re-init: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "already exists") {
+		t.Errorf("output should mention 'already exists', got:\n%s", out)
+	}
+
+	data, err := os.ReadFile(filepath.Join(repoDir, ".gitignore"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(data)
+	globEntry := filepath.Join(config.DirName, config.LocalGlob)
+	if !strings.Contains(content, globEntry) {
+		t.Errorf(".gitignore should contain %q after re-init, got:\n%s", globEntry, content)
+	}
+	if strings.Contains(content, filepath.Join(config.DirName, config.LocalFile)) {
+		t.Errorf(".gitignore should not contain per-file settings.local.toml after re-init, got:\n%s", content)
+	}
+	if strings.Contains(content, filepath.Join(config.DirName, config.TrustFile)) {
+		t.Errorf(".gitignore should not contain per-file trust.local.toml after re-init, got:\n%s", content)
 	}
 }

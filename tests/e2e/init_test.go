@@ -26,10 +26,10 @@ func TestInitCreatesConfigAndDir(t *testing.T) {
 	wtDir := filepath.Join(repo, config.DefaultWorktreeDir(filepath.Base(repo)))
 	assertFileExists(t, wtDir)
 
-	// .gitignore is created with .rimba/settings.local.toml
+	// .gitignore is created with .rimba/*.local.toml
 	assertFileExists(t, filepath.Join(repo, gitignoreFile))
-	localEntry := filepath.Join(configDir, localFile)
-	assertGitignoreContains(t, repo, localEntry)
+	globEntry := filepath.Join(configDir, localGlob)
+	assertGitignoreContains(t, repo, globEntry)
 }
 
 func TestInitConfigDefaults(t *testing.T) {
@@ -91,10 +91,10 @@ func TestInitAddsToGitignore(t *testing.T) {
 		t.Fatalf("failed to write %s: %v", gitignoreFile, err)
 	}
 
-	localEntry := filepath.Join(configDir, localFile)
+	globEntry := filepath.Join(configDir, localGlob)
 	r := rimbaSuccess(t, repo, "init")
-	assertContains(t, r.Stdout, localEntry+" added to .gitignore")
-	assertGitignoreContains(t, repo, localEntry)
+	assertContains(t, r.Stdout, globEntry+" added to .gitignore")
+	assertGitignoreContains(t, repo, globEntry)
 
 	// Original content is preserved
 	data, err := os.ReadFile(filepath.Join(repo, gitignoreFile))
@@ -112,9 +112,9 @@ func TestInitGitignoreIdempotent(t *testing.T) {
 	}
 
 	repo := setupRepo(t)
-	localEntry := filepath.Join(configDir, localFile)
-	// Pre-create .gitignore already containing the entry
-	if err := os.WriteFile(filepath.Join(repo, gitignoreFile), []byte(localEntry+"\n"), 0644); err != nil {
+	globEntry := filepath.Join(configDir, localGlob)
+	// Pre-create .gitignore already containing the glob entry
+	if err := os.WriteFile(filepath.Join(repo, gitignoreFile), []byte(globEntry+"\n"), 0644); err != nil {
 		t.Fatalf("failed to write %s: %v", gitignoreFile, err)
 	}
 
@@ -126,8 +126,8 @@ func TestInitGitignoreIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read %s: %v", gitignoreFile, err)
 	}
-	if strings.Count(string(data), localEntry) != 1 {
-		t.Errorf("expected exactly one %s entry, got:\n%s", localEntry, string(data))
+	if strings.Count(string(data), globEntry) != 1 {
+		t.Errorf("expected exactly one %s entry, got:\n%s", globEntry, string(data))
 	}
 }
 
@@ -177,8 +177,8 @@ func TestInitMigratesLegacyConfig(t *testing.T) {
 	if strings.Contains(content, configFile) {
 		t.Error(".gitignore should not contain legacy entry after migration")
 	}
-	localEntry := filepath.Join(configDir, localFile)
-	assertGitignoreContains(t, repo, localEntry)
+	globEntry := filepath.Join(configDir, localGlob)
+	assertGitignoreContains(t, repo, globEntry)
 }
 
 func TestInitFailsOutsideGitRepo(t *testing.T) {
@@ -324,11 +324,13 @@ func TestInitPersonalFreshInit(t *testing.T) {
 	assertFileExists(t, filepath.Join(repo, configDir, teamFile))
 	assertFileNotExists(t, filepath.Join(repo, configDir, localFile))
 
-	// .gitignore has .rimba/ not .rimba/settings.local.toml
+	// .gitignore has .rimba/ not per-file or glob entries
 	dirEntry := configDir + "/"
 	assertGitignoreContains(t, repo, dirEntry)
 	localEntry := filepath.Join(configDir, localFile)
 	assertGitignoreNotContains(t, repo, localEntry)
+	globEntry := filepath.Join(configDir, localGlob)
+	assertGitignoreNotContains(t, repo, globEntry)
 }
 
 func TestInitPersonalMigration(t *testing.T) {
@@ -367,7 +369,7 @@ func TestInitPersonalMigration(t *testing.T) {
 		t.Errorf("DefaultSource = %q, want %q", cfg.DefaultSource, branchMain)
 	}
 
-	// Verify .gitignore updated with .rimba/ not legacy entry
+	// Verify .gitignore updated with .rimba/ not legacy or per-file entries
 	data, err := os.ReadFile(filepath.Join(repo, gitignoreFile))
 	if err != nil {
 		t.Fatal(err)
@@ -380,6 +382,8 @@ func TestInitPersonalMigration(t *testing.T) {
 	assertGitignoreContains(t, repo, dirEntry)
 	localEntry := filepath.Join(configDir, localFile)
 	assertGitignoreNotContains(t, repo, localEntry)
+	globEntry := filepath.Join(configDir, localGlob)
+	assertGitignoreNotContains(t, repo, globEntry)
 }
 
 // assertGitignoreContains verifies that .gitignore in the repo contains the given entry.

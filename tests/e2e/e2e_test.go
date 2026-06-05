@@ -22,6 +22,7 @@ const (
 	configDir     = ".rimba"
 	teamFile      = "settings.toml"
 	localFile     = "settings.local.toml"
+	localGlob     = "*.local.toml" // gitignore glob — matches LocalGlob in config
 	gitignoreFile = ".gitignore"
 
 	// Output messages asserted in tests.

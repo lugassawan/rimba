@@ -23,6 +23,7 @@ func newTrustCmd(cfg *config.Config, repoRoot string) (*cobra.Command, *bytes.Bu
 
 func TestTrustCmdApprove(t *testing.T) {
 	dir := t.TempDir()
+	// Pre-seed with per-file entry to verify consolidation on approve.
 	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(".rimba/settings.local.toml\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -46,6 +47,16 @@ func TestTrustCmdApprove(t *testing.T) {
 	ok, _ := trust.IsTrusted(dir, trust.Hash(cfg))
 	if !ok {
 		t.Error("trust should be recorded after approve")
+	}
+
+	// Verify gitignore was consolidated to glob.
+	data, _ := os.ReadFile(filepath.Join(dir, ".gitignore"))
+	content := string(data)
+	if !strings.Contains(content, ".rimba/*.local.toml") {
+		t.Errorf(".gitignore should contain glob after approve, got:\n%s", content)
+	}
+	if strings.Contains(content, ".rimba/settings.local.toml") {
+		t.Errorf(".gitignore should not contain per-file entry after approve, got:\n%s", content)
 	}
 }
 

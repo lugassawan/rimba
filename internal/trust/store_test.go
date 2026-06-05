@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/trust"
 )
 
@@ -121,7 +122,8 @@ func TestRecordFilePermissions(t *testing.T) {
 
 func TestRecordGitignoreEntry(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(".rimba/settings.local.toml\n"), 0644); err != nil {
+	// Simulate an existing repo that has both per-file entries.
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(".rimba/settings.local.toml\n.rimba/trust.local.toml\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(dir, ".rimba"), 0750); err != nil {
@@ -136,8 +138,16 @@ func TestRecordGitignoreEntry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read .gitignore: %v", err)
 	}
-	if !strings.Contains(string(data), ".rimba/trust.local.toml") {
-		t.Errorf(".gitignore should contain .rimba/trust.local.toml, got:\n%s", data)
+	content := string(data)
+	glob := config.DirName + "/" + config.LocalGlob
+	if !strings.Contains(content, glob) {
+		t.Errorf(".gitignore should contain %q, got:\n%s", glob, content)
+	}
+	if strings.Contains(content, ".rimba/settings.local.toml") {
+		t.Errorf(".gitignore should not contain per-file settings.local.toml after consolidation, got:\n%s", content)
+	}
+	if strings.Contains(content, ".rimba/trust.local.toml") {
+		t.Errorf(".gitignore should not contain per-file trust.local.toml after consolidation, got:\n%s", content)
 	}
 }
 

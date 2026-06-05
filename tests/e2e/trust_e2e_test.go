@@ -1,7 +1,6 @@
 package e2e_test
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -164,16 +163,14 @@ func TestTrustTrustShow(t *testing.T) {
 	assertContains(t, r.Stdout, "not trusted")
 }
 
-// rimba init adds trust.local.toml to .gitignore.
+// rimba init adds .rimba/*.local.toml glob to .gitignore (covers both
+// settings.local.toml and trust.local.toml under a single entry).
 func TestTrustInitAddsGitignoreEntry(t *testing.T) {
 	repo := setupRepo(t)
 	rimbaSuccess(t, repo, "init")
 
-	data, err := os.ReadFile(filepath.Join(repo, ".gitignore"))
-	if err != nil {
-		t.Fatalf("read .gitignore: %v", err)
-	}
-	if !strings.Contains(string(data), trust.FileName) {
-		t.Errorf(".gitignore should contain %q after rimba init, got:\n%s", trust.FileName, data)
-	}
+	globEntry := filepath.Join(configDir, localGlob)
+	assertGitignoreContains(t, repo, globEntry)
+	// Specific trust.local.toml entry must NOT be added (the glob covers it).
+	assertGitignoreNotContains(t, repo, filepath.Join(configDir, trust.FileName))
 }

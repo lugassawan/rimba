@@ -10,7 +10,6 @@ import (
 	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/fileutil"
 	"github.com/lugassawan/rimba/internal/git"
-	"github.com/lugassawan/rimba/internal/trust"
 	"github.com/spf13/cobra"
 )
 
@@ -83,10 +82,10 @@ register MCP — it only updates agent files. Registration is idempotent.`,
 
 		dirPath := filepath.Join(repoRoot, config.DirName)
 		legacyPath := filepath.Join(repoRoot, config.FileName)
-		localEntry := filepath.Join(config.DirName, config.LocalFile)
+		globEntry := filepath.Join(config.DirName, config.LocalGlob)
 		dirEntry := config.DirName + "/"
 
-		gitignoreEntry := localEntry
+		gitignoreEntry := globEntry
 		if personal {
 			gitignoreEntry = dirEntry
 		}
@@ -95,6 +94,9 @@ register MCP — it only updates agent files. Registration is idempotent.`,
 		case dirExists(dirPath):
 			// .rimba/ directory already exists
 			fmt.Fprintf(cmd.OutOrStdout(), "Config %s already exists, skipping config creation\n", dirPath)
+			if err := reconcileExistingIgnore(cmd, repoRoot, personal); err != nil {
+				return err
+			}
 
 		case fileExists(legacyPath):
 			if err := runInitMigrate(cmd, repoRoot, dirPath, legacyPath, gitignoreEntry, personal); err != nil {
@@ -156,16 +158,9 @@ func runInitFresh(cmd *cobra.Command, r git.Runner, repoRoot, dirPath, gitignore
 		)
 	}
 
-	added, err := fileutil.EnsureGitignore(repoRoot, gitignoreEntry)
+	added, err := ensureLocalIgnore(repoRoot, gitignoreEntry, personal)
 	if err != nil {
 		return errhint.WithFix(fmt.Errorf("failed to update .gitignore: %w", err), gitignoreHint)
-	}
-
-	// Ensure trust store is gitignored (no-op in --personal mode since .rimba/ is already covered).
-	if !personal {
-		if _, err := fileutil.EnsureGitignore(repoRoot, filepath.Join(config.DirName, trust.FileName)); err != nil {
-			return errhint.WithFix(fmt.Errorf("failed to update .gitignore: %w", err), gitignoreHint)
-		}
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Initialized rimba in %s\n", repoRoot)
@@ -203,15 +198,8 @@ func runInitMigrate(cmd *cobra.Command, repoRoot, dirPath, legacyPath, gitignore
 
 	_, _ = fileutil.RemoveGitignoreEntry(repoRoot, config.FileName)
 
-	if _, err := fileutil.EnsureGitignore(repoRoot, gitignoreEntry); err != nil {
+	if _, err := ensureLocalIgnore(repoRoot, gitignoreEntry, personal); err != nil {
 		return errhint.WithFix(fmt.Errorf("failed to update .gitignore: %w", err), gitignoreHint)
-	}
-
-	// Ensure trust store is gitignored (no-op in --personal mode).
-	if !personal {
-		if _, err := fileutil.EnsureGitignore(repoRoot, filepath.Join(config.DirName, trust.FileName)); err != nil {
-			return errhint.WithFix(fmt.Errorf("failed to update .gitignore: %w", err), gitignoreHint)
-		}
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Migrated rimba config in %s\n", repoRoot)
@@ -296,6 +284,32 @@ func printSection(cmd *cobra.Command, title string, tier installTier, results []
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "    %s (%s)\n", p, r.Action)
 	}
+}
+
+// ensureLocalIgnore updates .gitignore for local config files.
+// Personal mode ignores the whole .rimba/ dir; non-personal mode writes the
+// *.local.toml glob. gitignoreEntry is only used in the personal branch.
+func ensureLocalIgnore(repoRoot, gitignoreEntry string, personal bool) (bool, error) {
+	if personal {
+		return fileutil.EnsureGitignore(repoRoot, gitignoreEntry)
+	}
+	return fileutil.EnsureLocalGlobIgnored(repoRoot)
+}
+
+// reconcileExistingIgnore migrates per-file .gitignore entries to the glob on
+// re-init. Switching from non-personal to personal mode is not handled here.
+func reconcileExistingIgnore(cmd *cobra.Command, repoRoot string, personal bool) error {
+	if personal {
+		return nil
+	}
+	added, err := fileutil.EnsureLocalGlobIgnored(repoRoot)
+	if err != nil {
+		return errhint.WithFix(fmt.Errorf("failed to update .gitignore: %w", err), gitignoreHint)
+	}
+	if added {
+		fmt.Fprintf(cmd.OutOrStdout(), "  Gitignore:    %s added to .gitignore\n", filepath.Join(config.DirName, config.LocalGlob))
+	}
+	return nil
 }
 
 func init() {

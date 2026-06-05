@@ -16,7 +16,7 @@ import (
 
 const (
 	// FileName is the gitignored local trust record for a repo.
-	FileName     = "trust.local.toml"
+	FileName     = config.TrustFile
 	storeVersion = 1
 )
 
@@ -57,17 +57,16 @@ func IsTrusted(repoRoot, hash string) (bool, error) {
 }
 
 // Record persists approval of the given command-set hash for repoRoot.
-// It ensures .rimba/ exists and registers trust.local.toml in .gitignore.
+// It ensures .rimba/ exists and consolidates *.local.toml under a single
+// .rimba/*.local.toml gitignore glob, self-healing repos initialized before
+// this feature existed.
 func Record(repoRoot, hash string) error {
 	dir := filepath.Join(repoRoot, config.DirName)
 	if err := os.MkdirAll(dir, 0750); err != nil {
 		return fmt.Errorf("create .rimba dir: %w", err)
 	}
 
-	// Best-effort gitignore registration — self-heals repos initialized
-	// before this feature existed.
-	entry := filepath.Join(config.DirName, FileName)
-	if _, err := fileutil.EnsureGitignore(repoRoot, entry); err != nil {
+	if _, err := fileutil.EnsureLocalGlobIgnored(repoRoot); err != nil {
 		return fmt.Errorf("update .gitignore: %w", err)
 	}
 
