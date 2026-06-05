@@ -27,6 +27,9 @@ func RenameWorktree(r git.Runner, wt resolver.WorktreeInfo, newTask, wtDir strin
 	}
 
 	newBranch := resolver.FullBranchName(svc, matchedPrefix, newTask)
+	if newBranch == wt.Branch {
+		return RenameResult{}, fmt.Errorf("new name is the same as the current name: %q", newTask)
+	}
 
 	if git.BranchExists(r, newBranch) {
 		return RenameResult{}, errhint.WithFix(

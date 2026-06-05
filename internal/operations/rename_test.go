@@ -72,6 +72,38 @@ func TestRenameWorktreeBranchExists(t *testing.T) {
 	}
 }
 
+func TestRenameWorktreeSameName(t *testing.T) {
+	calls := 0
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			calls++
+			return "", nil
+		},
+		runInDir: func(dir string, args ...string) (string, error) {
+			calls++
+			return "", nil
+		},
+	}
+
+	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
+	_, err := RenameWorktree(r, wt, "login", wtDir, false)
+	if err == nil {
+		t.Fatal("expected error for same-name rename")
+	}
+	if !strings.Contains(err.Error(), "same as the current name") {
+		t.Errorf("error = %q, want same-name message", err.Error())
+	}
+	if strings.Contains(err.Error(), "git branch -D") {
+		t.Errorf("error = %q, must not include destructive branch delete hint", err.Error())
+	}
+	if strings.Contains(err.Error(), "To fix:") {
+		t.Errorf("error = %q, must not include a recovery hint", err.Error())
+	}
+	if calls != 0 {
+		t.Fatalf("expected no git calls for same-name rename, got %d", calls)
+	}
+}
+
 func TestRenameWorktreeMoveFails(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
