@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/lugassawan/rimba/internal/trust"
 )
 
 const (
@@ -370,6 +372,7 @@ func TestAddToolServiceScoped(t *testing.T) {
 }
 
 func TestAddToolWithDepsAndHooks(t *testing.T) {
+	t.Setenv("RIMBA_TRUST_YES", "1")
 	tmpDir := t.TempDir()
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
@@ -378,7 +381,7 @@ func TestAddToolWithDepsAndHooks(t *testing.T) {
 				return "", errors.New("not found")
 			}
 			// AddWorktree: create the directory
-			if len(args) > 0 && args[0] == gitWorktree && len(args) > 1 && args[1] == "add" {
+			if len(args) > 0 && args[0] == gitWorktree && len(args) > 1 && args[1] == gitWorktreeAdd {
 				_ = os.MkdirAll(args[2], 0o755)
 				return "", nil
 			}
@@ -405,5 +408,117 @@ func TestAddToolWithDepsAndHooks(t *testing.T) {
 	data := unmarshalJSON[addResult](t, result)
 	if data.Task != "with-hooks" {
 		t.Errorf("task = %q", data.Task)
+	}
+}
+
+func TestAddToolTrustGateUntrusted(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmpDir, ".gitignore"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := testConfig()
+	cfg.PostCreate = []string{"make install"}
+	hctx := &HandlerContext{
+		Runner:   &mockRunner{},
+		Config:   cfg,
+		RepoRoot: tmpDir,
+		Version:  "test",
+	}
+	handler := handleAdd(hctx)
+
+	result := callTool(t, handler, map[string]any{"task": "blocked"})
+	errText := resultError(t, result)
+	if !strings.Contains(errText, "rimba trust") {
+		t.Errorf("untrusted error should mention 'rimba trust', got: %s", errText)
+	}
+}
+
+func TestAddToolTrustGatePreTrusted(t *testing.T) {
+	// When trust is already recorded, the gate should pass without env hatch.
+	tmpDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmpDir, ".gitignore"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".rimba"), 0750); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := testConfig()
+	cfg.PostCreate = []string{"echo trusted"}
+
+	// Pre-record trust.
+	h := trust.Hash(cfg)
+	if err := trust.Record(tmpDir, h); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == gitRevParse {
+				return "", errors.New("not found")
+			}
+			if len(args) > 0 && args[0] == gitWorktree && len(args) > 1 && args[1] == gitWorktreeAdd {
+				_ = os.MkdirAll(args[2], 0o755)
+				return "", nil
+			}
+			if len(args) > 0 && args[0] == gitWorktree && len(args) > 1 && args[1] == gitList {
+				return "worktree " + tmpDir + "\nHEAD abc\nbranch refs/heads/main\n\n", nil
+			}
+			return "", nil
+		},
+	}
+	hctx := &HandlerContext{
+		Runner:   r,
+		Config:   cfg,
+		RepoRoot: tmpDir,
+		Version:  "test",
+	}
+	handler := handleAdd(hctx)
+	cfg.CopyFiles = nil
+
+	result := callTool(t, handler, map[string]any{"task": "trusted-task"})
+	data := unmarshalJSON[addResult](t, result)
+	if data.Task != "trusted-task" {
+		t.Errorf("pre-trusted add should succeed, task = %q", data.Task)
+	}
+}
+
+func TestAddToolTrustGateEnvEscapeHatch(t *testing.T) {
+	t.Setenv("RIMBA_TRUST_YES", "1")
+	tmpDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmpDir, ".gitignore"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := testConfig()
+	cfg.PostCreate = []string{"pnpm install"}
+	cfg.CopyFiles = nil
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == gitRevParse {
+				return "", errors.New("not found")
+			}
+			if len(args) > 0 && args[0] == gitWorktree && len(args) > 1 && args[1] == gitWorktreeAdd {
+				_ = os.MkdirAll(args[2], 0o755)
+				return "", nil
+			}
+			if len(args) > 0 && args[0] == gitWorktree && len(args) > 1 && args[1] == gitList {
+				return "worktree " + tmpDir + "\nHEAD abc\nbranch refs/heads/main\n\n", nil
+			}
+			return "", nil
+		},
+	}
+	hctx := &HandlerContext{
+		Runner:   r,
+		Config:   cfg,
+		RepoRoot: tmpDir,
+		Version:  "test",
+	}
+	handler := handleAdd(hctx)
+
+	result := callTool(t, handler, map[string]any{"task": "env-bypass"})
+	data := unmarshalJSON[addResult](t, result)
+	if data.Task != "env-bypass" {
+		t.Errorf("RIMBA_TRUST_YES add should succeed, task = %q", data.Task)
 	}
 }

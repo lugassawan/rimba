@@ -18,6 +18,7 @@ const (
 	gitRevList     = "rev-list"
 	gitStatus      = "status"
 	gitList        = "list"
+	gitWorktreeAdd = "add"
 	revListEven    = "0\t0"
 	dirtyOutput    = " M dirty.go\n"
 )

@@ -162,6 +162,7 @@ func makeRenameRunner(repoDir, worktreeOut string) *mockRunner {
 }
 
 func TestRenameRunsHooksWhenConfigured(t *testing.T) {
+	t.Setenv("RIMBA_TRUST_YES", "1")
 	// WorktreeDir must be relative; cmd layer joins it with repoRoot.
 	// new branch = feature/auth → new path = <repoDir>/wt/feature-auth
 	repoDir := t.TempDir()
@@ -194,6 +195,7 @@ func TestRenameRunsHooksWhenConfigured(t *testing.T) {
 }
 
 func TestRenameSkipHooks(t *testing.T) {
+	t.Setenv("RIMBA_TRUST_YES", "1")
 	repoDir := t.TempDir()
 	hookDir := t.TempDir()
 	marker := filepath.Join(hookDir, "hook-ran")

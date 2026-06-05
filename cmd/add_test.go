@@ -202,6 +202,7 @@ func TestAddWithSource(t *testing.T) {
 }
 
 func TestAddPRCmd(t *testing.T) {
+	t.Setenv("RIMBA_TRUST_YES", "1")
 	repoDir := t.TempDir()
 	wtDir := filepath.Join(repoDir, ".worktrees")
 	_ = os.MkdirAll(wtDir, 0755)

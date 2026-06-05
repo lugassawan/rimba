@@ -10,6 +10,7 @@ import (
 	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/fileutil"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/trust"
 	"github.com/spf13/cobra"
 )
 
@@ -160,6 +161,13 @@ func runInitFresh(cmd *cobra.Command, r git.Runner, repoRoot, dirPath, gitignore
 		return errhint.WithFix(fmt.Errorf("failed to update .gitignore: %w", err), gitignoreHint)
 	}
 
+	// Ensure trust store is gitignored (no-op in --personal mode since .rimba/ is already covered).
+	if !personal {
+		if _, err := fileutil.EnsureGitignore(repoRoot, filepath.Join(config.DirName, trust.FileName)); err != nil {
+			return errhint.WithFix(fmt.Errorf("failed to update .gitignore: %w", err), gitignoreHint)
+		}
+	}
+
 	fmt.Fprintf(cmd.OutOrStdout(), "Initialized rimba in %s\n", repoRoot)
 	fmt.Fprintf(cmd.OutOrStdout(), "  Config:       %s\n", filepath.Join(dirPath, config.TeamFile))
 	fmt.Fprintf(cmd.OutOrStdout(), "  Worktree dir: %s\n", wtDir)
@@ -197,6 +205,13 @@ func runInitMigrate(cmd *cobra.Command, repoRoot, dirPath, legacyPath, gitignore
 
 	if _, err := fileutil.EnsureGitignore(repoRoot, gitignoreEntry); err != nil {
 		return errhint.WithFix(fmt.Errorf("failed to update .gitignore: %w", err), gitignoreHint)
+	}
+
+	// Ensure trust store is gitignored (no-op in --personal mode).
+	if !personal {
+		if _, err := fileutil.EnsureGitignore(repoRoot, filepath.Join(config.DirName, trust.FileName)); err != nil {
+			return errhint.WithFix(fmt.Errorf("failed to update .gitignore: %w", err), gitignoreHint)
+		}
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Migrated rimba config in %s\n", repoRoot)

@@ -123,6 +123,10 @@ var duplicateCmd = &cobra.Command{
 			return nil
 		}
 
+		if err := ensureTrust(cmd, repoRoot, cfg); err != nil {
+			return err
+		}
+
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
 
