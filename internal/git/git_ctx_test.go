@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -68,10 +69,5 @@ func TestStableGitEnvForcesCLocale(t *testing.T) {
 }
 
 func hasEnv(env []string, want string) bool {
-	for _, entry := range env {
-		if entry == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(env, want)
 }
