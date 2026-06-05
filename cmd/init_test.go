@@ -378,7 +378,7 @@ func TestInitReInitMigratesPerFileEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 	perFileEntries := filepath.Join(config.DirName, config.LocalFile) + "\n" +
-		filepath.Join(config.DirName, "trust.local.toml") + "\n"
+		filepath.Join(config.DirName, config.TrustFile) + "\n"
 	if err := os.WriteFile(filepath.Join(repoDir, ".gitignore"), []byte(perFileEntries), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -409,7 +409,7 @@ func TestInitReInitMigratesPerFileEntries(t *testing.T) {
 	if strings.Contains(content, filepath.Join(config.DirName, config.LocalFile)) {
 		t.Errorf(".gitignore should not contain per-file settings.local.toml after re-init, got:\n%s", content)
 	}
-	if strings.Contains(content, filepath.Join(config.DirName, "trust.local.toml")) {
+	if strings.Contains(content, filepath.Join(config.DirName, config.TrustFile)) {
 		t.Errorf(".gitignore should not contain per-file trust.local.toml after re-init, got:\n%s", content)
 	}
 }
