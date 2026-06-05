@@ -21,6 +21,7 @@ const (
 	DirName   = ".rimba"
 	TeamFile  = "settings.toml"
 	LocalFile = "settings.local.toml"
+	LocalGlob = "*.local.toml" // gitignore glob for personal *.local.toml overrides
 )
 
 type Config struct {

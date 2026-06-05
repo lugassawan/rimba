@@ -218,6 +218,44 @@ func TestRemoveGitignoreEntryWriteError(t *testing.T) {
 	}
 }
 
+func TestHasGitignoreEntryNoFile(t *testing.T) {
+	dir := t.TempDir()
+
+	present, err := HasGitignoreEntry(dir, testEntry)
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+	if present {
+		t.Fatal("expected present=false when .gitignore does not exist")
+	}
+}
+
+func TestHasGitignoreEntryPresent(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, gitignoreFile), otherEntryLine+testEntry+"\n")
+
+	present, err := HasGitignoreEntry(dir, testEntry)
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+	if !present {
+		t.Fatal("expected present=true when entry is in .gitignore")
+	}
+}
+
+func TestHasGitignoreEntryNotPresent(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, gitignoreFile), otherEntryLine)
+
+	present, err := HasGitignoreEntry(dir, testEntry)
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+	if present {
+		t.Fatal("expected present=false when entry is not in .gitignore")
+	}
+}
+
 func readFile(t *testing.T, path string) string {
 	t.Helper()
 	data, err := os.ReadFile(path)

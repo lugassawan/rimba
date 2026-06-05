@@ -9,7 +9,7 @@
 `rimba init` creates a `.rimba/` directory in the repo root with two config files:
 
 - **`settings.toml`** — team-shared configuration (commit this to git)
-- **`settings.local.toml`** — personal overrides (gitignored, per-developer)
+- **`settings.local.toml`** — personal overrides (gitignored via `.rimba/*.local.toml`, per-developer)
 
 Local settings override team settings. Fields omitted from the local file inherit from the team file. All fields are optional — sensible defaults are applied automatically.
 
@@ -65,7 +65,7 @@ rimba init
 # Migrated rimba config in /path/to/repo
 #   Moved:     .rimba.toml → .rimba/settings.toml
 #   Created:   .rimba/settings.local.toml
-#   Gitignore: updated (.rimba.toml → .rimba/settings.local.toml)
+#   Gitignore: updated (.rimba.toml → .rimba/*.local.toml)
 ```
 
 ## Field Reference

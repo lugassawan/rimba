@@ -51,6 +51,25 @@ func EnsureGitignore(repoRoot string, entry string) (added bool, retErr error) {
 	return true, nil
 }
 
+// HasGitignoreEntry reports whether entry is present as a trimmed line in the
+// .gitignore file at repoRoot. Returns false (not error) when the file is absent.
+func HasGitignoreEntry(repoRoot, entry string) (bool, error) {
+	path := filepath.Join(repoRoot, ".gitignore")
+	data, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	for line := range strings.SplitSeq(string(data), "\n") {
+		if strings.TrimSpace(line) == entry {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // RemoveGitignoreEntry removes entry from the .gitignore file at repoRoot.
 // Returns true if the entry was removed, false if the file doesn't exist or
 // the entry was not present.
