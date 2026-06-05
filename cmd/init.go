@@ -290,6 +290,8 @@ func printSection(cmd *cobra.Command, title string, tier installTier, results []
 // ensureLocalIgnore writes the gitignore entry for local config files.
 // In personal mode it ignores the whole .rimba/ dir; otherwise it consolidates
 // all *.local.toml files under a single glob via trust.EnsureLocalGlobIgnored.
+// gitignoreEntry is only used in personal mode; in non-personal mode
+// trust.EnsureLocalGlobIgnored always derives the glob from config.LocalGlob.
 func ensureLocalIgnore(repoRoot, gitignoreEntry string, personal bool) (bool, error) {
 	if personal {
 		return fileutil.EnsureGitignore(repoRoot, gitignoreEntry)
@@ -300,6 +302,8 @@ func ensureLocalIgnore(repoRoot, gitignoreEntry string, personal bool) (bool, er
 // reconcileExistingIgnore runs on re-init of an already-initialized repo.
 // It migrates per-file gitignore entries to the consolidated glob and prints
 // a message only when the glob line was newly added.
+// NOTE: switching from non-personal to personal mode (--personal on re-init) is
+// not handled here; users must manually add .rimba/ to .gitignore if desired.
 func reconcileExistingIgnore(cmd *cobra.Command, repoRoot string, personal bool) error {
 	if personal {
 		return nil
