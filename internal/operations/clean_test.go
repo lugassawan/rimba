@@ -3,6 +3,7 @@ package operations
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -259,7 +260,7 @@ func TestRemoveCandidatesMixedResults(t *testing.T) {
 		{Path: "/wt/c", Branch: "feature/c"},
 	}
 
-	items := RemoveCandidates(context.Background(), r, candidates, false, nil)
+	items := RemoveCandidates(context.Background(), r, candidates, false, false, nil)
 	if len(items) != 3 {
 		t.Fatalf("expected 3 items, got %d", len(items))
 	}
@@ -289,7 +290,7 @@ func TestRemoveCandidatesProgressCallbacks(t *testing.T) {
 		{Path: "/wt/b", Branch: "feature/b"},
 	}
 
-	RemoveCandidates(context.Background(), r, candidates, false, onProgress)
+	RemoveCandidates(context.Background(), r, candidates, false, false, onProgress)
 	if len(messages) != 2 {
 		t.Fatalf("expected 2 progress messages, got %d", len(messages))
 	}
@@ -398,7 +399,7 @@ func TestRemoveCandidatesRemoteDeleteSuccess(t *testing.T) {
 	}
 
 	candidates := []CleanCandidate{{Path: "/wt/a", Branch: "feature/a"}}
-	items := RemoveCandidates(context.Background(), r, candidates, true, nil) // originPresent=true passed by caller
+	items := RemoveCandidates(context.Background(), r, candidates, true, false, nil) // originPresent=true passed by caller
 	if len(items) != 1 {
 		t.Fatalf("expected 1 item, got %d", len(items))
 	}
@@ -425,7 +426,7 @@ func TestRemoveCandidatesRemoteDeleteFailureStillCountsItem(t *testing.T) {
 	}
 
 	candidates := []CleanCandidate{{Path: "/wt/a", Branch: "feature/a"}}
-	items := RemoveCandidates(context.Background(), r, candidates, true, nil)
+	items := RemoveCandidates(context.Background(), r, candidates, true, false, nil)
 	if len(items) != 1 {
 		t.Fatalf("expected 1 item, got %d", len(items))
 	}
@@ -455,7 +456,7 @@ func TestRemoveCandidatesNoOriginSkipsRemoteDelete(t *testing.T) {
 	}
 
 	candidates := []CleanCandidate{{Path: "/wt/a", Branch: "feature/a"}}
-	items := RemoveCandidates(context.Background(), r, candidates, false, nil) // originPresent=false → no push
+	items := RemoveCandidates(context.Background(), r, candidates, false, false, nil) // originPresent=false → no push
 	if len(items) != 1 {
 		t.Fatalf("expected 1 item, got %d", len(items))
 	}
@@ -464,5 +465,36 @@ func TestRemoveCandidatesNoOriginSkipsRemoteDelete(t *testing.T) {
 	}
 	if pushCalled {
 		t.Error("expected no push call when originPresent=false")
+	}
+}
+
+func TestRemoveCandidatesForceFlag(t *testing.T) {
+	tests := []struct {
+		name      string
+		force     bool
+		wantForce bool
+	}{
+		{name: "force=true passes --force to git", force: true, wantForce: true},
+		{name: "force=false omits --force from git", force: false, wantForce: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedArgs []string
+			r := &mockRunner{
+				run: func(args ...string) (string, error) {
+					if len(args) > 0 && args[0] == gitCmdWorktree {
+						capturedArgs = args
+					}
+					return "", nil
+				},
+				runInDir: noopRunInDir,
+			}
+			candidates := []CleanCandidate{{Path: "/wt/a", Branch: "feature/a"}}
+			RemoveCandidates(context.Background(), r, candidates, false, tt.force, nil)
+			hasForce := slices.Contains(capturedArgs, "--force")
+			if hasForce != tt.wantForce {
+				t.Errorf("git worktree args %v: --force present=%v, want %v", capturedArgs, hasForce, tt.wantForce)
+			}
+		})
 	}
 }
