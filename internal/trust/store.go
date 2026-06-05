@@ -66,9 +66,7 @@ func EnsureLocalGlobIgnored(repoRoot string) (added bool, err error) {
 	if err != nil || hasDir {
 		return false, err
 	}
-	// Removal of legacy per-file entries is best-effort: even if removal fails,
-	// the glob appended below still covers both files, so gitignore correctness is
-	// preserved — the only residue is a redundant line that git ignores via the glob.
+	// Best-effort cleanup: the glob below covers both files even if removal fails.
 	_, _ = fileutil.RemoveGitignoreEntry(repoRoot, filepath.Join(config.DirName, config.LocalFile))
 	_, _ = fileutil.RemoveGitignoreEntry(repoRoot, filepath.Join(config.DirName, FileName))
 	return fileutil.EnsureGitignore(repoRoot, filepath.Join(config.DirName, config.LocalGlob))
