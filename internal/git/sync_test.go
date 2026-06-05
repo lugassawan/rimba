@@ -20,20 +20,40 @@ const (
 )
 
 func TestFetch(t *testing.T) {
-	var captured []string
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			captured = args
-			return "", nil
+	cases := []struct {
+		name     string
+		args     FetchArgs
+		wantArgs []string
+	}{
+		{
+			name:     "plain fetch",
+			args:     FetchArgs{},
+			wantArgs: []string{"fetch", remoteOrigin},
+		},
+		{
+			name:     "fetch with prune",
+			args:     FetchArgs{Prune: true},
+			wantArgs: []string{"fetch", "--prune", remoteOrigin},
 		},
 	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var captured []string
+			r := &mockRunner{
+				run: func(args ...string) (string, error) {
+					captured = args
+					return "", nil
+				},
+			}
 
-	if err := Fetch(context.Background(), r, remoteOrigin); err != nil {
-		t.Fatalf("Fetch: %v", err)
-	}
+			if err := Fetch(context.Background(), r, remoteOrigin, tc.args); err != nil {
+				t.Fatalf("Fetch: %v", err)
+			}
 
-	if len(captured) != 2 || captured[0] != "fetch" || captured[1] != remoteOrigin {
-		t.Errorf("expected [fetch origin], got %v", captured)
+			if !slices.Equal(captured, tc.wantArgs) {
+				t.Errorf("got %v, want %v", captured, tc.wantArgs)
+			}
+		})
 	}
 }
 
@@ -44,7 +64,7 @@ func TestFetchError(t *testing.T) {
 		},
 	}
 
-	err := Fetch(context.Background(), r, remoteOrigin)
+	err := Fetch(context.Background(), r, remoteOrigin, FetchArgs{})
 	if err == nil {
 		t.Fatal("expected error from Fetch")
 	}

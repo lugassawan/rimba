@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -795,5 +796,29 @@ func TestCleanFetchMergeRefCancelled(t *testing.T) {
 	ref, err := cleanFetchMergeRef(context.Background(), cmd, r, s, branchMain)
 	if !errors.Is(err, context.Canceled) {
 		t.Errorf("expected context.Canceled, got err=%v ref=%q", err, ref)
+	}
+}
+
+func TestCleanFetchMergeRefPassesPrune(t *testing.T) {
+	cmd, _ := newTestCmd()
+	var fetchArgs []string
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == cmdFetch {
+				fetchArgs = append([]string(nil), args...)
+				return "", nil
+			}
+			return "", nil
+		},
+	}
+	s := spinner.New(spinnerOpts(cmd))
+	defer s.Stop()
+
+	_, err := cleanFetchMergeRef(context.Background(), cmd, r, s, branchMain)
+	if err != nil {
+		t.Fatalf("cleanFetchMergeRef: %v", err)
+	}
+	if !slices.Contains(fetchArgs, "--prune") {
+		t.Errorf("fetch args %v missing --prune: merged cleanup must prune stale remote-tracking refs", fetchArgs)
 	}
 }

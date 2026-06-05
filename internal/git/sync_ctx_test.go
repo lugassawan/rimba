@@ -46,7 +46,7 @@ func TestFetchContextCancelledReturnsFast(t *testing.T) {
 
 	r := &ExecRunner{}
 	start := time.Now()
-	err := Fetch(ctx, r, "origin")
+	err := Fetch(ctx, r, "origin", FetchArgs{})
 	if time.Since(start) > time.Second {
 		t.Errorf("Fetch with cancelled ctx took too long: %v", time.Since(start))
 	}
@@ -62,7 +62,7 @@ func TestFetchPassesContext(t *testing.T) {
 	sentinel := context.WithValue(context.Background(), ctxKey{}, "sentinel")
 	r := &ctxMockRunner{}
 
-	if err := Fetch(sentinel, r, "origin"); err != nil {
+	if err := Fetch(sentinel, r, "origin", FetchArgs{}); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 

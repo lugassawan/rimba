@@ -278,7 +278,7 @@ func cleanStale(ctx context.Context, cmd *cobra.Command, r git.Runner) error {
 // other fetch failures (e.g. no remote configured).
 func cleanFetchMergeRef(ctx context.Context, cmd *cobra.Command, r git.Runner, s *spinner.Spinner, mainBranch string) (string, error) {
 	s.Start("Fetching from " + git.DefaultRemote + "...")
-	if err := git.Fetch(ctx, r, git.DefaultRemote); err != nil {
+	if err := git.Fetch(ctx, r, git.DefaultRemote, git.FetchArgs{Prune: true}); err != nil {
 		s.Stop()
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return "", err

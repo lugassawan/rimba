@@ -2,9 +2,20 @@ package git
 
 import "context"
 
-// Fetch runs `git fetch <remote>` to update remote tracking branches.
-func Fetch(ctx context.Context, r Runner, remote string) error {
-	_, err := r.RunContext(ctx, "fetch", remote)
+// FetchArgs configures Fetch. The zero value performs a plain `git fetch <remote>`.
+type FetchArgs struct {
+	Prune bool // append --prune: drop remote-tracking refs whose upstream branch was deleted
+}
+
+// Fetch runs `git fetch <remote>`, applying any options in args, to update
+// remote-tracking branches.
+func Fetch(ctx context.Context, r Runner, remote string, args FetchArgs) error {
+	gitArgs := []string{"fetch"}
+	if args.Prune {
+		gitArgs = append(gitArgs, "--prune")
+	}
+	gitArgs = append(gitArgs, remote)
+	_, err := r.RunContext(ctx, gitArgs...)
 	return err
 }
 
