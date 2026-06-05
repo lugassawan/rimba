@@ -1,11 +1,14 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/lugassawan/rimba/internal/output"
 )
 
 func TestLogNoWorktrees(t *testing.T) {
@@ -260,5 +263,100 @@ func TestLogCommitInfoError(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "No recent commits found") {
 		t.Errorf("expected 'No recent commits found' when all entries fail, got: %q", buf.String())
+	}
+}
+
+func TestLogJSON(t *testing.T) {
+	ts := strconv.FormatInt(time.Now().Add(-2*time.Hour).Unix(), 10)
+	restore := overrideNewRunner(logRunnerWithWorktree(func(_ string) (string, error) {
+		return ts + "\tadd login feature", nil
+	}))
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	cmd.Flags().Int(flagLimit, 0, "")
+	cmd.Flags().String(flagSince, "", "")
+
+	if err := logCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("logCmd.RunE: %v", err)
+	}
+
+	var env output.Envelope
+	if err := json.Unmarshal(buf.Bytes(), &env); err != nil {
+		t.Fatalf("invalid JSON: %v\noutput: %s", err, buf.String())
+	}
+	if env.Command != "log" {
+		t.Errorf("command = %q, want %q", env.Command, "log")
+	}
+
+	data, ok := env.Data.([]any)
+	if !ok {
+		t.Fatalf("data type = %T, want []any", env.Data)
+	}
+	if len(data) != 1 {
+		t.Errorf("data length = %d, want 1", len(data))
+	}
+
+	item, ok := data[0].(map[string]any)
+	if !ok {
+		t.Fatalf("item type = %T, want map[string]any", data[0])
+	}
+	for _, field := range []string{"task", "type", "branch", "path", "last_commit", "subject"} {
+		if _, exists := item[field]; !exists {
+			t.Errorf("item missing field %q", field)
+		}
+	}
+	if item["task"] != taskLogin {
+		t.Errorf("task = %v, want %q", item["task"], taskLogin)
+	}
+	if item["path"] != pathWtFeatureLogin {
+		t.Errorf("path = %v, want %q", item["path"], pathWtFeatureLogin)
+	}
+	if item["subject"] != "add login feature" {
+		t.Errorf("subject = %v, want %q", item["subject"], "add login feature")
+	}
+}
+
+func TestLogJSONEmpty(t *testing.T) {
+	restore := overrideNewRunner(&mockRunner{
+		run: func(args ...string) (string, error) {
+			switch {
+			case args[0] == cmdRevParse && args[1] == cmdShowToplevel:
+				return repoPath, nil
+			case args[0] == cmdSymbolicRef:
+				return refsRemotesOriginMain, nil
+			case args[0] == cmdWorktreeTest && args[1] == cmdList:
+				return wtRepo + headMainBlock, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	})
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	cmd.Flags().Int(flagLimit, 0, "")
+	cmd.Flags().String(flagSince, "", "")
+
+	if err := logCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("logCmd.RunE: %v", err)
+	}
+
+	var env output.Envelope
+	if err := json.Unmarshal(buf.Bytes(), &env); err != nil {
+		t.Fatalf("invalid JSON: %v\noutput: %s", err, buf.String())
+	}
+	if env.Command != "log" {
+		t.Errorf("command = %q, want %q", env.Command, "log")
+	}
+
+	data, ok := env.Data.([]any)
+	if !ok {
+		t.Fatalf("data type = %T, want []any", env.Data)
+	}
+	if len(data) != 0 {
+		t.Errorf("expected empty data array, got %d items", len(data))
 	}
 }

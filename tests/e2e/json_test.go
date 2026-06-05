@@ -2,10 +2,13 @@ package e2e_test
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/deps"
+	"github.com/lugassawan/rimba/internal/resolver"
+	"github.com/lugassawan/rimba/testutil"
 )
 
 // parseEnvelope parses a JSON envelope from stdout and returns the data field.
@@ -109,6 +112,62 @@ func TestListJSONArchived(t *testing.T) {
 	}
 	if len(data) == 0 {
 		t.Error("expected at least one archived branch")
+	}
+}
+
+func TestLogJSON(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", "log-json-task")
+
+	// Make a commit in the worktree so log has something to show
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch := resolver.BranchName(defaultPrefix, "log-json-task")
+	wtPath := resolver.WorktreePath(wtDir, branch)
+	testutil.CreateFile(t, wtPath, "work.txt", "some work")
+	testutil.GitCmd(t, wtPath, "add", ".")
+	testutil.GitCmd(t, wtPath, "commit", "-m", "add log json work")
+
+	r := rimbaSuccess(t, repo, "log", "--json")
+	env := parseEnvelope(t, r.Stdout)
+
+	if env["command"] != "log" {
+		t.Errorf("command = %v, want 'log'", env["command"])
+	}
+
+	data, ok := env["data"].([]any)
+	if !ok {
+		t.Fatalf("data type = %T, want []any", env["data"])
+	}
+	if len(data) == 0 {
+		t.Fatal("expected at least one log entry")
+	}
+
+	item, ok := data[0].(map[string]any)
+	if !ok {
+		t.Fatalf("item type = %T, want map[string]any", data[0])
+	}
+	for _, field := range []string{"task", "type", "branch", "path", "last_commit", "subject"} {
+		if _, exists := item[field]; !exists {
+			t.Errorf("item missing field %q", field)
+		}
+	}
+	if item["task"] != "log-json-task" {
+		t.Errorf("task = %v, want 'log-json-task'", item["task"])
+	}
+	if item["subject"] != "add log json work" {
+		t.Errorf("subject = %v, want 'add log json work'", item["subject"])
+	}
+
+	// No ANSI escape codes
+	assertNotContains(t, r.Stdout, "\033[")
+	// No spinner output on stderr
+	if r.Stderr != "" {
+		t.Errorf("expected empty stderr in JSON mode, got: %s", r.Stderr)
 	}
 }
 

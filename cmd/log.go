@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
@@ -25,6 +26,7 @@ type logEntry struct {
 	task       string
 	service    string
 	typeName   string
+	path       string
 	commitTime time.Time
 	subject    string
 	valid      bool
@@ -53,6 +55,9 @@ var logCmd = &cobra.Command{
 		candidates := git.FilterEntries(entries, mainBranch)
 
 		if len(candidates) == 0 {
+			if isJSON(cmd) {
+				return output.WriteJSON(cmd.OutOrStdout(), version, "log", make([]output.LogItem, 0))
+			}
 			fmt.Fprintln(cmd.OutOrStdout(), "No worktrees found.")
 			return nil
 		}
@@ -88,8 +93,15 @@ var logCmd = &cobra.Command{
 		}
 
 		if len(valid) == 0 {
+			if isJSON(cmd) {
+				return output.WriteJSON(cmd.OutOrStdout(), version, "log", make([]output.LogItem, 0))
+			}
 			fmt.Fprintln(cmd.OutOrStdout(), "No recent commits found.")
 			return nil
+		}
+
+		if isJSON(cmd) {
+			return writeLogJSON(cmd, valid)
 		}
 
 		noColor, _ := cmd.Flags().GetBool(flagNoColor)
@@ -118,13 +130,14 @@ func collectLogEntries(r git.Runner, candidates []git.WorktreeEntry, s *spinner.
 
 		ct, subject, err := git.LastCommitInfo(r, e.Branch)
 		if err != nil {
-			return logEntry{branch: e.Branch, task: task, service: svc, typeName: typeName}
+			return logEntry{branch: e.Branch, task: task, service: svc, typeName: typeName, path: e.Path}
 		}
 		return logEntry{
 			branch:     e.Branch,
 			task:       task,
 			service:    svc,
 			typeName:   typeName,
+			path:       e.Path,
 			commitTime: ct,
 			subject:    subject,
 			valid:      true,
@@ -189,4 +202,20 @@ func renderLogTable(out io.Writer, p *termcolor.Painter, entries []logEntry) {
 	}
 
 	tbl.Render(out)
+}
+
+func writeLogJSON(cmd *cobra.Command, entries []logEntry) error {
+	items := make([]output.LogItem, 0, len(entries))
+	for _, e := range entries {
+		items = append(items, output.LogItem{
+			Task:       e.task,
+			Service:    e.service,
+			Type:       e.typeName,
+			Branch:     e.branch,
+			Path:       e.path,
+			LastCommit: e.commitTime.UTC().Format(time.RFC3339),
+			Subject:    e.subject,
+		})
+	}
+	return output.WriteJSON(cmd.OutOrStdout(), version, "log", items)
 }
