@@ -41,11 +41,7 @@ func (r *ExecRunner) RunInDirContext(ctx context.Context, dir string, args ...st
 func stableGitEnv(environ []string) []string {
 	env := make([]string, 0, len(environ)+2)
 	for _, entry := range environ {
-		key, _, ok := strings.Cut(entry, "=")
-		if !ok {
-			env = append(env, entry)
-			continue
-		}
+		key, _, _ := strings.Cut(entry, "=")
 		if strings.EqualFold(key, "LANG") || strings.EqualFold(key, "LC_ALL") {
 			continue
 		}
