@@ -117,7 +117,7 @@ func mcpCleanMerged(ctx context.Context, r git.Runner, hctx *HandlerContext, dry
 	// Force mode: no confirmation prompts. Probe origin once and pass the result
 	// directly so RemoveCandidates does not re-issue git remote get-url per candidate.
 	originPresent := git.RemoteExists(r, git.DefaultRemote)
-	opItems := operations.RemoveCandidates(ctx, r, mergedResult.Candidates, originPresent, nil)
+	opItems := operations.RemoveCandidates(ctx, r, mergedResult.Candidates, originPresent, true, nil)
 	warnings := mergedResult.Warnings
 	items := make([]cleanedItem, len(opItems))
 	for i, item := range opItems {
@@ -163,7 +163,7 @@ func mcpCleanStale(ctx context.Context, r git.Runner, hctx *HandlerContext, dryR
 		toRemove[i] = c.CleanCandidate
 	}
 
-	opItems := operations.RemoveCandidates(ctx, r, toRemove, false, nil)
+	opItems := operations.RemoveCandidates(ctx, r, toRemove, false, true, nil)
 	items := make([]cleanedItem, len(opItems))
 	for i, item := range opItems {
 		items[i] = cleanedItem{Branch: item.Branch, Path: item.Path}

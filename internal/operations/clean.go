@@ -118,11 +118,12 @@ func FindStaleCandidates(r git.Runner, mainBranch string, staleDays int) (StaleR
 // removed. Callers are responsible for probing RemoteExists before invoking — passing
 // a pre-resolved boolean avoids redundant git remote get-url calls per candidate and
 // ensures the CLI dry-run preview and actual deletion share a single probe result.
-func RemoveCandidates(ctx context.Context, r git.Runner, candidates []CleanCandidate, originPresent bool, onProgress progress.Func) []CleanedItem {
+// force is forwarded to git worktree remove to allow discarding untracked files.
+func RemoveCandidates(ctx context.Context, r git.Runner, candidates []CleanCandidate, originPresent bool, force bool, onProgress progress.Func) []CleanedItem {
 	items := make([]CleanedItem, 0, len(candidates))
 	for _, c := range candidates {
 		progress.Notifyf(onProgress, "Removing %s...", c.Branch)
-		wtRemoved, brDeleted, err := removeAndCleanup(r, c.Path, c.Branch)
+		wtRemoved, brDeleted, err := removeAndCleanup(r, c.Path, c.Branch, force)
 		item := CleanedItem{
 			Branch:          c.Branch,
 			Path:            c.Path,

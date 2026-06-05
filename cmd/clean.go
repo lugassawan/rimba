@@ -22,7 +22,7 @@ const (
 	hintMerged      = "Remove worktrees whose branches are already merged into main"
 	hintDryRunPrune = "Preview what would be pruned without making changes"
 	hintDryRunClean = "Preview what would be removed without making changes"
-	hintForce       = "Skip confirmation prompt"
+	hintForce       = "Skip confirmation and force-remove dirty worktrees"
 )
 
 var cleanCmd = &cobra.Command{
@@ -55,7 +55,7 @@ func init() {
 	cleanCmd.Flags().Bool(flagMerged, false, "remove worktrees whose branches are merged into main")
 	cleanCmd.Flags().Bool(flagStale, false, "remove worktrees with no recent commits")
 	cleanCmd.Flags().Int(flagStaleDays, defaultStaleDays, "number of days to consider a worktree stale (used with --stale)")
-	cleanCmd.Flags().Bool(flagForce, false, "skip confirmation prompt when used with --merged or --stale")
+	cleanCmd.Flags().Bool(flagForce, false, "skip confirmation and force-remove dirty worktrees (with --merged or --stale)")
 
 	cleanCmd.MarkFlagsMutuallyExclusive(flagMerged, flagStale)
 
@@ -201,7 +201,7 @@ func runClean(ctx context.Context, cmd *cobra.Command, r git.Runner, s cleanStra
 		return nil
 	}
 
-	removed := cleanRemoveCandidates(ctx, cmd, r, sp, candidates, s.originPresent)
+	removed := cleanRemoveCandidates(ctx, cmd, r, sp, candidates, s.originPresent, force)
 	fmt.Fprintf(cmd.OutOrStdout(), s.summaryFmt, removed)
 	return nil
 }
@@ -289,9 +289,9 @@ func cleanFetchMergeRef(ctx context.Context, cmd *cobra.Command, r git.Runner, s
 	return git.DefaultRemote + "/" + mainBranch, nil
 }
 
-func cleanRemoveCandidates(ctx context.Context, cmd *cobra.Command, r git.Runner, s *spinner.Spinner, candidates []operations.CleanCandidate, originPresent bool) int {
+func cleanRemoveCandidates(ctx context.Context, cmd *cobra.Command, r git.Runner, s *spinner.Spinner, candidates []operations.CleanCandidate, originPresent bool, force bool) int {
 	s.Start("Removing worktrees...")
-	items := operations.RemoveCandidates(ctx, r, candidates, originPresent, func(msg string) {
+	items := operations.RemoveCandidates(ctx, r, candidates, originPresent, force, func(msg string) {
 		s.Update(msg)
 	})
 	s.Stop()

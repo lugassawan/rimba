@@ -163,7 +163,7 @@ func TestRemoveAndCleanupSuccess(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	wtRemoved, brDeleted, err := removeAndCleanup(r, "/wt/test", "feature/test")
+	wtRemoved, brDeleted, err := removeAndCleanup(r, "/wt/test", "feature/test", false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestRemoveAndCleanupWtRemovalFails(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	wtRemoved, brDeleted, err := removeAndCleanup(r, "/wt/test", "feature/test")
+	wtRemoved, brDeleted, err := removeAndCleanup(r, "/wt/test", "feature/test", false)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -201,7 +201,7 @@ func TestRemoveAndCleanupBranchDeleteFails(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	wtRemoved, brDeleted, err := removeAndCleanup(r, "/wt/test", "feature/test")
+	wtRemoved, brDeleted, err := removeAndCleanup(r, "/wt/test", "feature/test", false)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -216,5 +216,39 @@ func TestRemoveAndCleanupBranchDeleteFails(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "git branch -D feature/test") {
 		t.Errorf("expected 'git branch -D feature/test' hint in error, got: %v", err)
+	}
+}
+
+func TestRemoveAndCleanupForceFlag(t *testing.T) {
+	tests := []struct {
+		name      string
+		force     bool
+		wantForce bool
+	}{
+		{name: "force=true passes --force to git", force: true, wantForce: true},
+		{name: "force=false omits --force from git", force: false, wantForce: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedArgs []string
+			r := &mockRunner{
+				run: func(args ...string) (string, error) {
+					if len(args) > 0 && args[0] == "worktree" {
+						capturedArgs = args
+					}
+					return "", nil
+				},
+				runInDir: noopRunInDir,
+			}
+			_, _, err := removeAndCleanup(r, "/wt/test", "feature/test", tt.force)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			joined := strings.Join(capturedArgs, " ")
+			hasForce := strings.Contains(joined, "--force")
+			if hasForce != tt.wantForce {
+				t.Errorf("git worktree args %q: --force present=%v, want %v", joined, hasForce, tt.wantForce)
+			}
+		})
 	}
 }

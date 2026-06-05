@@ -43,9 +43,11 @@ func RemoveWorktree(r git.Runner, wt resolver.WorktreeInfo, task string, keepBra
 }
 
 // removeAndCleanup removes a worktree and deletes its branch.
-// Used by remove, merge, and clean operations.
-func removeAndCleanup(r git.Runner, path, branch string) (wtRemoved, brDeleted bool, err error) {
-	if err := git.RemoveWorktree(r, path, false); err != nil {
+// Used by remove, merge, and clean operations. force is forwarded to git
+// worktree remove so callers can discard untracked files or uncommitted
+// tracked-file modifications (e.g. node_modules, local config edits).
+func removeAndCleanup(r git.Runner, path, branch string, force bool) (wtRemoved, brDeleted bool, err error) {
+	if err := git.RemoveWorktree(r, path, force); err != nil {
 		return false, false, err
 	}
 

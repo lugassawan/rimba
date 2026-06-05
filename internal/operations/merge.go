@@ -106,7 +106,7 @@ func MergeWorktree(ctx context.Context, r git.Runner, params MergeParams, onProg
 		var wtRemoved, brDeleted bool
 		rmErr := plan.Do("remove worktree: "+source.Path, func() error {
 			var err error
-			wtRemoved, brDeleted, err = removeAndCleanup(r, source.Path, source.Branch)
+			wtRemoved, brDeleted, err = removeAndCleanup(r, source.Path, source.Branch, false)
 			return err
 		})
 		result.WorktreeRemoved = wtRemoved
