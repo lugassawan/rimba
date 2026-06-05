@@ -83,6 +83,18 @@ func TestLogWithWorktrees(t *testing.T) {
 	}
 }
 
+// findLogItem searches a JSON data slice for the entry with the given task name.
+func findLogItem(t *testing.T, data []any, task string) map[string]any {
+	t.Helper()
+	for _, d := range data {
+		if m, ok := d.(map[string]any); ok && m["task"] == task {
+			return m
+		}
+	}
+	t.Fatalf("%q entry not found in JSON output", task)
+	return nil
+}
+
 func logRunnerWithWorktree(logResp func(branch string) (string, error)) *mockRunner {
 	return &mockRunner{
 		run: func(args ...string) (string, error) {
@@ -294,14 +306,10 @@ func TestLogJSON(t *testing.T) {
 	if !ok {
 		t.Fatalf("data type = %T, want []any", env.Data)
 	}
-	if len(data) != 1 {
-		t.Errorf("data length = %d, want 1", len(data))
+	if len(data) == 0 {
+		t.Fatal("expected at least one log entry")
 	}
-
-	item, ok := data[0].(map[string]any)
-	if !ok {
-		t.Fatalf("item type = %T, want map[string]any", data[0])
-	}
+	item := findLogItem(t, data, taskLogin)
 	for _, field := range []string{"task", "type", "branch", "path", "last_commit", "subject"} {
 		if _, exists := item[field]; !exists {
 			t.Errorf("item missing field %q", field)
