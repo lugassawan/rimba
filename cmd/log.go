@@ -56,7 +56,7 @@ var logCmd = &cobra.Command{
 
 		if len(candidates) == 0 {
 			if isJSON(cmd) {
-				return output.WriteJSON(cmd.OutOrStdout(), version, "log", make([]output.LogItem, 0))
+				return writeLogJSONEmpty(cmd)
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "No worktrees found.")
 			return nil
@@ -94,7 +94,7 @@ var logCmd = &cobra.Command{
 
 		if len(valid) == 0 {
 			if isJSON(cmd) {
-				return output.WriteJSON(cmd.OutOrStdout(), version, "log", make([]output.LogItem, 0))
+				return writeLogJSONEmpty(cmd)
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "No recent commits found.")
 			return nil
@@ -202,6 +202,10 @@ func renderLogTable(out io.Writer, p *termcolor.Painter, entries []logEntry) {
 	}
 
 	tbl.Render(out)
+}
+
+func writeLogJSONEmpty(cmd *cobra.Command) error {
+	return output.WriteJSON(cmd.OutOrStdout(), version, "log", make([]output.LogItem, 0))
 }
 
 func writeLogJSON(cmd *cobra.Command, entries []logEntry) error {

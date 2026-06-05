@@ -148,17 +148,21 @@ func TestLogJSON(t *testing.T) {
 		t.Fatal("expected at least one log entry")
 	}
 
-	item, ok := data[0].(map[string]any)
-	if !ok {
-		t.Fatalf("item type = %T, want map[string]any", data[0])
+	var item map[string]any
+	for _, d := range data {
+		if m, ok := d.(map[string]any); ok && m["task"] == "log-json-task" {
+			item = m
+			break
+		}
 	}
+	if item == nil {
+		t.Fatal("log-json-task entry not found in JSON output")
+	}
+
 	for _, field := range []string{"task", "type", "branch", "path", "last_commit", "subject"} {
 		if _, exists := item[field]; !exists {
 			t.Errorf("item missing field %q", field)
 		}
-	}
-	if item["task"] != "log-json-task" {
-		t.Errorf("task = %v, want 'log-json-task'", item["task"])
 	}
 	if item["subject"] != "add log json work" {
 		t.Errorf("subject = %v, want 'add log json work'", item["subject"])
