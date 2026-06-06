@@ -28,7 +28,7 @@ func TestInitCreatesConfigAndDir(t *testing.T) {
 
 	// .gitignore is created with .rimba/*.local.toml
 	assertFileExists(t, filepath.Join(repo, gitignoreFile))
-	globEntry := filepath.Join(configDir, localGlob)
+	globEntry := configDir + "/" + localGlob
 	assertGitignoreContains(t, repo, globEntry)
 }
 
@@ -91,7 +91,7 @@ func TestInitAddsToGitignore(t *testing.T) {
 		t.Fatalf("failed to write %s: %v", gitignoreFile, err)
 	}
 
-	globEntry := filepath.Join(configDir, localGlob)
+	globEntry := configDir + "/" + localGlob
 	r := rimbaSuccess(t, repo, "init")
 	assertContains(t, r.Stdout, globEntry+" added to .gitignore")
 	assertGitignoreContains(t, repo, globEntry)
@@ -112,7 +112,7 @@ func TestInitGitignoreIdempotent(t *testing.T) {
 	}
 
 	repo := setupRepo(t)
-	globEntry := filepath.Join(configDir, localGlob)
+	globEntry := configDir + "/" + localGlob
 	// Pre-create .gitignore already containing the glob entry
 	if err := os.WriteFile(filepath.Join(repo, gitignoreFile), []byte(globEntry+"\n"), 0644); err != nil {
 		t.Fatalf("failed to write %s: %v", gitignoreFile, err)
@@ -177,7 +177,7 @@ func TestInitMigratesLegacyConfig(t *testing.T) {
 	if strings.Contains(content, configFile) {
 		t.Error(".gitignore should not contain legacy entry after migration")
 	}
-	globEntry := filepath.Join(configDir, localGlob)
+	globEntry := configDir + "/" + localGlob
 	assertGitignoreContains(t, repo, globEntry)
 }
 
@@ -329,7 +329,7 @@ func TestInitPersonalFreshInit(t *testing.T) {
 	assertGitignoreContains(t, repo, dirEntry)
 	localEntry := filepath.Join(configDir, localFile)
 	assertGitignoreNotContains(t, repo, localEntry)
-	globEntry := filepath.Join(configDir, localGlob)
+	globEntry := configDir + "/" + localGlob
 	assertGitignoreNotContains(t, repo, globEntry)
 }
 
@@ -382,7 +382,7 @@ func TestInitPersonalMigration(t *testing.T) {
 	assertGitignoreContains(t, repo, dirEntry)
 	localEntry := filepath.Join(configDir, localFile)
 	assertGitignoreNotContains(t, repo, localEntry)
-	globEntry := filepath.Join(configDir, localGlob)
+	globEntry := configDir + "/" + localGlob
 	assertGitignoreNotContains(t, repo, globEntry)
 }
 

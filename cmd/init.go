@@ -82,7 +82,7 @@ register MCP — it only updates agent files. Registration is idempotent.`,
 
 		dirPath := filepath.Join(repoRoot, config.DirName)
 		legacyPath := filepath.Join(repoRoot, config.FileName)
-		globEntry := filepath.Join(config.DirName, config.LocalGlob)
+		globEntry := config.DirName + "/" + config.LocalGlob
 		dirEntry := config.DirName + "/"
 
 		gitignoreEntry := globEntry
@@ -307,7 +307,7 @@ func reconcileExistingIgnore(cmd *cobra.Command, repoRoot string, personal bool)
 		return errhint.WithFix(fmt.Errorf("failed to update .gitignore: %w", err), gitignoreHint)
 	}
 	if added {
-		fmt.Fprintf(cmd.OutOrStdout(), "  Gitignore:    %s added to .gitignore\n", filepath.Join(config.DirName, config.LocalGlob))
+		fmt.Fprintf(cmd.OutOrStdout(), "  Gitignore:    %s added to .gitignore\n", config.DirName+"/"+config.LocalGlob)
 	}
 	return nil
 }

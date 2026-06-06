@@ -59,7 +59,7 @@ func TestInitPersonalFreshInit(t *testing.T) {
 	if strings.Contains(content, localEntry) {
 		t.Errorf(".gitignore should not contain %q in personal mode, got:\n%s", localEntry, content)
 	}
-	globEntry := filepath.Join(config.DirName, config.LocalGlob)
+	globEntry := config.DirName + "/" + config.LocalGlob
 	if strings.Contains(content, globEntry) {
 		t.Errorf(".gitignore should not contain glob %q in personal mode, got:\n%s", globEntry, content)
 	}
