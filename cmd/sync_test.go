@@ -38,6 +38,18 @@ func testSyncWorktrees() []resolver.WorktreeInfo {
 	}
 }
 
+func TestPrintSyncDryRunMerge(t *testing.T) {
+	cmd, buf := newTestCmd()
+
+	printSyncDryRun(cmd, "feature/login", "main", true, true)
+
+	want := "[dry-run] would merge feature/login onto main\n" +
+		"[dry-run] would push feature/login to origin\n"
+	if got := buf.String(); got != want {
+		t.Fatalf("output = %q, want %q", got, want)
+	}
+}
+
 func TestSyncOneSuccess(t *testing.T) {
 	worktrees := testSyncWorktrees()
 
