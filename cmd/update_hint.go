@@ -18,15 +18,17 @@ var newUpdater func(string) *updater.Updater = updater.New
 // Returns nil if the version is dev, the check fails, times out, or is up to date.
 // The check is cancelled when ctx is done or timeout elapses — whichever comes first.
 func checkUpdateHint(ctx context.Context, version string, timeout time.Duration) <-chan *updater.CheckResult {
-	ch := make(chan *updater.CheckResult, 1)
+	out := make(chan *updater.CheckResult, 1)
 
 	if updater.IsDevVersion(version) {
-		close(ch)
-		return ch
+		close(out)
+		return out
 	}
 
-	// Derive a timeout-scoped child so the HTTP request is actually cancelled
-	// when timeout elapses, not just when the caller stops waiting.
+	// Bound the check by timeout so the HTTP request is actually cancelled, not
+	// just abandoned. u.Check honours tctx, so the goroutine always terminates
+	// within timeout — no leak, and the result can never be lost to a racing
+	// cancellation (there is no select between "result" and "ctx done").
 	tctx, cancel := context.WithTimeout(ctx, timeout)
 
 	// Read newUpdater before spawning the goroutine: goroutine launch
@@ -37,26 +39,10 @@ func checkUpdateHint(ctx context.Context, version string, timeout time.Duration)
 		defer cancel()
 		result, err := u.Check(tctx)
 		if err != nil || result.UpToDate {
-			close(ch)
+			close(out)
 			return
 		}
-		ch <- result
-	}()
-
-	// Return a channel that resolves with the result or nil when tctx expires.
-	out := make(chan *updater.CheckResult, 1)
-	go func() {
-		defer cancel()
-		select {
-		case r, ok := <-ch:
-			if ok {
-				out <- r
-			} else {
-				close(out)
-			}
-		case <-tctx.Done():
-			close(out)
-		}
+		out <- result // buffered (cap 1) — never blocks
 	}()
 
 	return out
