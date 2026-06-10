@@ -81,7 +81,7 @@ func ListWorktrees(
 		}
 	}
 
-	results := parallel.Collect(len(candidates), listWorktreesConcurrency, func(i int) listWorktreeResult {
+	results := parallel.Collect(ctx, len(candidates), listWorktreesConcurrency, func(ctx context.Context, i int) listWorktreeResult {
 		c := candidates[i]
 		status := CollectWorktreeStatus(ctx, gitR, c.entry.Path)
 		d := resolver.NewWorktreeDetail(c.entry.Branch, prefixes, c.displayPath, status, c.isCurrent)

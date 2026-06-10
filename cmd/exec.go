@@ -266,7 +266,7 @@ func filterDirtyWorktrees(ctx context.Context, cmd *cobra.Command, r git.Runner,
 	n := len(worktrees)
 	var done atomic.Int32
 
-	results := parallel.Collect[dirtyResult](n, 8, func(i int) dirtyResult {
+	results := parallel.Collect[dirtyResult](ctx, n, 8, func(ctx context.Context, i int) dirtyResult {
 		path := worktrees[i].Path
 		dirty, err := git.IsDirty(ctx, r, path)
 		count := done.Add(1)

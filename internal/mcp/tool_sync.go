@@ -109,7 +109,8 @@ func syncMultiple(ctx context.Context, r git.Runner, worktrees []resolver.Worktr
 	allTasks := operations.CollectTasks(worktrees, prefixes)
 	eligible := operations.FilterEligible(worktrees, prefixes, opts.mainBranch, allTasks, includeInherited)
 
-	results := parallel.Collect(len(eligible), 4, func(i int) syncWorktreeResult {
+	// No per-item timeout here — sync operations (fetch/rebase) are long-running by design.
+	results := parallel.Collect(ctx, len(eligible), 4, func(ctx context.Context, i int) syncWorktreeResult {
 		return convertSyncResult(operations.SyncWorktree(ctx, r, opts.mainBranch, eligible[i], opts.useMerge, opts.push))
 	})
 

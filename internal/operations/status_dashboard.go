@@ -117,7 +117,7 @@ func SummarizeStatus(entries []StatusEntry, staleThreshold time.Time) StatusSumm
 // per candidate in parallel. Under detail it also computes size and 7-day
 // velocity; per-item errors leave the pointer nil (non-fatal).
 func collectStatusEntries(ctx context.Context, gitR git.Runner, candidates []git.WorktreeEntry, detail bool) []StatusEntry {
-	return parallel.Collect(len(candidates), 8, func(i int) StatusEntry {
+	return parallel.Collect(ctx, len(candidates), 8, func(ctx context.Context, i int) StatusEntry {
 		e := candidates[i]
 		st := CollectWorktreeStatus(ctx, gitR, e.Path)
 		var ct time.Time

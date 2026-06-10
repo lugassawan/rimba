@@ -55,7 +55,7 @@ func handleStatus(hctx *HandlerContext) server.ToolHandlerFunc {
 			})
 		}
 
-		results := parallel.Collect(len(candidates), 8, func(i int) statusCollectedEntry {
+		results := parallel.Collect(ctx, len(candidates), 8, func(ctx context.Context, i int) statusCollectedEntry {
 			e := candidates[i]
 			st := operations.CollectWorktreeStatus(ctx, r, e.Path)
 			var ct time.Time

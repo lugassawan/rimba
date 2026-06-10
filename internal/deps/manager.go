@@ -105,7 +105,8 @@ func (m *Manager) install(ctx context.Context, worktreePath, sourceWT string, mo
 	var done atomic.Int32
 	total := len(hashed)
 
-	results = parallel.Collect(total, concurrency, func(i int) InstallResult {
+	// No per-item timeout here — dependency installation is long-running by design.
+	results = parallel.Collect(ctx, total, concurrency, func(ctx context.Context, i int) InstallResult {
 		res := m.installModule(ctx, worktreePath, hashed[i], existingPaths)
 		completed := done.Add(1)
 		progress.Notifyf(onProgress, "%d/%d complete", completed, total)

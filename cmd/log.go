@@ -125,7 +125,7 @@ func init() {
 func collectLogEntries(ctx context.Context, r git.Runner, candidates []git.WorktreeEntry, s *spinner.Spinner) []logEntry {
 	prefixes := resolver.AllPrefixes()
 	s.Update("Collecting commit info...")
-	results := parallel.Collect(len(candidates), 8, func(i int) logEntry {
+	results := parallel.Collect(ctx, len(candidates), 8, func(ctx context.Context, i int) logEntry {
 		e := candidates[i]
 		svc, task, matchedPrefix := resolver.ServiceFromBranch(e.Branch, prefixes)
 		typeName := strings.TrimSuffix(matchedPrefix, "/")
