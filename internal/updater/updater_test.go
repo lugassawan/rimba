@@ -88,7 +88,7 @@ func serveOctetStream(t *testing.T, data []byte) *httptest.Server {
 func releaseJSON(tagName string, extras ...string) string {
 	assets := make([]string, 0, 1+len(extras))
 	assets = append(assets,
-		`{"name":"checksums.txt","browser_download_url":"https://example.com/checksums.txt"}`,
+		`{"name":"checksums.txt","browser_download_url":"https://github.com/lugassawan/rimba/releases/download/v2.0.0/checksums.txt"}`,
 	)
 	assets = append(assets, extras...)
 	return fmt.Sprintf(`{"tag_name":%q,"assets":[%s]}`, tagName, strings.Join(assets, ","))
@@ -110,7 +110,7 @@ func TestCheckUpToDate(t *testing.T) {
 
 func TestCheckNewVersionAvailable(t *testing.T) {
 	srv := serveJSON(t, releaseJSON(testVersionNew,
-		`{"name":"rimba_2.0.0_linux_amd64.tar.gz","browser_download_url":"https://example.com/rimba_2.0.0_linux_amd64.tar.gz"}`,
+		`{"name":"rimba_2.0.0_linux_amd64.tar.gz","browser_download_url":"https://github.com/lugassawan/rimba/releases/download/v2.0.0/rimba_2.0.0_linux_amd64.tar.gz"}`,
 	))
 	u := newTestUpdater(srv)
 
@@ -120,7 +120,7 @@ func TestCheckNewVersionAvailable(t *testing.T) {
 		t.Errorf("expected not up to date")
 	}
 
-	wantURL := "https://example.com/rimba_2.0.0_linux_amd64.tar.gz"
+	wantURL := "https://github.com/lugassawan/rimba/releases/download/v2.0.0/rimba_2.0.0_linux_amd64.tar.gz"
 	if result.DownloadURL != wantURL {
 		t.Errorf("download URL = %q, want %q", result.DownloadURL, wantURL)
 	}
@@ -130,7 +130,7 @@ func TestCheckNewVersionAvailable(t *testing.T) {
 		t.Errorf("AssetName = %q, want %q", result.AssetName, wantAsset)
 	}
 
-	wantChecksums := "https://example.com/checksums.txt"
+	wantChecksums := "https://github.com/lugassawan/rimba/releases/download/v2.0.0/checksums.txt"
 	if result.ChecksumsURL != wantChecksums {
 		t.Errorf("ChecksumsURL = %q, want %q", result.ChecksumsURL, wantChecksums)
 	}
@@ -140,7 +140,7 @@ func TestCheckNoMatchingAsset(t *testing.T) {
 	srv := serveJSON(t, `{
 		"tag_name":"`+testVersionNew+`",
 		"assets":[
-			{"name":"rimba_2.0.0_windows_amd64.zip","browser_download_url":"https://example.com/rimba_2.0.0_windows_amd64.zip"}
+			{"name":"rimba_2.0.0_windows_amd64.zip","browser_download_url":"https://github.com/lugassawan/rimba/releases/download/v2.0.0/rimba_2.0.0_windows_amd64.zip"}
 		]
 	}`)
 	u := newTestUpdater(srv)
@@ -160,7 +160,7 @@ func TestCheckMissingChecksums(t *testing.T) {
 	srv := serveJSON(t, fmt.Sprintf(`{
 		"tag_name":%q,
 		"assets":[
-			{"name":"rimba_2.0.0_linux_amd64.tar.gz","browser_download_url":"https://example.com/rimba_2.0.0_linux_amd64.tar.gz"}
+			{"name":"rimba_2.0.0_linux_amd64.tar.gz","browser_download_url":"https://github.com/lugassawan/rimba/releases/download/v2.0.0/rimba_2.0.0_linux_amd64.tar.gz"}
 		]
 	}`, testVersionNew))
 	u := newTestUpdater(srv)
@@ -176,7 +176,7 @@ func TestCheckMissingChecksums(t *testing.T) {
 
 func TestCheckWindowsAsset(t *testing.T) {
 	srv := serveJSON(t, releaseJSON(testVersionNew,
-		`{"name":"rimba_2.0.0_windows_amd64.zip","browser_download_url":"https://example.com/rimba_2.0.0_windows_amd64.zip"}`,
+		`{"name":"rimba_2.0.0_windows_amd64.zip","browser_download_url":"https://github.com/lugassawan/rimba/releases/download/v2.0.0/rimba_2.0.0_windows_amd64.zip"}`,
 	))
 	u := &Updater{
 		CurrentVersion: testVersion,
@@ -1532,5 +1532,99 @@ func TestAssetNameFor(t *testing.T) {
 				t.Errorf("assetNameFor(%q, %q, %q) = %q, want %q", tt.goos, tt.goarch, "1.0.0", got, tt.want)
 			}
 		})
+	}
+}
+
+// ---- validateAssetURL tests ----
+
+func TestValidateAssetURL(t *testing.T) {
+	tests := []struct {
+		name    string
+		url     string
+		wantErr string
+	}{
+		{
+			name: "github.com happy path",
+			url:  "https://github.com/lugassawan/rimba/releases/download/v2.0.0/rimba_2.0.0_linux_amd64.tar.gz",
+		},
+		{
+			name: "objects.githubusercontent.com happy path",
+			url:  "https://objects.githubusercontent.com/github-production-release-asset/12345/rimba_2.0.0_linux_amd64.tar.gz",
+		},
+		{
+			name:    "http scheme rejected",
+			url:     "http://github.com/lugassawan/rimba/releases/download/v2.0.0/rimba_2.0.0_linux_amd64.tar.gz",
+			wantErr: "must use https",
+		},
+		{
+			name:    "untrusted host rejected",
+			url:     "https://evil.com/lugassawan/rimba/releases/download/v2.0.0/rimba_2.0.0_linux_amd64.tar.gz",
+			wantErr: "not a trusted GitHub host",
+		},
+		{
+			name:    "subdomain spoof rejected",
+			url:     "https://github.com.evil.com/lugassawan/rimba/releases/download/v2.0.0/rimba_2.0.0_linux_amd64.tar.gz",
+			wantErr: "not a trusted GitHub host",
+		},
+		{
+			name:    "unparseable URL rejected",
+			url:     "https://github.com/%zz",
+			wantErr: "parsing asset URL",
+		},
+		{
+			name:    "empty URL rejected",
+			url:     "",
+			wantErr: "must not be empty",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateAssetURL(tt.url)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("expected error containing %q, got nil", tt.wantErr)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("error = %q, want to contain %q", err.Error(), tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestCheckRejectsUntrustedDownloadHost(t *testing.T) {
+	srv := serveJSON(t, releaseJSON(testVersionNew,
+		`{"name":"rimba_2.0.0_linux_amd64.tar.gz","browser_download_url":"https://evil.com/rimba_2.0.0_linux_amd64.tar.gz"}`,
+	))
+	u := newTestUpdater(srv)
+
+	_, err := u.Check(context.Background())
+	if err == nil {
+		t.Fatal("expected error for untrusted download URL host")
+	}
+	if !strings.Contains(err.Error(), "untrusted download URL") {
+		t.Errorf("error = %q, want to contain 'untrusted download URL'", err.Error())
+	}
+}
+
+func TestCheckRejectsUntrustedChecksumsHost(t *testing.T) {
+	body := fmt.Sprintf(`{"tag_name":%q,"assets":[
+		{"name":"rimba_2.0.0_linux_amd64.tar.gz","browser_download_url":"https://github.com/lugassawan/rimba/releases/download/v2.0.0/rimba_2.0.0_linux_amd64.tar.gz"},
+		{"name":"checksums.txt","browser_download_url":"https://evil.com/checksums.txt"}
+	]}`, testVersionNew)
+	srv := serveJSON(t, body)
+	u := newTestUpdater(srv)
+
+	_, err := u.Check(context.Background())
+	if err == nil {
+		t.Fatal("expected error for untrusted checksums URL host")
+	}
+	if !strings.Contains(err.Error(), "untrusted checksums URL") {
+		t.Errorf("error = %q, want to contain 'untrusted checksums URL'", err.Error())
 	}
 }
