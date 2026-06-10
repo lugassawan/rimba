@@ -9,9 +9,9 @@ import (
 
 // WorktreeStatus holds the structured git status of a worktree.
 type WorktreeStatus struct {
-	Dirty   bool `json:"dirty"`
-	Ahead   int  `json:"ahead"`
-	Behind  int  `json:"behind"`
+	Dirty   bool `json:"dirty,omitempty"`
+	Ahead   int  `json:"ahead,omitempty"`
+	Behind  int  `json:"behind,omitempty"`
 	Unknown bool `json:"unknown,omitempty"` // set when git queries time out or fail (e.g. stalled NFS mount)
 }
 

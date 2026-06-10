@@ -2,7 +2,6 @@ package git
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -70,13 +69,15 @@ func IsDirty(ctx context.Context, r Runner, dir string) (bool, error) {
 
 // AheadBehind returns the ahead/behind counts of the current branch vs its upstream.
 // Returns (0, 0, nil) if there's no upstream configured.
-// Returns a non-nil error on context cancellation so callers can distinguish a
+// Returns ctx.Err() on context cancellation so callers can distinguish a
 // timed-out query from a branch with no upstream.
 func AheadBehind(ctx context.Context, r Runner, dir string) (ahead, behind int, _ error) {
 	out, err := r.RunInDir(ctx, dir, "rev-list", "--left-right", "--count", "@{upstream}...HEAD")
 	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-			return 0, 0, err
+		// exec.CommandContext kills via SIGKILL; CombinedOutput returns *exec.ExitError,
+		// not the context sentinel — check ctx.Err() directly.
+		if ctx.Err() != nil {
+			return 0, 0, ctx.Err()
 		}
 		// No upstream configured or other non-fatal error — treat as 0/0.
 		return 0, 0, nil //nolint:nilerr // intentional: missing upstream is not an error
