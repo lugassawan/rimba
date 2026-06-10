@@ -19,6 +19,7 @@
 
 - [Features](#features)
 - [Installation](#installation)
+  - [Verifying releases](#verifying-releases)
 - [Quick Start](#quick-start)
 - [Commands](#commands)
 - [Configuration](#configuration)
