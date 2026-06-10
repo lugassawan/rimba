@@ -89,6 +89,8 @@ func ListWorktrees(
 		d := resolver.NewWorktreeDetail(c.entry.Branch, prefixes, c.displayPath, status, c.isCurrent)
 		var info PRInfo
 		if activeGhR != nil {
+			// Pass outer ctx (not itemCtx): queryPRInfo is a gh network call that
+			// builds its own prQueryTimeout internally, not a git query.
 			info = queryPRInfo(ctx, activeGhR, c.entry.Branch)
 		}
 		return listWorktreeResult{detail: d, info: info}
