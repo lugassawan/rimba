@@ -110,7 +110,13 @@ func init() {
 	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		var hint <-chan *updater.CheckResult
 		if cmd == rootCmd {
-			hint = checkUpdateHint(version, 2*time.Second)
+			ctx := cmd.Context()
+			if ctx == nil {
+				// cmd.Context() is nil when HelpFunc is called outside of
+				// ExecuteContext (e.g., directly in tests).
+				ctx = context.Background()
+			}
+			hint = checkUpdateHint(ctx, version, 2*time.Second)
 			printBanner(cmd)
 		}
 		originalHelp(cmd, args)

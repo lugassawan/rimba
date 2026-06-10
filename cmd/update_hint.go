@@ -14,9 +14,10 @@ import (
 // Tests can override this to inject a mock server.
 var newUpdater func(string) *updater.Updater = updater.New
 
-// checkUpdateHint runs a background version check with a timeout.
+// checkUpdateHint runs a background version check bounded by timeout.
 // Returns nil if the version is dev, the check fails, times out, or is up to date.
-func checkUpdateHint(version string, timeout time.Duration) <-chan *updater.CheckResult {
+// The check is cancelled when ctx is done or timeout elapses — whichever comes first.
+func checkUpdateHint(ctx context.Context, version string, timeout time.Duration) <-chan *updater.CheckResult {
 	ch := make(chan *updater.CheckResult, 1)
 
 	if updater.IsDevVersion(version) {
@@ -24,12 +25,17 @@ func checkUpdateHint(version string, timeout time.Duration) <-chan *updater.Chec
 		return ch
 	}
 
+	// Derive a timeout-scoped child so the HTTP request is actually cancelled
+	// when timeout elapses, not just when the caller stops waiting.
+	tctx, cancel := context.WithTimeout(ctx, timeout)
+
 	// Read newUpdater before spawning the goroutine: goroutine launch
 	// establishes a happens-before edge, preventing a data race with
 	// test overrides that restore the variable via t.Cleanup.
 	u := newUpdater(version)
 	go func() {
-		result, err := u.Check(context.Background())
+		defer cancel()
+		result, err := u.Check(tctx)
 		if err != nil || result.UpToDate {
 			close(ch)
 			return
@@ -37,9 +43,10 @@ func checkUpdateHint(version string, timeout time.Duration) <-chan *updater.Chec
 		ch <- result
 	}()
 
-	// Return a channel that resolves with the result or nil after timeout
+	// Return a channel that resolves with the result or nil when tctx expires.
 	out := make(chan *updater.CheckResult, 1)
 	go func() {
+		defer cancel()
 		select {
 		case r, ok := <-ch:
 			if ok {
@@ -47,7 +54,7 @@ func checkUpdateHint(version string, timeout time.Duration) <-chan *updater.Chec
 			} else {
 				close(out)
 			}
-		case <-time.After(timeout):
+		case <-tctx.Done():
 			close(out)
 		}
 	}()
