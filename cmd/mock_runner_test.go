@@ -108,6 +108,7 @@ func newTestCmd() (*cobra.Command, *bytes.Buffer) {
 	cmd.Flags().Bool(flagJSON, false, "")
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
+	cmd.SetContext(context.Background())
 	return cmd, buf
 }
 
