@@ -81,12 +81,15 @@ func ListWorktrees(
 		}
 	}
 
-	results := parallel.Collect(len(candidates), listWorktreesConcurrency, func(i int) listWorktreeResult {
+	results := parallel.Collect(ctx, len(candidates), listWorktreesConcurrency, func(ctx context.Context, i int) listWorktreeResult {
+		itemCtx, cancel := git.WithItemTimeout(ctx)
+		defer cancel()
 		c := candidates[i]
-		status := CollectWorktreeStatus(ctx, gitR, c.entry.Path)
+		status := CollectWorktreeStatus(itemCtx, gitR, c.entry.Path)
 		d := resolver.NewWorktreeDetail(c.entry.Branch, prefixes, c.displayPath, status, c.isCurrent)
 		var info PRInfo
 		if activeGhR != nil {
+			// queryPRInfo manages its own prQueryTimeout; pass outer ctx.
 			info = queryPRInfo(ctx, activeGhR, c.entry.Branch)
 		}
 		return listWorktreeResult{detail: d, info: info}

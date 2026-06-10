@@ -70,9 +70,26 @@ func TestCollectWorktreeStatusIsDirtyError(t *testing.T) {
 		},
 	}
 	status := CollectWorktreeStatus(context.Background(), r, "/wt/feature-login")
-	// On IsDirty error, dirty should be false (err != nil means the condition `err == nil && dirty` is false)
-	if status.Dirty {
-		t.Error("expected Dirty=false when IsDirty returns error")
+	if !status.Unknown {
+		t.Error("expected Unknown=true when IsDirty returns error")
+	}
+}
+
+func TestCollectWorktreeStatusUnknownOnAheadBehindError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // pre-cancel so AheadBehind propagates ctx.Err()
+
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) { return "", nil },
+		// IsDirty (status --porcelain) returns an error too on cancelled ctx, so
+		// returning a non-nil error for all runInDir calls is sufficient here.
+		runInDir: func(_ string, _ ...string) (string, error) {
+			return "", context.Canceled
+		},
+	}
+	status := CollectWorktreeStatus(ctx, r, "/wt/feature-login")
+	if !status.Unknown {
+		t.Error("expected Unknown=true when git queries return context error")
 	}
 }
 
@@ -133,5 +150,32 @@ func TestFilterDetailsByStatusNoFilter(t *testing.T) {
 	filtered := FilterDetailsByStatus(rows, false, false)
 	if len(filtered) != 2 {
 		t.Errorf("expected all 2 rows when no filters active, got %d", len(filtered))
+	}
+}
+
+func TestFilterDetailsByStatusUnknownPassthrough(t *testing.T) {
+	rows := []resolver.WorktreeDetail{
+		{Task: taskLogin, Status: resolver.WorktreeStatus{Dirty: true}},
+		{Task: taskSignup, Status: resolver.WorktreeStatus{Unknown: true}},
+		{Task: taskLogout, Status: resolver.WorktreeStatus{Dirty: false}},
+	}
+
+	// Under --dirty filter: clean row excluded, but Unknown row must be kept.
+	filtered := FilterDetailsByStatus(rows, true, false)
+	if len(filtered) != 2 {
+		t.Fatalf("expected 2 rows (dirty + unknown), got %d", len(filtered))
+	}
+	tasks := []string{filtered[0].Task, filtered[1].Task}
+	if tasks[0] != taskLogin || tasks[1] != taskSignup {
+		t.Errorf("unexpected tasks: %v", tasks)
+	}
+
+	// Under --behind filter: non-behind rows excluded, but Unknown row must be kept.
+	filtered2 := FilterDetailsByStatus(rows, false, true)
+	if len(filtered2) != 1 {
+		t.Fatalf("expected 1 row (unknown), got %d", len(filtered2))
+	}
+	if filtered2[0].Task != taskSignup {
+		t.Errorf("expected unknown row 'signup', got %q", filtered2[0].Task)
 	}
 }

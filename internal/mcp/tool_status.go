@@ -55,12 +55,14 @@ func handleStatus(hctx *HandlerContext) server.ToolHandlerFunc {
 			})
 		}
 
-		results := parallel.Collect(len(candidates), 8, func(i int) statusCollectedEntry {
+		results := parallel.Collect(ctx, len(candidates), 8, func(ctx context.Context, i int) statusCollectedEntry {
+			itemCtx, cancel := git.WithItemTimeout(ctx)
+			defer cancel()
 			e := candidates[i]
-			st := operations.CollectWorktreeStatus(ctx, r, e.Path)
+			st := operations.CollectWorktreeStatus(itemCtx, r, e.Path)
 			var ct time.Time
 			var hasTime bool
-			if t, err := git.LastCommitTime(ctx, r, e.Branch); err == nil {
+			if t, err := git.LastCommitTime(itemCtx, r, e.Branch); err == nil {
 				ct = t
 				hasTime = true
 			}
