@@ -19,6 +19,7 @@
 
 - [Features](#features)
 - [Installation](#installation)
+  - [Verifying releases](#verifying-releases)
 - [Quick Start](#quick-start)
 - [Commands](#commands)
 - [Configuration](#configuration)
@@ -75,6 +76,21 @@ cd rimba
 make build
 # Binary is at ./bin/rimba
 ```
+
+### Verifying releases
+
+Each release publishes a `checksums.txt` signed with [cosign](https://github.com/sigstore/cosign) keyless signing (Sigstore OIDC via GitHub Actions). To verify a downloaded checksum file:
+
+```sh
+cosign verify-blob \
+  --certificate checksums.txt.pem \
+  --signature checksums.txt.sig \
+  --certificate-identity-regexp 'https://github.com/lugassawan/rimba/.github/workflows/release.yml@refs/tags/v.*' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  checksums.txt
+```
+
+Each release archive also ships a companion `*.sbom.json` (SPDX format) on the GitHub Release page.
 
 ## Quick Start
 
