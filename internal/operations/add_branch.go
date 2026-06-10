@@ -42,7 +42,7 @@ func PromoteBranch(ctx context.Context, worktreeDir string, r git.Runner, repoRo
 	}
 
 	if err := git.Checkout(ctx, r, repoRoot, defaultBranch); err != nil {
-		if restoreErr := restoreStash(ctx, r, repoRoot, stashSHA); restoreErr != nil {
+		if restoreErr := restoreStash(r, repoRoot, stashSHA); restoreErr != nil {
 			return "", fmt.Errorf("switch to %s: %w; also failed to restore stash: %w", defaultBranch, err, restoreErr)
 		}
 		return "", fmt.Errorf("switch to %s: %w", defaultBranch, err)
@@ -54,14 +54,14 @@ func PromoteBranch(ctx context.Context, worktreeDir string, r git.Runner, repoRo
 		if switchErr := git.Checkout(ctx, r, repoRoot, branch); switchErr != nil {
 			return "", fmt.Errorf("create worktree: %w; also failed to restore HEAD to %s: %w", err, branch, switchErr)
 		}
-		if restoreErr := restoreStash(ctx, r, repoRoot, stashSHA); restoreErr != nil {
+		if restoreErr := restoreStash(r, repoRoot, stashSHA); restoreErr != nil {
 			return "", fmt.Errorf("create worktree: %w; also failed to restore stash: %w", err, restoreErr)
 		}
 		return "", fmt.Errorf("create worktree: %w", err)
 	}
 
 	if stashSHA != "" {
-		return wtPath, applyStashToWorktree(ctx, r, wtPath, stashSHA)
+		return wtPath, applyStashToWorktree(r, wtPath, stashSHA)
 	}
 	return wtPath, nil
 }
@@ -110,8 +110,7 @@ func validateForPromotion(ctx context.Context, r git.Runner, repoRoot, branch st
 // restoreStash re-applies and drops a stash entry to undo a failed mid-operation stash push.
 // No-ops when sha is empty. Returns an error if the apply fails (stash entry is preserved).
 // StashApply and StashDrop are intentionally non-cancellable (recovery paths must complete).
-func restoreStash(ctx context.Context, r git.Runner, dir, sha string) error {
-	_ = ctx
+func restoreStash(r git.Runner, dir, sha string) error {
 	if sha == "" {
 		return nil
 	}
@@ -129,8 +128,7 @@ func restoreStash(ctx context.Context, r git.Runner, dir, sha string) error {
 // resolve-then-cleanup hint, other apply errors surface their true cause, and a
 // failed drop after a clean apply is reported rather than swallowed.
 // StashApply and StashDrop are intentionally non-cancellable (recovery paths must complete).
-func applyStashToWorktree(ctx context.Context, r git.Runner, wtPath, sha string) error {
-	_ = ctx
+func applyStashToWorktree(r git.Runner, wtPath, sha string) error {
 	if err := git.StashApply(r, wtPath, sha); err != nil {
 		if stashApplyConflicted(err) {
 			return errhint.WithFix(

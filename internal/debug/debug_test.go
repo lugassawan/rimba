@@ -9,17 +9,17 @@ import (
 )
 
 type stubRunner struct {
-	runContextCalled  bool
-	runInDirCtxCalled bool
+	runCalled      bool
+	runInDirCalled bool
 }
 
 func (s *stubRunner) Run(_ context.Context, args ...string) (string, error) {
-	s.runContextCalled = true
+	s.runCalled = true
 	return "ok", nil
 }
 
 func (s *stubRunner) RunInDir(_ context.Context, dir string, args ...string) (string, error) {
-	s.runInDirCtxCalled = true
+	s.runInDirCalled = true
 	return "ok", nil
 }
 
@@ -101,7 +101,7 @@ func TestTimedRunnerRun(t *testing.T) {
 	if out != "ok" {
 		t.Errorf("expected ok, got %s", out)
 	}
-	if !stub.runContextCalled {
+	if !stub.runCalled {
 		t.Error("inner runner Run was not called")
 	}
 }
@@ -119,7 +119,7 @@ func TestTimedRunnerRunInDir(t *testing.T) {
 	if out != "ok" {
 		t.Errorf("expected ok, got %s", out)
 	}
-	if !stub.runInDirCtxCalled {
+	if !stub.runInDirCalled {
 		t.Error("inner runner RunInDir was not called")
 	}
 }
