@@ -69,8 +69,8 @@ func IsDirty(ctx context.Context, r Runner, dir string) (bool, error) {
 
 // AheadBehind returns the ahead/behind counts of the current branch vs its upstream.
 // Returns (0, 0, nil) if there's no upstream configured.
-// Context cancellation and deadline errors are propagated so callers can distinguish
-// a timed-out query (e.g. stalled NFS mount) from a branch with no upstream.
+// Returns a non-nil error on context cancellation so callers can distinguish a
+// timed-out query from a branch with no upstream.
 func AheadBehind(ctx context.Context, r Runner, dir string) (ahead, behind int, _ error) {
 	out, err := r.RunInDir(ctx, dir, "rev-list", "--left-right", "--count", "@{upstream}...HEAD")
 	if err != nil {

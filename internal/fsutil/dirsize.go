@@ -13,12 +13,10 @@ type dirSizeResult struct {
 }
 
 // DirSize returns the total size of regular files under path.
-// Symlinks are not followed. On partial failure (permission denied,
-// races) it returns the best-effort total and the first error seen.
+// Symlinks are not followed; partial failures return a best-effort total.
 //
-// If ctx is cancelled before the walk completes, DirSize returns (0, ctx.Err()).
-// The underlying WalkDir runs in a goroutine so a stuck syscall (e.g. stalled
-// NFS mount) cannot block the caller beyond the context deadline.
+// Returns (0, ctx.Err()) immediately on cancellation. The WalkDir goroutine
+// continues until the OS returns — it cannot be interrupted mid-syscall.
 func DirSize(ctx context.Context, path string) (int64, error) {
 	ch := make(chan dirSizeResult, 1)
 	go func() {

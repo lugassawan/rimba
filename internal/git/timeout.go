@@ -5,12 +5,10 @@ import (
 	"time"
 )
 
-// itemQueryTimeout caps a single git status/log/count query so one stalled
-// worktree (e.g. NFS mount) cannot hang a fan-out indefinitely.
+// itemQueryTimeout bounds a single git query; prevents a stalled worktree from blocking the fan-out.
 const itemQueryTimeout = 10 * time.Second
 
-// WithItemTimeout derives a child context bounded by itemQueryTimeout.
-// Callers must defer the returned cancel to release the timer.
+// WithItemTimeout returns a child context bounded by itemQueryTimeout. Caller must defer cancel().
 func WithItemTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(ctx, itemQueryTimeout)
 }
