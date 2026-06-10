@@ -47,9 +47,10 @@ and CI rollup. CI symbols: ✓ success · ● pending · ✗ failure · – unkn
 	RunE: func(cmd *cobra.Command, args []string) error {
 		opts := listReadFlags(cmd)
 
+		ctx := cmd.Context()
 		if opts.archived {
 			r := newRunner()
-			mainBranch, err := resolveMainBranch(r)
+			mainBranch, err := resolveMainBranch(ctx, r)
 			if err != nil {
 				return err
 			}
@@ -62,7 +63,7 @@ and CI rollup. CI symbols: ✓ success · ● pending · ✗ failure · – unkn
 
 		r := newRunner()
 		cfg := config.FromContext(cmd.Context())
-		repoRoot, err := git.MainRepoRoot(r)
+		repoRoot, err := git.MainRepoRoot(ctx, r)
 		if err != nil {
 			return err
 		}

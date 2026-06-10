@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -146,8 +147,9 @@ func execShowHints(cmd *cobra.Command) {
 }
 
 func execSelectWorktrees(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, opts execOpts, prefixes []string) ([]resolver.WorktreeInfo, error) {
-	cfg := config.FromContext(cmd.Context())
-	worktrees, err := listWorktreeInfos(r)
+	ctx := cmd.Context()
+	cfg := config.FromContext(ctx)
+	worktrees, err := listWorktreeInfos(ctx, r)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +163,7 @@ func execSelectWorktrees(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, o
 	}
 
 	if opts.dirty {
-		filtered = filterDirtyWorktrees(cmd, r, s, filtered)
+		filtered = filterDirtyWorktrees(ctx, cmd, r, s, filtered)
 	}
 	return filtered, nil
 }
@@ -233,13 +235,13 @@ func init() {
 // filterDirtyWorktrees filters worktrees to only those with uncommitted changes.
 // If IsDirty returns an error for a worktree, it is treated as dirty (included)
 // and a warning is emitted to cmd.ErrOrStderr() so the error is visible.
-func filterDirtyWorktrees(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, worktrees []resolver.WorktreeInfo) []resolver.WorktreeInfo {
+func filterDirtyWorktrees(ctx context.Context, cmd *cobra.Command, r git.Runner, s *spinner.Spinner, worktrees []resolver.WorktreeInfo) []resolver.WorktreeInfo {
 	n := len(worktrees)
 	var done atomic.Int32
 
 	results := parallel.Collect[dirtyResult](n, 8, func(i int) dirtyResult {
 		path := worktrees[i].Path
-		dirty, err := git.IsDirty(r, path)
+		dirty, err := git.IsDirty(ctx, r, path)
 		count := done.Add(1)
 		s.Update(fmt.Sprintf("Checking dirty status... (%d/%d)", count, n))
 		if err != nil {

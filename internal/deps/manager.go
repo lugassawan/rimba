@@ -90,7 +90,7 @@ func (m *Manager) install(ctx context.Context, worktreePath, sourceWT string, mo
 
 	entries := existingEntries
 	if entries == nil {
-		entries, err = git.ListWorktrees(m.Runner)
+		entries, err = git.ListWorktrees(ctx, m.Runner)
 		if err != nil {
 			for _, mod := range modules {
 				results = append(results, InstallResult{Module: mod, Error: err})

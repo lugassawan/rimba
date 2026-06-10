@@ -39,7 +39,7 @@ var conflictCheckCmd = &cobra.Command{
 
 		r := newRunner()
 
-		worktrees, err := listWorktreeInfos(r)
+		worktrees, err := listWorktreeInfos(cmd.Context(), r)
 		if err != nil {
 			return err
 		}
@@ -68,7 +68,7 @@ var conflictCheckCmd = &cobra.Command{
 		defer s.Stop()
 		s.Start("Collecting file changes...")
 
-		diffs, err := conflict.CollectDiffs(r, cfg.DefaultSource, eligible)
+		diffs, err := conflict.CollectDiffs(cmd.Context(), r, cfg.DefaultSource, eligible)
 		if err != nil {
 			return err
 		}
@@ -79,7 +79,7 @@ var conflictCheckCmd = &cobra.Command{
 		var dryResults []conflict.DryMergeResult
 		if dryMerge {
 			s.Update("Running dry merges...")
-			dryResults, err = conflict.DryMergeAll(r, eligible)
+			dryResults, err = conflict.DryMergeAll(cmd.Context(), r, eligible)
 			if err != nil {
 				return err
 			}

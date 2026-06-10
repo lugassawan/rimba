@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"context"
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/resolver"
@@ -17,7 +18,7 @@ func TestCollectWorktreeStatusClean(t *testing.T) {
 		run:      func(_ ...string) (string, error) { return "", nil },
 		runInDir: noopRunInDir,
 	}
-	status := CollectWorktreeStatus(r, "/wt/feature-login")
+	status := CollectWorktreeStatus(context.Background(), r, "/wt/feature-login")
 	if status.Dirty {
 		t.Error("expected Dirty=false for clean worktree")
 	}
@@ -36,7 +37,7 @@ func TestCollectWorktreeStatusDirty(t *testing.T) {
 			return "", nil
 		},
 	}
-	status := CollectWorktreeStatus(r, "/wt/feature-login")
+	status := CollectWorktreeStatus(context.Background(), r, "/wt/feature-login")
 	if !status.Dirty {
 		t.Error("expected Dirty=true")
 	}
@@ -52,7 +53,7 @@ func TestCollectWorktreeStatusAheadBehind(t *testing.T) {
 			return "", nil
 		},
 	}
-	status := CollectWorktreeStatus(r, "/wt/feature-login")
+	status := CollectWorktreeStatus(context.Background(), r, "/wt/feature-login")
 	if status.Ahead != 3 {
 		t.Errorf("Ahead = %d, want 3", status.Ahead)
 	}
@@ -68,7 +69,7 @@ func TestCollectWorktreeStatusIsDirtyError(t *testing.T) {
 			return "", errGitFailed
 		},
 	}
-	status := CollectWorktreeStatus(r, "/wt/feature-login")
+	status := CollectWorktreeStatus(context.Background(), r, "/wt/feature-login")
 	// On IsDirty error, dirty should be false (err != nil means the condition `err == nil && dirty` is false)
 	if status.Dirty {
 		t.Error("expected Dirty=false when IsDirty returns error")

@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -14,16 +15,16 @@ const ErrWorktreeNotFoundFmt = "worktree not found for task %q"
 
 // ResolveMainBranch returns the main branch name.
 // If configDefault is non-empty it is used directly; otherwise git detection is used.
-func ResolveMainBranch(r git.Runner, configDefault string) (string, error) {
+func ResolveMainBranch(ctx context.Context, r git.Runner, configDefault string) (string, error) {
 	if configDefault != "" {
 		return configDefault, nil
 	}
-	return git.DefaultBranch(r)
+	return git.DefaultBranch(ctx, r)
 }
 
 // ListWorktreeInfos converts git worktree entries to resolver-compatible WorktreeInfo slice.
-func ListWorktreeInfos(r git.Runner) ([]resolver.WorktreeInfo, error) {
-	entries, err := git.ListWorktrees(r)
+func ListWorktreeInfos(ctx context.Context, r git.Runner) ([]resolver.WorktreeInfo, error) {
+	entries, err := git.ListWorktrees(ctx, r)
 	if err != nil {
 		return nil, err
 	}
@@ -43,8 +44,8 @@ func ListWorktreeInfos(r git.Runner) ([]resolver.WorktreeInfo, error) {
 
 // FindWorktree looks up a worktree by service and task name.
 // When service is empty and the task matches multiple services, an ambiguity error is returned.
-func FindWorktree(r git.Runner, service, task string) (resolver.WorktreeInfo, error) {
-	worktrees, err := ListWorktreeInfos(r)
+func FindWorktree(ctx context.Context, r git.Runner, service, task string) (resolver.WorktreeInfo, error) {
+	worktrees, err := ListWorktreeInfos(ctx, r)
 	if err != nil {
 		return resolver.WorktreeInfo{}, err
 	}

@@ -34,7 +34,7 @@ func PostRenameSetup(ctx context.Context, r git.Runner, params PostRenameParams,
 
 	if !params.SkipDeps {
 		progress.Notify(onProgress, "Refreshing dependencies...")
-		wtEntries, err := git.ListWorktrees(r)
+		wtEntries, err := git.ListWorktrees(ctx, r)
 		if err != nil {
 			return result, fmt.Errorf("failed to list worktrees for dependency refresh: %w", err)
 		}

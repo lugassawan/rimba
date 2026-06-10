@@ -28,25 +28,25 @@ func Rebase(ctx context.Context, r Runner, dir, branch string) error {
 // AbortRebase runs `git rebase --abort` inside the given directory.
 // Intentionally non-cancellable: rebase recovery must succeed even after Ctrl-C.
 func AbortRebase(r Runner, dir string) error {
-	_, err := r.RunInDir(dir, "rebase", "--abort")
+	_, err := r.RunInDirContext(context.Background(), dir, "rebase", "--abort")
 	return err
 }
 
 // MergeBase returns the merge-base commit of two refs.
-func MergeBase(r Runner, ref1, ref2 string) (string, error) {
-	return r.Run("merge-base", ref1, ref2)
+func MergeBase(ctx context.Context, r Runner, ref1, ref2 string) (string, error) {
+	return r.RunContext(ctx, "merge-base", ref1, ref2)
 }
 
 // IsMergeBaseAncestor checks if ancestor is an ancestor of descendant
 // using `git merge-base --is-ancestor`.
-func IsMergeBaseAncestor(r Runner, ancestor, descendant string) bool {
-	_, err := r.Run("merge-base", "--is-ancestor", ancestor, descendant)
+func IsMergeBaseAncestor(ctx context.Context, r Runner, ancestor, descendant string) bool {
+	_, err := r.RunContext(ctx, "merge-base", "--is-ancestor", ancestor, descendant)
 	return err == nil
 }
 
 // HasUpstream checks whether the current branch in dir has a remote tracking branch.
-func HasUpstream(r Runner, dir string) bool {
-	_, err := r.RunInDir(dir, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+func HasUpstream(ctx context.Context, r Runner, dir string) bool {
+	_, err := r.RunInDirContext(ctx, dir, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
 	return err == nil
 }
 

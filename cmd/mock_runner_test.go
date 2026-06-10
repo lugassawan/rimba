@@ -86,14 +86,6 @@ type mockRunner struct {
 	runInDir func(dir string, args ...string) (string, error)
 }
 
-func (m *mockRunner) Run(args ...string) (string, error) {
-	return m.run(args...)
-}
-
-func (m *mockRunner) RunInDir(dir string, args ...string) (string, error) {
-	return m.runInDir(dir, args...)
-}
-
 func (m *mockRunner) RunContext(_ context.Context, args ...string) (string, error) {
 	return m.run(args...)
 }

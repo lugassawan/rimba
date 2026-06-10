@@ -20,8 +20,8 @@ func Merge(ctx context.Context, r Runner, dir, branch string, noFF bool) error {
 // MergeInProgress reports whether a merge is in progress in dir (MERGE_HEAD exists).
 // Returns (false, nil) when no merge is in progress, (true, nil) when one is,
 // and (false, err) when the check itself fails (infrastructure error).
-func MergeInProgress(r Runner, dir string) (bool, error) {
-	_, err := r.RunInDir(dir, "rev-parse", "--verify", "-q", "MERGE_HEAD")
+func MergeInProgress(ctx context.Context, r Runner, dir string) (bool, error) {
+	_, err := r.RunInDirContext(ctx, dir, "rev-parse", "--verify", "-q", "MERGE_HEAD")
 	if err == nil {
 		return true, nil
 	}
@@ -38,7 +38,8 @@ func MergeInProgress(r Runner, dir string) (bool, error) {
 }
 
 // MergeAbort runs `git merge --abort` in dir.
+// Intentionally non-cancellable: merge recovery must complete after Ctrl-C to restore a clean state.
 func MergeAbort(r Runner, dir string) error {
-	_, err := r.RunInDir(dir, "merge", "--abort")
+	_, err := r.RunInDirContext(context.Background(), dir, "merge", "--abort")
 	return err
 }

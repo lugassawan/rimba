@@ -51,7 +51,7 @@ func TestFindMergedCandidatesNormalMerge(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	result, err := FindMergedCandidates(r, "origin/main", "main")
+	result, err := FindMergedCandidates(context.Background(), r, "origin/main", "main")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestFindMergedCandidatesSquashMerge(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	result, err := FindMergedCandidates(r, "origin/main", "main")
+	result, err := FindMergedCandidates(context.Background(), r, "origin/main", "main")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestFindMergedCandidatesNoCandidates(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	result, err := FindMergedCandidates(r, "origin/main", "main")
+	result, err := FindMergedCandidates(context.Background(), r, "origin/main", "main")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +140,7 @@ func TestFindMergedCandidatesGitError(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	_, err := FindMergedCandidates(r, "origin/main", "main")
+	_, err := FindMergedCandidates(context.Background(), r, "origin/main", "main")
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -166,7 +166,7 @@ func TestFindStaleCandidatesFound(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	result, err := FindStaleCandidates(r, "main", 14)
+	result, err := FindStaleCandidates(context.Background(), r, "main", 14)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func TestFindStaleCandidatesNoneStale(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	result, err := FindStaleCandidates(r, "main", 14)
+	result, err := FindStaleCandidates(context.Background(), r, "main", 14)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +213,7 @@ func TestFindStaleCandidatesGitError(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	_, err := FindStaleCandidates(r, "main", 14)
+	_, err := FindStaleCandidates(context.Background(), r, "main", 14)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -320,7 +320,7 @@ func TestFindMergedCandidatesSquashMergeError(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	result, err := FindMergedCandidates(r, "origin/main", branchMain)
+	result, err := FindMergedCandidates(context.Background(), r, "origin/main", branchMain)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -354,7 +354,7 @@ func TestFindStaleCandidatesLastCommitError(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	result, err := FindStaleCandidates(r, branchMain, 14)
+	result, err := FindStaleCandidates(context.Background(), r, branchMain, 14)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -379,7 +379,7 @@ func TestFindMergedCandidatesListWorktreesError(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	_, err := FindMergedCandidates(r, "origin/main", branchMain)
+	_, err := FindMergedCandidates(context.Background(), r, "origin/main", branchMain)
 	if err == nil {
 		t.Fatal("expected error when ListWorktrees fails")
 	}

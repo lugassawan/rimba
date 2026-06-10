@@ -18,8 +18,8 @@ type RemoteFailure struct {
 const DefaultRemote = "origin"
 
 // RemoteExists reports whether a remote with the given name is configured.
-func RemoteExists(r Runner, name string) bool {
-	_, err := r.Run("remote", "get-url", name)
+func RemoteExists(ctx context.Context, r Runner, name string) bool {
+	_, err := r.RunContext(ctx, "remote", "get-url", name)
 	return err == nil
 }
 
@@ -59,15 +59,15 @@ func DeleteRemoteBranch(ctx context.Context, r Runner, remote, branch string) er
 }
 
 // AddRemote adds a new remote with the given name and URL.
-func AddRemote(r Runner, name, url string) error {
-	_, err := r.Run("remote", "add", name, url)
+func AddRemote(ctx context.Context, r Runner, name, url string) error {
+	_, err := r.RunContext(ctx, "remote", "add", name, url)
 	return err
 }
 
 // ListRemotes returns the names of all configured remotes by running `git remote`.
 // It returns an empty (non-nil) slice when there are no remotes configured.
-func ListRemotes(r Runner) ([]string, error) {
-	out, err := r.Run("remote")
+func ListRemotes(ctx context.Context, r Runner) ([]string, error) {
+	out, err := r.RunContext(ctx, "remote")
 	if err != nil {
 		return nil, errhint.WithFix(
 			fmt.Errorf("list remotes: %w", err),

@@ -23,7 +23,7 @@ var mergePlanCmd = &cobra.Command{
 
 		r := newRunner()
 
-		worktrees, err := listWorktreeInfos(r)
+		worktrees, err := listWorktreeInfos(cmd.Context(), r)
 		if err != nil {
 			return err
 		}
@@ -41,7 +41,7 @@ var mergePlanCmd = &cobra.Command{
 		defer s.Stop()
 		s.Start("Collecting file changes...")
 
-		diffs, err := conflict.CollectDiffs(r, cfg.DefaultSource, eligible)
+		diffs, err := conflict.CollectDiffs(cmd.Context(), r, cfg.DefaultSource, eligible)
 		if err != nil {
 			return err
 		}

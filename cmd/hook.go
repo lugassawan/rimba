@@ -23,12 +23,12 @@ var hookInstallCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		r := newRunner()
 
-		branch, err := resolveMainBranch(r)
+		branch, err := resolveMainBranch(cmd.Context(), r)
 		if err != nil {
 			return fmt.Errorf("resolve main branch: %w", err)
 		}
 
-		hooksDir, err := git.HooksDir(r)
+		hooksDir, err := git.HooksDir(cmd.Context(), r)
 		if err != nil {
 			return err
 		}
@@ -66,7 +66,7 @@ var hookUninstallCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		r := newRunner()
 
-		hooksDir, err := git.HooksDir(r)
+		hooksDir, err := git.HooksDir(cmd.Context(), r)
 		if err != nil {
 			return err
 		}
@@ -110,7 +110,7 @@ var hookStatusCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		r := newRunner()
 
-		hooksDir, err := git.HooksDir(r)
+		hooksDir, err := git.HooksDir(cmd.Context(), r)
 		if err != nil {
 			return err
 		}

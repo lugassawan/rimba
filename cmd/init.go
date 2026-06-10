@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -73,7 +74,8 @@ register MCP — it only updates agent files. Registration is idempotent.`,
 
 		r := newRunner()
 
-		repoRoot, err := git.RepoRoot(r)
+		ctx := cmd.Context()
+		repoRoot, err := git.RepoRoot(ctx, r)
 		if err != nil {
 			return err
 		}
@@ -104,7 +106,7 @@ register MCP — it only updates agent files. Registration is idempotent.`,
 			}
 
 		default:
-			if err := runInitFresh(cmd, r, repoRoot, dirPath, gitignoreEntry, personal); err != nil {
+			if err := runInitFresh(cmd, ctx, r, repoRoot, dirPath, gitignoreEntry, personal); err != nil {
 				return err
 			}
 		}
@@ -118,13 +120,13 @@ register MCP — it only updates agent files. Registration is idempotent.`,
 	},
 }
 
-func runInitFresh(cmd *cobra.Command, r git.Runner, repoRoot, dirPath, gitignoreEntry string, personal bool) error {
-	repoName, err := git.RepoName(r)
+func runInitFresh(cmd *cobra.Command, ctx context.Context, r git.Runner, repoRoot, dirPath, gitignoreEntry string, personal bool) error {
+	repoName, err := git.RepoName(ctx, r)
 	if err != nil {
 		return err
 	}
 
-	defaultBranch, err := git.DefaultBranch(r)
+	defaultBranch, err := git.DefaultBranch(ctx, r)
 	if err != nil {
 		return err
 	}

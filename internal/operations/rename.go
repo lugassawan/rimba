@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/lugassawan/rimba/internal/errhint"
@@ -18,7 +19,7 @@ type RenameResult struct {
 
 // RenameWorktree renames a worktree's directory and branch to match a new task name.
 // It resolves the new branch name by inheriting the prefix from the current branch.
-func RenameWorktree(r git.Runner, wt resolver.WorktreeInfo, newTask, wtDir string, force bool) (RenameResult, error) {
+func RenameWorktree(ctx context.Context, r git.Runner, wt resolver.WorktreeInfo, newTask, wtDir string, force bool) (RenameResult, error) {
 	prefixes := resolver.AllPrefixes()
 
 	svc, _, matchedPrefix := resolver.ServiceFromBranch(wt.Branch, prefixes)
@@ -31,7 +32,7 @@ func RenameWorktree(r git.Runner, wt resolver.WorktreeInfo, newTask, wtDir strin
 		return RenameResult{}, fmt.Errorf("new name is the same as the current name: %q", newTask)
 	}
 
-	if git.BranchExists(r, newBranch) {
+	if git.BranchExists(ctx, r, newBranch) {
 		return RenameResult{}, errhint.WithFix(
 			fmt.Errorf("branch %q already exists", newBranch),
 			"choose a different task name, or remove the existing branch: git branch -D "+newBranch,
@@ -47,7 +48,7 @@ func RenameWorktree(r git.Runner, wt resolver.WorktreeInfo, newTask, wtDir strin
 		)
 	}
 
-	if err := git.RenameBranch(r, wt.Branch, newBranch); err != nil {
+	if err := git.RenameBranch(ctx, r, wt.Branch, newBranch); err != nil {
 		if rbErr := git.MoveWorktree(r, newPath, wt.Path, force); rbErr != nil {
 			return RenameResult{}, errhint.WithFix(
 				fmt.Errorf("failed to rename branch %q → %q: %w\nRollback failed — worktree is at %s: %w",

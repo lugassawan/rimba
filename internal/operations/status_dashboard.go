@@ -50,12 +50,12 @@ func StatusDashboard(ctx context.Context, gitR git.Runner, req StatusDashboardRe
 	if err := ctx.Err(); err != nil {
 		return StatusDashboardResult{}, err
 	}
-	mainBranch, err := ResolveMainBranch(gitR, "")
+	mainBranch, err := ResolveMainBranch(ctx, gitR, "")
 	if err != nil {
 		return StatusDashboardResult{}, err
 	}
 
-	allEntries, err := git.ListWorktrees(gitR)
+	allEntries, err := git.ListWorktrees(ctx, gitR)
 	if err != nil {
 		return StatusDashboardResult{}, err
 	}
@@ -78,7 +78,7 @@ func StatusDashboard(ctx context.Context, gitR git.Runner, req StatusDashboardRe
 		}(mainEntry.Path)
 	}
 
-	entries := collectStatusEntries(gitR, candidates, req.Detail)
+	entries := collectStatusEntries(ctx, gitR, candidates, req.Detail)
 	mainWG.Wait()
 
 	var footprint *DiskFootprint
@@ -116,13 +116,13 @@ func SummarizeStatus(entries []StatusEntry, staleThreshold time.Time) StatusSumm
 // collectStatusEntries gathers dirty/ahead/behind state and last commit time
 // per candidate in parallel. Under detail it also computes size and 7-day
 // velocity; per-item errors leave the pointer nil (non-fatal).
-func collectStatusEntries(gitR git.Runner, candidates []git.WorktreeEntry, detail bool) []StatusEntry {
+func collectStatusEntries(ctx context.Context, gitR git.Runner, candidates []git.WorktreeEntry, detail bool) []StatusEntry {
 	return parallel.Collect(len(candidates), 8, func(i int) StatusEntry {
 		e := candidates[i]
-		st := CollectWorktreeStatus(gitR, e.Path)
+		st := CollectWorktreeStatus(ctx, gitR, e.Path)
 		var ct time.Time
 		var hasTime bool
-		if t, err := git.LastCommitTime(gitR, e.Branch); err == nil {
+		if t, err := git.LastCommitTime(ctx, gitR, e.Branch); err == nil {
 			ct = t
 			hasTime = true
 		}
@@ -131,7 +131,7 @@ func collectStatusEntries(gitR git.Runner, candidates []git.WorktreeEntry, detai
 			if n, err := fsutil.DirSize(e.Path); err == nil {
 				se.SizeBytes = &n
 			}
-			if c, err := git.CommitCountSince(gitR, e.Branch, recentWindow); err == nil {
+			if c, err := git.CommitCountSince(ctx, gitR, e.Branch, recentWindow); err == nil {
 				se.Recent7D = &c
 			}
 		}

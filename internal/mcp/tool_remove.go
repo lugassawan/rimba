@@ -39,12 +39,12 @@ func handleRemove(hctx *HandlerContext) server.ToolHandlerFunc {
 
 		r := hctx.Runner
 
-		wt, findErr := operations.FindWorktree(r, service, task)
+		wt, findErr := operations.FindWorktree(ctx, r, service, task)
 		if findErr != nil {
 			return mcp.NewToolResultError(findErr.Error()), nil
 		}
 
-		result, err := operations.RemoveWorktree(r, wt, task, keepBranch, force, nil)
+		result, err := operations.RemoveWorktree(ctx, r, wt, task, keepBranch, force, nil)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

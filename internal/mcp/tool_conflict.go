@@ -31,7 +31,7 @@ func handleConflictCheck(hctx *HandlerContext) server.ToolHandlerFunc {
 
 		r := hctx.Runner
 
-		worktrees, err := operations.ListWorktreeInfos(r)
+		worktrees, err := operations.ListWorktreeInfos(ctx, r)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -46,7 +46,7 @@ func handleConflictCheck(hctx *HandlerContext) server.ToolHandlerFunc {
 			})
 		}
 
-		diffs, err := conflict.CollectDiffs(r, cfg.DefaultSource, eligible)
+		diffs, err := conflict.CollectDiffs(ctx, r, cfg.DefaultSource, eligible)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -60,7 +60,7 @@ func handleConflictCheck(hctx *HandlerContext) server.ToolHandlerFunc {
 		}
 
 		if dryMerge {
-			dryResults, err := conflict.DryMergeAll(r, eligible)
+			dryResults, err := conflict.DryMergeAll(ctx, r, eligible)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

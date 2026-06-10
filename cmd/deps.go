@@ -35,7 +35,7 @@ var depsStatusCmd = &cobra.Command{
 		cfg := config.FromContext(cmd.Context())
 
 		r := newRunner()
-		worktrees, err := listWorktreeInfos(r)
+		worktrees, err := listWorktreeInfos(cmd.Context(), r)
 		if err != nil {
 			return err
 		}
@@ -141,12 +141,12 @@ var depsInstallCmd = &cobra.Command{
 
 		r := newRunner()
 
-		repoRoot, err := git.MainRepoRoot(r)
+		repoRoot, err := git.MainRepoRoot(cmd.Context(), r)
 		if err != nil {
 			return err
 		}
 
-		worktrees, err := listWorktreeInfos(r)
+		worktrees, err := listWorktreeInfos(cmd.Context(), r)
 		if err != nil {
 			return err
 		}

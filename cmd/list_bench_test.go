@@ -15,21 +15,16 @@ const benchFilterType = "bugfix"
 // benchMockRunner simulates git status calls with minimal overhead.
 type benchMockRunner struct{}
 
-func (m *benchMockRunner) Run(_ ...string) (string, error) { return "", nil }
-func (m *benchMockRunner) RunInDir(_ string, args ...string) (string, error) {
-	// Simulate IsDirty returning clean, AheadBehind returning 0/0
-	if len(args) > 0 && args[0] == cmdRevList {
-		return aheadBehindZero, nil
-	}
-	return "", nil
-}
-
 func (m *benchMockRunner) RunContext(_ context.Context, _ ...string) (string, error) {
 	return "", nil
 }
 
 func (m *benchMockRunner) RunInDirContext(_ context.Context, _ string, args ...string) (string, error) {
-	return m.RunInDir("", args...)
+	// Simulate IsDirty returning clean, AheadBehind returning 0/0
+	if len(args) > 0 && args[0] == cmdRevList {
+		return aheadBehindZero, nil
+	}
+	return "", nil
 }
 
 func makeBenchEntries(n int) []git.WorktreeEntry { //nolint:unparam // n is parameterized for benchmark flexibility
@@ -55,10 +50,10 @@ func BenchmarkListStatusCollectionSequential(b *testing.B) {
 		rows := make([]resolver.WorktreeDetail, 0, len(entries))
 		for _, e := range entries {
 			var status resolver.WorktreeStatus
-			if dirty, err := git.IsDirty(r, e.Path); err == nil && dirty {
+			if dirty, err := git.IsDirty(context.Background(), r, e.Path); err == nil && dirty {
 				status.Dirty = true
 			}
-			ahead, behind, _ := git.AheadBehind(r, e.Path)
+			ahead, behind, _ := git.AheadBehind(context.Background(), r, e.Path)
 			status.Ahead = ahead
 			status.Behind = behind
 			rows = append(rows, resolver.NewWorktreeDetail(e.Branch, prefixes, e.Path, status, false))
@@ -86,10 +81,10 @@ func BenchmarkListStatusCollectionParallel(b *testing.B) {
 				defer func() { <-sem }()
 
 				var status resolver.WorktreeStatus
-				if dirty, err := git.IsDirty(r, e.Path); err == nil && dirty {
+				if dirty, err := git.IsDirty(context.Background(), r, e.Path); err == nil && dirty {
 					status.Dirty = true
 				}
-				ahead, behind, _ := git.AheadBehind(r, e.Path)
+				ahead, behind, _ := git.AheadBehind(context.Background(), r, e.Path)
 				status.Ahead = ahead
 				status.Behind = behind
 				rows[idx] = resolver.NewWorktreeDetail(e.Branch, prefixes, e.Path, status, false)
@@ -123,10 +118,10 @@ func BenchmarkListWithTypeFilter(b *testing.B) {
 		rows := make([]resolver.WorktreeDetail, len(filtered))
 		for i, e := range filtered {
 			var status resolver.WorktreeStatus
-			if dirty, err := git.IsDirty(r, e.Path); err == nil && dirty {
+			if dirty, err := git.IsDirty(context.Background(), r, e.Path); err == nil && dirty {
 				status.Dirty = true
 			}
-			ahead, behind, _ := git.AheadBehind(r, e.Path)
+			ahead, behind, _ := git.AheadBehind(context.Background(), r, e.Path)
 			status.Ahead = ahead
 			status.Behind = behind
 			rows[i] = resolver.NewWorktreeDetail(e.Branch, prefixes, e.Path, status, false)
@@ -146,10 +141,10 @@ func BenchmarkListWithoutTypeFilter(b *testing.B) {
 		rows := make([]resolver.WorktreeDetail, len(entries))
 		for i, e := range entries {
 			var status resolver.WorktreeStatus
-			if dirty, err := git.IsDirty(r, e.Path); err == nil && dirty {
+			if dirty, err := git.IsDirty(context.Background(), r, e.Path); err == nil && dirty {
 				status.Dirty = true
 			}
-			ahead, behind, _ := git.AheadBehind(r, e.Path)
+			ahead, behind, _ := git.AheadBehind(context.Background(), r, e.Path)
 			status.Ahead = ahead
 			status.Behind = behind
 			rows[i] = resolver.NewWorktreeDetail(e.Branch, prefixes, e.Path, status, false)

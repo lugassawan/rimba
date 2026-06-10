@@ -202,7 +202,7 @@ func TestCollectDiffsSuccess(t *testing.T) {
 		{Branch: "feature/b", Path: "/wt/b"},
 	}
 
-	diffs, err := CollectDiffs(r, "main", branches)
+	diffs, err := CollectDiffs(context.Background(), r, "main", branches)
 	if err != nil {
 		t.Fatalf("CollectDiffs: %v", err)
 	}
@@ -224,7 +224,7 @@ func TestCollectDiffsEmpty(t *testing.T) {
 		},
 	}
 
-	diffs, err := CollectDiffs(r, "main", nil)
+	diffs, err := CollectDiffs(context.Background(), r, "main", nil)
 	if err != nil {
 		t.Fatalf("CollectDiffs: %v", err)
 	}
@@ -244,7 +244,7 @@ func TestCollectDiffsError(t *testing.T) {
 		{Branch: "feature/a", Path: "/wt/a"},
 	}
 
-	_, err := CollectDiffs(r, "main", branches)
+	_, err := CollectDiffs(context.Background(), r, "main", branches)
 	if err == nil {
 		t.Fatal("expected error from CollectDiffs")
 	}
@@ -265,7 +265,7 @@ func TestDryMergeAllClean(t *testing.T) {
 		{Branch: "feature/b", Path: "/wt/b"},
 	}
 
-	results, err := DryMergeAll(r, branches)
+	results, err := DryMergeAll(context.Background(), r, branches)
 	if err != nil {
 		t.Fatalf("DryMergeAll: %v", err)
 	}
@@ -292,7 +292,7 @@ func TestDryMergeAllConflicts(t *testing.T) {
 		{Branch: "feature/b", Path: "/wt/b"},
 	}
 
-	results, err := DryMergeAll(r, branches)
+	results, err := DryMergeAll(context.Background(), r, branches)
 	if err != nil {
 		t.Fatalf("DryMergeAll: %v", err)
 	}
@@ -319,7 +319,7 @@ func TestDryMergeAllError(t *testing.T) {
 		{Branch: "feature/b", Path: "/wt/b"},
 	}
 
-	_, err := DryMergeAll(r, branches)
+	_, err := DryMergeAll(context.Background(), r, branches)
 	if err == nil {
 		t.Fatal("expected error from DryMergeAll")
 	}
@@ -338,7 +338,7 @@ func TestDryMergeAllThreeBranches(t *testing.T) {
 		{Branch: "feature/c", Path: "/wt/c"},
 	}
 
-	results, err := DryMergeAll(r, branches)
+	results, err := DryMergeAll(context.Background(), r, branches)
 	if err != nil {
 		t.Fatalf("DryMergeAll: %v", err)
 	}
@@ -380,7 +380,7 @@ func TestDryMergeAllEmpty(t *testing.T) {
 		},
 	}
 
-	results, err := DryMergeAll(r, nil)
+	results, err := DryMergeAll(context.Background(), r, nil)
 	if err != nil {
 		t.Fatalf("DryMergeAll: %v", err)
 	}

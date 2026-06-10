@@ -59,7 +59,7 @@ func ListWorktrees(
 	ghR gh.Runner,
 	req ListWorktreesRequest,
 ) (ListWorktreesResult, error) {
-	entries, err := git.ListWorktrees(gitR)
+	entries, err := git.ListWorktrees(ctx, gitR)
 	if err != nil {
 		return ListWorktreesResult{}, err
 	}
@@ -83,7 +83,7 @@ func ListWorktrees(
 
 	results := parallel.Collect(len(candidates), listWorktreesConcurrency, func(i int) listWorktreeResult {
 		c := candidates[i]
-		status := CollectWorktreeStatus(gitR, c.entry.Path)
+		status := CollectWorktreeStatus(ctx, gitR, c.entry.Path)
 		d := resolver.NewWorktreeDetail(c.entry.Branch, prefixes, c.displayPath, status, c.isCurrent)
 		var info PRInfo
 		if activeGhR != nil {

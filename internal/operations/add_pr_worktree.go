@@ -70,9 +70,9 @@ func resolveSource(ctx context.Context, gitR git.Runner, meta gh.PRMeta, onProgr
 	remoteName := "gh-fork-" + meta.HeadRepoOwner
 	remoteURL := "https://github.com/" + meta.HeadRepoOwner + "/" + meta.HeadRepoName + ".git"
 
-	if !git.RemoteExists(gitR, remoteName) {
+	if !git.RemoteExists(ctx, gitR, remoteName) {
 		progress.Notify(onProgress, fmt.Sprintf("Adding fork remote %s...", remoteName))
-		if err := git.AddRemote(gitR, remoteName, remoteURL); err != nil {
+		if err := git.AddRemote(ctx, gitR, remoteName, remoteURL); err != nil {
 			return "", errhint.WithFix(err, "check network and fork visibility")
 		}
 	}

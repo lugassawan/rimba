@@ -41,7 +41,7 @@ var mergeCmd = &cobra.Command{
 
 		r := newRunner()
 
-		repoRoot, err := git.MainRepoRoot(r)
+		repoRoot, err := git.MainRepoRoot(cmd.Context(), r)
 		if err != nil {
 			return err
 		}

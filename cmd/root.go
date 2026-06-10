@@ -68,7 +68,7 @@ Persistent flags (available on every command):
 		}
 
 		r := newRunner()
-		repoRoot, err := git.MainRepoRoot(r)
+		repoRoot, err := git.MainRepoRoot(cmd.Context(), r)
 		if err != nil {
 			return err
 		}
@@ -82,7 +82,7 @@ Persistent flags (available on every command):
 		repoName := filepath.Base(repoRoot)
 		var defaultBranch string
 		if cfg.DefaultSource == "" {
-			defaultBranch, err = git.DefaultBranch(r)
+			defaultBranch, err = git.DefaultBranch(cmd.Context(), r)
 			if err != nil {
 				return err
 			}

@@ -1,6 +1,7 @@
 package git_test
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -16,7 +17,7 @@ func TestRepoRoot(t *testing.T) {
 	repo := testutil.NewTestRepo(t)
 	r := &git.ExecRunner{Dir: repo}
 
-	root, err := git.RepoRoot(r)
+	root, err := git.RepoRoot(context.Background(), r)
 	if err != nil {
 		t.Fatalf("RepoRoot: %v", err)
 	}
@@ -37,7 +38,7 @@ func TestRepoName(t *testing.T) {
 	repo := testutil.NewTestRepo(t)
 	r := &git.ExecRunner{Dir: repo}
 
-	name, err := git.RepoName(r)
+	name, err := git.RepoName(context.Background(), r)
 	if err != nil {
 		t.Fatalf("RepoName: %v", err)
 	}
@@ -55,7 +56,7 @@ func TestHooksDir(t *testing.T) {
 	repo := testutil.NewTestRepo(t)
 	r := &git.ExecRunner{Dir: repo}
 
-	dir, err := git.HooksDir(r)
+	dir, err := git.HooksDir(context.Background(), r)
 	if err != nil {
 		t.Fatalf("HooksDir: %v", err)
 	}
@@ -79,7 +80,7 @@ func TestHooksDirWithCoreHooksPath(t *testing.T) {
 	testutil.GitCmd(t, repo, "config", "core.hooksPath", ".githooks")
 
 	r := &git.ExecRunner{Dir: repo}
-	dir, err := git.HooksDir(r)
+	dir, err := git.HooksDir(context.Background(), r)
 	if err != nil {
 		t.Fatalf("HooksDir: %v", err)
 	}
@@ -100,7 +101,7 @@ func TestMainRepoRoot(t *testing.T) {
 	repo := testutil.NewTestRepo(t)
 	r := &git.ExecRunner{Dir: repo}
 
-	root, err := git.MainRepoRoot(r)
+	root, err := git.MainRepoRoot(context.Background(), r)
 	if err != nil {
 		t.Fatalf("MainRepoRoot: %v", err)
 	}
@@ -123,13 +124,13 @@ func TestMainRepoRootFromWorktree(t *testing.T) {
 
 	// Create a worktree
 	wtPath := filepath.Join(repo, ".worktrees", "test-wt")
-	if err := git.AddWorktree(r, wtPath, "feature/test-wt", "main"); err != nil {
+	if err := git.AddWorktree(context.Background(), r, wtPath, "feature/test-wt", "main"); err != nil {
 		t.Fatalf("AddWorktree: %v", err)
 	}
 
 	// Run MainRepoRoot from the worktree
 	wr := &git.ExecRunner{Dir: wtPath}
-	root, err := git.MainRepoRoot(wr)
+	root, err := git.MainRepoRoot(context.Background(), wr)
 	if err != nil {
 		t.Fatalf("MainRepoRoot from worktree: %v", err)
 	}
@@ -142,7 +143,7 @@ func TestMainRepoRootFromWorktree(t *testing.T) {
 	}
 
 	// Confirm RepoRoot would give different result (the worktree path)
-	wtRoot, err := git.RepoRoot(wr)
+	wtRoot, err := git.RepoRoot(context.Background(), wr)
 	if err != nil {
 		t.Fatalf("RepoRoot from worktree: %v", err)
 	}
@@ -161,7 +162,7 @@ func TestDefaultBranch(t *testing.T) {
 	repo := testutil.NewTestRepo(t)
 	r := &git.ExecRunner{Dir: repo}
 
-	branch, err := git.DefaultBranch(r)
+	branch, err := git.DefaultBranch(context.Background(), r)
 	if err != nil {
 		t.Fatalf("DefaultBranch: %v", err)
 	}

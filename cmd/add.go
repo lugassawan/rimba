@@ -56,7 +56,7 @@ main repo and is not the default branch. --source is not valid in branch: mode.`
 
 		r := newRunner()
 
-		repoRoot, err := git.MainRepoRoot(r)
+		repoRoot, err := git.MainRepoRoot(cmd.Context(), r)
 		if err != nil {
 			return err
 		}

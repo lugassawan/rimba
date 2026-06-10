@@ -1,6 +1,7 @@
 package conflict
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -89,7 +90,7 @@ func DetectOverlaps(diffs map[string][]string) *CheckResult {
 }
 
 // CollectDiffs runs git diff --name-only for each branch vs mainBranch, in parallel.
-func CollectDiffs(r git.Runner, mainBranch string, branches []resolver.WorktreeInfo) (map[string][]string, error) {
+func CollectDiffs(ctx context.Context, r git.Runner, mainBranch string, branches []resolver.WorktreeInfo) (map[string][]string, error) {
 	diffs := make(map[string][]string)
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -103,7 +104,7 @@ func CollectDiffs(r git.Runner, mainBranch string, branches []resolver.WorktreeI
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			files, err := git.DiffNameOnly(r, mainBranch, wt.Branch)
+			files, err := git.DiffNameOnly(ctx, r, mainBranch, wt.Branch)
 
 			mu.Lock()
 			defer mu.Unlock()
@@ -127,7 +128,7 @@ func CollectDiffs(r git.Runner, mainBranch string, branches []resolver.WorktreeI
 type pair struct{ i, j int }
 
 // DryMergeAll runs git merge-tree for all unique branch pairs, in parallel.
-func DryMergeAll(r git.Runner, branches []resolver.WorktreeInfo) ([]DryMergeResult, error) {
+func DryMergeAll(ctx context.Context, r git.Runner, branches []resolver.WorktreeInfo) ([]DryMergeResult, error) {
 	var pairs []pair
 	for i := range branches {
 		for j := i + 1; j < len(branches); j++ {
@@ -148,7 +149,7 @@ func DryMergeAll(r git.Runner, branches []resolver.WorktreeInfo) ([]DryMergeResu
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			mt, err := git.MergeTree(r, branches[p.i].Branch, branches[p.j].Branch)
+			mt, err := git.MergeTree(ctx, r, branches[p.i].Branch, branches[p.j].Branch)
 
 			mu.Lock()
 			defer mu.Unlock()

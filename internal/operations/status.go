@@ -1,19 +1,21 @@
 package operations
 
 import (
+	"context"
+
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/resolver"
 )
 
 // CollectWorktreeStatus gathers dirty/ahead/behind state for a worktree path.
-func CollectWorktreeStatus(r git.Runner, wtPath string) resolver.WorktreeStatus {
+func CollectWorktreeStatus(ctx context.Context, r git.Runner, wtPath string) resolver.WorktreeStatus {
 	var status resolver.WorktreeStatus
 
-	if dirty, err := git.IsDirty(r, wtPath); err == nil && dirty {
+	if dirty, err := git.IsDirty(ctx, r, wtPath); err == nil && dirty {
 		status.Dirty = true
 	}
 
-	ahead, behind, _ := git.AheadBehind(r, wtPath)
+	ahead, behind, _ := git.AheadBehind(ctx, r, wtPath)
 	status.Ahead = ahead
 	status.Behind = behind
 

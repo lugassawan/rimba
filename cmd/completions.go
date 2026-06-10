@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -47,7 +48,7 @@ func init() {
 // completeWorktreeTasks returns task names for shell completion.
 func completeWorktreeTasks(_ *cobra.Command, toComplete string) []string {
 	r := newRunner()
-	entries, err := git.ListWorktrees(r)
+	entries, err := git.ListWorktrees(context.Background(), r)
 	if err != nil {
 		return nil
 	}
@@ -86,10 +87,11 @@ func completeOpenShortcuts(cmd *cobra.Command, toComplete string) []string {
 // completeArchivedTasks returns task names from archived branches (branches not in any active worktree).
 func completeArchivedTasks(_ *cobra.Command, toComplete string) []string {
 	r := newRunner()
+	ctx := context.Background()
 
-	mainBranch, _ := resolveMainBranch(r)
+	mainBranch, _ := resolveMainBranch(ctx, r)
 
-	archived, err := operations.ListArchivedBranches(r, mainBranch)
+	archived, err := operations.ListArchivedBranches(ctx, r, mainBranch)
 	if err != nil {
 		return nil
 	}
@@ -108,7 +110,7 @@ func completeArchivedTasks(_ *cobra.Command, toComplete string) []string {
 // completeBranchNames returns branch names for shell completion.
 func completeBranchNames(_ *cobra.Command, toComplete string) []string {
 	r := newRunner()
-	out, err := r.Run("branch", "--format=%(refname:short)")
+	out, err := r.RunContext(context.Background(), "branch", "--format=%(refname:short)")
 	if err != nil {
 		return nil
 	}
