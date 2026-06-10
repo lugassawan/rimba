@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -48,7 +49,7 @@ func TestCheckUpdateHintNewVersionAvailable(t *testing.T) {
 	t.Cleanup(srv.Close)
 	overrideNewUpdater(t, srv)
 
-	ch := checkUpdateHint(testVersionHint, 2*time.Second)
+	ch := checkUpdateHint(context.Background(), testVersionHint, 2*time.Second)
 	result := collectHint(ch)
 	if result == nil {
 		t.Fatal("expected non-nil result for available update")
@@ -67,7 +68,7 @@ func TestCheckUpdateHintUpToDate(t *testing.T) {
 	t.Cleanup(srv.Close)
 	overrideNewUpdater(t, srv)
 
-	ch := checkUpdateHint(testVersionHint, 2*time.Second)
+	ch := checkUpdateHint(context.Background(), testVersionHint, 2*time.Second)
 	result := collectHint(ch)
 	if result != nil {
 		t.Errorf("expected nil result for up-to-date version, got %+v", result)
@@ -81,7 +82,7 @@ func TestCheckUpdateHintDevVersion(t *testing.T) {
 	t.Cleanup(srv.Close)
 	overrideNewUpdater(t, srv)
 
-	ch := checkUpdateHint("dev", 2*time.Second)
+	ch := checkUpdateHint(context.Background(), "dev", 2*time.Second)
 	result := collectHint(ch)
 	if result != nil {
 		t.Errorf("expected nil result for dev version, got %+v", result)
@@ -102,7 +103,7 @@ func TestCheckUpdateHintTimeout(t *testing.T) {
 	t.Cleanup(srv.Close)
 	overrideNewUpdater(t, srv)
 
-	ch := checkUpdateHint(testVersionHint, 50*time.Millisecond)
+	ch := checkUpdateHint(context.Background(), testVersionHint, 50*time.Millisecond)
 	result := collectHint(ch)
 	if result != nil {
 		t.Errorf("expected nil result on timeout, got %+v", result)
@@ -148,5 +149,30 @@ func TestCollectHintValue(t *testing.T) {
 	}
 	if result.LatestVersion != testVersionOther {
 		t.Errorf("LatestVersion = %q, want %q", result.LatestVersion, testVersionOther)
+	}
+}
+
+func TestCheckUpdateHintCancelledContext(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// A pre-cancelled context should cause the HTTP client to fail before
+		// sending a request, so the handler must never complete a response.
+		t.Error("unexpected HTTP round-trip for pre-cancelled context")
+	}))
+	t.Cleanup(srv.Close)
+	overrideNewUpdater(t, srv)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // already cancelled
+
+	start := time.Now()
+	ch := checkUpdateHint(ctx, testVersionHint, 2*time.Second)
+	result := collectHint(ch)
+	elapsed := time.Since(start)
+
+	if result != nil {
+		t.Errorf("expected nil result for cancelled context, got %+v", result)
+	}
+	if elapsed > 400*time.Millisecond {
+		t.Errorf("expected fast return on cancelled context, took %v", elapsed)
 	}
 }

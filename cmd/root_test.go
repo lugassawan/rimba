@@ -218,6 +218,10 @@ func TestExecute(t *testing.T) {
 	t.Cleanup(func() {
 		rootCmd.SetOut(nil)
 		rootCmd.SetErr(nil)
+		// Execute() sets rootCmd.ctx to a signal-notified context that is
+		// cancelled when Execute returns (via defer stop()). Reset it so
+		// subsequent tests that call cmd.Context() get a live context.
+		rootCmd.SetContext(context.Background())
 	})
 
 	if err := Execute(); err != nil {
