@@ -77,7 +77,7 @@ func TestCheckUpdateHintUpToDate(t *testing.T) {
 
 func TestCheckUpdateHintDevVersion(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Error("unexpected HTTP request for dev version")
+		t.Fatal("unexpected HTTP request for dev version")
 	}))
 	t.Cleanup(srv.Close)
 	overrideNewUpdater(t, srv)
