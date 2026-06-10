@@ -320,6 +320,18 @@ func TestFindBranchForTaskWithService(t *testing.T) {
 		}
 	})
 
+	t.Run("bare branch collision with service matches is ambiguous", func(t *testing.T) {
+		colliding := []resolver.WorktreeInfo{
+			{Path: "/wt/login", Branch: taskLogin},
+			{Path: "/wt/auth-api-feature-login", Branch: "auth-api/" + featurePrefix + taskLogin},
+			{Path: "/wt/web-app-feature-login", Branch: "web-app/" + featurePrefix + taskLogin},
+		}
+		_, ok := resolver.FindBranchForTask("", taskLogin, colliding, prefixes)
+		if ok {
+			t.Fatal("expected no match due to bare branch collision with service-scoped matches")
+		}
+	})
+
 	t.Run("bare task with single monorepo match", func(t *testing.T) {
 		singleMono := []resolver.WorktreeInfo{
 			{Path: "/wt/auth-api-feature-login", Branch: "auth-api/" + featurePrefix + taskLogin},

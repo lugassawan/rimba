@@ -116,15 +116,18 @@ func FindBranchForTask(service, task string, worktrees []WorktreeInfo, prefixes 
 		return wt, true
 	}
 
-	if wt, ok := findExact(task, worktrees); ok {
-		return wt, true
-	}
-
 	if service == "" {
 		matches := FindAllBranchesForTask(task, worktrees, prefixes)
 		if len(matches) == 1 {
 			return matches[0], true
 		}
+		if len(matches) > 1 {
+			return WorktreeInfo{}, false
+		}
+	}
+
+	if wt, ok := findExact(task, worktrees); ok {
+		return wt, true
 	}
 
 	return WorktreeInfo{}, false
