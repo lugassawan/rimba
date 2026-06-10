@@ -27,11 +27,8 @@ const (
 	goosWindows        = "windows"
 )
 
-// allowedAssetHosts pins release-asset downloads to GitHub-controlled hosts.
-// The GitHub API's browser_download_url is always https://github.com/...; the
-// CDN redirect to objects.githubusercontent.com is followed at fetch time and
-// never appears in the API response. objects.githubusercontent.com is included
-// defensively for any future direct CDN URLs that GitHub may introduce.
+// allowedAssetHosts pins asset downloads to GitHub-controlled hosts.
+// objects.githubusercontent.com is included for CDN redirects followed at HTTP fetch time.
 var allowedAssetHosts = map[string]bool{
 	"github.com":                    true,
 	"objects.githubusercontent.com": true,
@@ -370,8 +367,7 @@ func assetNameFor(goos, goarch, version string) string {
 }
 
 // findReleaseAssets scans release assets for the platform archive and checksums file.
-// Returns empty strings for any asset not found.
-// Returned URLs are validated by Check via validateAssetURL before use (issue #281).
+// Returns empty strings for any asset not found. URLs are validated by Check before use.
 func findReleaseAssets(assetName string, assets []Asset) (downloadURL, checksumsURL string) {
 	for _, a := range assets {
 		if a.Name == assetName {
@@ -384,11 +380,10 @@ func findReleaseAssets(assetName string, assets []Asset) (downloadURL, checksums
 	return
 }
 
-// validateAssetURL rejects asset URLs that are not https or whose host is not a
-// trusted GitHub host, defending against a tampered API response that redirects
-// the binary and checksums.txt to an attacker-controlled server (issue #281).
+// validateAssetURL rejects asset URLs with a non-https scheme or untrusted host,
+// guarding against a tampered API response redirecting downloads to an attacker (#281).
 func validateAssetURL(rawURL string) error {
-	// Defensive: Check() pre-screens for empty, but callers outside Check may not.
+	// Check() pre-screens for empty, but guard here for direct callers.
 	if rawURL == "" {
 		return errors.New("asset URL must not be empty")
 	}
