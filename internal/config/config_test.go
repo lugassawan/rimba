@@ -759,3 +759,31 @@ func TestIsAutoDetectDeps(t *testing.T) {
 		})
 	}
 }
+
+func TestDepsConcurrency(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  config.Config
+		want int
+	}{
+		{
+			name: "nil deps",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch},
+			want: 0,
+		},
+		{
+			name: "configured concurrency",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch, Deps: &config.DepsConfig{Concurrency: 4}},
+			want: 4,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.cfg.DepsConcurrency()
+			if got != tt.want {
+				t.Errorf("DepsConcurrency() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
