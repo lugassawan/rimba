@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sync"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/executor"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
+	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -169,45 +169,35 @@ func buildExecData(command string, results []executor.Result) execData {
 	}
 }
 
+type dirtyCheckResult struct {
+	dirty   bool
+	warning string
+}
+
 // filterDirty filters worktrees to only those with uncommitted changes.
 // If IsDirty returns an error, the worktree is treated as dirty (included)
 // and a warning is written to os.Stderr so the operator can investigate.
 func filterDirty(ctx context.Context, r git.Runner, worktrees []resolver.WorktreeInfo) []resolver.WorktreeInfo {
-	isDirtyFlags := make([]bool, len(worktrees))
-	warnings := make([]string, len(worktrees))
-	var wg sync.WaitGroup
-	sem := make(chan struct{}, 8)
+	results := parallel.Collect(ctx, len(worktrees), 8, func(ctx context.Context, i int) dirtyCheckResult {
+		itemCtx, cancel := git.WithItemTimeout(ctx)
+		defer cancel()
+		d, err := git.IsDirty(itemCtx, r, worktrees[i].Path)
+		if err != nil {
+			return dirtyCheckResult{dirty: true, warning: fmt.Sprintf("Warning: cannot check dirty status for %s: %v", worktrees[i].Path, err)}
+		}
+		return dirtyCheckResult{dirty: d}
+	})
 
-	for i, wt := range worktrees {
-		wg.Add(1)
-		go func(idx int, path string) {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
-			d, err := git.IsDirty(ctx, r, path)
-			if err != nil {
-				warnings[idx] = fmt.Sprintf("Warning: cannot check dirty status for %s: %v", path, err)
-				isDirtyFlags[idx] = true
-				return
-			}
-			if d {
-				isDirtyFlags[idx] = true
-			}
-		}(i, wt.Path)
-	}
-	wg.Wait()
-
-	for _, w := range warnings {
-		if w != "" {
-			fmt.Fprintln(os.Stderr, w)
+	for _, res := range results {
+		if res.warning != "" {
+			fmt.Fprintln(os.Stderr, res.warning)
 		}
 	}
 
 	var out []resolver.WorktreeInfo
-	for i, wt := range worktrees {
-		if isDirtyFlags[i] {
-			out = append(out, wt)
+	for i, res := range results {
+		if res.dirty {
+			out = append(out, worktrees[i])
 		}
 	}
 	return out

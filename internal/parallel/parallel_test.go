@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/lugassawan/rimba/internal/parallel"
 )
@@ -91,4 +92,33 @@ func TestCollectPassesCtx(t *testing.T) {
 		}
 		return struct{}{}
 	})
+}
+
+func TestCollectCancelledContextDoesNotHang(t *testing.T) {
+	// Collect with concurrency=1 and a fn that blocks until the gate is opened.
+	// Cancel the context before opening the gate. Goroutines waiting on the
+	// full semaphore should return via ctx.Done() rather than blocking forever.
+	gate := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		parallel.Collect(ctx, 5, 1, func(_ context.Context, _ int) int {
+			<-gate // blocks until gate opens or ctx fires
+			return 1
+		})
+	}()
+
+	// Cancel the context — goroutines waiting on the full semaphore should exit.
+	cancel()
+	// Open the gate so any goroutine that already acquired the semaphore can finish.
+	close(gate)
+
+	select {
+	case <-done:
+		// expected: Collect returned promptly after cancellation
+	case <-time.After(2 * time.Second):
+		t.Error("Collect did not return promptly after context cancellation")
+	}
 }

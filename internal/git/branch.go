@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -74,8 +75,8 @@ func IsDirty(ctx context.Context, r Runner, dir string) (bool, error) {
 func AheadBehind(ctx context.Context, r Runner, dir string) (ahead, behind int, _ error) {
 	out, err := r.RunInDir(ctx, dir, "rev-list", "--left-right", "--count", "@{upstream}...HEAD")
 	if err != nil {
-		if ctx.Err() != nil {
-			return 0, 0, ctx.Err()
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			return 0, 0, err
 		}
 		// No upstream configured or other non-fatal error — treat as 0/0.
 		return 0, 0, nil //nolint:nilerr // intentional: missing upstream is not an error

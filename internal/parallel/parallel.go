@@ -25,7 +25,11 @@ func Collect[T any](ctx context.Context, n, concurrency int, fn func(ctx context
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			sem <- struct{}{}
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
 			defer func() { <-sem }()
 
 			results[idx] = fn(ctx, idx)
