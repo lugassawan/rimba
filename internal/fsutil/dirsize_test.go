@@ -1,6 +1,8 @@
 package fsutil_test
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -16,7 +18,7 @@ func TestDirSizeSumsRegularFiles(t *testing.T) {
 	writeFile(t, filepath.Join(root, "nested", "b.txt"), 250)
 	writeFile(t, filepath.Join(root, "nested", "deeper", "c.txt"), 50)
 
-	got, err := fsutil.DirSize(root)
+	got, err := fsutil.DirSize(context.Background(), root)
 	if err != nil {
 		t.Fatalf("DirSize returned error: %v", err)
 	}
@@ -39,7 +41,7 @@ func TestDirSizeDoesNotFollowSymlinks(t *testing.T) {
 		t.Fatalf("symlink: %v", err)
 	}
 
-	got, err := fsutil.DirSize(root)
+	got, err := fsutil.DirSize(context.Background(), root)
 	if err != nil {
 		t.Fatalf("DirSize returned error: %v", err)
 	}
@@ -53,7 +55,7 @@ func TestDirSizeDoesNotFollowSymlinks(t *testing.T) {
 
 func TestDirSizeEmptyDir(t *testing.T) {
 	root := t.TempDir()
-	got, err := fsutil.DirSize(root)
+	got, err := fsutil.DirSize(context.Background(), root)
 	if err != nil {
 		t.Fatalf("DirSize returned error: %v", err)
 	}
@@ -63,7 +65,7 @@ func TestDirSizeEmptyDir(t *testing.T) {
 }
 
 func TestDirSizeMissingPath(t *testing.T) {
-	_, err := fsutil.DirSize(filepath.Join(t.TempDir(), "does-not-exist"))
+	_, err := fsutil.DirSize(context.Background(), filepath.Join(t.TempDir(), "does-not-exist"))
 	if err == nil {
 		t.Fatal("DirSize on missing path returned nil error, want non-nil")
 	}
@@ -90,7 +92,7 @@ func TestDirSizeBestEffortOnPartialError(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(denied, 0o755) })
 
-	got, err := fsutil.DirSize(root)
+	got, err := fsutil.DirSize(context.Background(), root)
 	if err == nil {
 		t.Fatal("DirSize returned nil error despite permission-denied subdir")
 	}
@@ -99,6 +101,19 @@ func TestDirSizeBestEffortOnPartialError(t *testing.T) {
 	}
 	if got < 123 {
 		t.Errorf("DirSize = %d, want at least 123 (best-effort should include visible.txt)", got)
+	}
+}
+
+func TestDirSizeCancelledContext(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "a.txt"), 100)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // pre-cancel
+
+	_, err := fsutil.DirSize(ctx, root)
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled, got %v", err)
 	}
 }
 

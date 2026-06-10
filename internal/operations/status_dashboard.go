@@ -74,7 +74,7 @@ func StatusDashboard(ctx context.Context, gitR git.Runner, req StatusDashboardRe
 		mainWG.Add(1)
 		go func(path string) {
 			defer mainWG.Done()
-			mainSize, mainErr = fsutil.DirSize(path)
+			mainSize, mainErr = fsutil.DirSize(ctx, path)
 		}(mainEntry.Path)
 	}
 
@@ -128,7 +128,7 @@ func collectStatusEntries(ctx context.Context, gitR git.Runner, candidates []git
 		}
 		se := StatusEntry{Entry: e, Status: st, CommitTime: ct, HasTime: hasTime}
 		if detail {
-			if n, err := fsutil.DirSize(e.Path); err == nil {
+			if n, err := fsutil.DirSize(ctx, e.Path); err == nil {
 				se.SizeBytes = &n
 			}
 			if c, err := git.CommitCountSince(ctx, gitR, e.Branch, recentWindow); err == nil {
