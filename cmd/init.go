@@ -106,7 +106,7 @@ register MCP — it only updates agent files. Registration is idempotent.`,
 			}
 
 		default:
-			if err := runInitFresh(cmd, ctx, r, repoRoot, dirPath, gitignoreEntry, personal); err != nil {
+			if err := runInitFresh(ctx, cmd, r, repoRoot, dirPath, gitignoreEntry, personal); err != nil {
 				return err
 			}
 		}
@@ -120,7 +120,7 @@ register MCP — it only updates agent files. Registration is idempotent.`,
 	},
 }
 
-func runInitFresh(cmd *cobra.Command, ctx context.Context, r git.Runner, repoRoot, dirPath, gitignoreEntry string, personal bool) error {
+func runInitFresh(ctx context.Context, cmd *cobra.Command, r git.Runner, repoRoot, dirPath, gitignoreEntry string, personal bool) error {
 	repoName, err := git.RepoName(ctx, r)
 	if err != nil {
 		return err
