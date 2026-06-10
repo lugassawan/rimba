@@ -46,6 +46,7 @@ func checkUpdateHint(ctx context.Context, version string, timeout time.Duration)
 	// Return a channel that resolves with the result or nil when tctx expires.
 	out := make(chan *updater.CheckResult, 1)
 	go func() {
+		defer cancel()
 		select {
 		case r, ok := <-ch:
 			if ok {

@@ -156,7 +156,7 @@ func TestCheckUpdateHintCancelledContext(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// A pre-cancelled context should cause the HTTP client to fail before
 		// sending a request, so the handler must never complete a response.
-		t.Error("unexpected HTTP round-trip for pre-cancelled context")
+		t.Fatal("unexpected HTTP round-trip for pre-cancelled context")
 	}))
 	t.Cleanup(srv.Close)
 	overrideNewUpdater(t, srv)

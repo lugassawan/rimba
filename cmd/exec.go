@@ -93,6 +93,15 @@ func runExec(cmd *cobra.Command, args []string, r git.Runner, execFn execRunner)
 	return execRenderText(cmd, results, prefixes)
 }
 
+// addExecFlags registers exec-specific flags on c, shared by execCmd and buildExecCmd.
+func addExecFlags(c *cobra.Command) {
+	c.Flags().Bool(flagAll, false, "run in all eligible worktrees")
+	c.Flags().String(flagType, "", "filter by prefix type (e.g. feature, bugfix)")
+	c.Flags().Bool(flagDirty, false, "run only in dirty worktrees")
+	c.Flags().Bool(flagFailFast, false, "stop after the first failure")
+	c.Flags().Int(flagConcurrency, 0, "max parallel executions (0 = unlimited)")
+}
+
 // buildExecCmd constructs a testable exec command with injected deps.
 // Used by exec_test.go to exercise the full flag-parse → filter → executor pipeline.
 func buildExecCmd(r git.Runner, execFn execRunner) *cobra.Command {
@@ -103,11 +112,7 @@ func buildExecCmd(r git.Runner, execFn execRunner) *cobra.Command {
 			return runExec(cmd, args, r, execFn)
 		},
 	}
-	c.Flags().Bool(flagAll, false, "")
-	c.Flags().String(flagType, "", "")
-	c.Flags().Bool(flagDirty, false, "")
-	c.Flags().Bool(flagFailFast, false, "")
-	c.Flags().Int(flagConcurrency, 0, "")
+	addExecFlags(c)
 	c.Flags().Bool(flagJSON, false, "")
 	c.Flags().Bool(flagNoColor, false, "")
 	return c
@@ -249,14 +254,8 @@ func execRenderText(cmd *cobra.Command, results []executor.Result, prefixes []st
 }
 
 func init() {
-	execCmd.Flags().Bool(flagAll, false, "run in all eligible worktrees")
-	execCmd.Flags().String(flagType, "", "filter by prefix type (e.g. feature, bugfix)")
-	execCmd.Flags().Bool(flagDirty, false, "run only in dirty worktrees")
-	execCmd.Flags().Bool(flagFailFast, false, "stop after the first failure")
-	execCmd.Flags().Int(flagConcurrency, 0, "max parallel executions (0 = unlimited)")
-
+	addExecFlags(execCmd)
 	_ = execCmd.RegisterFlagCompletionFunc(flagType, typeFilterCompletion())
-
 	rootCmd.AddCommand(execCmd)
 }
 
