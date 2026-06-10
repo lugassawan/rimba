@@ -70,9 +70,26 @@ func TestCollectWorktreeStatusIsDirtyError(t *testing.T) {
 		},
 	}
 	status := CollectWorktreeStatus(context.Background(), r, "/wt/feature-login")
-	// On IsDirty error, dirty should be false (err != nil means the condition `err == nil && dirty` is false)
-	if status.Dirty {
-		t.Error("expected Dirty=false when IsDirty returns error")
+	if !status.Unknown {
+		t.Error("expected Unknown=true when IsDirty returns error")
+	}
+}
+
+func TestCollectWorktreeStatusUnknownOnAheadBehindError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // pre-cancel so AheadBehind propagates ctx.Err()
+
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) { return "", nil },
+		// IsDirty (status --porcelain) returns an error too on cancelled ctx, so
+		// returning a non-nil error for all runInDir calls is sufficient here.
+		runInDir: func(_ string, _ ...string) (string, error) {
+			return "", context.Canceled
+		},
+	}
+	status := CollectWorktreeStatus(ctx, r, "/wt/feature-login")
+	if !status.Unknown {
+		t.Error("expected Unknown=true when git queries return context error")
 	}
 }
 

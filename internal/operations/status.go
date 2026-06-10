@@ -8,18 +8,21 @@ import (
 )
 
 // CollectWorktreeStatus gathers dirty/ahead/behind state for a worktree path.
+// If any git query fails (including context.DeadlineExceeded on a stalled mount),
+// the returned status has Unknown=true rather than silently appearing clean.
 func CollectWorktreeStatus(ctx context.Context, r git.Runner, wtPath string) resolver.WorktreeStatus {
-	var status resolver.WorktreeStatus
+	dirty, dirtyErr := git.IsDirty(ctx, r, wtPath)
+	ahead, behind, aheadBehindErr := git.AheadBehind(ctx, r, wtPath)
 
-	if dirty, err := git.IsDirty(ctx, r, wtPath); err == nil && dirty {
-		status.Dirty = true
+	if dirtyErr != nil || aheadBehindErr != nil {
+		return resolver.WorktreeStatus{Unknown: true}
 	}
 
-	ahead, behind, _ := git.AheadBehind(ctx, r, wtPath)
-	status.Ahead = ahead
-	status.Behind = behind
-
-	return status
+	return resolver.WorktreeStatus{
+		Dirty:  dirty,
+		Ahead:  ahead,
+		Behind: behind,
+	}
 }
 
 // FilterDetailsByStatus filters worktree details by dirty and/or behind status.

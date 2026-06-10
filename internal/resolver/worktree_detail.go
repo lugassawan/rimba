@@ -9,9 +9,10 @@ import (
 
 // WorktreeStatus holds the structured git status of a worktree.
 type WorktreeStatus struct {
-	Dirty  bool `json:"dirty"`
-	Ahead  int  `json:"ahead"`
-	Behind int  `json:"behind"`
+	Dirty   bool `json:"dirty"`
+	Ahead   int  `json:"ahead"`
+	Behind  int  `json:"behind"`
+	Unknown bool `json:"unknown,omitempty"` // set when git queries time out or fail (e.g. stalled NFS mount)
 }
 
 // WorktreeDetail holds the resolved view of a worktree with extracted task and type.
@@ -47,11 +48,16 @@ func NewWorktreeDetail(branch string, prefixes []string, path string, status Wor
 }
 
 // FormatStatus returns a human-readable status string.
+// - "unknown" when git queries could not complete (timeout, NFS stall, etc.)
 // - "[dirty]" when dirty
 // - "↑N" when ahead, "↓M" when behind
 // - "✓" when fully clean
 // Combines as needed, e.g. "[dirty] ↑2 ↓1"
 func FormatStatus(s WorktreeStatus) string {
+	if s.Unknown {
+		return "unknown"
+	}
+
 	var parts []string
 
 	if s.Dirty {
