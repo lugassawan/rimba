@@ -388,6 +388,7 @@ func findReleaseAssets(assetName string, assets []Asset) (downloadURL, checksums
 // trusted GitHub host, defending against a tampered API response that redirects
 // the binary and checksums.txt to an attacker-controlled server (issue #281).
 func validateAssetURL(rawURL string) error {
+	// Defensive: Check() pre-screens for empty, but callers outside Check may not.
 	if rawURL == "" {
 		return errors.New("asset URL must not be empty")
 	}

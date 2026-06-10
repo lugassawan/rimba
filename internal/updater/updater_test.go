@@ -1567,6 +1567,11 @@ func TestValidateAssetURL(t *testing.T) {
 			wantErr: "not a trusted GitHub host",
 		},
 		{
+			name:    "objects.githubusercontent.com subdomain spoof rejected",
+			url:     "https://evil.objects.githubusercontent.com/rimba_2.0.0_linux_amd64.tar.gz",
+			wantErr: "not a trusted GitHub host",
+		},
+		{
 			name:    "unparseable URL rejected",
 			url:     "https://github.com/%zz",
 			wantErr: "parsing asset URL",
