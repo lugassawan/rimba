@@ -37,18 +37,18 @@ type TimedRunner struct {
 	Inner git.Runner
 }
 
-func (r *TimedRunner) RunContext(ctx context.Context, args ...string) (string, error) {
+func (r *TimedRunner) Run(ctx context.Context, args ...string) (string, error) {
 	label := "git " + strings.Join(args, " ")
 	start := time.Now()
-	out, err := r.Inner.RunContext(ctx, args...)
+	out, err := r.Inner.Run(ctx, args...)
 	logf("%s: %s", label, time.Since(start).Round(time.Millisecond))
 	return out, err
 }
 
-func (r *TimedRunner) RunInDirContext(ctx context.Context, dir string, args ...string) (string, error) {
+func (r *TimedRunner) RunInDir(ctx context.Context, dir string, args ...string) (string, error) {
 	label := fmt.Sprintf("git %s [%s]", strings.Join(args, " "), filepath.Base(dir))
 	start := time.Now()
-	out, err := r.Inner.RunInDirContext(ctx, dir, args...)
+	out, err := r.Inner.RunInDir(ctx, dir, args...)
 	logf("%s: %s", label, time.Since(start).Round(time.Millisecond))
 	return out, err
 }

@@ -10,8 +10,8 @@ import (
 
 // Runner abstracts git command execution for testability.
 type Runner interface {
-	RunContext(ctx context.Context, args ...string) (string, error)
-	RunInDirContext(ctx context.Context, dir string, args ...string) (string, error)
+	Run(ctx context.Context, args ...string) (string, error)
+	RunInDir(ctx context.Context, dir string, args ...string) (string, error)
 }
 
 // ExecRunner is the production implementation of Runner.
@@ -20,8 +20,8 @@ type ExecRunner struct {
 	Dir string
 }
 
-// RunInDirContext is the single execution primitive: all other methods delegate here.
-func (r *ExecRunner) RunInDirContext(ctx context.Context, dir string, args ...string) (string, error) {
+// RunInDir is the single execution primitive: all other methods delegate here.
+func (r *ExecRunner) RunInDir(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Env = stableGitEnv(os.Environ())
 	if dir != "" {
@@ -49,6 +49,6 @@ func stableGitEnv(environ []string) []string {
 	return append(env, "LANG=C", "LC_ALL=C")
 }
 
-func (r *ExecRunner) RunContext(ctx context.Context, args ...string) (string, error) {
-	return r.RunInDirContext(ctx, r.Dir, args...)
+func (r *ExecRunner) Run(ctx context.Context, args ...string) (string, error) {
+	return r.RunInDir(ctx, r.Dir, args...)
 }

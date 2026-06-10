@@ -19,7 +19,7 @@ const DefaultRemote = "origin"
 
 // RemoteExists reports whether a remote with the given name is configured.
 func RemoteExists(ctx context.Context, r Runner, name string) bool {
-	_, err := r.RunContext(ctx, "remote", "get-url", name)
+	_, err := r.Run(ctx, "remote", "get-url", name)
 	return err == nil
 }
 
@@ -31,7 +31,7 @@ func RemotePrune(ctx context.Context, r Runner, remote string, dryRun bool) ([]s
 		args = append(args, "--dry-run")
 	}
 	args = append(args, remote)
-	out, err := r.RunContext(ctx, args...)
+	out, err := r.Run(ctx, args...)
 	if err != nil {
 		return nil, errhint.WithFix(
 			fmt.Errorf("remote prune: %w", err),
@@ -44,7 +44,7 @@ func RemotePrune(ctx context.Context, r Runner, remote string, dryRun bool) ([]s
 // DeleteRemoteBranch deletes a branch on the given remote.
 // An already-gone remote ref is treated as success (idempotent).
 func DeleteRemoteBranch(ctx context.Context, r Runner, remote, branch string) error {
-	_, err := r.RunContext(ctx, "push", remote, "--delete", branch)
+	_, err := r.Run(ctx, "push", remote, "--delete", branch)
 	if err == nil {
 		return nil
 	}
@@ -60,14 +60,14 @@ func DeleteRemoteBranch(ctx context.Context, r Runner, remote, branch string) er
 
 // AddRemote adds a new remote with the given name and URL.
 func AddRemote(ctx context.Context, r Runner, name, url string) error {
-	_, err := r.RunContext(ctx, "remote", "add", name, url)
+	_, err := r.Run(ctx, "remote", "add", name, url)
 	return err
 }
 
 // ListRemotes returns the names of all configured remotes by running `git remote`.
 // It returns an empty (non-nil) slice when there are no remotes configured.
 func ListRemotes(ctx context.Context, r Runner) ([]string, error) {
-	out, err := r.RunContext(ctx, "remote")
+	out, err := r.Run(ctx, "remote")
 	if err != nil {
 		return nil, errhint.WithFix(
 			fmt.Errorf("list remotes: %w", err),

@@ -15,11 +15,11 @@ const benchFilterType = "bugfix"
 // benchMockRunner simulates git status calls with minimal overhead.
 type benchMockRunner struct{}
 
-func (m *benchMockRunner) RunContext(_ context.Context, _ ...string) (string, error) {
+func (m *benchMockRunner) Run(_ context.Context, _ ...string) (string, error) {
 	return "", nil
 }
 
-func (m *benchMockRunner) RunInDirContext(_ context.Context, _ string, args ...string) (string, error) {
+func (m *benchMockRunner) RunInDir(_ context.Context, _ string, args ...string) (string, error) {
 	// Simulate IsDirty returning clean, AheadBehind returning 0/0
 	if len(args) > 0 && args[0] == cmdRevList {
 		return aheadBehindZero, nil

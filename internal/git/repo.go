@@ -25,7 +25,7 @@ const (
 
 // RepoRoot returns the absolute path to the repository root.
 func RepoRoot(ctx context.Context, r Runner) (string, error) {
-	out, err := r.RunContext(ctx, cmdRevParse, "--show-toplevel")
+	out, err := r.Run(ctx, cmdRevParse, "--show-toplevel")
 	if err != nil {
 		return "", errhint.WithFix(fmt.Errorf("not a git repository: %w", err), notInRepoHint)
 	}
@@ -57,7 +57,7 @@ func MainRepoRoot(ctx context.Context, r Runner) (string, error) {
 // <git-common-dir>/hooks for worktree compatibility.
 func HooksDir(ctx context.Context, r Runner) (string, error) {
 	// Check if core.hooksPath is configured (overrides default)
-	hooksPath, err := r.RunContext(ctx, cmdConfig, "core.hooksPath")
+	hooksPath, err := r.Run(ctx, cmdConfig, "core.hooksPath")
 	if err == nil && hooksPath != "" {
 		if filepath.IsAbs(hooksPath) {
 			return hooksPath, nil
@@ -81,7 +81,7 @@ func HooksDir(ctx context.Context, r Runner) (string, error) {
 // DefaultBranch detects the default branch (main or master).
 func DefaultBranch(ctx context.Context, r Runner) (string, error) {
 	// Try symbolic-ref for origin/HEAD first
-	out, err := r.RunContext(ctx, "symbolic-ref", "refs/remotes/origin/HEAD")
+	out, err := r.Run(ctx, "symbolic-ref", "refs/remotes/origin/HEAD")
 	if err == nil {
 		// refs/remotes/origin/main → main
 		parts := strings.Split(out, "/")
@@ -89,12 +89,12 @@ func DefaultBranch(ctx context.Context, r Runner) (string, error) {
 	}
 
 	// Fall back: check if main exists
-	if _, err := r.RunContext(ctx, cmdRevParse, flagVerify, refsHeadsPrefix+"main"); err == nil {
+	if _, err := r.Run(ctx, cmdRevParse, flagVerify, refsHeadsPrefix+"main"); err == nil {
 		return "main", nil
 	}
 
 	// Fall back: check if master exists
-	if _, err := r.RunContext(ctx, cmdRevParse, flagVerify, refsHeadsPrefix+"master"); err == nil {
+	if _, err := r.Run(ctx, cmdRevParse, flagVerify, refsHeadsPrefix+"master"); err == nil {
 		return "master", nil
 	}
 
@@ -107,7 +107,7 @@ func DefaultBranch(ctx context.Context, r Runner) (string, error) {
 // resolveCommonDir returns the absolute path to the git common directory.
 // --git-common-dir may return a relative path; this resolves it against the repo root.
 func resolveCommonDir(ctx context.Context, r Runner) (string, error) {
-	commonDir, err := r.RunContext(ctx, cmdRevParse, "--git-common-dir")
+	commonDir, err := r.Run(ctx, cmdRevParse, "--git-common-dir")
 	if err != nil {
 		return "", errhint.WithFix(fmt.Errorf("not a git repository: %w", err), notInRepoHint)
 	}

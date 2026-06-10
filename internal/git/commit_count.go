@@ -18,7 +18,7 @@ import (
 // here: recent activity on the tip, not total commits in history.
 func CommitCountSince(ctx context.Context, r Runner, branch string, since time.Duration) (int, error) {
 	cutoff := time.Now().Add(-since).Unix()
-	out, err := r.RunContext(
+	out, err := r.Run(
 		ctx,
 		"rev-list", "--count",
 		fmt.Sprintf("--since=%d", cutoff),

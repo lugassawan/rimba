@@ -9,10 +9,10 @@ import (
 // StashPushAndRef stashes all changes (including untracked files) with the given message
 // and returns the stash object SHA so it can be applied or dropped by reference later.
 func StashPushAndRef(ctx context.Context, r Runner, dir, message string) (string, error) {
-	if _, err := r.RunInDirContext(ctx, dir, "stash", "push", "-u", "-m", message); err != nil {
+	if _, err := r.RunInDir(ctx, dir, "stash", "push", "-u", "-m", message); err != nil {
 		return "", fmt.Errorf("stash push: %w", err)
 	}
-	sha, err := r.RunInDirContext(ctx, dir, "rev-parse", "stash@{0}")
+	sha, err := r.RunInDir(ctx, dir, "rev-parse", "stash@{0}")
 	if err != nil {
 		return "", fmt.Errorf("resolve stash ref: %w", err)
 	}
@@ -24,7 +24,7 @@ func StashPushAndRef(ctx context.Context, r Runner, dir, message string) (string
 // On conflict the error wraps the stderr output so conflict markers surface to the caller.
 // Intentionally non-cancellable: working-tree restores must complete after cancellation to avoid data loss.
 func StashApply(r Runner, dir, sha string) error {
-	_, err := r.RunInDirContext(context.Background(), dir, "stash", "apply", sha)
+	_, err := r.RunInDir(context.Background(), dir, "stash", "apply", sha)
 	return err
 }
 
@@ -36,13 +36,14 @@ func StashDrop(r Runner, dir, sha string) error {
 	if err != nil {
 		return err
 	}
-	_, err = r.RunInDirContext(context.Background(), dir, "stash", "drop", ref)
+	_, err = r.RunInDir(context.Background(), dir, "stash", "drop", ref)
 	return err
 }
 
 // stashRefBySHA walks the stash list to find the stash@{N} ref matching sha.
+// Intentionally non-cancellable: called only from StashDrop, a recovery path.
 func stashRefBySHA(r Runner, dir, sha string) (string, error) {
-	out, err := r.RunInDirContext(context.Background(), dir, "stash", "list", "--format=%H %gd")
+	out, err := r.RunInDir(context.Background(), dir, "stash", "list", "--format=%H %gd")
 	if err != nil {
 		return "", fmt.Errorf("stash list: %w", err)
 	}

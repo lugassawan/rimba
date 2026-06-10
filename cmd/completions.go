@@ -110,7 +110,7 @@ func completeArchivedTasks(_ *cobra.Command, toComplete string) []string {
 // completeBranchNames returns branch names for shell completion.
 func completeBranchNames(_ *cobra.Command, toComplete string) []string {
 	r := newRunner()
-	out, err := r.RunContext(context.Background(), "branch", "--format=%(refname:short)")
+	out, err := r.Run(context.Background(), "branch", "--format=%(refname:short)")
 	if err != nil {
 		return nil
 	}

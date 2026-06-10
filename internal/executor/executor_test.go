@@ -193,7 +193,7 @@ func TestRunEmptyTargets(t *testing.T) {
 	}
 }
 
-func TestRunContextCancellation(t *testing.T) {
+func TestRunCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately
 

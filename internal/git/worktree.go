@@ -28,13 +28,13 @@ type WorktreeEntry struct {
 
 // AddWorktree creates a new worktree at the given path with a new branch from source.
 func AddWorktree(ctx context.Context, r Runner, path, branch, source string) error {
-	_, err := r.RunContext(ctx, cmdWorktree, "add", "-b", branch, path, source)
+	_, err := r.Run(ctx, cmdWorktree, "add", "-b", branch, path, source)
 	return err
 }
 
 // AddWorktreeFromBranch creates a worktree from an existing branch (no -b flag).
 func AddWorktreeFromBranch(ctx context.Context, r Runner, path, branch string) error {
-	_, err := r.RunContext(ctx, cmdWorktree, "add", "--", path, branch)
+	_, err := r.Run(ctx, cmdWorktree, "add", "--", path, branch)
 	return err
 }
 
@@ -44,7 +44,7 @@ func RemoveWorktree(ctx context.Context, r Runner, path string, force bool) erro
 	if force {
 		args = append(args, flagForce)
 	}
-	_, err := r.RunContext(ctx, args...)
+	_, err := r.Run(ctx, args...)
 	return err
 }
 
@@ -56,13 +56,13 @@ func MoveWorktree(r Runner, oldPath, newPath string, force bool) error {
 	if force {
 		args = append(args, flagForce, flagForce)
 	}
-	_, err := r.RunContext(context.Background(), args...)
+	_, err := r.Run(context.Background(), args...)
 	return err
 }
 
 // ListWorktrees returns all worktrees by parsing `git worktree list --porcelain`.
 func ListWorktrees(ctx context.Context, r Runner) ([]WorktreeEntry, error) {
-	out, err := r.RunContext(ctx, cmdWorktree, "list", "--porcelain")
+	out, err := r.Run(ctx, cmdWorktree, "list", "--porcelain")
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +126,7 @@ func Prune(ctx context.Context, r Runner, dryRun bool) (string, error) {
 	if dryRun {
 		args = append(args, "--dry-run")
 	}
-	out, err := r.RunContext(ctx, args...)
+	out, err := r.Run(ctx, args...)
 	if err != nil {
 		return "", errhint.WithFix(
 			fmt.Errorf("prune: %w", err),

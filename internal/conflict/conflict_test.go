@@ -14,19 +14,11 @@ type mockRunner struct {
 	run func(args ...string) (string, error)
 }
 
-func (m *mockRunner) Run(args ...string) (string, error) {
+func (m *mockRunner) Run(_ context.Context, args ...string) (string, error) {
 	return m.run(args...)
 }
 
-func (m *mockRunner) RunInDir(_ string, _ ...string) (string, error) {
-	return "", nil
-}
-
-func (m *mockRunner) RunContext(_ context.Context, args ...string) (string, error) {
-	return m.run(args...)
-}
-
-func (m *mockRunner) RunInDirContext(_ context.Context, _ string, _ ...string) (string, error) {
+func (m *mockRunner) RunInDir(_ context.Context, _ string, _ ...string) (string, error) {
 	return "", nil
 }
 

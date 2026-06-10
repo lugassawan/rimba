@@ -14,7 +14,7 @@ const internalGitInvariantHint = "report this — git output unexpectedly malfor
 
 // BranchExists checks whether a local branch exists.
 func BranchExists(ctx context.Context, r Runner, branch string) bool {
-	_, err := r.RunContext(ctx, cmdRevParse, flagVerify, refsHeadsPrefix+branch)
+	_, err := r.Run(ctx, cmdRevParse, flagVerify, refsHeadsPrefix+branch)
 	return err == nil
 }
 
@@ -25,7 +25,7 @@ func DeleteBranch(ctx context.Context, r Runner, branch string, force bool) erro
 	if force {
 		flag = "-D"
 	}
-	_, err := r.RunContext(ctx, "branch", flag, branch)
+	_, err := r.Run(ctx, "branch", flag, branch)
 	// git emits "error: branch 'X' not found." — assumes LC_ALL=C or English git.
 	if err != nil && strings.Contains(err.Error(), "branch '") && strings.Contains(err.Error(), "not found") {
 		return nil // already gone — idempotent
@@ -35,14 +35,14 @@ func DeleteBranch(ctx context.Context, r Runner, branch string, force bool) erro
 
 // RenameBranch renames a local branch from oldBranch to newBranch.
 func RenameBranch(ctx context.Context, r Runner, oldBranch, newBranch string) error {
-	_, err := r.RunContext(ctx, "branch", "-m", oldBranch, newBranch)
+	_, err := r.Run(ctx, "branch", "-m", oldBranch, newBranch)
 	return err
 }
 
 // CurrentBranch returns the short branch name checked out in the given directory.
 // Returns an error with a hint if HEAD is detached.
 func CurrentBranch(ctx context.Context, r Runner, dir string) (string, error) {
-	out, err := r.RunInDirContext(ctx, dir, "symbolic-ref", "--short", "HEAD")
+	out, err := r.RunInDir(ctx, dir, "symbolic-ref", "--short", "HEAD")
 	if err != nil {
 		return "", errhint.WithFix(
 			fmt.Errorf("could not determine current branch: %w", err),
@@ -54,13 +54,13 @@ func CurrentBranch(ctx context.Context, r Runner, dir string) (string, error) {
 
 // Checkout switches the working tree in dir to the given branch.
 func Checkout(ctx context.Context, r Runner, dir, branch string) error {
-	_, err := r.RunInDirContext(ctx, dir, "switch", "--", branch)
+	_, err := r.RunInDir(ctx, dir, "switch", "--", branch)
 	return err
 }
 
 // IsDirty returns true if the working tree at the given directory has uncommitted changes.
 func IsDirty(ctx context.Context, r Runner, dir string) (bool, error) {
-	out, err := r.RunInDirContext(ctx, dir, "status", "--porcelain")
+	out, err := r.RunInDir(ctx, dir, "status", "--porcelain")
 	if err != nil {
 		return false, err
 	}
@@ -70,7 +70,7 @@ func IsDirty(ctx context.Context, r Runner, dir string) (bool, error) {
 // AheadBehind returns the ahead/behind counts of the current branch vs its upstream.
 // Returns (0, 0, nil) if there's no upstream configured.
 func AheadBehind(ctx context.Context, r Runner, dir string) (ahead, behind int, _ error) {
-	out, err := r.RunInDirContext(ctx, dir, "rev-list", "--left-right", "--count", "@{upstream}...HEAD")
+	out, err := r.RunInDir(ctx, dir, "rev-list", "--left-right", "--count", "@{upstream}...HEAD")
 	if err != nil {
 		// No upstream or other error — treat as 0/0
 		return 0, 0, nil //nolint:nilerr // intentional: missing upstream is not an error
@@ -98,17 +98,17 @@ func IsSquashMerged(ctx context.Context, r Runner, mergeRef, branch string) (boo
 		return false, err
 	}
 
-	tree, err := r.RunContext(ctx, cmdRevParse, branch+treeSuffix)
+	tree, err := r.Run(ctx, cmdRevParse, branch+treeSuffix)
 	if err != nil {
 		return false, err
 	}
 
-	tempCommit, err := r.RunContext(ctx, cmdCommitTree, tree, "-p", mergeBase, "-m", "temp")
+	tempCommit, err := r.Run(ctx, cmdCommitTree, tree, "-p", mergeBase, "-m", "temp")
 	if err != nil {
 		return false, err
 	}
 
-	out, err := r.RunContext(ctx, cmdCherry, mergeRef, tempCommit)
+	out, err := r.Run(ctx, cmdCherry, mergeRef, tempCommit)
 	if err != nil {
 		return false, err
 	}
@@ -119,7 +119,7 @@ func IsSquashMerged(ctx context.Context, r Runner, mergeRef, branch string) (boo
 // MergedBranches returns branches that have been merged into the given branch.
 // Runs `git branch --merged <branch>` and parses the output.
 func MergedBranches(ctx context.Context, r Runner, branch string) ([]string, error) {
-	out, err := r.RunContext(ctx, "branch", "--merged", branch)
+	out, err := r.Run(ctx, "branch", "--merged", branch)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +145,7 @@ func LastCommitTime(ctx context.Context, r Runner, branch string) (time.Time, er
 
 // LastCommitInfo returns the time and subject of the last commit on the given branch.
 func LastCommitInfo(ctx context.Context, r Runner, branch string) (time.Time, string, error) {
-	out, err := r.RunContext(ctx, "log", "-1", "--format=%ct\t%s", branch)
+	out, err := r.Run(ctx, "log", "-1", "--format=%ct\t%s", branch)
 	if err != nil {
 		return time.Time{}, "", errhint.WithFix(
 			fmt.Errorf("last commit info for %s: %w", branch, err),
@@ -180,7 +180,7 @@ func LastCommitInfo(ctx context.Context, r Runner, branch string) (time.Time, st
 
 // LocalBranches returns the list of local branch names.
 func LocalBranches(ctx context.Context, r Runner) ([]string, error) {
-	out, err := r.RunContext(ctx, "branch", "--format=%(refname:short)")
+	out, err := r.Run(ctx, "branch", "--format=%(refname:short)")
 	if err != nil {
 		return nil, err
 	}

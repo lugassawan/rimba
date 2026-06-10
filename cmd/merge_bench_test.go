@@ -11,10 +11,10 @@ import (
 // mergeBenchMockRunner simulates IsDirty calls.
 type mergeBenchMockRunner struct{}
 
-func (m *mergeBenchMockRunner) RunContext(_ context.Context, _ ...string) (string, error) {
+func (m *mergeBenchMockRunner) Run(_ context.Context, _ ...string) (string, error) {
 	return "", nil
 }
-func (m *mergeBenchMockRunner) RunInDirContext(_ context.Context, _ string, _ ...string) (string, error) {
+func (m *mergeBenchMockRunner) RunInDir(_ context.Context, _ string, _ ...string) (string, error) {
 	return "", nil
 }
 

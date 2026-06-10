@@ -8,7 +8,7 @@ import (
 // DiffNameOnly returns files changed between base and branch using three-dot diff.
 // The three-dot notation (base...branch) shows changes on branch since it diverged from base.
 func DiffNameOnly(ctx context.Context, r Runner, base, branch string) ([]string, error) {
-	out, err := r.RunContext(ctx, "diff", "--name-only", base+"..."+branch)
+	out, err := r.Run(ctx, "diff", "--name-only", base+"..."+branch)
 	if err != nil {
 		return nil, err
 	}
@@ -28,7 +28,7 @@ type MergeTreeResult struct {
 // touching the working tree. Requires git 2.38+.
 // Exit code 0 = clean merge, exit code 1 = conflicts, other = error.
 func MergeTree(ctx context.Context, r Runner, branch1, branch2 string) (MergeTreeResult, error) {
-	out, err := r.RunContext(ctx, "merge-tree", "--write-tree", branch1, branch2)
+	out, err := r.Run(ctx, "merge-tree", "--write-tree", branch1, branch2)
 	if err != nil {
 		// git merge-tree exits 1 for both conflicts and errors.
 		// We distinguish by checking whether the output contains CONFLICT lines.

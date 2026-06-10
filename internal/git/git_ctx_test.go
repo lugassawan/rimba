@@ -7,12 +7,12 @@ import (
 	"testing"
 )
 
-func TestRunInDirContextCancelled(t *testing.T) {
+func TestRunInDirCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // pre-cancel
 
 	r := &ExecRunner{}
-	_, err := r.RunInDirContext(ctx, "", "status")
+	_, err := r.RunInDir(ctx, "", "status")
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
 	}
@@ -21,11 +21,11 @@ func TestRunInDirContextCancelled(t *testing.T) {
 	}
 }
 
-func TestRunContextDelegatesToRunInDirContext(t *testing.T) {
+func TestRunDelegatesToRunInDir(t *testing.T) {
 	r := &ExecRunner{}
-	out, err := r.RunContext(context.Background(), "--version")
+	out, err := r.Run(context.Background(), "--version")
 	if err != nil {
-		t.Fatalf("RunContext: %v", err)
+		t.Fatalf("Run: %v", err)
 	}
 	if !strings.Contains(out, "git") {
 		t.Errorf("expected git version output, got: %q", out)
