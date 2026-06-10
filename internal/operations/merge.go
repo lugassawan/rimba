@@ -46,7 +46,7 @@ type dirtyResult struct {
 // MergeWorktree merges a source worktree branch into main or another worktree.
 // It handles worktree resolution, concurrent dirty checks, merge execution, and cleanup.
 func MergeWorktree(ctx context.Context, r git.Runner, params MergeParams, onProgress progress.Func) (MergeResult, error) {
-	worktrees, err := ListWorktreeInfos(r)
+	worktrees, err := ListWorktreeInfos(ctx, r)
 	if err != nil {
 		return MergeResult{}, err
 	}
@@ -86,7 +86,14 @@ func MergeWorktree(ctx context.Context, r git.Runner, params MergeParams, onProg
 
 	// Concurrent dirty checks (always run — read-only pre-flight)
 	progress.Notify(onProgress, "Checking for uncommitted changes...")
-	if err := checkDirty(r, source.Path, targetDir, params.SourceTask, params.IntoTask, mergingToMain, targetLabel); err != nil {
+	if err := checkDirty(ctx, r, dirtyCheckArgs{
+		sourcePath:    source.Path,
+		targetDir:     targetDir,
+		sourceTask:    params.SourceTask,
+		intoTask:      params.IntoTask,
+		targetLabel:   targetLabel,
+		mergingToMain: mergingToMain,
+	}); err != nil {
 		return result, err
 	}
 
@@ -96,7 +103,7 @@ func MergeWorktree(ctx context.Context, r git.Runner, params MergeParams, onProg
 	if err := plan.Do(mergeDesc, func() error {
 		return git.Merge(ctx, r, targetDir, source.Branch, params.NoFF)
 	}); err != nil {
-		return result, abortFailedMerge(r, targetDir, targetLabel, source.Branch, err)
+		return result, abortFailedMerge(ctx, r, targetDir, targetLabel, source.Branch, err)
 	}
 
 	// Auto-cleanup
@@ -106,7 +113,7 @@ func MergeWorktree(ctx context.Context, r git.Runner, params MergeParams, onProg
 		var wtRemoved, brDeleted bool
 		rmErr := plan.Do("remove worktree: "+source.Path, func() error {
 			var err error
-			wtRemoved, brDeleted, err = removeAndCleanup(r, source.Path, source.Branch, false)
+			wtRemoved, brDeleted, err = removeAndCleanup(ctx, r, source.Path, source.Branch, false)
 			return err
 		})
 		result.WorktreeRemoved = wtRemoved
@@ -124,8 +131,8 @@ func MergeWorktree(ctx context.Context, r git.Runner, params MergeParams, onProg
 // If the abort also fails, both errors are surfaced with a manual-cleanup hint.
 // If the MERGE_HEAD check itself fails (infrastructure error), a conservative
 // manual-cleanup hint is returned rather than assuming no merge is in progress.
-func abortFailedMerge(r git.Runner, targetDir, targetLabel, sourceBranch string, mergeErr error) error {
-	inProgress, checkErr := git.MergeInProgress(r, targetDir)
+func abortFailedMerge(ctx context.Context, r git.Runner, targetDir, targetLabel, sourceBranch string, mergeErr error) error {
+	inProgress, checkErr := git.MergeInProgress(ctx, r, targetDir)
 	if checkErr != nil {
 		// Cannot determine merge state — conservative: tell user to clean up manually.
 		return errhint.WithFix(
@@ -151,19 +158,26 @@ func abortFailedMerge(r git.Runner, targetDir, targetLabel, sourceBranch string,
 	)
 }
 
+type dirtyCheckArgs struct {
+	sourcePath, targetDir string
+	sourceTask, intoTask  string
+	targetLabel           string
+	mergingToMain         bool
+}
+
 // checkDirty checks both source and target for uncommitted changes concurrently.
-func checkDirty(r git.Runner, sourcePath, targetDir, sourceTask, intoTask string, mergingToMain bool, targetLabel string) error {
+func checkDirty(ctx context.Context, r git.Runner, args dirtyCheckArgs) error {
 	var srcCheck, tgtCheck dirtyResult
 	var wg sync.WaitGroup
 	wg.Add(2)
 
 	go func() {
 		defer wg.Done()
-		srcCheck.dirty, srcCheck.err = git.IsDirty(r, sourcePath)
+		srcCheck.dirty, srcCheck.err = git.IsDirty(ctx, r, args.sourcePath)
 	}()
 	go func() {
 		defer wg.Done()
-		tgtCheck.dirty, tgtCheck.err = git.IsDirty(r, targetDir)
+		tgtCheck.dirty, tgtCheck.err = git.IsDirty(ctx, r, args.targetDir)
 	}()
 	wg.Wait()
 
@@ -172,21 +186,21 @@ func checkDirty(r git.Runner, sourcePath, targetDir, sourceTask, intoTask string
 	}
 	if srcCheck.dirty {
 		return errhint.WithFix(
-			fmt.Errorf("source worktree %q has uncommitted changes", sourceTask),
-			"Commit or stash changes before merging: cd "+sourcePath,
+			fmt.Errorf("source worktree %q has uncommitted changes", args.sourceTask),
+			"Commit or stash changes before merging: cd "+args.sourcePath,
 		)
 	}
 	if tgtCheck.err != nil {
 		return tgtCheck.err
 	}
 	if tgtCheck.dirty {
-		label := targetLabel
-		if !mergingToMain {
-			label = intoTask
+		label := args.targetLabel
+		if !args.mergingToMain {
+			label = args.intoTask
 		}
 		return errhint.WithFix(
 			fmt.Errorf("target %q has uncommitted changes", label),
-			"Commit or stash changes before merging: cd "+targetDir,
+			"Commit or stash changes before merging: cd "+args.targetDir,
 		)
 	}
 	return nil

@@ -22,7 +22,7 @@ rimba commands with structured parameters and typed responses.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		r := newRunner()
 
-		repoRoot, err := git.MainRepoRoot(r)
+		repoRoot, err := git.MainRepoRoot(cmd.Context(), r)
 		if err != nil {
 			return err
 		}
@@ -33,7 +33,7 @@ rimba commands with structured parameters and typed responses.`,
 			repoName := filepath.Base(repoRoot)
 			var defaultBranch string
 			if cfg.DefaultSource == "" {
-				defaultBranch, _ = git.DefaultBranch(r)
+				defaultBranch, _ = git.DefaultBranch(cmd.Context(), r)
 			}
 			cfg.FillDefaults(repoName, defaultBranch)
 		}

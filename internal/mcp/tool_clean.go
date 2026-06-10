@@ -58,14 +58,14 @@ func handleClean(hctx *HandlerContext) server.ToolHandlerFunc {
 }
 
 func mcpCleanPrune(ctx context.Context, r git.Runner, dryRun bool) (*mcp.CallToolResult, error) {
-	output, err := git.Prune(r, dryRun)
+	output, err := git.Prune(ctx, r, dryRun)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	var remotePruned []string
 	warnings := []string{}
-	remotes, err := git.ListRemotes(r)
+	remotes, err := git.ListRemotes(ctx, r)
 	if err != nil {
 		warnings = append(warnings, fmt.Sprintf("failed to list remotes: %v", err))
 	} else {
@@ -87,7 +87,7 @@ func mcpCleanPrune(ctx context.Context, r git.Runner, dryRun bool) (*mcp.CallToo
 }
 
 func mcpCleanMerged(ctx context.Context, r git.Runner, hctx *HandlerContext, dryRun bool, force bool) (*mcp.CallToolResult, error) {
-	mainBranch, err := operations.ResolveMainBranch(r, configDefault(hctx))
+	mainBranch, err := operations.ResolveMainBranch(ctx, r, configDefault(hctx))
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -100,7 +100,7 @@ func mcpCleanMerged(ctx context.Context, r git.Runner, hctx *HandlerContext, dry
 		mergeRef = git.DefaultRemote + "/" + mainBranch
 	}
 
-	mergedResult, err := operations.FindMergedCandidates(r, mergeRef, mainBranch)
+	mergedResult, err := operations.FindMergedCandidates(ctx, r, mergeRef, mainBranch)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -119,7 +119,7 @@ func mcpCleanMerged(ctx context.Context, r git.Runner, hctx *HandlerContext, dry
 	}
 
 	// Probe origin once so RemoveCandidates does not re-issue git remote get-url per candidate.
-	originPresent := git.RemoteExists(r, git.DefaultRemote)
+	originPresent := git.RemoteExists(ctx, r, git.DefaultRemote)
 	opItems := operations.RemoveCandidates(ctx, r, mergedResult.Candidates, originPresent, force, nil)
 	warnings := mergedResult.Warnings
 	items := make([]cleanedItem, len(opItems))
@@ -138,12 +138,12 @@ func mcpCleanMerged(ctx context.Context, r git.Runner, hctx *HandlerContext, dry
 }
 
 func mcpCleanStale(ctx context.Context, r git.Runner, hctx *HandlerContext, dryRun bool, staleDays int, force bool) (*mcp.CallToolResult, error) {
-	mainBranch, err := operations.ResolveMainBranch(r, configDefault(hctx))
+	mainBranch, err := operations.ResolveMainBranch(ctx, r, configDefault(hctx))
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	staleResult, err := operations.FindStaleCandidates(r, mainBranch, staleDays)
+	staleResult, err := operations.FindStaleCandidates(ctx, r, mainBranch, staleDays)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}

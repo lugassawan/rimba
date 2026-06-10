@@ -1,6 +1,7 @@
 package git_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,7 +20,7 @@ func TestAddAndListWorktrees(t *testing.T) {
 
 	wtPath := filepath.Join(filepath.Dir(repo), "wt-feat-login")
 
-	if err := git.AddWorktree(r, wtPath, "feat/login", "main"); err != nil {
+	if err := git.AddWorktree(context.Background(), r, wtPath, "feat/login", "main"); err != nil {
 		t.Fatalf(fatalAddWorktree, err)
 	}
 
@@ -28,7 +29,7 @@ func TestAddAndListWorktrees(t *testing.T) {
 		t.Fatalf("worktree dir not created: %v", err)
 	}
 
-	entries, err := git.ListWorktrees(r)
+	entries, err := git.ListWorktrees(context.Background(), r)
 	if err != nil {
 		t.Fatalf("ListWorktrees: %v", err)
 	}
@@ -62,7 +63,7 @@ func TestAddWorktreeFromBranch(t *testing.T) {
 	testutil.GitCmd(t, repo, "branch", "feat/existing")
 
 	wtPath := filepath.Join(filepath.Dir(repo), "wt-from-branch")
-	if err := git.AddWorktreeFromBranch(r, wtPath, "feat/existing"); err != nil {
+	if err := git.AddWorktreeFromBranch(context.Background(), r, wtPath, "feat/existing"); err != nil {
 		t.Fatalf("AddWorktreeFromBranch: %v", err)
 	}
 
@@ -70,7 +71,7 @@ func TestAddWorktreeFromBranch(t *testing.T) {
 		t.Fatalf("worktree dir not created: %v", err)
 	}
 
-	entries, err := git.ListWorktrees(r)
+	entries, err := git.ListWorktrees(context.Background(), r)
 	if err != nil {
 		t.Fatalf("ListWorktrees: %v", err)
 	}
@@ -96,11 +97,11 @@ func TestRemoveWorktree(t *testing.T) {
 	r := &git.ExecRunner{Dir: repo}
 
 	wtPath := filepath.Join(filepath.Dir(repo), "wt-to-remove")
-	if err := git.AddWorktree(r, wtPath, "feat/remove-me", "main"); err != nil {
+	if err := git.AddWorktree(context.Background(), r, wtPath, "feat/remove-me", "main"); err != nil {
 		t.Fatalf(fatalAddWorktree, err)
 	}
 
-	if err := git.RemoveWorktree(r, wtPath, false); err != nil {
+	if err := git.RemoveWorktree(context.Background(), r, wtPath, false); err != nil {
 		t.Fatalf("RemoveWorktree: %v", err)
 	}
 
@@ -165,7 +166,7 @@ func TestMoveWorktree(t *testing.T) {
 	r := &git.ExecRunner{Dir: repo}
 
 	oldPath := filepath.Join(filepath.Dir(repo), "wt-to-move")
-	if err := git.AddWorktree(r, oldPath, "feat/move-me", "main"); err != nil {
+	if err := git.AddWorktree(context.Background(), r, oldPath, "feat/move-me", "main"); err != nil {
 		t.Fatalf(fatalAddWorktree, err)
 	}
 
@@ -190,7 +191,7 @@ func TestMoveWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EvalSymlinks: %v", err)
 	}
-	entries, err := git.ListWorktrees(r)
+	entries, err := git.ListWorktrees(context.Background(), r)
 	if err != nil {
 		t.Fatalf("ListWorktrees: %v", err)
 	}

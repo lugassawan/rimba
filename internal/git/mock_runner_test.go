@@ -37,19 +37,11 @@ type mockRunner struct {
 	runInDir func(dir string, args ...string) (string, error)
 }
 
-func (m *mockRunner) Run(args ...string) (string, error) {
+func (m *mockRunner) Run(_ context.Context, args ...string) (string, error) {
 	return m.run(args...)
 }
 
-func (m *mockRunner) RunInDir(dir string, args ...string) (string, error) {
-	return m.runInDir(dir, args...)
-}
-
-func (m *mockRunner) RunContext(_ context.Context, args ...string) (string, error) {
-	return m.run(args...)
-}
-
-func (m *mockRunner) RunInDirContext(_ context.Context, dir string, args ...string) (string, error) {
+func (m *mockRunner) RunInDir(_ context.Context, dir string, args ...string) (string, error) {
 	return m.runInDir(dir, args...)
 }
 
@@ -107,7 +99,7 @@ func TestAheadBehind(t *testing.T) {
 					return tt.out, tt.err
 				},
 			}
-			ahead, behind, err := AheadBehind(r, fakeDir)
+			ahead, behind, err := AheadBehind(context.Background(), r, fakeDir)
 			if err != nil {
 				t.Fatalf("AheadBehind returned error: %v", err)
 			}
@@ -128,7 +120,7 @@ func TestMergedBranches(t *testing.T) {
 		},
 	}
 
-	branches, err := MergedBranches(r, branchMain)
+	branches, err := MergedBranches(context.Background(), r, branchMain)
 	if err != nil {
 		t.Fatalf("MergedBranches: %v", err)
 	}
@@ -151,7 +143,7 @@ func TestMergedBranchesError(t *testing.T) {
 		},
 	}
 
-	_, err := MergedBranches(r, branchMain)
+	_, err := MergedBranches(context.Background(), r, branchMain)
 	if err == nil {
 		t.Fatal("expected error from MergedBranches")
 	}
@@ -164,7 +156,7 @@ func TestMergedBranchesEmpty(t *testing.T) {
 		},
 	}
 
-	branches, err := MergedBranches(r, branchMain)
+	branches, err := MergedBranches(context.Background(), r, branchMain)
 	if err != nil {
 		t.Fatalf("MergedBranches: %v", err)
 	}
@@ -182,7 +174,7 @@ func TestDeleteBranchForce(t *testing.T) {
 		},
 	}
 
-	if err := DeleteBranch(r, branchOld, true); err != nil {
+	if err := DeleteBranch(context.Background(), r, branchOld, true); err != nil {
 		t.Fatalf("DeleteBranch: %v", err)
 	}
 
@@ -197,7 +189,7 @@ func TestDeleteBranchNotFoundIsIdempotent(t *testing.T) {
 			return "", errors.New("error: branch 'gone' not found.")
 		},
 	}
-	if err := DeleteBranch(r, "gone", false); err != nil {
+	if err := DeleteBranch(context.Background(), r, "gone", false); err != nil {
 		t.Fatalf("expected nil for already-gone branch, got: %v", err)
 	}
 }
@@ -208,7 +200,7 @@ func TestDeleteBranchOtherErrorPropagates(t *testing.T) {
 			return "", errors.New("error: Cannot delete branch 'main' checked out at '/repo'")
 		},
 	}
-	if err := DeleteBranch(r, "main", false); err == nil {
+	if err := DeleteBranch(context.Background(), r, "main", false); err == nil {
 		t.Fatal("expected non-nil error for checked-out branch")
 	}
 }
@@ -220,7 +212,7 @@ func TestDeleteBranchNotFoundWithoutBranchKeywordPropagates(t *testing.T) {
 			return "", errors.New("ref not found")
 		},
 	}
-	if err := DeleteBranch(r, "gone", false); err == nil {
+	if err := DeleteBranch(context.Background(), r, "gone", false); err == nil {
 		t.Fatal("expected non-nil error when 'branch \\'' is absent from the message")
 	}
 }
@@ -234,7 +226,7 @@ func TestRenameBranch(t *testing.T) {
 		},
 	}
 
-	if err := RenameBranch(r, branchOld, branchNew); err != nil {
+	if err := RenameBranch(context.Background(), r, branchOld, branchNew); err != nil {
 		t.Fatalf("RenameBranch: %v", err)
 	}
 
@@ -256,7 +248,7 @@ func TestIsDirtyError(t *testing.T) {
 		},
 	}
 
-	_, err := IsDirty(r, fakeDir)
+	_, err := IsDirty(context.Background(), r, fakeDir)
 	if err == nil {
 		t.Fatal("expected error from IsDirty")
 	}
@@ -272,7 +264,7 @@ func TestPruneNormal(t *testing.T) {
 		},
 	}
 
-	if _, err := Prune(r, false); err != nil {
+	if _, err := Prune(context.Background(), r, false); err != nil {
 		t.Fatalf("Prune: %v", err)
 	}
 	if slices.Contains(captured, flagDryRun) {
@@ -289,7 +281,7 @@ func TestPruneDryRun(t *testing.T) {
 		},
 	}
 
-	out, err := Prune(r, true)
+	out, err := Prune(context.Background(), r, true)
 	if err != nil {
 		t.Fatalf("Prune: %v", err)
 	}
@@ -308,7 +300,7 @@ func TestPruneErrorWrapping(t *testing.T) {
 		},
 	}
 
-	_, err := Prune(r, false)
+	_, err := Prune(context.Background(), r, false)
 	if err == nil {
 		t.Fatal("expected error from Prune")
 	}
@@ -324,7 +316,7 @@ func TestRemoveWorktreeForce(t *testing.T) {
 		},
 	}
 
-	if err := RemoveWorktree(r, fakePath, true); err != nil {
+	if err := RemoveWorktree(context.Background(), r, fakePath, true); err != nil {
 		t.Fatalf("RemoveWorktree: %v", err)
 	}
 	if !slices.Contains(captured, flagForce) {
@@ -380,7 +372,7 @@ func TestListWorktreesError(t *testing.T) {
 		},
 	}
 
-	entries, err := ListWorktrees(r)
+	entries, err := ListWorktrees(context.Background(), r)
 	if err == nil {
 		t.Fatal("expected error from ListWorktrees")
 	}
@@ -411,7 +403,7 @@ func defaultBranchRunner(symRef, acceptBranch string) *mockRunner {
 
 func TestDefaultBranchSymbolicRef(t *testing.T) {
 	r := defaultBranchRunner("refs/remotes/origin/develop", "")
-	branch, err := DefaultBranch(r)
+	branch, err := DefaultBranch(context.Background(), r)
 	if err != nil {
 		t.Fatalf(fatalDefaultFmt, err)
 	}
@@ -422,7 +414,7 @@ func TestDefaultBranchSymbolicRef(t *testing.T) {
 
 func TestDefaultBranchFallbackMain(t *testing.T) {
 	r := defaultBranchRunner("", "main")
-	branch, err := DefaultBranch(r)
+	branch, err := DefaultBranch(context.Background(), r)
 	if err != nil {
 		t.Fatalf(fatalDefaultFmt, err)
 	}
@@ -433,7 +425,7 @@ func TestDefaultBranchFallbackMain(t *testing.T) {
 
 func TestDefaultBranchFallbackMaster(t *testing.T) {
 	r := defaultBranchRunner("", "master")
-	branch, err := DefaultBranch(r)
+	branch, err := DefaultBranch(context.Background(), r)
 	if err != nil {
 		t.Fatalf(fatalDefaultFmt, err)
 	}
@@ -444,7 +436,7 @@ func TestDefaultBranchFallbackMaster(t *testing.T) {
 
 func TestDefaultBranchNotFound(t *testing.T) {
 	r := defaultBranchRunner("", "")
-	_, err := DefaultBranch(r)
+	_, err := DefaultBranch(context.Background(), r)
 	if err == nil {
 		t.Fatal("expected error when no default branch found")
 	}
@@ -460,7 +452,7 @@ func TestHooksDirError(t *testing.T) {
 		},
 	}
 
-	_, err := HooksDir(r)
+	_, err := HooksDir(context.Background(), r)
 	if err == nil {
 		t.Fatal("expected error from HooksDir")
 	}
@@ -483,7 +475,7 @@ func TestHooksDirRelativePath(t *testing.T) {
 		},
 	}
 
-	dir, err := HooksDir(r)
+	dir, err := HooksDir(context.Background(), r)
 	if err != nil {
 		t.Fatalf("HooksDir: %v", err)
 	}
@@ -508,7 +500,7 @@ func TestHooksDirAbsolutePath(t *testing.T) {
 		},
 	}
 
-	dir, err := HooksDir(r)
+	dir, err := HooksDir(context.Background(), r)
 	if err != nil {
 		t.Fatalf("HooksDir: %v", err)
 	}
@@ -526,7 +518,7 @@ func TestRepoRootError(t *testing.T) {
 		},
 	}
 
-	_, err := RepoRoot(r)
+	_, err := RepoRoot(context.Background(), r)
 	if err == nil {
 		t.Fatal("expected error from RepoRoot")
 	}
@@ -549,7 +541,7 @@ func TestHooksDirRelativePathRepoRootError(t *testing.T) {
 		},
 	}
 
-	_, err := HooksDir(r)
+	_, err := HooksDir(context.Background(), r)
 	if err == nil {
 		t.Fatal("expected error from HooksDir when RepoRoot fails")
 	}
@@ -566,7 +558,7 @@ func TestHooksDirCoreHooksPathAbsolute(t *testing.T) {
 		},
 	}
 
-	dir, err := HooksDir(r)
+	dir, err := HooksDir(context.Background(), r)
 	if err != nil {
 		t.Fatalf("HooksDir: %v", err)
 	}
@@ -592,7 +584,7 @@ func TestHooksDirCoreHooksPathRelative(t *testing.T) {
 		},
 	}
 
-	dir, err := HooksDir(r)
+	dir, err := HooksDir(context.Background(), r)
 	if err != nil {
 		t.Fatalf("HooksDir: %v", err)
 	}
@@ -614,7 +606,7 @@ func TestHooksDirCoreHooksPathRelativeRepoRootError(t *testing.T) {
 		},
 	}
 
-	_, err := HooksDir(r)
+	_, err := HooksDir(context.Background(), r)
 	if err == nil {
 		t.Fatal("expected error from HooksDir when MainRepoRoot fails")
 	}
@@ -628,7 +620,7 @@ func TestListWorktreesBareEntry(t *testing.T) {
 		},
 	}
 
-	entries, err := ListWorktrees(r)
+	entries, err := ListWorktrees(context.Background(), r)
 	if err != nil {
 		t.Fatalf("ListWorktrees: %v", err)
 	}
@@ -662,7 +654,7 @@ func TestIsSquashMerged(t *testing.T) {
 		},
 	}
 
-	merged, err := IsSquashMerged(r, branchMain, branchFeature)
+	merged, err := IsSquashMerged(context.Background(), r, branchMain, branchFeature)
 	if err != nil {
 		t.Fatalf("IsSquashMerged: %v", err)
 	}
@@ -690,7 +682,7 @@ func TestIsSquashMergedNotMerged(t *testing.T) {
 		},
 	}
 
-	merged, err := IsSquashMerged(r, branchMain, branchFeature)
+	merged, err := IsSquashMerged(context.Background(), r, branchMain, branchFeature)
 	if err != nil {
 		t.Fatalf("IsSquashMerged: %v", err)
 	}
@@ -706,7 +698,7 @@ func TestIsSquashMergedMergeBaseError(t *testing.T) {
 		},
 	}
 
-	_, err := IsSquashMerged(r, branchMain, branchFeature)
+	_, err := IsSquashMerged(context.Background(), r, branchMain, branchFeature)
 	if err == nil {
 		t.Fatal("expected error from MergeBase failure")
 	}
@@ -724,7 +716,7 @@ func TestIsSquashMergedRevParseError(t *testing.T) {
 		},
 	}
 
-	_, err := IsSquashMerged(r, branchMain, branchFeature)
+	_, err := IsSquashMerged(context.Background(), r, branchMain, branchFeature)
 	if err == nil {
 		t.Fatal("expected error from rev-parse failure")
 	}
@@ -745,7 +737,7 @@ func TestIsSquashMergedCommitTreeError(t *testing.T) {
 		},
 	}
 
-	_, err := IsSquashMerged(r, branchMain, branchFeature)
+	_, err := IsSquashMerged(context.Background(), r, branchMain, branchFeature)
 	if err == nil {
 		t.Fatal("expected error from commit-tree failure")
 	}
@@ -770,7 +762,7 @@ func TestIsSquashMergedEmptyCherry(t *testing.T) {
 		},
 	}
 
-	merged, err := IsSquashMerged(r, branchMain, branchFeature)
+	merged, err := IsSquashMerged(context.Background(), r, branchMain, branchFeature)
 	if err != nil {
 		t.Fatalf("IsSquashMerged: %v", err)
 	}
@@ -796,7 +788,7 @@ func TestIsSquashMergedCherryError(t *testing.T) {
 		},
 	}
 
-	_, err := IsSquashMerged(r, branchMain, branchFeature)
+	_, err := IsSquashMerged(context.Background(), r, branchMain, branchFeature)
 	if err == nil {
 		t.Fatal("expected error from cherry failure")
 	}
@@ -809,7 +801,7 @@ func TestMainRepoRootError(t *testing.T) {
 		},
 	}
 
-	_, err := MainRepoRoot(r)
+	_, err := MainRepoRoot(context.Background(), r)
 	if err == nil {
 		t.Fatal("expected error from MainRepoRoot")
 	}
@@ -829,7 +821,7 @@ func TestMainRepoRootRelativePath(t *testing.T) {
 		},
 	}
 
-	root, err := MainRepoRoot(r)
+	root, err := MainRepoRoot(context.Background(), r)
 	if err != nil {
 		t.Fatalf("MainRepoRoot: %v", err)
 	}
@@ -849,7 +841,7 @@ func TestMainRepoRootAbsolutePath(t *testing.T) {
 		},
 	}
 
-	root, err := MainRepoRoot(r)
+	root, err := MainRepoRoot(context.Background(), r)
 	if err != nil {
 		t.Fatalf("MainRepoRoot: %v", err)
 	}
@@ -872,7 +864,7 @@ func TestMainRepoRootRelativePathRepoRootError(t *testing.T) {
 		},
 	}
 
-	_, err := MainRepoRoot(r)
+	_, err := MainRepoRoot(context.Background(), r)
 	if err == nil {
 		t.Fatal("expected error from MainRepoRoot when RepoRoot fails")
 	}
@@ -885,7 +877,7 @@ func TestLastCommitInfoEmptyOutput(t *testing.T) {
 			return "", nil
 		},
 	}
-	_, _, err := LastCommitInfo(r, branchFeature)
+	_, _, err := LastCommitInfo(context.Background(), r, branchFeature)
 	if err == nil {
 		t.Fatal("expected error for empty output")
 	}
@@ -898,7 +890,7 @@ func TestLastCommitInfoMalformed(t *testing.T) {
 			return "no-tab-separator", nil
 		},
 	}
-	_, _, err := LastCommitInfo(r, branchFeature)
+	_, _, err := LastCommitInfo(context.Background(), r, branchFeature)
 	if err == nil {
 		t.Fatal("expected error for malformed output")
 	}
@@ -911,7 +903,7 @@ func TestLastCommitInfoBadTimestamp(t *testing.T) {
 			return "not-a-number\tcommit subject", nil
 		},
 	}
-	_, _, err := LastCommitInfo(r, branchFeature)
+	_, _, err := LastCommitInfo(context.Background(), r, branchFeature)
 	if err == nil {
 		t.Fatal("expected error for non-numeric timestamp")
 	}
@@ -924,7 +916,7 @@ func TestLastCommitInfoRunError(t *testing.T) {
 			return "", errors.New(errNotARepo)
 		},
 	}
-	_, _, err := LastCommitInfo(r, branchFeature)
+	_, _, err := LastCommitInfo(context.Background(), r, branchFeature)
 	if err == nil {
 		t.Fatal("expected error from runner failure")
 	}
@@ -938,7 +930,7 @@ func TestLocalBranchesError(t *testing.T) {
 			return "", errors.New(errNotARepo)
 		},
 	}
-	_, err := LocalBranches(r)
+	_, err := LocalBranches(context.Background(), r)
 	if err == nil {
 		t.Fatal("expected error from LocalBranches")
 	}
@@ -951,7 +943,7 @@ func TestRepoNameError(t *testing.T) {
 		},
 	}
 
-	_, err := RepoName(r)
+	_, err := RepoName(context.Background(), r)
 	if err == nil {
 		t.Fatal("expected error from RepoName")
 	}
@@ -970,7 +962,7 @@ func TestCheckoutInsertsDashDash(t *testing.T) {
 		},
 	}
 
-	if err := Checkout(r, fakeDir, branch); err != nil {
+	if err := Checkout(context.Background(), r, fakeDir, branch); err != nil {
 		t.Fatalf("Checkout: %v", err)
 	}
 
@@ -993,7 +985,7 @@ func TestAddWorktreeFromBranchInsertsDashDash(t *testing.T) {
 		},
 	}
 
-	if err := AddWorktreeFromBranch(r, fakePath, branch); err != nil {
+	if err := AddWorktreeFromBranch(context.Background(), r, fakePath, branch); err != nil {
 		t.Fatalf("AddWorktreeFromBranch: %v", err)
 	}
 

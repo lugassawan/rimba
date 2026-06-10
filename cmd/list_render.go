@@ -132,7 +132,7 @@ func formatCICell(status gh.CIStatus, p *termcolor.Painter) string {
 }
 
 func listArchivedBranches(cmd *cobra.Command, r git.Runner, mainBranch string) error {
-	archived, err := operations.ListArchivedBranches(r, mainBranch)
+	archived, err := operations.ListArchivedBranches(cmd.Context(), r, mainBranch)
 	if err != nil {
 		return err
 	}

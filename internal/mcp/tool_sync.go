@@ -72,7 +72,7 @@ func handleSync(hctx *HandlerContext) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(fetchErr.Error()), nil
 		}
 
-		worktrees, err := operations.ListWorktreeInfos(r)
+		worktrees, err := operations.ListWorktreeInfos(ctx, r)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

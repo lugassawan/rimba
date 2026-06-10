@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"sort"
@@ -40,14 +41,15 @@ var logCmd = &cobra.Command{
   rimba log --since 7d --limit 10`,
 	Annotations: map[string]string{"skipConfig": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
 		r := newRunner()
 
-		mainBranch, err := resolveMainBranch(r)
+		mainBranch, err := resolveMainBranch(ctx, r)
 		if err != nil {
 			return err
 		}
 
-		entries, err := git.ListWorktrees(r)
+		entries, err := git.ListWorktrees(ctx, r)
 		if err != nil {
 			return err
 		}
@@ -66,7 +68,7 @@ var logCmd = &cobra.Command{
 		defer s.Stop()
 		s.Start("Collecting commit info...")
 
-		valid := collectLogEntries(r, candidates, s)
+		valid := collectLogEntries(ctx, r, candidates, s)
 		s.Stop()
 
 		// Apply --since filter
@@ -120,7 +122,7 @@ func init() {
 
 // collectLogEntries gathers commit info for each candidate in parallel,
 // returning only valid entries sorted by commit time descending.
-func collectLogEntries(r git.Runner, candidates []git.WorktreeEntry, s *spinner.Spinner) []logEntry {
+func collectLogEntries(ctx context.Context, r git.Runner, candidates []git.WorktreeEntry, s *spinner.Spinner) []logEntry {
 	prefixes := resolver.AllPrefixes()
 	s.Update("Collecting commit info...")
 	results := parallel.Collect(len(candidates), 8, func(i int) logEntry {
@@ -128,7 +130,7 @@ func collectLogEntries(r git.Runner, candidates []git.WorktreeEntry, s *spinner.
 		svc, task, matchedPrefix := resolver.ServiceFromBranch(e.Branch, prefixes)
 		typeName := strings.TrimSuffix(matchedPrefix, "/")
 
-		ct, subject, err := git.LastCommitInfo(r, e.Branch)
+		ct, subject, err := git.LastCommitInfo(ctx, r, e.Branch)
 		if err != nil {
 			return logEntry{branch: e.Branch, task: task, service: svc, typeName: typeName, path: e.Path}
 		}

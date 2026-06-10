@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -24,7 +25,7 @@ func TestListWorktreeInfos(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	infos, err := ListWorktreeInfos(r)
+	infos, err := ListWorktreeInfos(context.Background(), r)
 	if err != nil {
 		t.Fatalf("ListWorktreeInfos: %v", err)
 	}
@@ -44,7 +45,7 @@ func TestListWorktreeInfosError(t *testing.T) {
 		run:      func(_ ...string) (string, error) { return "", errGitFailed },
 		runInDir: noopRunInDir,
 	}
-	if _, err := ListWorktreeInfos(r); err == nil {
+	if _, err := ListWorktreeInfos(context.Background(), r); err == nil {
 		t.Fatal("expected error")
 	}
 }
@@ -67,7 +68,7 @@ func TestFindWorktree(t *testing.T) {
 	}
 
 	t.Run("found", func(t *testing.T) {
-		wt, err := FindWorktree(r, "", "login")
+		wt, err := FindWorktree(context.Background(), r, "", "login")
 		if err != nil {
 			t.Fatalf("FindWorktree: %v", err)
 		}
@@ -77,7 +78,7 @@ func TestFindWorktree(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		_, err := FindWorktree(r, "", "nonexistent")
+		_, err := FindWorktree(context.Background(), r, "", "nonexistent")
 		if err == nil {
 			t.Fatal("expected error for missing worktree")
 		}
@@ -112,7 +113,7 @@ func TestFindWorktreeAmbiguity(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	_, err := FindWorktree(r, "", "login")
+	_, err := FindWorktree(context.Background(), r, "", "login")
 	if err == nil {
 		t.Fatal("expected ambiguity error")
 	}
@@ -132,7 +133,7 @@ func TestFindWorktreeError(t *testing.T) {
 		run:      func(_ ...string) (string, error) { return "", errGitFailed },
 		runInDir: noopRunInDir,
 	}
-	if _, err := FindWorktree(r, "", "login"); err == nil {
+	if _, err := FindWorktree(context.Background(), r, "", "login"); err == nil {
 		t.Fatal("expected error")
 	}
 }

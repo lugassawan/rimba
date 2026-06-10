@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -74,7 +75,7 @@ func BenchmarkListWorktrees5(b *testing.B) {
 
 	b.ResetTimer()
 	for b.Loop() {
-		if _, err := ListWorktrees(r); err != nil {
+		if _, err := ListWorktrees(context.Background(), r); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -90,7 +91,7 @@ func BenchmarkListWorktrees10(b *testing.B) {
 
 	b.ResetTimer()
 	for b.Loop() {
-		if _, err := ListWorktrees(r); err != nil {
+		if _, err := ListWorktrees(context.Background(), r); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -106,7 +107,7 @@ func BenchmarkIsDirty(b *testing.B) {
 
 	b.ResetTimer()
 	for b.Loop() {
-		if _, err := IsDirty(r, wts[0]); err != nil {
+		if _, err := IsDirty(context.Background(), r, wts[0]); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -122,7 +123,7 @@ func BenchmarkAheadBehind(b *testing.B) {
 
 	b.ResetTimer()
 	for b.Loop() {
-		_, _, err := AheadBehind(r, wts[0])
+		_, _, err := AheadBehind(context.Background(), r, wts[0])
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -141,7 +142,7 @@ func BenchmarkIsDirtyParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		i := 0
 		for pb.Next() {
-			if _, err := IsDirty(r, wts[i%len(wts)]); err != nil {
+			if _, err := IsDirty(context.Background(), r, wts[i%len(wts)]); err != nil {
 				b.Fatal(err)
 			}
 			i++

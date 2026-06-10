@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -12,19 +13,19 @@ import (
 const internalGitInvariantHint = "report this — git output unexpectedly malformed"
 
 // BranchExists checks whether a local branch exists.
-func BranchExists(r Runner, branch string) bool {
-	_, err := r.Run(cmdRevParse, flagVerify, refsHeadsPrefix+branch)
+func BranchExists(ctx context.Context, r Runner, branch string) bool {
+	_, err := r.Run(ctx, cmdRevParse, flagVerify, refsHeadsPrefix+branch)
 	return err == nil
 }
 
 // DeleteBranch deletes a local branch. If force is true, uses -D instead of -d.
 // Already-gone branches are treated as success (idempotent).
-func DeleteBranch(r Runner, branch string, force bool) error {
+func DeleteBranch(ctx context.Context, r Runner, branch string, force bool) error {
 	flag := "-d"
 	if force {
 		flag = "-D"
 	}
-	_, err := r.Run("branch", flag, branch)
+	_, err := r.Run(ctx, "branch", flag, branch)
 	// git emits "error: branch 'X' not found." — assumes LC_ALL=C or English git.
 	if err != nil && strings.Contains(err.Error(), "branch '") && strings.Contains(err.Error(), "not found") {
 		return nil // already gone — idempotent
@@ -33,15 +34,15 @@ func DeleteBranch(r Runner, branch string, force bool) error {
 }
 
 // RenameBranch renames a local branch from oldBranch to newBranch.
-func RenameBranch(r Runner, oldBranch, newBranch string) error {
-	_, err := r.Run("branch", "-m", oldBranch, newBranch)
+func RenameBranch(ctx context.Context, r Runner, oldBranch, newBranch string) error {
+	_, err := r.Run(ctx, "branch", "-m", oldBranch, newBranch)
 	return err
 }
 
 // CurrentBranch returns the short branch name checked out in the given directory.
 // Returns an error with a hint if HEAD is detached.
-func CurrentBranch(r Runner, dir string) (string, error) {
-	out, err := r.RunInDir(dir, "symbolic-ref", "--short", "HEAD")
+func CurrentBranch(ctx context.Context, r Runner, dir string) (string, error) {
+	out, err := r.RunInDir(ctx, dir, "symbolic-ref", "--short", "HEAD")
 	if err != nil {
 		return "", errhint.WithFix(
 			fmt.Errorf("could not determine current branch: %w", err),
@@ -52,14 +53,14 @@ func CurrentBranch(r Runner, dir string) (string, error) {
 }
 
 // Checkout switches the working tree in dir to the given branch.
-func Checkout(r Runner, dir, branch string) error {
-	_, err := r.RunInDir(dir, "switch", "--", branch)
+func Checkout(ctx context.Context, r Runner, dir, branch string) error {
+	_, err := r.RunInDir(ctx, dir, "switch", "--", branch)
 	return err
 }
 
 // IsDirty returns true if the working tree at the given directory has uncommitted changes.
-func IsDirty(r Runner, dir string) (bool, error) {
-	out, err := r.RunInDir(dir, "status", "--porcelain")
+func IsDirty(ctx context.Context, r Runner, dir string) (bool, error) {
+	out, err := r.RunInDir(ctx, dir, "status", "--porcelain")
 	if err != nil {
 		return false, err
 	}
@@ -68,8 +69,8 @@ func IsDirty(r Runner, dir string) (bool, error) {
 
 // AheadBehind returns the ahead/behind counts of the current branch vs its upstream.
 // Returns (0, 0, nil) if there's no upstream configured.
-func AheadBehind(r Runner, dir string) (ahead, behind int, _ error) {
-	out, err := r.RunInDir(dir, "rev-list", "--left-right", "--count", "@{upstream}...HEAD")
+func AheadBehind(ctx context.Context, r Runner, dir string) (ahead, behind int, _ error) {
+	out, err := r.RunInDir(ctx, dir, "rev-list", "--left-right", "--count", "@{upstream}...HEAD")
 	if err != nil {
 		// No upstream or other error — treat as 0/0
 		return 0, 0, nil //nolint:nilerr // intentional: missing upstream is not an error
@@ -91,23 +92,23 @@ func AheadBehind(r Runner, dir string) (ahead, behind int, _ error) {
 // branch's tree on the merge-base, then check if that content is already in mergeRef.
 // Note: each call creates an unreferenced commit object in the git store; these are
 // cleaned up automatically by git gc.
-func IsSquashMerged(r Runner, mergeRef, branch string) (bool, error) {
-	mergeBase, err := MergeBase(r, mergeRef, branch)
+func IsSquashMerged(ctx context.Context, r Runner, mergeRef, branch string) (bool, error) {
+	mergeBase, err := MergeBase(ctx, r, mergeRef, branch)
 	if err != nil {
 		return false, err
 	}
 
-	tree, err := r.Run(cmdRevParse, branch+treeSuffix)
+	tree, err := r.Run(ctx, cmdRevParse, branch+treeSuffix)
 	if err != nil {
 		return false, err
 	}
 
-	tempCommit, err := r.Run(cmdCommitTree, tree, "-p", mergeBase, "-m", "temp")
+	tempCommit, err := r.Run(ctx, cmdCommitTree, tree, "-p", mergeBase, "-m", "temp")
 	if err != nil {
 		return false, err
 	}
 
-	out, err := r.Run(cmdCherry, mergeRef, tempCommit)
+	out, err := r.Run(ctx, cmdCherry, mergeRef, tempCommit)
 	if err != nil {
 		return false, err
 	}
@@ -117,8 +118,8 @@ func IsSquashMerged(r Runner, mergeRef, branch string) (bool, error) {
 
 // MergedBranches returns branches that have been merged into the given branch.
 // Runs `git branch --merged <branch>` and parses the output.
-func MergedBranches(r Runner, branch string) ([]string, error) {
-	out, err := r.Run("branch", "--merged", branch)
+func MergedBranches(ctx context.Context, r Runner, branch string) ([]string, error) {
+	out, err := r.Run(ctx, "branch", "--merged", branch)
 	if err != nil {
 		return nil, err
 	}
@@ -137,14 +138,14 @@ func MergedBranches(r Runner, branch string) ([]string, error) {
 }
 
 // LastCommitTime returns the time of the last commit on the given branch.
-func LastCommitTime(r Runner, branch string) (time.Time, error) {
-	t, _, err := LastCommitInfo(r, branch)
+func LastCommitTime(ctx context.Context, r Runner, branch string) (time.Time, error) {
+	t, _, err := LastCommitInfo(ctx, r, branch)
 	return t, err
 }
 
 // LastCommitInfo returns the time and subject of the last commit on the given branch.
-func LastCommitInfo(r Runner, branch string) (time.Time, string, error) {
-	out, err := r.Run("log", "-1", "--format=%ct\t%s", branch)
+func LastCommitInfo(ctx context.Context, r Runner, branch string) (time.Time, string, error) {
+	out, err := r.Run(ctx, "log", "-1", "--format=%ct\t%s", branch)
 	if err != nil {
 		return time.Time{}, "", errhint.WithFix(
 			fmt.Errorf("last commit info for %s: %w", branch, err),
@@ -178,8 +179,8 @@ func LastCommitInfo(r Runner, branch string) (time.Time, string, error) {
 }
 
 // LocalBranches returns the list of local branch names.
-func LocalBranches(r Runner) ([]string, error) {
-	out, err := r.Run("branch", "--format=%(refname:short)")
+func LocalBranches(ctx context.Context, r Runner) ([]string, error) {
+	out, err := r.Run(ctx, "branch", "--format=%(refname:short)")
 	if err != nil {
 		return nil, err
 	}

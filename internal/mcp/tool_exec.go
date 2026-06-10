@@ -74,7 +74,7 @@ func handleExec(hctx *HandlerContext) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(fmt.Sprintf("invalid type %q; valid types: feature, bugfix, hotfix, docs, test, chore", typeFilter)), nil
 		}
 
-		filtered, err := resolveExecTargets(hctx.Runner, cfg, typeFilter, dirty)
+		filtered, err := resolveExecTargets(ctx, hctx.Runner, cfg, typeFilter, dirty)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -92,8 +92,8 @@ func handleExec(hctx *HandlerContext) server.ToolHandlerFunc {
 }
 
 // resolveExecTargets collects and filters worktrees for exec.
-func resolveExecTargets(r git.Runner, cfg *config.Config, typeFilter string, dirty bool) ([]resolver.WorktreeInfo, error) {
-	worktrees, err := operations.ListWorktreeInfos(r)
+func resolveExecTargets(ctx context.Context, r git.Runner, cfg *config.Config, typeFilter string, dirty bool) ([]resolver.WorktreeInfo, error) {
+	worktrees, err := operations.ListWorktreeInfos(ctx, r)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +109,7 @@ func resolveExecTargets(r git.Runner, cfg *config.Config, typeFilter string, dir
 	}
 
 	if dirty {
-		filtered = filterDirty(r, filtered)
+		filtered = filterDirty(ctx, r, filtered)
 	}
 
 	return filtered, nil
@@ -172,7 +172,7 @@ func buildExecData(command string, results []executor.Result) execData {
 // filterDirty filters worktrees to only those with uncommitted changes.
 // If IsDirty returns an error, the worktree is treated as dirty (included)
 // and a warning is written to os.Stderr so the operator can investigate.
-func filterDirty(r git.Runner, worktrees []resolver.WorktreeInfo) []resolver.WorktreeInfo {
+func filterDirty(ctx context.Context, r git.Runner, worktrees []resolver.WorktreeInfo) []resolver.WorktreeInfo {
 	isDirtyFlags := make([]bool, len(worktrees))
 	warnings := make([]string, len(worktrees))
 	var wg sync.WaitGroup
@@ -185,7 +185,7 @@ func filterDirty(r git.Runner, worktrees []resolver.WorktreeInfo) []resolver.Wor
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			d, err := git.IsDirty(r, path)
+			d, err := git.IsDirty(ctx, r, path)
 			if err != nil {
 				warnings[idx] = fmt.Sprintf("Warning: cannot check dirty status for %s: %v", path, err)
 				isDirtyFlags[idx] = true

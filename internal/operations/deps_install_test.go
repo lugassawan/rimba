@@ -49,7 +49,7 @@ func TestResolveMainBranchConfigDefault(t *testing.T) {
 		},
 	}
 
-	branch, err := ResolveMainBranch(r, "develop")
+	branch, err := ResolveMainBranch(context.Background(), r, "develop")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestResolveMainBranchFallbackToGit(t *testing.T) {
 		},
 	}
 
-	branch, err := ResolveMainBranch(r, "")
+	branch, err := ResolveMainBranch(context.Background(), r, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestResolveMainBranchGitError(t *testing.T) {
 		},
 	}
 
-	_, err := ResolveMainBranch(r, "")
+	_, err := ResolveMainBranch(context.Background(), r, "")
 	if err == nil {
 		t.Fatal("expected error")
 	}

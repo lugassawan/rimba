@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"io"
 
 	"github.com/lugassawan/rimba/internal/config"
@@ -44,8 +45,8 @@ func spinnerOpts(cmd *cobra.Command) spinner.Options {
 }
 
 // resolveMainBranch tries to get the main branch from config, falling back to DefaultBranch.
-func resolveMainBranch(r git.Runner) (string, error) {
-	repoRoot, err := git.MainRepoRoot(r)
+func resolveMainBranch(ctx context.Context, r git.Runner) (string, error) {
+	repoRoot, err := git.MainRepoRoot(ctx, r)
 	if err != nil {
 		return "", err
 	}
@@ -55,21 +56,21 @@ func resolveMainBranch(r git.Runner) (string, error) {
 		configDefault = cfg.DefaultSource
 	}
 
-	return operations.ResolveMainBranch(r, configDefault)
+	return operations.ResolveMainBranch(ctx, r, configDefault)
 }
 
 // listWorktreeInfos converts git worktree entries to resolver-compatible WorktreeInfo slice.
-func listWorktreeInfos(r git.Runner) ([]resolver.WorktreeInfo, error) {
-	return operations.ListWorktreeInfos(r)
+func listWorktreeInfos(ctx context.Context, r git.Runner) ([]resolver.WorktreeInfo, error) {
+	return operations.ListWorktreeInfos(ctx, r)
 }
 
 // findWorktree looks up a worktree by user input (task or service/task).
 // It resolves the input to detect monorepo service names.
-func findWorktree(r git.Runner, input string) (resolver.WorktreeInfo, error) {
-	repoRoot, err := git.MainRepoRoot(r)
+func findWorktree(ctx context.Context, r git.Runner, input string) (resolver.WorktreeInfo, error) {
+	repoRoot, err := git.MainRepoRoot(ctx, r)
 	if err != nil {
-		return operations.FindWorktree(r, "", input)
+		return operations.FindWorktree(ctx, r, "", input)
 	}
 	service, task := operations.ResolveTaskInput(input, repoRoot)
-	return operations.FindWorktree(r, service, task)
+	return operations.FindWorktree(ctx, r, service, task)
 }

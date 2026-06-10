@@ -11,12 +11,10 @@ import (
 // mergeBenchMockRunner simulates IsDirty calls.
 type mergeBenchMockRunner struct{}
 
-func (m *mergeBenchMockRunner) Run(_ ...string) (string, error)                { return "", nil }
-func (m *mergeBenchMockRunner) RunInDir(_ string, _ ...string) (string, error) { return "", nil }
-func (m *mergeBenchMockRunner) RunContext(_ context.Context, _ ...string) (string, error) {
+func (m *mergeBenchMockRunner) Run(_ context.Context, _ ...string) (string, error) {
 	return "", nil
 }
-func (m *mergeBenchMockRunner) RunInDirContext(_ context.Context, _ string, _ ...string) (string, error) {
+func (m *mergeBenchMockRunner) RunInDir(_ context.Context, _ string, _ ...string) (string, error) {
 	return "", nil
 }
 
@@ -27,8 +25,8 @@ func BenchmarkDirtyChecksSequential(b *testing.B) {
 
 	b.ResetTimer()
 	for b.Loop() {
-		_, _ = git.IsDirty(r, srcPath)
-		_, _ = git.IsDirty(r, tgtPath)
+		_, _ = git.IsDirty(context.Background(), r, srcPath)
+		_, _ = git.IsDirty(context.Background(), r, tgtPath)
 	}
 }
 
@@ -47,11 +45,11 @@ func BenchmarkDirtyChecksParallel(b *testing.B) {
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			srcResult.dirty, srcResult.err = git.IsDirty(r, srcPath)
+			srcResult.dirty, srcResult.err = git.IsDirty(context.Background(), r, srcPath)
 		}()
 		go func() {
 			defer wg.Done()
-			tgtResult.dirty, tgtResult.err = git.IsDirty(r, tgtPath)
+			tgtResult.dirty, tgtResult.err = git.IsDirty(context.Background(), r, tgtPath)
 		}()
 		wg.Wait()
 		_ = srcResult

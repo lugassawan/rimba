@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -30,7 +31,7 @@ func TestRenameWorktreeSuccess(t *testing.T) {
 	}
 
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	res, err := RenameWorktree(r, wt, "auth", wtDir, false)
+	res, err := RenameWorktree(context.Background(), r, wt, "auth", wtDir, false)
 	if err != nil {
 		t.Fatalf("RenameWorktree: %v", err)
 	}
@@ -57,7 +58,7 @@ func TestRenameWorktreeBranchExists(t *testing.T) {
 	}
 
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	_, err := RenameWorktree(r, wt, "auth", wtDir, false)
+	_, err := RenameWorktree(context.Background(), r, wt, "auth", wtDir, false)
 	if err == nil {
 		t.Fatal("expected error for existing branch")
 	}
@@ -86,7 +87,7 @@ func TestRenameWorktreeSameName(t *testing.T) {
 	}
 
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	_, err := RenameWorktree(r, wt, "login", wtDir, false)
+	_, err := RenameWorktree(context.Background(), r, wt, "login", wtDir, false)
 	if err == nil {
 		t.Fatal("expected error for same-name rename")
 	}
@@ -119,7 +120,7 @@ func TestRenameWorktreeMoveFails(t *testing.T) {
 	}
 
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	_, err := RenameWorktree(r, wt, "auth", wtDir, false)
+	_, err := RenameWorktree(context.Background(), r, wt, "auth", wtDir, false)
 	if err == nil {
 		t.Fatal("expected error from move failure")
 	}
@@ -151,7 +152,7 @@ func TestRenameWorktreeBranchRenameFails(t *testing.T) {
 	}
 
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	_, err := RenameWorktree(r, wt, "auth", wtDir, false)
+	_, err := RenameWorktree(context.Background(), r, wt, "auth", wtDir, false)
 	if err == nil {
 		t.Fatal("expected error from branch rename failure")
 	}
@@ -195,7 +196,7 @@ func TestRenameWorktreeBranchRenameFailsRollbackFails(t *testing.T) {
 	}
 
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	_, err := RenameWorktree(r, wt, "auth", wtDir, false)
+	_, err := RenameWorktree(context.Background(), r, wt, "auth", wtDir, false)
 	if err == nil {
 		t.Fatal("expected error from branch rename + rollback failure")
 	}
@@ -226,7 +227,7 @@ func TestRenameWorktreeNoPrefixMatch(t *testing.T) {
 	}
 
 	wt := resolver.WorktreeInfo{Branch: "plain-branch", Path: "/wt/plain-branch"}
-	res, err := RenameWorktree(r, wt, "new-task", wtDir, false)
+	res, err := RenameWorktree(context.Background(), r, wt, "new-task", wtDir, false)
 	if err != nil {
 		t.Fatalf("RenameWorktree: %v", err)
 	}

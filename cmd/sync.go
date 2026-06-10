@@ -101,12 +101,12 @@ var syncCmd = &cobra.Command{
 			}
 		}
 
-		repoRoot, err := git.MainRepoRoot(r)
+		repoRoot, err := git.MainRepoRoot(cmd.Context(), r)
 		if err != nil {
 			return err
 		}
 
-		worktrees, err := listWorktreeInfos(r)
+		worktrees, err := listWorktreeInfos(cmd.Context(), r)
 		if err != nil {
 			return err
 		}
@@ -138,7 +138,7 @@ func syncOne(ctx context.Context, sc *syncContext, input string, worktrees []res
 		return fmt.Errorf(operations.ErrWorktreeNotFoundFmt, input)
 	}
 
-	dirty, err := git.IsDirty(sc.r, wt.Path)
+	dirty, err := git.IsDirty(ctx, sc.r, wt.Path)
 	if err != nil {
 		return err
 	}

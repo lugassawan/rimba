@@ -234,7 +234,7 @@ func TestFilterDirtyWorktrees(t *testing.T) {
 	s := testExecSpinner(cmd)
 	defer s.Stop()
 
-	result := filterDirtyWorktrees(cmd, r, s, worktrees)
+	result := filterDirtyWorktrees(context.Background(), cmd, r, s, worktrees)
 	if len(result) != 1 {
 		t.Fatalf("expected 1 dirty worktree, got %d", len(result))
 	}
@@ -262,7 +262,7 @@ func TestFilterDirtyWorktreesIsDirtyErrorIncludedAndWarned(t *testing.T) {
 	s := testExecSpinner(cmd)
 	defer s.Stop()
 
-	result := filterDirtyWorktrees(cmd, r, s, worktrees)
+	result := filterDirtyWorktrees(context.Background(), cmd, r, s, worktrees)
 
 	if len(result) != 1 {
 		t.Fatalf("expected erroring worktree to be included (treated as dirty), got %d", len(result))

@@ -43,7 +43,7 @@ func handleList(hctx *HandlerContext) server.ToolHandlerFunc {
 		r := hctx.Runner
 
 		if archived {
-			return handleListArchived(r, hctx)
+			return handleListArchived(ctx, r, hctx)
 		}
 
 		cfg, err := hctx.requireConfig()
@@ -84,13 +84,13 @@ func detailsToListItems(rows []resolver.WorktreeDetail) []listItem {
 	return items
 }
 
-func handleListArchived(r git.Runner, hctx *HandlerContext) (*mcp.CallToolResult, error) {
-	mainBranch, err := operations.ResolveMainBranch(r, configDefault(hctx))
+func handleListArchived(ctx context.Context, r git.Runner, hctx *HandlerContext) (*mcp.CallToolResult, error) {
+	mainBranch, err := operations.ResolveMainBranch(ctx, r, configDefault(hctx))
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	archived, err := operations.ListArchivedBranches(r, mainBranch)
+	archived, err := operations.ListArchivedBranches(ctx, r, mainBranch)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}

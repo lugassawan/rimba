@@ -34,12 +34,12 @@ var renameCmd = &cobra.Command{
 
 		r := newRunner()
 
-		repoRoot, err := git.MainRepoRoot(r)
+		repoRoot, err := git.MainRepoRoot(cmd.Context(), r)
 		if err != nil {
 			return err
 		}
 
-		wt, err := findWorktree(r, task)
+		wt, err := findWorktree(cmd.Context(), r, task)
 		if err != nil {
 			return err
 		}
@@ -66,7 +66,7 @@ var renameCmd = &cobra.Command{
 		force, _ := cmd.Flags().GetBool(flagForce)
 		s.Start("Renaming worktree...")
 
-		result, err := operations.RenameWorktree(r, wt, newTask, wtDir, force)
+		result, err := operations.RenameWorktree(cmd.Context(), r, wt, newTask, wtDir, force)
 		if err != nil {
 			return err
 		}

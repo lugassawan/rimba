@@ -31,7 +31,7 @@ Use --yes to approve without prompting (e.g. in CI, combined with RIMBA_TRUST_YE
 		cfg := config.FromContext(cmd.Context())
 
 		r := newRunner()
-		repoRoot, err := git.MainRepoRoot(r)
+		repoRoot, err := git.MainRepoRoot(cmd.Context(), r)
 		if err != nil {
 			return err
 		}

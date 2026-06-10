@@ -50,7 +50,7 @@ Shortcuts are configured in .rimba/settings.toml:
 		task := args[0]
 		r := newRunner()
 
-		wt, err := findWorktree(r, task)
+		wt, err := findWorktree(cmd.Context(), r, task)
 		if err != nil {
 			return err
 		}

@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"errors"
 	"testing"
 )
@@ -45,7 +46,7 @@ func TestDiffNameOnly(t *testing.T) {
 				},
 			}
 
-			got, err := DiffNameOnly(r, "main", "feature/x")
+			got, err := DiffNameOnly(context.Background(), r, "main", "feature/x")
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("DiffNameOnly error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -74,7 +75,7 @@ func TestMergeTreeClean(t *testing.T) {
 		},
 	}
 
-	result, err := MergeTree(r, "main", "feature/x")
+	result, err := MergeTree(context.Background(), r, "main", "feature/x")
 	if err != nil {
 		t.Fatalf("MergeTree: %v", err)
 	}
@@ -91,7 +92,7 @@ func TestMergeTreeConflicts(t *testing.T) {
 		},
 	}
 
-	result, err := MergeTree(r, "main", "feature/x")
+	result, err := MergeTree(context.Background(), r, "main", "feature/x")
 	if err != nil {
 		t.Fatalf("MergeTree: %v", err)
 	}
@@ -116,7 +117,7 @@ func TestMergeTreeError(t *testing.T) {
 		},
 	}
 
-	_, err := MergeTree(r, "main", "nonexistent")
+	_, err := MergeTree(context.Background(), r, "main", "nonexistent")
 	if err == nil {
 		t.Fatal("expected error from MergeTree")
 	}
@@ -131,7 +132,7 @@ func TestMergeTreeArgs(t *testing.T) {
 		},
 	}
 
-	_, _ = MergeTree(r, "main", "feature/x")
+	_, _ = MergeTree(context.Background(), r, "main", "feature/x")
 	want := []string{"merge-tree", "--write-tree", "main", "feature/x"}
 	if len(captured) != len(want) {
 		t.Fatalf("args = %v, want %v", captured, want)

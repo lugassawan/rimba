@@ -1,6 +1,7 @@
 package git_test
 
 import (
+	"context"
 	"slices"
 	"strings"
 	"testing"
@@ -24,11 +25,11 @@ func TestBranchExists(t *testing.T) {
 	repo := testutil.NewTestRepo(t)
 	r := &git.ExecRunner{Dir: repo}
 
-	if !git.BranchExists(r, "main") {
+	if !git.BranchExists(context.Background(), r, "main") {
 		t.Error("expected main branch to exist")
 	}
 
-	if git.BranchExists(r, "nonexistent") {
+	if git.BranchExists(context.Background(), r, "nonexistent") {
 		t.Error("expected nonexistent branch to not exist")
 	}
 }
@@ -44,15 +45,15 @@ func TestDeleteBranch(t *testing.T) {
 	// Create a branch
 	testutil.GitCmd(t, repo, "branch", branchToDelete)
 
-	if !git.BranchExists(r, branchToDelete) {
+	if !git.BranchExists(context.Background(), r, branchToDelete) {
 		t.Fatal("branch should exist before delete")
 	}
 
-	if err := git.DeleteBranch(r, branchToDelete, false); err != nil {
+	if err := git.DeleteBranch(context.Background(), r, branchToDelete, false); err != nil {
 		t.Fatalf("DeleteBranch: %v", err)
 	}
 
-	if git.BranchExists(r, branchToDelete) {
+	if git.BranchExists(context.Background(), r, branchToDelete) {
 		t.Error("branch should not exist after delete")
 	}
 }
@@ -65,7 +66,7 @@ func TestLastCommitTime(t *testing.T) {
 	repo := testutil.NewTestRepo(t)
 	r := &git.ExecRunner{Dir: repo}
 
-	ct, err := git.LastCommitTime(r, "main")
+	ct, err := git.LastCommitTime(context.Background(), r, "main")
 	if err != nil {
 		t.Fatalf("LastCommitTime: %v", err)
 	}
@@ -84,7 +85,7 @@ func TestLastCommitInfo(t *testing.T) {
 	repo := testutil.NewTestRepo(t)
 	r := &git.ExecRunner{Dir: repo}
 
-	ct, subject, err := git.LastCommitInfo(r, "main")
+	ct, subject, err := git.LastCommitInfo(context.Background(), r, "main")
 	if err != nil {
 		t.Fatalf("LastCommitInfo: %v", err)
 	}
@@ -105,7 +106,7 @@ func TestLastCommitInfoError(t *testing.T) {
 	repo := testutil.NewTestRepo(t)
 	r := &git.ExecRunner{Dir: repo}
 
-	_, _, err := git.LastCommitInfo(r, "nonexistent")
+	_, _, err := git.LastCommitInfo(context.Background(), r, "nonexistent")
 	if err == nil {
 		t.Error("expected error for nonexistent branch")
 	}
@@ -119,7 +120,7 @@ func TestLastCommitTimeError(t *testing.T) {
 	repo := testutil.NewTestRepo(t)
 	r := &git.ExecRunner{Dir: repo}
 
-	_, err := git.LastCommitTime(r, "nonexistent")
+	_, err := git.LastCommitTime(context.Background(), r, "nonexistent")
 	if err == nil {
 		t.Error("expected error for nonexistent branch")
 	}
@@ -133,7 +134,7 @@ func TestLocalBranches(t *testing.T) {
 	repo := testutil.NewTestRepo(t)
 	r := &git.ExecRunner{Dir: repo}
 
-	branches, err := git.LocalBranches(r)
+	branches, err := git.LocalBranches(context.Background(), r)
 	if err != nil {
 		t.Fatalf("LocalBranches: %v", err)
 	}
@@ -157,7 +158,7 @@ func TestLocalBranchesMultiple(t *testing.T) {
 
 	testutil.GitCmd(t, repo, "branch", "feature/test-branch")
 
-	branches, err := git.LocalBranches(r)
+	branches, err := git.LocalBranches(context.Background(), r)
 	if err != nil {
 		t.Fatalf("LocalBranches: %v", err)
 	}
@@ -175,7 +176,7 @@ func TestIsDirty(t *testing.T) {
 	repo := testutil.NewTestRepo(t)
 	r := &git.ExecRunner{Dir: repo}
 
-	dirty, err := git.IsDirty(r, repo)
+	dirty, err := git.IsDirty(context.Background(), r, repo)
 	if err != nil {
 		t.Fatalf("IsDirty: %v", err)
 	}
@@ -186,7 +187,7 @@ func TestIsDirty(t *testing.T) {
 	// Make it dirty
 	testutil.CreateFile(t, repo, "new.txt", "dirty")
 
-	dirty, err = git.IsDirty(r, repo)
+	dirty, err = git.IsDirty(context.Background(), r, repo)
 	if err != nil {
 		t.Fatalf("IsDirty: %v", err)
 	}
@@ -215,7 +216,7 @@ func TestIsSquashMergedIntegration(t *testing.T) {
 	testutil.GitCmd(t, repo, "commit", "-m", "squash merge feature")
 
 	// The branch should be detected as squash-merged
-	merged, err := git.IsSquashMerged(r, "main", "feature/squash-test")
+	merged, err := git.IsSquashMerged(context.Background(), r, "main", "feature/squash-test")
 	if err != nil {
 		t.Fatalf("IsSquashMerged: %v", err)
 	}
@@ -240,7 +241,7 @@ func TestIsSquashMergedIntegrationNotMerged(t *testing.T) {
 
 	testutil.GitCmd(t, repo, "checkout", "main")
 
-	merged, err := git.IsSquashMerged(r, "main", "feature/unmerged")
+	merged, err := git.IsSquashMerged(context.Background(), r, "main", "feature/unmerged")
 	if err != nil {
 		t.Fatalf("IsSquashMerged: %v", err)
 	}
@@ -257,7 +258,7 @@ func TestCurrentBranch(t *testing.T) {
 	repo := testutil.NewTestRepo(t)
 	r := &git.ExecRunner{Dir: repo}
 
-	branch, err := git.CurrentBranch(r, repo)
+	branch, err := git.CurrentBranch(context.Background(), r, repo)
 	if err != nil {
 		t.Fatalf("CurrentBranch: %v", err)
 	}
@@ -276,7 +277,7 @@ func TestCurrentBranchAfterSwitch(t *testing.T) {
 
 	testutil.GitCmd(t, repo, "checkout", "-b", "feature/cur-branch-test")
 
-	branch, err := git.CurrentBranch(r, repo)
+	branch, err := git.CurrentBranch(context.Background(), r, repo)
 	if err != nil {
 		t.Fatalf("CurrentBranch after switch: %v", err)
 	}
@@ -295,11 +296,11 @@ func TestCheckout(t *testing.T) {
 
 	testutil.GitCmd(t, repo, "branch", "feature/checkout-test")
 
-	if err := git.Checkout(r, repo, "feature/checkout-test"); err != nil {
+	if err := git.Checkout(context.Background(), r, repo, "feature/checkout-test"); err != nil {
 		t.Fatalf("Checkout: %v", err)
 	}
 
-	branch, err := git.CurrentBranch(r, repo)
+	branch, err := git.CurrentBranch(context.Background(), r, repo)
 	if err != nil {
 		t.Fatalf("CurrentBranch after Checkout: %v", err)
 	}
@@ -316,7 +317,7 @@ func TestCheckoutError(t *testing.T) {
 	repo := testutil.NewTestRepo(t)
 	r := &git.ExecRunner{Dir: repo}
 
-	if err := git.Checkout(r, repo, "nonexistent-branch"); err == nil {
+	if err := git.Checkout(context.Background(), r, repo, "nonexistent-branch"); err == nil {
 		t.Error("expected error for nonexistent branch")
 	}
 }
@@ -333,7 +334,7 @@ func TestCurrentBranchDetachedHead(t *testing.T) {
 	sha := testutil.GitCmd(t, repo, "rev-parse", "HEAD")
 	testutil.GitCmd(t, repo, "checkout", "--detach", strings.TrimSpace(sha))
 
-	_, err := git.CurrentBranch(r, repo)
+	_, err := git.CurrentBranch(context.Background(), r, repo)
 	if err == nil {
 		t.Fatal("expected error for detached HEAD")
 	}

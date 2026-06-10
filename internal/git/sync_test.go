@@ -141,7 +141,7 @@ func TestMergeBase(t *testing.T) {
 		},
 	}
 
-	sha, err := MergeBase(r, branchMain, branchFeature)
+	sha, err := MergeBase(context.Background(), r, branchMain, branchFeature)
 	if err != nil {
 		t.Fatalf("MergeBase: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestMergeBaseError(t *testing.T) {
 		},
 	}
 
-	_, err := MergeBase(r, branchMain, branchFeature)
+	_, err := MergeBase(context.Background(), r, branchMain, branchFeature)
 	if err == nil {
 		t.Fatal("expected error from MergeBase")
 	}
@@ -173,7 +173,7 @@ func TestIsMergeBaseAncestor(t *testing.T) {
 		},
 	}
 
-	if !IsMergeBaseAncestor(r, branchMain, branchFeature) {
+	if !IsMergeBaseAncestor(context.Background(), r, branchMain, branchFeature) {
 		t.Error("expected true for ancestor check")
 	}
 }
@@ -185,7 +185,7 @@ func TestIsMergeBaseAncestorFalse(t *testing.T) {
 		},
 	}
 
-	if IsMergeBaseAncestor(r, branchMain, branchFeature) {
+	if IsMergeBaseAncestor(context.Background(), r, branchMain, branchFeature) {
 		t.Error("expected false for non-ancestor")
 	}
 }
@@ -200,7 +200,7 @@ func TestHasUpstream(t *testing.T) {
 		},
 	}
 
-	if !HasUpstream(r, fakeDir) {
+	if !HasUpstream(context.Background(), r, fakeDir) {
 		t.Error("expected true when upstream exists")
 	}
 }
@@ -212,7 +212,7 @@ func TestHasUpstreamFalse(t *testing.T) {
 		},
 	}
 
-	if HasUpstream(r, fakeDir) {
+	if HasUpstream(context.Background(), r, fakeDir) {
 		t.Error("expected false when no upstream")
 	}
 }

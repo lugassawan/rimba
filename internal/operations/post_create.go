@@ -55,7 +55,7 @@ func PostCreateSetup(ctx context.Context, r git.Runner, params PostCreateParams,
 	// Dependencies
 	if !params.SkipDeps {
 		progress.Notify(onProgress, "Installing dependencies...")
-		wtEntries, err := git.ListWorktrees(r)
+		wtEntries, err := git.ListWorktrees(ctx, r)
 		if err != nil {
 			return result, fmt.Errorf("failed to list worktrees for dependency setup: %w", err)
 		}

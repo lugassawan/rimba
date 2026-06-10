@@ -1,6 +1,8 @@
 package operations
 
 import (
+	"context"
+
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/progress"
 	"github.com/lugassawan/rimba/internal/resolver"
@@ -17,7 +19,7 @@ type RemoveResult struct {
 }
 
 // RemoveWorktree removes a worktree and optionally deletes its branch.
-func RemoveWorktree(r git.Runner, wt resolver.WorktreeInfo, task string, keepBranch, force bool, onProgress progress.Func) (RemoveResult, error) {
+func RemoveWorktree(ctx context.Context, r git.Runner, wt resolver.WorktreeInfo, task string, keepBranch, force bool, onProgress progress.Func) (RemoveResult, error) {
 	result := RemoveResult{
 		Task:   task,
 		Branch: wt.Branch,
@@ -25,14 +27,14 @@ func RemoveWorktree(r git.Runner, wt resolver.WorktreeInfo, task string, keepBra
 	}
 
 	progress.Notify(onProgress, "Removing worktree...")
-	if err := git.RemoveWorktree(r, wt.Path, force); err != nil {
+	if err := git.RemoveWorktree(ctx, r, wt.Path, force); err != nil {
 		return result, err
 	}
 	result.WorktreeRemoved = true
 
 	if !keepBranch {
 		progress.Notify(onProgress, "Deleting branch...")
-		if err := git.DeleteBranch(r, wt.Branch, true); err != nil {
+		if err := git.DeleteBranch(ctx, r, wt.Branch, true); err != nil {
 			result.BranchError = branchDeleteFailedErr(wt.Branch, err)
 			return result, nil
 		}
@@ -46,12 +48,12 @@ func RemoveWorktree(r git.Runner, wt resolver.WorktreeInfo, task string, keepBra
 // Used by remove, merge, and clean operations. force is forwarded to git
 // worktree remove so callers can discard untracked files or uncommitted
 // tracked-file modifications (e.g. node_modules, local config edits).
-func removeAndCleanup(r git.Runner, path, branch string, force bool) (wtRemoved, brDeleted bool, err error) {
-	if err := git.RemoveWorktree(r, path, force); err != nil {
+func removeAndCleanup(ctx context.Context, r git.Runner, path, branch string, force bool) (wtRemoved, brDeleted bool, err error) {
+	if err := git.RemoveWorktree(ctx, r, path, force); err != nil {
 		return false, false, err
 	}
 
-	if err := git.DeleteBranch(r, branch, true); err != nil {
+	if err := git.DeleteBranch(ctx, r, branch, true); err != nil {
 		return true, false, branchDeleteFailedErr(branch, err)
 	}
 

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -39,7 +40,7 @@ func anyInstalled(statuses []agentfile.FileStatus) bool {
 func resolvePostUpdateTipPaths() (string, string) {
 	home, _ := os.UserHomeDir()
 	var repoRoot string
-	if root, err := git.RepoRoot(newRunner()); err == nil {
+	if root, err := git.RepoRoot(context.Background(), newRunner()); err == nil {
 		repoRoot = root
 	}
 	return home, repoRoot
