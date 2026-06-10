@@ -118,20 +118,22 @@ func SummarizeStatus(entries []StatusEntry, staleThreshold time.Time) StatusSumm
 // velocity; per-item errors leave the pointer nil (non-fatal).
 func collectStatusEntries(ctx context.Context, gitR git.Runner, candidates []git.WorktreeEntry, detail bool) []StatusEntry {
 	return parallel.Collect(ctx, len(candidates), 8, func(ctx context.Context, i int) StatusEntry {
+		itemCtx, cancel := git.WithItemTimeout(ctx)
+		defer cancel()
 		e := candidates[i]
-		st := CollectWorktreeStatus(ctx, gitR, e.Path)
+		st := CollectWorktreeStatus(itemCtx, gitR, e.Path)
 		var ct time.Time
 		var hasTime bool
-		if t, err := git.LastCommitTime(ctx, gitR, e.Branch); err == nil {
+		if t, err := git.LastCommitTime(itemCtx, gitR, e.Branch); err == nil {
 			ct = t
 			hasTime = true
 		}
 		se := StatusEntry{Entry: e, Status: st, CommitTime: ct, HasTime: hasTime}
 		if detail {
-			if n, err := fsutil.DirSize(ctx, e.Path); err == nil {
+			if n, err := fsutil.DirSize(itemCtx, e.Path); err == nil {
 				se.SizeBytes = &n
 			}
-			if c, err := git.CommitCountSince(ctx, gitR, e.Branch, recentWindow); err == nil {
+			if c, err := git.CommitCountSince(itemCtx, gitR, e.Branch, recentWindow); err == nil {
 				se.Recent7D = &c
 			}
 		}

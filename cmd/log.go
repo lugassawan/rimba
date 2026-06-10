@@ -126,11 +126,13 @@ func collectLogEntries(ctx context.Context, r git.Runner, candidates []git.Workt
 	prefixes := resolver.AllPrefixes()
 	s.Update("Collecting commit info...")
 	results := parallel.Collect(ctx, len(candidates), 8, func(ctx context.Context, i int) logEntry {
+		itemCtx, cancel := git.WithItemTimeout(ctx)
+		defer cancel()
 		e := candidates[i]
 		svc, task, matchedPrefix := resolver.ServiceFromBranch(e.Branch, prefixes)
 		typeName := strings.TrimSuffix(matchedPrefix, "/")
 
-		ct, subject, err := git.LastCommitInfo(ctx, r, e.Branch)
+		ct, subject, err := git.LastCommitInfo(itemCtx, r, e.Branch)
 		if err != nil {
 			return logEntry{branch: e.Branch, task: task, service: svc, typeName: typeName, path: e.Path}
 		}
