@@ -9,6 +9,8 @@ import (
 // collecting results into a slice that preserves index order.
 // A concurrency value <= 0 is treated as "auto" (= n, i.e. unlimited).
 // ctx is passed to each fn invocation so callers can enforce per-item deadlines.
+// On cancellation, goroutines waiting for a semaphore slot exit early; their
+// result entries hold the zero value of T.
 func Collect[T any](ctx context.Context, n, concurrency int, fn func(ctx context.Context, i int) T) []T {
 	if n == 0 {
 		return nil

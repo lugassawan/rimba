@@ -152,3 +152,30 @@ func TestFilterDetailsByStatusNoFilter(t *testing.T) {
 		t.Errorf("expected all 2 rows when no filters active, got %d", len(filtered))
 	}
 }
+
+func TestFilterDetailsByStatusUnknownPassthrough(t *testing.T) {
+	rows := []resolver.WorktreeDetail{
+		{Task: taskLogin, Status: resolver.WorktreeStatus{Dirty: true}},
+		{Task: taskSignup, Status: resolver.WorktreeStatus{Unknown: true}},
+		{Task: taskLogout, Status: resolver.WorktreeStatus{Dirty: false}},
+	}
+
+	// Under --dirty filter: clean row excluded, but Unknown row must be kept.
+	filtered := FilterDetailsByStatus(rows, true, false)
+	if len(filtered) != 2 {
+		t.Fatalf("expected 2 rows (dirty + unknown), got %d", len(filtered))
+	}
+	tasks := []string{filtered[0].Task, filtered[1].Task}
+	if tasks[0] != taskLogin || tasks[1] != taskSignup {
+		t.Errorf("unexpected tasks: %v", tasks)
+	}
+
+	// Under --behind filter: non-behind rows excluded, but Unknown row must be kept.
+	filtered2 := FilterDetailsByStatus(rows, false, true)
+	if len(filtered2) != 1 {
+		t.Fatalf("expected 1 row (unknown), got %d", len(filtered2))
+	}
+	if filtered2[0].Task != taskSignup {
+		t.Errorf("expected unknown row 'signup', got %q", filtered2[0].Task)
+	}
+}
