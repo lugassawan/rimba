@@ -152,6 +152,26 @@ func TestCollectHintValue(t *testing.T) {
 	}
 }
 
+func TestCheckUpdateHintNeverDropsResult(t *testing.T) {
+	// Regression guard for the #301 select race: a successfully-fetched, newer
+	// version must never be dropped. The race is scheduler-biased (reliably lost
+	// on linux CI, won on macOS), so this asserts the invariant over many runs.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set(hdrContentType, mimeJSON)
+		_, _ = w.Write([]byte(`{"tag_name":"v99.0.0","assets":[
+			{"name":"rimba_99.0.0_linux_amd64.tar.gz","browser_download_url":"https://github.com/lugassawan/rimba/releases/download/v99.0.0/rimba_99.0.0_linux_amd64.tar.gz"},
+			{"name":"checksums.txt","browser_download_url":"https://github.com/lugassawan/rimba/releases/download/v99.0.0/checksums.txt"}]}`))
+	}))
+	t.Cleanup(srv.Close)
+	overrideNewUpdater(t, srv)
+
+	for i := range 500 {
+		if got := collectHint(checkUpdateHint(context.Background(), testVersionHint, 2*time.Second)); got == nil {
+			t.Fatalf("iteration %d: update hint dropped (nil result) for a newer version", i)
+		}
+	}
+}
+
 func TestCheckUpdateHintCancelledContext(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// A pre-cancelled context should cause the HTTP client to fail before

@@ -222,6 +222,14 @@ func TestExecute(t *testing.T) {
 		// cancelled when Execute returns (via defer stop()). Reset it so
 		// subsequent tests that call cmd.Context() get a live context.
 		rootCmd.SetContext(context.Background())
+		// Execute() makes cobra graft a default "help" command onto the global
+		// rootCmd; remove it so later tests that iterate rootCmd's children
+		// (e.g. TestExamplePresent) aren't polluted by execution order.
+		for _, c := range rootCmd.Commands() {
+			if c.Name() == "help" {
+				rootCmd.RemoveCommand(c)
+			}
+		}
 	})
 
 	if err := Execute(); err != nil {
