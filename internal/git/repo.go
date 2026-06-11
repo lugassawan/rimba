@@ -17,9 +17,9 @@ const (
 	cmdRevParse     = "rev-parse"
 	flagVerify      = "--verify"
 	cmdConfig       = "config"
-	cmdMergeBase    = "merge-base"
-	cmdDiff         = "diff"
-	cmdLog          = "log"
+	CmdMergeBase    = "merge-base"
+	CmdDiff         = "diff"
+	CmdLog          = "log"
 )
 
 // RepoRoot returns the absolute path to the repository root.

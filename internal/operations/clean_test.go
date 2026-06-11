@@ -89,16 +89,16 @@ func TestFindMergedCandidatesSquashMerge(t *testing.T) {
 				return wt, nil
 			}
 			// IsSquashMerged: merge-base → rev-parse → diff → log
-			if len(args) > 0 && args[0] == "merge-base" {
+			if len(args) > 0 && args[0] == git.CmdMergeBase {
 				return "base123", nil
 			}
 			if len(args) > 0 && args[0] == "rev-parse" {
 				return "tip456", nil
 			}
-			if len(args) > 0 && args[0] == "diff" {
+			if len(args) > 0 && args[0] == git.CmdDiff {
 				return "fake diff", nil
 			}
-			if len(args) > 0 && args[0] == "log" {
+			if len(args) > 0 && args[0] == git.CmdLog {
 				return "fake log", nil
 			}
 			return "", nil

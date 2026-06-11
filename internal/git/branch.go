@@ -144,11 +144,11 @@ func IsSquashMerged(ctx context.Context, r Runner, mergeRef, branch string) (boo
 		return false, err
 	}
 
-	if mergeBase == tip { // empty branch — nothing squash-merged
+	if strings.TrimSpace(mergeBase) == strings.TrimSpace(tip) { // empty branch — nothing squash-merged
 		return false, nil
 	}
 
-	branchDiff, err := r.Run(ctx, cmdDiff, mergeBase, branch)
+	branchDiff, err := r.Run(ctx, CmdDiff, mergeBase, branch)
 	if err != nil {
 		return false, err
 	}
@@ -160,7 +160,7 @@ func IsSquashMerged(ctx context.Context, r Runner, mergeRef, branch string) (boo
 		return false, nil
 	}
 
-	mergeRefDiffs, err := r.Run(ctx, cmdLog, "-p", "--no-merges", mergeBase+".."+mergeRef)
+	mergeRefDiffs, err := r.Run(ctx, CmdLog, "-p", "--no-merges", mergeBase+".."+mergeRef)
 	if err != nil {
 		return false, err
 	}
@@ -206,7 +206,7 @@ func LastCommitTime(ctx context.Context, r Runner, branch string) (time.Time, er
 
 // LastCommitInfo returns the time and subject of the last commit on the given branch.
 func LastCommitInfo(ctx context.Context, r Runner, branch string) (time.Time, string, error) {
-	out, err := r.Run(ctx, cmdLog, "-1", "--format=%ct\t%s", branch)
+	out, err := r.Run(ctx, CmdLog, "-1", "--format=%ct\t%s", branch)
 	if err != nil {
 		return time.Time{}, "", errhint.WithFix(
 			fmt.Errorf("last commit info for %s: %w", branch, err),

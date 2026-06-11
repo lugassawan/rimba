@@ -647,13 +647,13 @@ func TestIsSquashMerged(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			switch args[0] {
-			case cmdMergeBase:
+			case CmdMergeBase:
 				return fakeSHA, nil
 			case cmdRevParse:
 				return fakeTip, nil
-			case cmdDiff:
+			case CmdDiff:
 				return "fake diff", nil
-			case cmdLog:
+			case CmdLog:
 				return fakeLog, nil
 			}
 			return "", errors.New("unexpected call: " + args[0])
@@ -670,28 +670,26 @@ func TestIsSquashMerged(t *testing.T) {
 }
 
 func TestIsSquashMergedNotMerged(t *testing.T) {
-	callCount := 0
 	defer func(orig func(context.Context, string) (map[string]bool, error)) {
 		ComputePatchIDs = orig
 	}(ComputePatchIDs)
-	ComputePatchIDs = func(_ context.Context, _ string) (map[string]bool, error) {
-		callCount++
-		if callCount == 1 {
-			return map[string]bool{"branch-pid": true}, nil
+	ComputePatchIDs = func(_ context.Context, diff string) (map[string]bool, error) {
+		if diff == fakeLog {
+			return map[string]bool{"merge-ref-pid": true}, nil
 		}
-		return map[string]bool{"merge-ref-pid": true}, nil
+		return map[string]bool{"branch-pid": true}, nil
 	}
 
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			switch args[0] {
-			case cmdMergeBase:
+			case CmdMergeBase:
 				return fakeSHA, nil
 			case cmdRevParse:
 				return fakeTip, nil
-			case cmdDiff:
+			case CmdDiff:
 				return "fake diff", nil
-			case cmdLog:
+			case CmdLog:
 				return fakeLog, nil
 			}
 			return "", errors.New("unexpected call: " + args[0])
@@ -723,7 +721,7 @@ func TestIsSquashMergedMergeBaseError(t *testing.T) {
 func TestIsSquashMergedRevParseError(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
-			if args[0] == cmdMergeBase {
+			if args[0] == CmdMergeBase {
 				return fakeSHA, nil
 			}
 			return "", errors.New("rev-parse failed")
@@ -740,7 +738,7 @@ func TestIsSquashMergedDiffError(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			switch args[0] {
-			case cmdMergeBase:
+			case CmdMergeBase:
 				return fakeSHA, nil
 			case cmdRevParse:
 				return fakeTip, nil
@@ -766,11 +764,11 @@ func TestIsSquashMergedEmptyBranchPatchID(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			switch args[0] {
-			case cmdMergeBase:
+			case CmdMergeBase:
 				return fakeSHA, nil
 			case cmdRevParse:
 				return fakeTip, nil
-			case cmdDiff:
+			case CmdDiff:
 				return fakeDiff, nil
 			}
 			return "", errors.New("unexpected call: " + args[0])
@@ -797,11 +795,11 @@ func TestIsSquashMergedLogError(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			switch args[0] {
-			case cmdMergeBase:
+			case CmdMergeBase:
 				return fakeSHA, nil
 			case cmdRevParse:
 				return fakeTip, nil
-			case cmdDiff:
+			case CmdDiff:
 				return fakeDiff, nil
 			}
 			return "", errors.New("log failed")
@@ -825,11 +823,11 @@ func TestIsSquashMergedPatchIDError(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			switch args[0] {
-			case cmdMergeBase:
+			case CmdMergeBase:
 				return fakeSHA, nil
 			case cmdRevParse:
 				return fakeTip, nil
-			case cmdDiff:
+			case CmdDiff:
 				return fakeDiff, nil
 			}
 			return "", errors.New("unexpected call: " + args[0])
@@ -843,28 +841,26 @@ func TestIsSquashMergedPatchIDError(t *testing.T) {
 }
 
 func TestIsSquashMergedPatchIDErrorOnMergeRef(t *testing.T) {
-	callCount := 0
 	defer func(orig func(context.Context, string) (map[string]bool, error)) {
 		ComputePatchIDs = orig
 	}(ComputePatchIDs)
-	ComputePatchIDs = func(_ context.Context, _ string) (map[string]bool, error) {
-		callCount++
-		if callCount == 1 {
-			return map[string]bool{fakeSHA: true}, nil
+	ComputePatchIDs = func(_ context.Context, diff string) (map[string]bool, error) {
+		if diff == fakeLog {
+			return nil, errors.New("patch-id failed on mergeRef")
 		}
-		return nil, errors.New("patch-id failed on mergeRef")
+		return map[string]bool{fakeSHA: true}, nil
 	}
 
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			switch args[0] {
-			case cmdMergeBase:
+			case CmdMergeBase:
 				return fakeSHA, nil
 			case cmdRevParse:
 				return fakeTip, nil
-			case cmdDiff:
+			case CmdDiff:
 				return fakeDiff, nil
-			case cmdLog:
+			case CmdLog:
 				return fakeLog, nil
 			}
 			return "", errors.New("unexpected call: " + args[0])
@@ -881,7 +877,7 @@ func TestIsSquashMergedMergeBaseEqualsTip(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			switch args[0] {
-			case cmdMergeBase:
+			case CmdMergeBase:
 				return fakeSHA, nil
 			case cmdRevParse:
 				return fakeSHA, nil // same SHA = empty branch
