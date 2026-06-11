@@ -32,8 +32,6 @@ custom-gcl
 # env file
 .env
 
-# Rimba config (local to each repo)
-
 # Editor/IDE
 # .idea/
 # .vscode/
@@ -54,4 +52,6 @@ local.properties
 
 # macOS
 .DS_Store
+
+# Rimba config (local to each repo)
 .rimba/*.local.toml
