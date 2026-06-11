@@ -2,7 +2,10 @@ package git
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -11,6 +14,45 @@ import (
 )
 
 const internalGitInvariantHint = "report this — git output unexpectedly malformed"
+
+// errEmptyDiff is returned by ComputePatchIDs when the input diff is empty.
+var errEmptyDiff = errors.New("empty diff")
+
+// ComputePatchIDs computes patch-ids from a diff string by piping it to
+// git patch-id --stable. Defined as a variable so tests can override it
+// with deterministic results without executing a real git subprocess.
+// Returns the set of patch-id hex strings (first field per output line).
+//
+// Not safe for concurrent modification — tests must override and restore
+// sequentially via defer:
+//
+//	defer func(orig ...) { ComputePatchIDs = orig }(ComputePatchIDs)
+//	ComputePatchIDs = func(...) { ... }
+var ComputePatchIDs = func(ctx context.Context, diff string) (map[string]bool, error) {
+	if diff == "" {
+		return nil, errEmptyDiff
+	}
+	cmd := exec.CommandContext(ctx, "git", "patch-id", "--stable")
+	cmd.Env = stableGitEnv(os.Environ())
+	cmd.Stdin = strings.NewReader(diff)
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("git patch-id --stable: %w", err)
+	}
+
+	ids := make(map[string]bool)
+	for line := range strings.SplitSeq(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		pid, _, _ := strings.Cut(line, " ")
+		if pid != "" {
+			ids[pid] = true
+		}
+	}
+	return ids, nil
+}
 
 // BranchExists checks whether a local branch exists.
 func BranchExists(ctx context.Context, r Runner, branch string) bool {
@@ -95,32 +137,61 @@ func AheadBehind(ctx context.Context, r Runner, dir string) (ahead, behind int, 
 }
 
 // IsSquashMerged checks whether a branch's content has been squash-merged into mergeRef.
-// It uses the commit-tree + cherry technique: create a synthetic commit with the
-// branch's tree on the merge-base, then check if that content is already in mergeRef.
-// Note: each call creates an unreferenced commit object in the git store; these are
-// cleaned up automatically by git gc.
+// It computes a patch-id for the branch diff and checks whether any commit in
+// mergeRef (since the merge-base) produces the same patch-id.
+// Unlike the previous commit-tree + cherry approach, this technique creates no
+// loose objects in the git store.
 func IsSquashMerged(ctx context.Context, r Runner, mergeRef, branch string) (bool, error) {
 	mergeBase, err := MergeBase(ctx, r, mergeRef, branch)
 	if err != nil {
 		return false, err
 	}
 
-	tree, err := r.Run(ctx, cmdRevParse, branch+treeSuffix)
+	tip, err := r.Run(ctx, cmdRevParse, "--verify", branch)
 	if err != nil {
 		return false, err
 	}
 
-	tempCommit, err := r.Run(ctx, cmdCommitTree, tree, "-p", mergeBase, "-m", "temp")
+	// Empty branch (merge-base == branch tip) — nothing to squash-merge.
+	if mergeBase == tip {
+		return false, nil
+	}
+
+	// Branch patch-id: diff from merge-base to branch tip.
+	branchDiff, err := r.Run(ctx, "diff", mergeBase, branch)
 	if err != nil {
 		return false, err
 	}
+	branchPIDs, err := ComputePatchIDs(ctx, branchDiff)
+	if err != nil {
+		if errors.Is(err, errEmptyDiff) {
+			return false, nil // empty diff — not squash-merged
+		}
+		return false, err
+	}
+	if len(branchPIDs) == 0 {
+		return false, nil
+	}
 
-	out, err := r.Run(ctx, cmdCherry, mergeRef, tempCommit)
+	// MergeRef patch-ids: diffs for each non-merge commit since merge-base.
+	mergeRefDiffs, err := r.Run(ctx, "log", "-p", "--no-merges", mergeBase+".."+mergeRef)
 	if err != nil {
 		return false, err
 	}
+	mergeRefPIDs, err := ComputePatchIDs(ctx, mergeRefDiffs)
+	if err != nil {
+		if errors.Is(err, errEmptyDiff) {
+			return false, nil // no commits in mergeRef range
+		}
+		return false, err
+	}
 
-	return strings.HasPrefix(out, cherryMerged), nil
+	for pid := range mergeRefPIDs {
+		if branchPIDs[pid] {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // MergedBranches returns branches that have been merged into the given branch.

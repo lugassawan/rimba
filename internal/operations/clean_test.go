@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/progress"
 )
 
@@ -67,6 +68,13 @@ func TestFindMergedCandidatesNormalMerge(t *testing.T) {
 }
 
 func TestFindMergedCandidatesSquashMerge(t *testing.T) {
+	defer func(orig func(context.Context, string) (map[string]bool, error)) {
+		git.ComputePatchIDs = orig
+	}(git.ComputePatchIDs)
+	git.ComputePatchIDs = func(_ context.Context, _ string) (map[string]bool, error) {
+		return map[string]bool{"fakePID": true}, nil
+	}
+
 	wt := porcelainEntries(
 		struct{ path, branch string }{"/repo", "main"},
 		struct{ path, branch string }{"/wt/squashed", "feature/squashed"},
@@ -80,18 +88,18 @@ func TestFindMergedCandidatesSquashMerge(t *testing.T) {
 			if len(args) > 0 && args[0] == gitCmdWorktree {
 				return wt, nil
 			}
-			// IsSquashMerged: merge-base → rev-parse → commit-tree → cherry
+			// IsSquashMerged: merge-base → rev-parse → diff → log
 			if len(args) > 0 && args[0] == "merge-base" {
 				return "base123", nil
 			}
 			if len(args) > 0 && args[0] == "rev-parse" {
-				return "tree123", nil
+				return "tip456", nil
 			}
-			if len(args) > 0 && args[0] == "commit-tree" {
-				return "temp123", nil
+			if len(args) > 0 && args[0] == "diff" {
+				return "fake diff", nil
 			}
-			if len(args) > 0 && args[0] == "cherry" {
-				return "- temp123", nil // "- " prefix = already merged
+			if len(args) > 0 && args[0] == "log" {
+				return "fake log", nil
 			}
 			return "", nil
 		},

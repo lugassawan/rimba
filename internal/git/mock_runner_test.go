@@ -27,8 +27,8 @@ const (
 	errBranchWantFmt = "branch = %q, want %q"
 	flagGitCommonDir = "--git-common-dir"
 	flagShowToplevel = "--show-toplevel"
-	fakeTree         = "tree123"
-	fakeTempCommit   = "temp456"
+	fakeTip          = "tip789"
+	fakeDiff         = "some diff"
 )
 
 // mockRunner implements Runner with configurable closures for testing.
@@ -636,6 +636,13 @@ func TestListWorktreesBareEntry(t *testing.T) {
 }
 
 func TestIsSquashMerged(t *testing.T) {
+	defer func(orig func(context.Context, string) (map[string]bool, error)) {
+		ComputePatchIDs = orig
+	}(ComputePatchIDs)
+	ComputePatchIDs = func(_ context.Context, _ string) (map[string]bool, error) {
+		return map[string]bool{fakeSHA: true}, nil
+	}
+
 	step := 0
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
@@ -643,12 +650,12 @@ func TestIsSquashMerged(t *testing.T) {
 			switch step {
 			case 1: // merge-base
 				return fakeSHA, nil
-			case 2: // rev-parse branch^{tree}
-				return fakeTree, nil
-			case 3: // commit-tree
-				return fakeTempCommit, nil
-			case 4: // cherry
-				return "- abc789", nil
+			case 2: // rev-parse --verify branch
+				return fakeTip, nil
+			case 3: // diff
+				return "fake diff", nil
+			case 4: // log -p --no-merges
+				return "fake log", nil
 			}
 			return "", errors.New("unexpected call")
 		},
@@ -664,19 +671,31 @@ func TestIsSquashMerged(t *testing.T) {
 }
 
 func TestIsSquashMergedNotMerged(t *testing.T) {
+	callCount := 0
+	defer func(orig func(context.Context, string) (map[string]bool, error)) {
+		ComputePatchIDs = orig
+	}(ComputePatchIDs)
+	ComputePatchIDs = func(_ context.Context, _ string) (map[string]bool, error) {
+		callCount++
+		if callCount == 1 {
+			return map[string]bool{"branch-pid": true}, nil
+		}
+		return map[string]bool{"merge-ref-pid": true}, nil
+	}
+
 	step := 0
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			step++
 			switch step {
-			case 1:
+			case 1: // merge-base
 				return fakeSHA, nil
-			case 2:
-				return fakeTree, nil
-			case 3:
-				return fakeTempCommit, nil
-			case 4:
-				return "+ abc789", nil
+			case 2: // rev-parse --verify branch
+				return fakeTip, nil
+			case 3: // diff
+				return "fake diff", nil
+			case 4: // log -p --no-merges
+				return "fake log", nil
 			}
 			return "", errors.New("unexpected call")
 		},
@@ -722,41 +741,46 @@ func TestIsSquashMergedRevParseError(t *testing.T) {
 	}
 }
 
-func TestIsSquashMergedCommitTreeError(t *testing.T) {
+func TestIsSquashMergedDiffError(t *testing.T) {
 	step := 0
 	r := &mockRunner{
 		run: func(_ ...string) (string, error) {
 			step++
 			switch step {
 			case 1:
-				return fakeSHA, nil
+				return fakeSHA, nil // merge-base
 			case 2:
-				return fakeTree, nil
+				return fakeTip, nil // rev-parse
 			}
-			return "", errors.New("commit-tree failed")
+			return "", errors.New("diff failed")
 		},
 	}
 
 	_, err := IsSquashMerged(context.Background(), r, branchMain, branchFeature)
 	if err == nil {
-		t.Fatal("expected error from commit-tree failure")
+		t.Fatal("expected error from diff failure")
 	}
 }
 
-func TestIsSquashMergedEmptyCherry(t *testing.T) {
+func TestIsSquashMergedEmptyBranchPatchID(t *testing.T) {
+	defer func(orig func(context.Context, string) (map[string]bool, error)) {
+		ComputePatchIDs = orig
+	}(ComputePatchIDs)
+	ComputePatchIDs = func(_ context.Context, _ string) (map[string]bool, error) {
+		return map[string]bool{}, nil
+	}
+
 	step := 0
 	r := &mockRunner{
 		run: func(_ ...string) (string, error) {
 			step++
 			switch step {
 			case 1:
-				return fakeSHA, nil
+				return fakeSHA, nil // merge-base
 			case 2:
-				return fakeTree, nil
+				return fakeTip, nil // rev-parse
 			case 3:
-				return fakeTempCommit, nil
-			case 4:
-				return "", nil
+				return fakeDiff, nil
 			}
 			return "", errors.New("unexpected call")
 		},
@@ -767,30 +791,91 @@ func TestIsSquashMergedEmptyCherry(t *testing.T) {
 		t.Fatalf("IsSquashMerged: %v", err)
 	}
 	if merged {
-		t.Error("expected empty cherry output to not indicate squash-merge")
+		t.Error("expected empty branch patch-id to not indicate squash-merge")
 	}
 }
 
-func TestIsSquashMergedCherryError(t *testing.T) {
+func TestIsSquashMergedLogError(t *testing.T) {
+	defer func(orig func(context.Context, string) (map[string]bool, error)) {
+		ComputePatchIDs = orig
+	}(ComputePatchIDs)
+	ComputePatchIDs = func(_ context.Context, _ string) (map[string]bool, error) {
+		return map[string]bool{fakeSHA: true}, nil
+	}
+
 	step := 0
 	r := &mockRunner{
 		run: func(_ ...string) (string, error) {
 			step++
 			switch step {
 			case 1:
-				return fakeSHA, nil
+				return fakeSHA, nil // merge-base
 			case 2:
-				return fakeTree, nil
+				return fakeTip, nil // rev-parse
 			case 3:
-				return fakeTempCommit, nil
+				return fakeDiff, nil
 			}
-			return "", errors.New("cherry failed")
+			return "", errors.New("log failed")
 		},
 	}
 
 	_, err := IsSquashMerged(context.Background(), r, branchMain, branchFeature)
 	if err == nil {
-		t.Fatal("expected error from cherry failure")
+		t.Fatal("expected error from log failure")
+	}
+}
+
+func TestIsSquashMergedPatchIDError(t *testing.T) {
+	defer func(orig func(context.Context, string) (map[string]bool, error)) {
+		ComputePatchIDs = orig
+	}(ComputePatchIDs)
+	ComputePatchIDs = func(_ context.Context, _ string) (map[string]bool, error) {
+		return nil, errors.New("patch-id failed")
+	}
+
+	step := 0
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			step++
+			switch step {
+			case 1:
+				return fakeSHA, nil // merge-base
+			case 2:
+				return fakeTip, nil // rev-parse
+			case 3:
+				return fakeDiff, nil
+			}
+			return "", errors.New("unexpected call")
+		},
+	}
+
+	_, err := IsSquashMerged(context.Background(), r, branchMain, branchFeature)
+	if err == nil {
+		t.Fatal("expected error from patch-id failure")
+	}
+}
+
+func TestIsSquashMergedMergeBaseEqualsTip(t *testing.T) {
+	step := 0
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			step++
+			switch step {
+			case 1:
+				return fakeSHA, nil // merge-base
+			case 2:
+				return fakeSHA, nil // rev-parse (same SHA = empty branch)
+			}
+			return "", errors.New("unexpected call")
+		},
+	}
+
+	merged, err := IsSquashMerged(context.Background(), r, branchMain, branchFeature)
+	if err != nil {
+		t.Fatalf("IsSquashMerged: %v", err)
+	}
+	if merged {
+		t.Error("expected empty branch (merge-base == tip) to not indicate squash-merge")
 	}
 }
 
