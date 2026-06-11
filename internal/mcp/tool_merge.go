@@ -70,6 +70,7 @@ func handleMerge(hctx *HandlerContext) server.ToolHandlerFunc {
 			Source:        result.SourceBranch,
 			Into:          result.TargetLabel,
 			SourceRemoved: result.SourceRemoved,
+			RemoteDeleted: result.RemoteDeleted,
 		})
 	}
 }

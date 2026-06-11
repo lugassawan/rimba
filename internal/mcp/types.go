@@ -61,6 +61,7 @@ type mergeResult struct {
 	Source        string `json:"source"`
 	Into          string `json:"into"`
 	SourceRemoved bool   `json:"source_removed"`
+	RemoteDeleted bool   `json:"remote_deleted,omitempty"`
 }
 
 // syncResult holds the outcome of a sync operation.
