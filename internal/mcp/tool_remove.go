@@ -32,6 +32,10 @@ func handleRemove(hctx *HandlerContext) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("task is required"), nil
 		}
 
+		if _, cfgErr := hctx.requireConfig(); cfgErr != nil {
+			return mcp.NewToolResultError(cfgErr.Error()), nil
+		}
+
 		service, task := operations.ResolveTaskInput(task, hctx.RepoRoot)
 
 		keepBranch := req.GetBool("keep_branch", false)

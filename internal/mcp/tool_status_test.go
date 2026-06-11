@@ -108,36 +108,19 @@ func TestStatusToolResolvesMainBranch(t *testing.T) {
 	}
 }
 
-func TestStatusToolNoConfig(t *testing.T) {
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) > 0 && args[0] == gitSymbolicRef {
-				return refsOriginMain, nil
-			}
-			if len(args) > 0 && args[0] == gitWorktree {
-				return worktreePorcelain(
-					struct{ path, branch string }{"/repo", "main"},
-				), nil
-			}
-			return "", nil
-		},
-	}
+func TestStatusToolRequiresConfig(t *testing.T) {
 	hctx := &HandlerContext{
-		Runner:   r,
+		Runner:   &mockRunner{},
 		Config:   nil,
 		RepoRoot: "/repo",
 		Version:  "test",
 	}
 	handler := handleStatus(hctx)
 
-	// Status should work without config (uses git detection)
 	result := callTool(t, handler, nil)
-	if result.IsError {
-		errMsg := resultError(t, result)
-		// Only fail if the error is about config — git detection errors are acceptable
-		if strings.Contains(errMsg, "not initialized") {
-			t.Errorf("status should work without config, got: %s", errMsg)
-		}
+	errText := resultError(t, result)
+	if !strings.Contains(errText, errConfigRequired.Error()) {
+		t.Errorf("expected config required error, got: %s", errText)
 	}
 }
 
