@@ -110,8 +110,8 @@ var mergeCmd = &cobra.Command{
 		if result.RemoteDeleted {
 			fmt.Fprintf(cmd.OutOrStdout(), "Deleted remote branch: %s/%s\n", git.DefaultRemote, result.SourceBranch)
 		} else if result.RemoteError != nil {
-			fmt.Fprintf(cmd.OutOrStdout(), "Failed to delete remote branch %s/%s\nTo delete remote: git push %s --delete %s\n",
-				git.DefaultRemote, result.SourceBranch, git.DefaultRemote, result.SourceBranch)
+			fmt.Fprintf(cmd.OutOrStdout(), "Failed to delete remote branch %s/%s: %v\nTo delete remote: git push %s --delete %s\n",
+				git.DefaultRemote, result.SourceBranch, result.RemoteError, git.DefaultRemote, result.SourceBranch)
 		}
 
 		return nil

@@ -226,10 +226,7 @@ func TestMergeDeletesRemoteBranch(t *testing.T) {
 	repo, _ := setupRepoWithBareOrigin(t)
 	wtPath := mergeSetup(t, repo, taskMergeRemote, flagSkipHooksE2E)
 
-	cfg := loadConfig(t, repo)
-	wtDir := filepath.Join(repo, cfg.WorktreeDir)
 	branch := resolver.BranchName(defaultPrefix, taskMergeRemote)
-	_ = resolver.WorktreePath(wtDir, branch)
 
 	// Push the feature branch to origin before merging.
 	testutil.GitCmd(t, wtPath, "push", "-u", "origin", branch)
@@ -260,10 +257,7 @@ func TestMergeKeepDoesNotDeleteRemoteBranch(t *testing.T) {
 	repo, _ := setupRepoWithBareOrigin(t)
 	wtPath := mergeSetup(t, repo, taskMergeRemoteKeep, flagSkipHooksE2E)
 
-	cfg := loadConfig(t, repo)
-	wtDir := filepath.Join(repo, cfg.WorktreeDir)
 	branch := resolver.BranchName(defaultPrefix, taskMergeRemoteKeep)
-	_ = resolver.WorktreePath(wtDir, branch)
 
 	testutil.GitCmd(t, wtPath, "push", "-u", "origin", branch)
 

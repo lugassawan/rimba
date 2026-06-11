@@ -3,6 +3,7 @@ package operations
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -564,14 +565,14 @@ func TestMergeWorktreeCleanupBranchDeleteFails(t *testing.T) {
 
 func TestMergeWorktreeRemoteDeleteSuccess(t *testing.T) {
 	wt := mergeWorktreeList()
-	pushCalled := false
+	var pushArgs []string
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			if len(args) >= 2 && args[0] == gitCmdWorktree {
 				return wt, nil
 			}
 			if len(args) >= 1 && args[0] == gitCmdPush {
-				pushCalled = true
+				pushArgs = args
 				return "", nil
 			}
 			return "", nil
@@ -601,8 +602,11 @@ func TestMergeWorktreeRemoteDeleteSuccess(t *testing.T) {
 	if result.RemoteError != nil {
 		t.Errorf("expected nil RemoteError, got: %v", result.RemoteError)
 	}
-	if !pushCalled {
+	if len(pushArgs) == 0 {
 		t.Error("expected git push --delete to be called")
+	}
+	if !slices.Contains(pushArgs, "--delete") {
+		t.Errorf("expected --delete flag in push args, got: %v", pushArgs)
 	}
 }
 

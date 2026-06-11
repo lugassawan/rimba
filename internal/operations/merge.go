@@ -125,6 +125,8 @@ func MergeWorktree(ctx context.Context, r git.Runner, params MergeParams, onProg
 		}
 
 		// Delete the merged remote branch (best-effort, parity with clean --merged, #231).
+		// Gated on wtRemoved (not brDeleted) so that a partial failure — branch deleted but
+		// worktree still on disk — defers remote cleanup to a later `rimba clean --merged` run.
 		deleteMergedRemote(ctx, r, plan, source.Branch, &result, params.DryRun, wtRemoved)
 	}
 

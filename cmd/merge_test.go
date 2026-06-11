@@ -10,7 +10,10 @@ import (
 	"github.com/lugassawan/rimba/internal/config"
 )
 
-const mergeWorktreeOut = "worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /wt/feature-login\nHEAD def456\nbranch refs/heads/feature/login\n\nworktree /wt/feature-dashboard\nHEAD ghi789\nbranch refs/heads/feature/dashboard\n"
+const (
+	mergeWorktreeOut = "worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /wt/feature-login\nHEAD def456\nbranch refs/heads/feature/login\n\nworktree /wt/feature-dashboard\nHEAD ghi789\nbranch refs/heads/feature/dashboard\n"
+	gitCmdPush       = "push" // first arg of "git push <remote> ..." — distinct from gitSubcmdStashPush which is args[1] of "git stash push"
+)
 
 func mergeTestRunner(mergeErr error) *mockRunner {
 	return &mockRunner{
@@ -510,7 +513,10 @@ func TestMergeRemoteDeleteFailedOutput(t *testing.T) {
 			if len(args) >= 2 && args[1] == cmdShowToplevel {
 				return repoPath, nil
 			}
-			if len(args) >= 1 && args[0] == gitSubcmdStashPush {
+			if len(args) >= 1 && args[0] == "remote" {
+				return "https://github.com/lugassawan/rimba.git", nil
+			}
+			if len(args) >= 1 && args[0] == gitCmdPush {
 				return "", errors.New("connection refused")
 			}
 			return mergeWorktreeOut, nil
@@ -541,6 +547,9 @@ func TestMergeRemoteDeleteFailedOutput(t *testing.T) {
 	out := buf.String()
 	if !strings.Contains(out, "Failed to delete remote branch") {
 		t.Errorf("output = %q, want 'Failed to delete remote branch'", out)
+	}
+	if !strings.Contains(out, "connection refused") {
+		t.Errorf("output = %q, want remote error reason 'connection refused'", out)
 	}
 	if !strings.Contains(out, "git push origin --delete") {
 		t.Errorf("output = %q, want manual hint with 'git push origin --delete'", out)
