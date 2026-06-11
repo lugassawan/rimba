@@ -33,7 +33,6 @@ custom-gcl
 .env
 
 # Rimba config (local to each repo)
-.rimba/settings.local.toml
 
 # Editor/IDE
 # .idea/
@@ -55,3 +54,4 @@ local.properties
 
 # macOS
 .DS_Store
+.rimba/*.local.toml
