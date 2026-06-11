@@ -34,6 +34,8 @@ type MergeResult struct {
 	SourceRemoved   bool  // true only if both worktree removed and branch deleted
 	WorktreeRemoved bool  // true if worktree was removed (branch may still exist)
 	RemoveError     error // non-nil if cleanup failed
+	RemoteDeleted   bool  // true if the remote branch was deleted (parity with clean --merged, #231)
+	RemoteError     error // non-nil if remote-branch deletion was attempted and failed
 	Plan            *Plan // always non-nil on a successful return; records steps that were (or would be) executed
 }
 
@@ -121,9 +123,32 @@ func MergeWorktree(ctx context.Context, r git.Runner, params MergeParams, onProg
 		if rmErr != nil {
 			result.RemoveError = rmErr
 		}
+
+		// Delete the merged remote branch (best-effort, parity with clean --merged, #231).
+		deleteMergedRemote(ctx, r, plan, source.Branch, &result, params.DryRun, wtRemoved)
 	}
 
 	return result, nil
+}
+
+// deleteMergedRemote deletes the remote tracking branch after a merge cleanup.
+// It is a no-op when the remote is absent or when the worktree was not actually
+// removed. Failures are captured in result.RemoteError and never abort the merge.
+func deleteMergedRemote(ctx context.Context, r git.Runner, plan *Plan, branch string, result *MergeResult, dryRun, wtRemoved bool) {
+	if !dryRun && !wtRemoved {
+		return
+	}
+	if !git.RemoteExists(ctx, r, git.DefaultRemote) {
+		return
+	}
+	_ = plan.Do("delete remote branch: "+git.DefaultRemote+"/"+branch, func() error {
+		var remoteErr error
+		if remoteErr = git.DeleteRemoteBranch(ctx, r, git.DefaultRemote, branch); remoteErr == nil {
+			result.RemoteDeleted = true
+		}
+		result.RemoteError = remoteErr
+		return nil // best-effort: never abort the merge
+	})
 }
 
 // abortFailedMerge attempts to roll back a failed merge in targetDir.

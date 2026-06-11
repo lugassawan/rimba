@@ -562,6 +562,233 @@ func TestMergeWorktreeCleanupBranchDeleteFails(t *testing.T) {
 	}
 }
 
+func TestMergeWorktreeRemoteDeleteSuccess(t *testing.T) {
+	wt := mergeWorktreeList()
+	pushCalled := false
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == gitCmdWorktree {
+				return wt, nil
+			}
+			if len(args) >= 1 && args[0] == gitCmdPush {
+				pushCalled = true
+				return "", nil
+			}
+			return "", nil
+		},
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == gitCmdStatus {
+				return "", nil
+			}
+			if len(args) >= 1 && args[0] == gitCmdMerge {
+				return "", nil
+			}
+			return "", nil
+		},
+	}
+
+	result, err := MergeWorktree(context.Background(), r, MergeParams{
+		SourceTask: "login",
+		RepoRoot:   "/repo",
+		MainBranch: "main",
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.RemoteDeleted {
+		t.Error("expected RemoteDeleted=true")
+	}
+	if result.RemoteError != nil {
+		t.Errorf("expected nil RemoteError, got: %v", result.RemoteError)
+	}
+	if !pushCalled {
+		t.Error("expected git push --delete to be called")
+	}
+}
+
+func TestMergeWorktreeRemoteDeleteFailureNonFatal(t *testing.T) {
+	wt := mergeWorktreeList()
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == gitCmdWorktree {
+				return wt, nil
+			}
+			if len(args) >= 1 && args[0] == gitCmdPush {
+				return "", errors.New("connection refused")
+			}
+			return "", nil
+		},
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == gitCmdStatus {
+				return "", nil
+			}
+			if len(args) >= 1 && args[0] == gitCmdMerge {
+				return "", nil
+			}
+			return "", nil
+		},
+	}
+
+	result, err := MergeWorktree(context.Background(), r, MergeParams{
+		SourceTask: "login",
+		RepoRoot:   "/repo",
+		MainBranch: "main",
+	}, nil)
+	if err != nil {
+		t.Fatalf("expected no fatal error (remote delete is best-effort), got: %v", err)
+	}
+	if result.RemoteDeleted {
+		t.Error("expected RemoteDeleted=false on failure")
+	}
+	if result.RemoteError == nil {
+		t.Error("expected non-nil RemoteError")
+	}
+}
+
+func TestMergeWorktreeNoOriginSkipsRemoteDelete(t *testing.T) {
+	wt := mergeWorktreeList()
+	pushCalled := false
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == gitCmdWorktree {
+				return wt, nil
+			}
+			if len(args) >= 2 && args[0] == "remote" && args[1] == "get-url" {
+				return "", errors.New("no such remote")
+			}
+			if len(args) >= 1 && args[0] == gitCmdPush {
+				pushCalled = true
+				return "", nil
+			}
+			return "", nil
+		},
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == gitCmdStatus {
+				return "", nil
+			}
+			if len(args) >= 1 && args[0] == gitCmdMerge {
+				return "", nil
+			}
+			return "", nil
+		},
+	}
+
+	result, err := MergeWorktree(context.Background(), r, MergeParams{
+		SourceTask: "login",
+		RepoRoot:   "/repo",
+		MainBranch: "main",
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.RemoteDeleted {
+		t.Error("expected RemoteDeleted=false when no origin")
+	}
+	if pushCalled {
+		t.Error("expected no push call when no origin")
+	}
+}
+
+func TestMergeWorktreeKeepSuppressesRemoteDelete(t *testing.T) {
+	wt := mergeWorktreeList()
+	remoteChecked := false
+	pushCalled := false
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == gitCmdWorktree {
+				return wt, nil
+			}
+			if len(args) >= 1 && args[0] == "remote" {
+				remoteChecked = true
+				return "", nil
+			}
+			if len(args) >= 1 && args[0] == gitCmdPush {
+				pushCalled = true
+				return "", nil
+			}
+			return "", nil
+		},
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == gitCmdStatus {
+				return "", nil
+			}
+			if len(args) >= 1 && args[0] == gitCmdMerge {
+				return "", nil
+			}
+			return "", nil
+		},
+	}
+
+	result, err := MergeWorktree(context.Background(), r, MergeParams{
+		SourceTask: "login",
+		RepoRoot:   "/repo",
+		MainBranch: "main",
+		Keep:       true,
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.RemoteDeleted {
+		t.Error("expected RemoteDeleted=false with --keep")
+	}
+	if remoteChecked {
+		t.Error("expected no remote check when --keep suppresses cleanup")
+	}
+	if pushCalled {
+		t.Error("expected no push when --keep suppresses cleanup")
+	}
+}
+
+func TestMergeWorktreeDryRunIncludesRemoteStep(t *testing.T) {
+	wt := mergeWorktreeList()
+	pushCalled := false
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == gitCmdWorktree {
+				return wt, nil
+			}
+			if len(args) >= 1 && args[0] == gitCmdPush {
+				pushCalled = true
+				return "", nil
+			}
+			// remote get-url succeeds → origin present
+			return "", nil
+		},
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == gitCmdStatus {
+				return "", nil
+			}
+			if len(args) >= 1 && args[0] == gitCmdMerge {
+				return "", nil
+			}
+			return "", nil
+		},
+	}
+
+	result, err := MergeWorktree(context.Background(), r, MergeParams{
+		SourceTask: "login",
+		RepoRoot:   "/repo",
+		MainBranch: "main",
+		DryRun:     true,
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	hasRemoteStep := false
+	for _, s := range result.Plan.Steps {
+		if strings.Contains(s, "delete remote branch") && strings.Contains(s, "origin/"+branchFeatureLogin) {
+			hasRemoteStep = true
+			break
+		}
+	}
+	if !hasRemoteStep {
+		t.Errorf("expected remote step in plan, got: %v", result.Plan.Steps)
+	}
+	if pushCalled {
+		t.Error("expected no push in dry-run mode")
+	}
+}
+
 func TestMergeWorktreeTargetDirtyToWorktree(t *testing.T) {
 	wt := mergeWorktreeList()
 	r := &mockRunner{
