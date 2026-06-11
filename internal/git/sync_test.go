@@ -134,7 +134,7 @@ func TestAbortRebase(t *testing.T) {
 func TestMergeBase(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
-			if len(args) == 3 && args[0] == "merge-base" {
+			if len(args) == 3 && args[0] == CmdMergeBase {
 				return fakeSHA, nil
 			}
 			return "", errors.New("unexpected")

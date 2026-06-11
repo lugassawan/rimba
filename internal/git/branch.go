@@ -1,8 +1,11 @@
 package git
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -11,6 +14,40 @@ import (
 )
 
 const internalGitInvariantHint = "report this — git output unexpectedly malformed"
+
+// ComputePatchIDs pipes diff into git patch-id --stable and returns the set of
+// patch-id hex strings. Exposed as a variable so tests can stub it without a
+// real git subprocess. Not safe for concurrent modification.
+var ComputePatchIDs = func(ctx context.Context, diff string) (map[string]bool, error) {
+	if diff == "" {
+		return map[string]bool{}, nil
+	}
+	cmd := exec.CommandContext(ctx, "git", "patch-id", "--stable")
+	cmd.Env = stableGitEnv(os.Environ())
+	cmd.Stdin = strings.NewReader(diff)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return nil, fmt.Errorf("git patch-id --stable: %s: %w", msg, err)
+		}
+		return nil, fmt.Errorf("git patch-id --stable: %w", err)
+	}
+
+	ids := make(map[string]bool)
+	for line := range strings.SplitSeq(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		pid, _, _ := strings.Cut(line, " ")
+		if pid != "" {
+			ids[pid] = true
+		}
+	}
+	return ids, nil
+}
 
 // BranchExists checks whether a local branch exists.
 func BranchExists(ctx context.Context, r Runner, branch string) bool {
@@ -94,33 +131,50 @@ func AheadBehind(ctx context.Context, r Runner, dir string) (ahead, behind int, 
 	return ahead, behind, nil
 }
 
-// IsSquashMerged checks whether a branch's content has been squash-merged into mergeRef.
-// It uses the commit-tree + cherry technique: create a synthetic commit with the
-// branch's tree on the merge-base, then check if that content is already in mergeRef.
-// Note: each call creates an unreferenced commit object in the git store; these are
-// cleaned up automatically by git gc.
+// IsSquashMerged reports whether branch's diff patch-id matches any commit in
+// mergeRef since their common merge-base, indicating a squash merge.
 func IsSquashMerged(ctx context.Context, r Runner, mergeRef, branch string) (bool, error) {
 	mergeBase, err := MergeBase(ctx, r, mergeRef, branch)
 	if err != nil {
 		return false, err
 	}
 
-	tree, err := r.Run(ctx, cmdRevParse, branch+treeSuffix)
+	tip, err := r.Run(ctx, cmdRevParse, "--verify", branch)
 	if err != nil {
 		return false, err
 	}
 
-	tempCommit, err := r.Run(ctx, cmdCommitTree, tree, "-p", mergeBase, "-m", "temp")
+	if strings.TrimSpace(mergeBase) == strings.TrimSpace(tip) { // empty branch — nothing squash-merged
+		return false, nil
+	}
+
+	branchDiff, err := r.Run(ctx, CmdDiff, mergeBase, branch)
+	if err != nil {
+		return false, err
+	}
+	branchPIDs, err := ComputePatchIDs(ctx, branchDiff)
+	if err != nil {
+		return false, err
+	}
+	if len(branchPIDs) == 0 {
+		return false, nil
+	}
+
+	mergeRefDiffs, err := r.Run(ctx, CmdLog, "-p", "--no-merges", mergeBase+".."+mergeRef)
+	if err != nil {
+		return false, err
+	}
+	mergeRefPIDs, err := ComputePatchIDs(ctx, mergeRefDiffs)
 	if err != nil {
 		return false, err
 	}
 
-	out, err := r.Run(ctx, cmdCherry, mergeRef, tempCommit)
-	if err != nil {
-		return false, err
+	for pid := range mergeRefPIDs {
+		if branchPIDs[pid] {
+			return true, nil
+		}
 	}
-
-	return strings.HasPrefix(out, cherryMerged), nil
+	return false, nil
 }
 
 // MergedBranches returns branches that have been merged into the given branch.
@@ -152,7 +206,7 @@ func LastCommitTime(ctx context.Context, r Runner, branch string) (time.Time, er
 
 // LastCommitInfo returns the time and subject of the last commit on the given branch.
 func LastCommitInfo(ctx context.Context, r Runner, branch string) (time.Time, string, error) {
-	out, err := r.Run(ctx, "log", "-1", "--format=%ct\t%s", branch)
+	out, err := r.Run(ctx, CmdLog, "-1", "--format=%ct\t%s", branch)
 	if err != nil {
 		return time.Time{}, "", errhint.WithFix(
 			fmt.Errorf("last commit info for %s: %w", branch, err),

@@ -27,8 +27,9 @@ const (
 	errBranchWantFmt = "branch = %q, want %q"
 	flagGitCommonDir = "--git-common-dir"
 	flagShowToplevel = "--show-toplevel"
-	fakeTree         = "tree123"
-	fakeTempCommit   = "temp456"
+	fakeTip          = "tip789"
+	fakeDiff         = "some diff"
+	fakeLog          = "fake log"
 )
 
 // mockRunner implements Runner with configurable closures for testing.
@@ -636,21 +637,26 @@ func TestListWorktreesBareEntry(t *testing.T) {
 }
 
 func TestIsSquashMerged(t *testing.T) {
-	step := 0
+	defer func(orig func(context.Context, string) (map[string]bool, error)) {
+		ComputePatchIDs = orig
+	}(ComputePatchIDs)
+	ComputePatchIDs = func(_ context.Context, _ string) (map[string]bool, error) {
+		return map[string]bool{fakeSHA: true}, nil
+	}
+
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
-			step++
-			switch step {
-			case 1: // merge-base
+			switch args[0] {
+			case CmdMergeBase:
 				return fakeSHA, nil
-			case 2: // rev-parse branch^{tree}
-				return fakeTree, nil
-			case 3: // commit-tree
-				return fakeTempCommit, nil
-			case 4: // cherry
-				return "- abc789", nil
+			case cmdRevParse:
+				return fakeTip, nil
+			case CmdDiff:
+				return "fake diff", nil
+			case CmdLog:
+				return fakeLog, nil
 			}
-			return "", errors.New("unexpected call")
+			return "", errors.New("unexpected call: " + args[0])
 		},
 	}
 
@@ -664,21 +670,29 @@ func TestIsSquashMerged(t *testing.T) {
 }
 
 func TestIsSquashMergedNotMerged(t *testing.T) {
-	step := 0
+	defer func(orig func(context.Context, string) (map[string]bool, error)) {
+		ComputePatchIDs = orig
+	}(ComputePatchIDs)
+	ComputePatchIDs = func(_ context.Context, diff string) (map[string]bool, error) {
+		if diff == fakeLog {
+			return map[string]bool{"merge-ref-pid": true}, nil
+		}
+		return map[string]bool{"branch-pid": true}, nil
+	}
+
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
-			step++
-			switch step {
-			case 1:
+			switch args[0] {
+			case CmdMergeBase:
 				return fakeSHA, nil
-			case 2:
-				return fakeTree, nil
-			case 3:
-				return fakeTempCommit, nil
-			case 4:
-				return "+ abc789", nil
+			case cmdRevParse:
+				return fakeTip, nil
+			case CmdDiff:
+				return "fake diff", nil
+			case CmdLog:
+				return fakeLog, nil
 			}
-			return "", errors.New("unexpected call")
+			return "", errors.New("unexpected call: " + args[0])
 		},
 	}
 
@@ -705,11 +719,9 @@ func TestIsSquashMergedMergeBaseError(t *testing.T) {
 }
 
 func TestIsSquashMergedRevParseError(t *testing.T) {
-	step := 0
 	r := &mockRunner{
-		run: func(_ ...string) (string, error) {
-			step++
-			if step == 1 {
+		run: func(args ...string) (string, error) {
+			if args[0] == CmdMergeBase {
 				return fakeSHA, nil
 			}
 			return "", errors.New("rev-parse failed")
@@ -722,43 +734,44 @@ func TestIsSquashMergedRevParseError(t *testing.T) {
 	}
 }
 
-func TestIsSquashMergedCommitTreeError(t *testing.T) {
-	step := 0
+func TestIsSquashMergedDiffError(t *testing.T) {
 	r := &mockRunner{
-		run: func(_ ...string) (string, error) {
-			step++
-			switch step {
-			case 1:
+		run: func(args ...string) (string, error) {
+			switch args[0] {
+			case CmdMergeBase:
 				return fakeSHA, nil
-			case 2:
-				return fakeTree, nil
+			case cmdRevParse:
+				return fakeTip, nil
 			}
-			return "", errors.New("commit-tree failed")
+			return "", errors.New("diff failed")
 		},
 	}
 
 	_, err := IsSquashMerged(context.Background(), r, branchMain, branchFeature)
 	if err == nil {
-		t.Fatal("expected error from commit-tree failure")
+		t.Fatal("expected error from diff failure")
 	}
 }
 
-func TestIsSquashMergedEmptyCherry(t *testing.T) {
-	step := 0
+func TestIsSquashMergedEmptyBranchPatchID(t *testing.T) {
+	defer func(orig func(context.Context, string) (map[string]bool, error)) {
+		ComputePatchIDs = orig
+	}(ComputePatchIDs)
+	ComputePatchIDs = func(_ context.Context, _ string) (map[string]bool, error) {
+		return map[string]bool{}, nil
+	}
+
 	r := &mockRunner{
-		run: func(_ ...string) (string, error) {
-			step++
-			switch step {
-			case 1:
+		run: func(args ...string) (string, error) {
+			switch args[0] {
+			case CmdMergeBase:
 				return fakeSHA, nil
-			case 2:
-				return fakeTree, nil
-			case 3:
-				return fakeTempCommit, nil
-			case 4:
-				return "", nil
+			case cmdRevParse:
+				return fakeTip, nil
+			case CmdDiff:
+				return fakeDiff, nil
 			}
-			return "", errors.New("unexpected call")
+			return "", errors.New("unexpected call: " + args[0])
 		},
 	}
 
@@ -767,30 +780,118 @@ func TestIsSquashMergedEmptyCherry(t *testing.T) {
 		t.Fatalf("IsSquashMerged: %v", err)
 	}
 	if merged {
-		t.Error("expected empty cherry output to not indicate squash-merge")
+		t.Error("expected empty branch patch-id to not indicate squash-merge")
 	}
 }
 
-func TestIsSquashMergedCherryError(t *testing.T) {
-	step := 0
+func TestIsSquashMergedLogError(t *testing.T) {
+	defer func(orig func(context.Context, string) (map[string]bool, error)) {
+		ComputePatchIDs = orig
+	}(ComputePatchIDs)
+	ComputePatchIDs = func(_ context.Context, _ string) (map[string]bool, error) {
+		return map[string]bool{fakeSHA: true}, nil
+	}
+
 	r := &mockRunner{
-		run: func(_ ...string) (string, error) {
-			step++
-			switch step {
-			case 1:
+		run: func(args ...string) (string, error) {
+			switch args[0] {
+			case CmdMergeBase:
 				return fakeSHA, nil
-			case 2:
-				return fakeTree, nil
-			case 3:
-				return fakeTempCommit, nil
+			case cmdRevParse:
+				return fakeTip, nil
+			case CmdDiff:
+				return fakeDiff, nil
 			}
-			return "", errors.New("cherry failed")
+			return "", errors.New("log failed")
 		},
 	}
 
 	_, err := IsSquashMerged(context.Background(), r, branchMain, branchFeature)
 	if err == nil {
-		t.Fatal("expected error from cherry failure")
+		t.Fatal("expected error from log failure")
+	}
+}
+
+func TestIsSquashMergedPatchIDError(t *testing.T) {
+	defer func(orig func(context.Context, string) (map[string]bool, error)) {
+		ComputePatchIDs = orig
+	}(ComputePatchIDs)
+	ComputePatchIDs = func(_ context.Context, _ string) (map[string]bool, error) {
+		return nil, errors.New("patch-id failed")
+	}
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			switch args[0] {
+			case CmdMergeBase:
+				return fakeSHA, nil
+			case cmdRevParse:
+				return fakeTip, nil
+			case CmdDiff:
+				return fakeDiff, nil
+			}
+			return "", errors.New("unexpected call: " + args[0])
+		},
+	}
+
+	_, err := IsSquashMerged(context.Background(), r, branchMain, branchFeature)
+	if err == nil {
+		t.Fatal("expected error from patch-id failure")
+	}
+}
+
+func TestIsSquashMergedPatchIDErrorOnMergeRef(t *testing.T) {
+	defer func(orig func(context.Context, string) (map[string]bool, error)) {
+		ComputePatchIDs = orig
+	}(ComputePatchIDs)
+	ComputePatchIDs = func(_ context.Context, diff string) (map[string]bool, error) {
+		if diff == fakeLog {
+			return nil, errors.New("patch-id failed on mergeRef")
+		}
+		return map[string]bool{fakeSHA: true}, nil
+	}
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			switch args[0] {
+			case CmdMergeBase:
+				return fakeSHA, nil
+			case cmdRevParse:
+				return fakeTip, nil
+			case CmdDiff:
+				return fakeDiff, nil
+			case CmdLog:
+				return fakeLog, nil
+			}
+			return "", errors.New("unexpected call: " + args[0])
+		},
+	}
+
+	_, err := IsSquashMerged(context.Background(), r, branchMain, branchFeature)
+	if err == nil {
+		t.Fatal("expected error from patch-id failure on mergeRef diffs")
+	}
+}
+
+func TestIsSquashMergedMergeBaseEqualsTip(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			switch args[0] {
+			case CmdMergeBase:
+				return fakeSHA, nil
+			case cmdRevParse:
+				return fakeSHA, nil // same SHA = empty branch
+			}
+			return "", errors.New("unexpected call: " + args[0])
+		},
+	}
+
+	merged, err := IsSquashMerged(context.Background(), r, branchMain, branchFeature)
+	if err != nil {
+		t.Fatalf("IsSquashMerged: %v", err)
+	}
+	if merged {
+		t.Error("expected empty branch (merge-base == tip) to not indicate squash-merge")
 	}
 }
 
