@@ -1,8 +1,8 @@
 package git
 
 import (
+	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -15,28 +15,23 @@ import (
 
 const internalGitInvariantHint = "report this — git output unexpectedly malformed"
 
-// errEmptyDiff is returned by ComputePatchIDs when the input diff is empty.
-var errEmptyDiff = errors.New("empty diff")
-
-// ComputePatchIDs computes patch-ids from a diff string by piping it to
-// git patch-id --stable. Defined as a variable so tests can override it
-// with deterministic results without executing a real git subprocess.
-// Returns the set of patch-id hex strings (first field per output line).
-//
-// Not safe for concurrent modification — tests must override and restore
-// sequentially via defer:
-//
-//	defer func(orig ...) { ComputePatchIDs = orig }(ComputePatchIDs)
-//	ComputePatchIDs = func(...) { ... }
+// ComputePatchIDs pipes diff into git patch-id --stable and returns the set of
+// patch-id hex strings. Exposed as a variable so tests can stub it without a
+// real git subprocess. Not safe for concurrent modification.
 var ComputePatchIDs = func(ctx context.Context, diff string) (map[string]bool, error) {
 	if diff == "" {
-		return nil, errEmptyDiff
+		return map[string]bool{}, nil
 	}
 	cmd := exec.CommandContext(ctx, "git", "patch-id", "--stable")
 	cmd.Env = stableGitEnv(os.Environ())
 	cmd.Stdin = strings.NewReader(diff)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return nil, fmt.Errorf("git patch-id --stable: %s: %w", msg, err)
+		}
 		return nil, fmt.Errorf("git patch-id --stable: %w", err)
 	}
 
@@ -136,11 +131,8 @@ func AheadBehind(ctx context.Context, r Runner, dir string) (ahead, behind int, 
 	return ahead, behind, nil
 }
 
-// IsSquashMerged checks whether a branch's content has been squash-merged into mergeRef.
-// It computes a patch-id for the branch diff and checks whether any commit in
-// mergeRef (since the merge-base) produces the same patch-id.
-// Unlike the previous commit-tree + cherry approach, this technique creates no
-// loose objects in the git store.
+// IsSquashMerged reports whether branch's diff patch-id matches any commit in
+// mergeRef since their common merge-base, indicating a squash merge.
 func IsSquashMerged(ctx context.Context, r Runner, mergeRef, branch string) (bool, error) {
 	mergeBase, err := MergeBase(ctx, r, mergeRef, branch)
 	if err != nil {
@@ -152,37 +144,28 @@ func IsSquashMerged(ctx context.Context, r Runner, mergeRef, branch string) (boo
 		return false, err
 	}
 
-	// Empty branch (merge-base == branch tip) — nothing to squash-merge.
-	if mergeBase == tip {
+	if mergeBase == tip { // empty branch — nothing squash-merged
 		return false, nil
 	}
 
-	// Branch patch-id: diff from merge-base to branch tip.
-	branchDiff, err := r.Run(ctx, "diff", mergeBase, branch)
+	branchDiff, err := r.Run(ctx, cmdDiff, mergeBase, branch)
 	if err != nil {
 		return false, err
 	}
 	branchPIDs, err := ComputePatchIDs(ctx, branchDiff)
 	if err != nil {
-		if errors.Is(err, errEmptyDiff) {
-			return false, nil // empty diff — not squash-merged
-		}
 		return false, err
 	}
 	if len(branchPIDs) == 0 {
 		return false, nil
 	}
 
-	// MergeRef patch-ids: diffs for each non-merge commit since merge-base.
-	mergeRefDiffs, err := r.Run(ctx, "log", "-p", "--no-merges", mergeBase+".."+mergeRef)
+	mergeRefDiffs, err := r.Run(ctx, cmdLog, "-p", "--no-merges", mergeBase+".."+mergeRef)
 	if err != nil {
 		return false, err
 	}
 	mergeRefPIDs, err := ComputePatchIDs(ctx, mergeRefDiffs)
 	if err != nil {
-		if errors.Is(err, errEmptyDiff) {
-			return false, nil // no commits in mergeRef range
-		}
 		return false, err
 	}
 
@@ -223,7 +206,7 @@ func LastCommitTime(ctx context.Context, r Runner, branch string) (time.Time, er
 
 // LastCommitInfo returns the time and subject of the last commit on the given branch.
 func LastCommitInfo(ctx context.Context, r Runner, branch string) (time.Time, string, error) {
-	out, err := r.Run(ctx, "log", "-1", "--format=%ct\t%s", branch)
+	out, err := r.Run(ctx, cmdLog, "-1", "--format=%ct\t%s", branch)
 	if err != nil {
 		return time.Time{}, "", errhint.WithFix(
 			fmt.Errorf("last commit info for %s: %w", branch, err),

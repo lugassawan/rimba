@@ -8,7 +8,7 @@ import (
 // DiffNameOnly returns files changed between base and branch using three-dot diff.
 // The three-dot notation (base...branch) shows changes on branch since it diverged from base.
 func DiffNameOnly(ctx context.Context, r Runner, base, branch string) ([]string, error) {
-	out, err := r.Run(ctx, "diff", "--name-only", base+"..."+branch)
+	out, err := r.Run(ctx, cmdDiff, "--name-only", base+"..."+branch)
 	if err != nil {
 		return nil, err
 	}

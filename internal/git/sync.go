@@ -34,13 +34,13 @@ func AbortRebase(r Runner, dir string) error {
 
 // MergeBase returns the merge-base commit of two refs.
 func MergeBase(ctx context.Context, r Runner, ref1, ref2 string) (string, error) {
-	return r.Run(ctx, "merge-base", ref1, ref2)
+	return r.Run(ctx, cmdMergeBase, ref1, ref2)
 }
 
 // IsMergeBaseAncestor checks if ancestor is an ancestor of descendant
 // using `git merge-base --is-ancestor`.
 func IsMergeBaseAncestor(ctx context.Context, r Runner, ancestor, descendant string) bool {
-	_, err := r.Run(ctx, "merge-base", "--is-ancestor", ancestor, descendant)
+	_, err := r.Run(ctx, cmdMergeBase, "--is-ancestor", ancestor, descendant)
 	return err == nil
 }
 

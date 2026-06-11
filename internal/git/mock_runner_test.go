@@ -29,6 +29,7 @@ const (
 	flagShowToplevel = "--show-toplevel"
 	fakeTip          = "tip789"
 	fakeDiff         = "some diff"
+	fakeLog          = "fake log"
 )
 
 // mockRunner implements Runner with configurable closures for testing.
@@ -643,21 +644,19 @@ func TestIsSquashMerged(t *testing.T) {
 		return map[string]bool{fakeSHA: true}, nil
 	}
 
-	step := 0
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
-			step++
-			switch step {
-			case 1: // merge-base
+			switch args[0] {
+			case cmdMergeBase:
 				return fakeSHA, nil
-			case 2: // rev-parse --verify branch
+			case cmdRevParse:
 				return fakeTip, nil
-			case 3: // diff
+			case cmdDiff:
 				return "fake diff", nil
-			case 4: // log -p --no-merges
-				return "fake log", nil
+			case cmdLog:
+				return fakeLog, nil
 			}
-			return "", errors.New("unexpected call")
+			return "", errors.New("unexpected call: " + args[0])
 		},
 	}
 
@@ -683,21 +682,19 @@ func TestIsSquashMergedNotMerged(t *testing.T) {
 		return map[string]bool{"merge-ref-pid": true}, nil
 	}
 
-	step := 0
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
-			step++
-			switch step {
-			case 1: // merge-base
+			switch args[0] {
+			case cmdMergeBase:
 				return fakeSHA, nil
-			case 2: // rev-parse --verify branch
+			case cmdRevParse:
 				return fakeTip, nil
-			case 3: // diff
+			case cmdDiff:
 				return "fake diff", nil
-			case 4: // log -p --no-merges
-				return "fake log", nil
+			case cmdLog:
+				return fakeLog, nil
 			}
-			return "", errors.New("unexpected call")
+			return "", errors.New("unexpected call: " + args[0])
 		},
 	}
 
@@ -724,11 +721,9 @@ func TestIsSquashMergedMergeBaseError(t *testing.T) {
 }
 
 func TestIsSquashMergedRevParseError(t *testing.T) {
-	step := 0
 	r := &mockRunner{
-		run: func(_ ...string) (string, error) {
-			step++
-			if step == 1 {
+		run: func(args ...string) (string, error) {
+			if args[0] == cmdMergeBase {
 				return fakeSHA, nil
 			}
 			return "", errors.New("rev-parse failed")
@@ -742,15 +737,13 @@ func TestIsSquashMergedRevParseError(t *testing.T) {
 }
 
 func TestIsSquashMergedDiffError(t *testing.T) {
-	step := 0
 	r := &mockRunner{
-		run: func(_ ...string) (string, error) {
-			step++
-			switch step {
-			case 1:
-				return fakeSHA, nil // merge-base
-			case 2:
-				return fakeTip, nil // rev-parse
+		run: func(args ...string) (string, error) {
+			switch args[0] {
+			case cmdMergeBase:
+				return fakeSHA, nil
+			case cmdRevParse:
+				return fakeTip, nil
 			}
 			return "", errors.New("diff failed")
 		},
@@ -770,19 +763,17 @@ func TestIsSquashMergedEmptyBranchPatchID(t *testing.T) {
 		return map[string]bool{}, nil
 	}
 
-	step := 0
 	r := &mockRunner{
-		run: func(_ ...string) (string, error) {
-			step++
-			switch step {
-			case 1:
-				return fakeSHA, nil // merge-base
-			case 2:
-				return fakeTip, nil // rev-parse
-			case 3:
+		run: func(args ...string) (string, error) {
+			switch args[0] {
+			case cmdMergeBase:
+				return fakeSHA, nil
+			case cmdRevParse:
+				return fakeTip, nil
+			case cmdDiff:
 				return fakeDiff, nil
 			}
-			return "", errors.New("unexpected call")
+			return "", errors.New("unexpected call: " + args[0])
 		},
 	}
 
@@ -803,16 +794,14 @@ func TestIsSquashMergedLogError(t *testing.T) {
 		return map[string]bool{fakeSHA: true}, nil
 	}
 
-	step := 0
 	r := &mockRunner{
-		run: func(_ ...string) (string, error) {
-			step++
-			switch step {
-			case 1:
-				return fakeSHA, nil // merge-base
-			case 2:
-				return fakeTip, nil // rev-parse
-			case 3:
+		run: func(args ...string) (string, error) {
+			switch args[0] {
+			case cmdMergeBase:
+				return fakeSHA, nil
+			case cmdRevParse:
+				return fakeTip, nil
+			case cmdDiff:
 				return fakeDiff, nil
 			}
 			return "", errors.New("log failed")
@@ -833,19 +822,17 @@ func TestIsSquashMergedPatchIDError(t *testing.T) {
 		return nil, errors.New("patch-id failed")
 	}
 
-	step := 0
 	r := &mockRunner{
-		run: func(_ ...string) (string, error) {
-			step++
-			switch step {
-			case 1:
-				return fakeSHA, nil // merge-base
-			case 2:
-				return fakeTip, nil // rev-parse
-			case 3:
+		run: func(args ...string) (string, error) {
+			switch args[0] {
+			case cmdMergeBase:
+				return fakeSHA, nil
+			case cmdRevParse:
+				return fakeTip, nil
+			case cmdDiff:
 				return fakeDiff, nil
 			}
-			return "", errors.New("unexpected call")
+			return "", errors.New("unexpected call: " + args[0])
 		},
 	}
 
@@ -855,18 +842,51 @@ func TestIsSquashMergedPatchIDError(t *testing.T) {
 	}
 }
 
-func TestIsSquashMergedMergeBaseEqualsTip(t *testing.T) {
-	step := 0
+func TestIsSquashMergedPatchIDErrorOnMergeRef(t *testing.T) {
+	callCount := 0
+	defer func(orig func(context.Context, string) (map[string]bool, error)) {
+		ComputePatchIDs = orig
+	}(ComputePatchIDs)
+	ComputePatchIDs = func(_ context.Context, _ string) (map[string]bool, error) {
+		callCount++
+		if callCount == 1 {
+			return map[string]bool{fakeSHA: true}, nil
+		}
+		return nil, errors.New("patch-id failed on mergeRef")
+	}
+
 	r := &mockRunner{
-		run: func(_ ...string) (string, error) {
-			step++
-			switch step {
-			case 1:
-				return fakeSHA, nil // merge-base
-			case 2:
-				return fakeSHA, nil // rev-parse (same SHA = empty branch)
+		run: func(args ...string) (string, error) {
+			switch args[0] {
+			case cmdMergeBase:
+				return fakeSHA, nil
+			case cmdRevParse:
+				return fakeTip, nil
+			case cmdDiff:
+				return fakeDiff, nil
+			case cmdLog:
+				return fakeLog, nil
 			}
-			return "", errors.New("unexpected call")
+			return "", errors.New("unexpected call: " + args[0])
+		},
+	}
+
+	_, err := IsSquashMerged(context.Background(), r, branchMain, branchFeature)
+	if err == nil {
+		t.Fatal("expected error from patch-id failure on mergeRef diffs")
+	}
+}
+
+func TestIsSquashMergedMergeBaseEqualsTip(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			switch args[0] {
+			case cmdMergeBase:
+				return fakeSHA, nil
+			case cmdRevParse:
+				return fakeSHA, nil // same SHA = empty branch
+			}
+			return "", errors.New("unexpected call: " + args[0])
 		},
 	}
 
