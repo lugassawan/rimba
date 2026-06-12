@@ -1,0 +1,46 @@
+<svg width="512" height="512" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="ambientGlow" cx="55%" cy="55%" r="45%">
+      <stop offset="0%" stop-color="#4ade80" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#4ade80" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="nodeGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="128" height="128" rx="20" fill="#0a0e0a"/>
+  <rect x="1.5" y="1.5" width="125" height="125" rx="18.5" stroke="#1a2e1a" stroke-width="1"/>
+  <rect width="128" height="128" rx="20" fill="url(#ambientGlow)"/>
+  <line x1="30" y1="20" x2="30" y2="108" stroke="#3aaa5e" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M30 38 Q38 38 50 38" stroke="#3aaa5e" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M50 38 Q54 38 54 42 L54 74 Q54 78 50 78" stroke="#2dd4a8" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.7"/>
+  <path d="M50 78 Q38 78 30 78" stroke="#2dd4a8" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M30 52 Q40 52 56 52 Q62 52 72 52" stroke="#4ade80" stroke-width="2.8" stroke-linecap="round" fill="none"/>
+  <path d="M72 52 Q76 52 76 56 L76 94" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M30 66 Q42 66 60 66 Q68 66 90 66" stroke="#3aaa5e" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M90 66 Q94 66 94 70 L94 84" stroke="#22885a" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <circle cx="30" cy="20" r="4.5" fill="#4ade80"/>
+  <circle cx="30" cy="38" r="3.5" fill="#3aaa5e"/>
+  <circle cx="30" cy="52" r="4" fill="#4ade80"/>
+  <circle cx="30" cy="66" r="3.5" fill="#3aaa5e"/>
+  <circle cx="30" cy="78" r="3.5" fill="#2dd4a8"/>
+  <circle cx="30" cy="92" r="3.5" fill="#3aaa5e"/>
+  <circle cx="30" cy="108" r="4.5" fill="#4ade80"/>
+  <circle cx="50" cy="38" r="3" fill="#2dd4a8"/>
+  <circle cx="72" cy="52" r="3" fill="#4ade80"/>
+  <circle cx="90" cy="66" r="3" fill="#22885a"/>
+  <circle cx="76" cy="94" r="3.5" fill="#4ade80" filter="url(#nodeGlow)"/>
+  <circle cx="94" cy="84" r="2.5" fill="#22885a"/>
+  <path d="M76 90 Q72 84 68 86" stroke="#4ade80" stroke-width="1.8" fill="none" opacity="0.75"/>
+  <path d="M68 86 Q66 84 66 82" stroke="#4ade80" stroke-width="1.2" fill="none" opacity="0.5"/>
+  <path d="M76 90 Q80 84 84 87" stroke="#34d399" stroke-width="1.8" fill="none" opacity="0.7"/>
+  <path d="M72 49 Q76 43 80 46" stroke="#4ade80" stroke-width="1.5" fill="none" opacity="0.55"/>
+  <path d="M94 80 Q90 76 86 78" stroke="#22c55e" stroke-width="1.5" fill="none" opacity="0.5"/>
+  <path d="M94 80 Q98 76 100 80" stroke="#22885a" stroke-width="1.3" fill="none" opacity="0.4"/>
+  <path d="M50 35 Q54 30 58 33" stroke="#2dd4a8" stroke-width="1.4" fill="none" opacity="0.5"/>
+  <path d="M30 20 Q26 14 22 16" stroke="#4ade80" stroke-width="1.3" fill="none" opacity="0.4"/>
+  <path d="M30 20 Q34 14 36 18" stroke="#3aaa5e" stroke-width="1.2" fill="none" opacity="0.35"/>
+  <path d="M30 108 Q24 112 20 110" stroke="#1a5a2e" stroke-width="1.3" fill="none" opacity="0.3"/>
+  <path d="M30 108 Q36 112 40 110" stroke="#1a5a2e" stroke-width="1.3" fill="none" opacity="0.3"/>
+</svg>

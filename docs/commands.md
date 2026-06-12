@@ -46,7 +46,7 @@ rimba init -g --uninstall         # Remove user-level agent files and MCP regist
 rimba init --agents --uninstall   # Remove project-team agent files and MCP registration
 ```
 
-> **Notes:**
+{: .warning }
 > - `--local` is not allowed with `-g`.
 > - `--local` without `--agents` errors with: `--local requires --agents`.
 > - `--uninstall` requires `-g` or `--agents`.
@@ -79,10 +79,13 @@ rimba add pr:123 --task review/auth-tweak  # Override auto-derived task name
 rimba add branch:feature/my-feature  # Promote current branch to its own worktree
 ```
 
+{: .note }
 > **Monorepo:** If the first segment before `/` matches a directory in the repo root, rimba treats it as a service scope. The branch uses a 3-segment pattern: `<service>/<prefix>/<task>`. No configuration needed — detection is automatic.
 
+{: .note }
 > **PR mode:** `pr:<num>` requires `gh` to be installed and authenticated. For cross-fork PRs, rimba adds a `gh-fork-<owner>` remote automatically. Without `--task`, the task name is derived as `review/<num>-<slug>`.
 
+{: .note }
 > **Branch mode:** `branch:<branch>` requires that `<branch>` is the currently checked-out branch in the main repo and is not the default branch. Any uncommitted changes are transferred to the new worktree via `git stash`. `--source` is not valid in `branch:` mode. `--skip-deps` and `--skip-hooks` are accepted by the parser but have no effect in `branch:` mode; promote does not run dependency installation or post-create hooks.
 
 | Flag | Description |
@@ -158,7 +161,8 @@ rimba archive my-feature -f      # Force archival even if dirty
 | `-f`, `--force` | Force archival even if the worktree has uncommitted changes |
 | `--dry-run` | Preview what would be archived without making changes |
 
-> **Note:** The branch is preserved locally. Use [`rimba restore`](#rimba-restore) to recreate the worktree from the archived branch.
+{: .note }
+> The branch is preserved locally. Use [`rimba restore`](#rimba-restore) to recreate the worktree from the archived branch.
 
 ### rimba restore
 
@@ -173,7 +177,8 @@ rimba restore my-feature
 | `--skip-deps` | Skip dependency detection and installation |
 | `--skip-hooks` | Skip post-create hooks |
 
-> **Note:** Restoring copies dotfiles, installs dependencies, and runs post-create hooks — just like `rimba add`. Use [`rimba archive`](#rimba-archive) to archive a worktree.
+{: .note }
+> Restoring copies dotfiles, installs dependencies, and runs post-create hooks — just like `rimba add`. Use [`rimba archive`](#rimba-archive) to archive a worktree.
 
 ---
 
@@ -212,9 +217,11 @@ TASK            TYPE     BRANCH              PATH               STATUS    PR    
   ui-cleanup    chore    chore/ui-cleanup    chore-ui-cleanup   ✓         –      –
 ```
 
+{: .note }
 > **PR/CI columns:** Require `gh` installed and authenticated; otherwise a yellow warning is printed and those cells render as `–`. CI symbols: ✓ success · ● pending · ✗ failure · – unknown.
 
-> **Note:** `--archived` is mutually exclusive with `--type`, `--dirty`, `--behind`, and `--full`.
+{: .warning }
+> `--archived` is mutually exclusive with `--type`, `--dirty`, `--behind`, and `--full`.
 
 | Flag | Description |
 |------|-------------|
@@ -261,6 +268,7 @@ TASK          TYPE     BRANCH              STATUS    AGE   SIZE    7D
   ui-cleanup  chore    chore/ui-cleanup    ✓         21d   50 MB   0  ⚠ stale
 ```
 
+{: .note }
 > **Columns:** `SIZE` is the on-disk footprint of the worktree directory. `7D` is the number of commits on the worktree's branch in the last 7 days. `--detail` sorts rows largest-first.
 
 | Flag | Description |
@@ -313,7 +321,8 @@ rimba open my-task npm start    # Run an inline command
 | `--agent` | Run the `agent` shortcut from `[open]` config |
 | `-w`, `--with` | Run any named shortcut from `[open]` config |
 
-> **Note:** `--ide`, `--agent`, and `--with` are mutually exclusive with each other and with inline command arguments. Shortcuts are configured in the `[open]` section of `.rimba/settings.toml` (see [Configuration](configuration.md)).
+{: .warning }
+> `--ide`, `--agent`, and `--with` are mutually exclusive with each other and with inline command arguments. Shortcuts are configured in the `[open]` section of `.rimba/settings.toml` (see [Configuration](configuration.md)).
 
 ---
 
@@ -340,7 +349,8 @@ rimba merge auth --dry-run                 # Preview merge without making change
 | `--delete` | Delete source worktree after merging into another worktree |
 | `--dry-run` | Preview what would be merged/cleaned up without making changes |
 
-> **Note:** `--keep` and `--delete` are mutually exclusive. Merging to main deletes the source by default; merging to another worktree keeps it by default.
+{: .warning }
+> `--keep` and `--delete` are mutually exclusive. Merging to main deletes the source by default; merging to another worktree keeps it by default.
 
 ### rimba sync
 
@@ -362,7 +372,8 @@ rimba sync --all --include-inherited # Include duplicate worktrees
 | `--no-push` | Skip pushing after sync (useful for local-only rebase/merge) |
 | `--dry-run` | Preview what would be synced without making changes |
 
-> **Note:** Dirty worktrees are skipped with a warning. On conflict, the rebase is automatically aborted and a recovery hint is printed. After a successful sync, the branch is pushed to origin by default.
+{: .note }
+> Dirty worktrees are skipped with a warning. On conflict, the rebase is automatically aborted and a recovery hint is printed. After a successful sync, the branch is pushed to origin by default.
 
 ### rimba merge-plan
 
@@ -430,7 +441,8 @@ rimba exec "npm test" --all --concurrency 4 # Limit to 4 parallel runs
 | `--fail-fast` | Stop execution after the first failure |
 | `--concurrency` | Max parallel executions (default: 0 = unlimited) |
 
-> **Note:** Either `--all` or `--type` is required to select worktrees.
+{: .warning }
+> Either `--all` or `--type` is required to select worktrees.
 
 ---
 
@@ -464,7 +476,8 @@ Show whether the rimba post-merge and pre-commit hooks are currently installed.
 rimba hook status            # Check installation status
 ```
 
-> **Note:** `rimba hook` works with or without `rimba init`. The hooks coexist with existing user-defined hooks in the same hook files.
+{: .note }
+> `rimba hook` works with or without `rimba init`. The hooks coexist with existing user-defined hooks in the same hook files.
 
 ---
 
@@ -548,7 +561,8 @@ claude mcp add rimba rimba mcp
 | `conflict-check` | Detect file overlaps between worktree branches | — |
 | `clean` | Clean up stale references, merged branches, or stale worktrees | `mode` (prune, merged, stale) |
 
-> **Note:** All tools return JSON responses. See `rimba mcp` help output for full parameter details.
+{: .note }
+> All tools return JSON responses. See `rimba mcp` help output for full parameter details.
 
 ---
 
@@ -578,7 +592,8 @@ rimba clean --stale --dry-run            # Show stale worktrees without removing
 | `--stale-days` | Number of days to consider a worktree stale (default: 14, used with `--stale`) |
 | `--force` | Skip confirmation prompt when used with `--merged` or `--stale` |
 
-> **Note:** `--merged` and `--stale` are mutually exclusive. `--merged` works with or without `rimba init`. Without a config file, it falls back to auto-detecting the default branch. By default, `rimba clean` prunes stale remote-tracking refs across all configured remotes (not just `origin`).
+{: .warning }
+> `--merged` and `--stale` are mutually exclusive. `--merged` works with or without `rimba init`. Without a config file, it falls back to auto-detecting the default branch. By default, `rimba clean` prunes stale remote-tracking refs across all configured remotes (not just `origin`).
 
 ---
 
@@ -595,9 +610,11 @@ rimba update --force     # Also works on dev builds
 |------|-------------|
 | `--force` | Update even if running a development build |
 
-> **Note:** If the binary cannot be replaced due to file permissions, rimba installs to `~/.local/bin` instead.
+{: .note }
+> If the binary cannot be replaced due to file permissions, rimba installs to `~/.local/bin` instead.
 
-> **Post-update tips:** After a successful update, rimba prints a one-line tip if agent files are installed at user level (`rimba init -g` to refresh) or in this repo (`rimba init --agents` to refresh). Set `RIMBA_QUIET=1` to suppress.
+{: .tip }
+> After a successful update, rimba prints a one-line tip if agent files are installed at user level (`rimba init -g` to refresh) or in this repo (`rimba init --agents` to refresh). Set `RIMBA_QUIET=1` to suppress.
 
 ---
 
@@ -631,4 +648,5 @@ rimba completion fish        # Generate fish completions
 rimba completion powershell  # Generate PowerShell completions
 ```
 
-> **Note:** Follow the printed instructions after generating to install the completions for your shell.
+{: .note }
+> Follow the printed instructions after generating to install the completions for your shell.
