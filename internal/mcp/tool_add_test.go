@@ -841,7 +841,7 @@ func TestAddPRToolRequiresConfig(t *testing.T) {
 	}
 	handler := handleAdd(hctx)
 
-	result := callTool(t, handler, map[string]any{"pr": "42"})
+	result := callTool(t, handler, map[string]any{"pr": 42})
 	errText := resultError(t, result)
 	if !strings.Contains(errText, "not initialized") {
 		t.Errorf("expected config error, got: %s", errText)

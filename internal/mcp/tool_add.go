@@ -19,7 +19,7 @@ func registerAddTool(s *server.MCPServer, hctx *HandlerContext) {
 	tool := mcp.NewTool("add",
 		mcp.WithDescription("Create a new worktree for a task, a GitHub PR review, or promote an existing local branch"),
 		mcp.WithString("task",
-			mcp.Description("Task identifier (e.g. 'my-feature', 'JIRA-123', or 'auth-api/my-feature' for monorepo); required for normal add, optional as PR name override when pr is set"),
+			mcp.Description("Task identifier (e.g. 'my-feature', 'JIRA-123', or 'auth-api/my-feature' for monorepo); required for normal add, optional as PR name override when pr is set; ignored in branch mode"),
 		),
 		mcp.WithInteger("pr",
 			mcp.Description("GitHub PR number to open a review worktree from (branch review/<num>-<slug>); requires gh authenticated"),
