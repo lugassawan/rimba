@@ -8,6 +8,8 @@ aux_links:
   rimba on GitHub:
     - https://github.com/lugassawan/rimba
 aux_links_new_tab: true
+plugins:
+  - jekyll-sitemap
 exclude:
   - Gemfile
   - Gemfile.lock
