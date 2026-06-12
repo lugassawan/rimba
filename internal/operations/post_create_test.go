@@ -173,6 +173,10 @@ func TestPostCreateSetupCopyFilesErrorIncludesRecoveryHint(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if os.Getuid() == 0 {
+		t.Skip("chmod 000 is ineffective for root; skipping")
+	}
+
 	// Create a file then revoke read permissions to force a copy error.
 	envPath := filepath.Join(tmpDir, ".env")
 	if err := os.WriteFile(envPath, []byte("SECRET=1"), 0o600); err != nil {
@@ -201,6 +205,9 @@ func TestPostCreateSetupCopyFilesErrorIncludesRecoveryHint(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "failed to copy files") {
 		t.Errorf("error = %q, want to contain 'failed to copy files'", err.Error())
+	}
+	if !strings.Contains(err.Error(), "To retry, manually copy files to:") {
+		t.Errorf("error = %q, want 'To retry, manually copy files to:' context", err.Error())
 	}
 	if !strings.Contains(err.Error(), "To fix: rimba remove test-task") {
 		t.Errorf("error = %q, want recovery hint 'To fix: rimba remove test-task'", err.Error())
