@@ -588,7 +588,13 @@ func TestAddPRToolSuccess(t *testing.T) {
 }
 
 func TestAddPRToolNegativeNumber(t *testing.T) {
-	hctx := testContext(&mockRunner{})
+	hctx := &HandlerContext{
+		Runner:   &mockRunner{},
+		GH:       newGhAuthOK(""),
+		Config:   testConfig(),
+		RepoRoot: "/repo",
+		Version:  "test",
+	}
 	handler := handleAdd(hctx)
 
 	result := callTool(t, handler, map[string]any{"pr": -1})
