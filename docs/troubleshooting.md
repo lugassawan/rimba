@@ -127,7 +127,8 @@ git stash          # or: git commit -am "WIP"
 rimba sync auth
 ```
 
-> **Note:** `rimba sync --all` does *not* error on dirty worktrees — it skips them and prints
+{: .note }
+> `rimba sync --all` does *not* error on dirty worktrees — it skips them and prints
 > `Skipping <branch> (dirty)` so the rest continue. Run `rimba sync <task>` individually after
 > cleaning up.
 
