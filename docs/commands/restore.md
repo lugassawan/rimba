@@ -51,3 +51,4 @@ rimba restore my-feature --skip-deps --skip-hooks
 - [rimba archive](archive) · archive a worktree (remove directory, keep branch)
 - [rimba list](list) · use `--archived` to see restorable branches
 - [rimba add](add) · create a brand-new worktree
+- [rimba trust](trust) · approve post-create shell commands that run on restore

@@ -50,3 +50,4 @@ rimba duplicate login-flow --as login-flow-approach-b
 - [rimba add](add) · create a worktree from scratch
 - [rimba rename](rename) · rename an existing worktree
 - [rimba remove](remove) · remove a worktree when done
+- [rimba trust](trust) · approve post-create shell commands that run after duplication
