@@ -1,6 +1,11 @@
+---
+title: Troubleshooting
+nav_order: 4
+---
+
 # Troubleshooting
 
-> Back to [README](../README.md) | See also: [Commands](commands.md) · [Configuration](configuration.md)
+> See also: [Commands](commands.md) · [Configuration](configuration.md)
 
 ---
 
@@ -12,7 +17,7 @@ error, why it happens, and the command to resolve it.
 ## Trust & consent gate
 
 rimba will not run committed shell commands until they are approved. See
-[README § Consent gate](../README.md#consent-gate) for the full background on the approval flow.
+[README § Consent gate](https://github.com/lugassawan/rimba#consent-gate) for the full background on the approval flow.
 
 ### `committed shell commands require approval`
 

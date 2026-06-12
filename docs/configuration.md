@@ -1,6 +1,11 @@
+---
+title: Configuration
+nav_order: 3
+---
+
 # Configuration Reference
 
-> Back to [README](../README.md) | See also: [Command Reference](commands.md)
+> See also: [Command Reference](commands.md)
 
 ---
 

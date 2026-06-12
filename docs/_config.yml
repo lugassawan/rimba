@@ -1,0 +1,14 @@
+title: rimba
+description: Git worktree workflow manager — command & configuration reference
+theme: just-the-docs
+url: https://lugassawan.github.io
+baseurl: "/rimba"
+search_enabled: true
+aux_links:
+  rimba on GitHub:
+    - https://github.com/lugassawan/rimba
+aux_links_new_tab: true
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - vendor

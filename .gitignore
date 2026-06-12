@@ -55,3 +55,8 @@ local.properties
 
 # Rimba config (local to each repo)
 .rimba/*.local.toml
+
+# Jekyll (docs site)
+docs/_site/
+docs/.jekyll-cache/
+docs/.bundle/
