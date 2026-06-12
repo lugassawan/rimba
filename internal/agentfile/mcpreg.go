@@ -41,7 +41,7 @@ type MCPSpec struct {
 // GlobalMCPSpecs returns the MCP config files patched at user level (~/).
 func GlobalMCPSpecs() []MCPSpec {
 	return []MCPSpec{
-		{RelPath: filepath.Join(".claude", "settings.json"), Format: mcpJSON, ContainerKey: "mcpServers"},
+		{RelPath: ".claude.json", Format: mcpJSON, ContainerKey: "mcpServers"},
 		{RelPath: filepath.Join(".cursor", "mcp.json"), Format: mcpJSON, ContainerKey: "mcpServers"},
 		{RelPath: filepath.Join(".codeium", "windsurf", "mcp_config.json"), Format: mcpJSON, ContainerKey: "mcpServers"},
 		{RelPath: filepath.Join(".codex", "config.toml"), Format: mcpTOML, ContainerKey: "mcp_servers"},
@@ -60,13 +60,25 @@ func ProjectMCPSpecs() []MCPSpec {
 }
 
 // RegisterMCPGlobal patches all user-level MCP config files to add the rimba server entry.
+// It also removes the rimba entry from legacy config paths (self-heal for existing installs).
 func RegisterMCPGlobal(homeDir string) ([]Result, error) {
-	return applyMCPSpecs(homeDir, GlobalMCPSpecs(), false)
+	results, err := applyMCPSpecs(homeDir, GlobalMCPSpecs(), false)
+	if err != nil {
+		return results, err
+	}
+	legacy, legacyErr := applyMCPSpecs(homeDir, legacyClaudeSpecs(), true)
+	return append(results, legacy...), legacyErr
 }
 
 // UnregisterMCPGlobal removes the rimba server entry from all user-level MCP config files.
+// It also removes the rimba entry from legacy config paths (self-heal for existing installs).
 func UnregisterMCPGlobal(homeDir string) ([]Result, error) {
-	return applyMCPSpecs(homeDir, GlobalMCPSpecs(), true)
+	results, err := applyMCPSpecs(homeDir, GlobalMCPSpecs(), true)
+	if err != nil {
+		return results, err
+	}
+	legacy, legacyErr := applyMCPSpecs(homeDir, legacyClaudeSpecs(), true)
+	return append(results, legacy...), legacyErr
 }
 
 // RegisterMCPProject patches project-level MCP config files to add the rimba server entry.
@@ -77,6 +89,14 @@ func RegisterMCPProject(repoRoot string) ([]Result, error) {
 // UnregisterMCPProject removes the rimba server entry from project-level MCP config files.
 func UnregisterMCPProject(repoRoot string) ([]Result, error) {
 	return applyMCPSpecs(repoRoot, ProjectMCPSpecs(), true)
+}
+
+// legacyClaudeSpecs returns stale config paths that once held the Claude MCP entry.
+// They are only ever removed (never written) to self-heal existing installations.
+func legacyClaudeSpecs() []MCPSpec {
+	return []MCPSpec{
+		{RelPath: filepath.Join(".claude", "settings.json"), Format: mcpJSON, ContainerKey: "mcpServers"},
+	}
 }
 
 func codecFor(f mcpFormat) mcpCodec {
