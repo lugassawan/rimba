@@ -53,6 +53,7 @@ rimba log --limit 3
 |------|-------------|
 | `--limit` | Maximum number of entries to show (default: 0 = all) |
 | `--since` | Show entries since duration (e.g. `7d`, `2w`, `3h`) |
+| `--json` | Output as JSON |
 
 ## Related commands
 
