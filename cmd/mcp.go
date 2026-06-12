@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/gh"
 	"github.com/lugassawan/rimba/internal/git"
 	mcppkg "github.com/lugassawan/rimba/internal/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -40,6 +41,7 @@ rimba commands with structured parameters and typed responses.`,
 
 		hctx := &mcppkg.HandlerContext{
 			Runner:   r,
+			GH:       gh.Default(),
 			Config:   cfg,
 			RepoRoot: repoRoot,
 			Version:  version,

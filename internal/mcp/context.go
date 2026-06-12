@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/gh"
 	"github.com/lugassawan/rimba/internal/git"
 )
 
@@ -9,6 +10,7 @@ import (
 // Created once in cmd/mcp.go, captured by handler closures.
 type HandlerContext struct {
 	Runner   git.Runner
+	GH       gh.Runner      // nil for non-PR tools; set to gh.Default() in production
 	Config   *config.Config // may be nil if not in a rimba-initialized repo
 	RepoRoot string
 	Version  string

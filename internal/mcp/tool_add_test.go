@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/trust"
+	"github.com/lugassawan/rimba/testutil"
 )
 
 const (
@@ -520,5 +522,270 @@ func TestAddToolTrustGateEnvEscapeHatch(t *testing.T) {
 	data := unmarshalJSON[addResult](t, result)
 	if data.Task != "env-bypass" {
 		t.Errorf("RIMBA_TRUST_YES add should succeed, task = %q", data.Task)
+	}
+}
+
+// ── Dispatcher guard ─────────────────────────────────────────────────────────
+
+func TestAddToolPRBranchMutuallyExclusive(t *testing.T) {
+	hctx := testContext(&mockRunner{})
+	handler := handleAdd(hctx)
+
+	result := callTool(t, handler, map[string]any{"pr": "42", "branch": "feature/x"})
+	errText := resultError(t, result)
+	if !strings.Contains(errText, "mutually exclusive") {
+		t.Errorf("expected 'mutually exclusive' error, got: %s", errText)
+	}
+}
+
+// ── PR mode ──────────────────────────────────────────────────────────────────
+
+// makePRGitRunner returns a mockRunner for the happy-path PR add.
+// It simulates: fetch succeeds, BranchExists=false, worktree add succeeds.
+func makePRGitRunner() *mockRunner {
+	return &mockRunner{
+		run: func(args ...string) (string, error) {
+			switch {
+			case len(args) > 0 && args[0] == "fetch":
+				return "", nil
+			case len(args) > 1 && args[0] == gitRevParse && args[1] == flagVerify:
+				return "", errors.New("not found") // branch doesn't exist
+			case len(args) > 1 && args[0] == gitWorktree && args[1] == gitWorktreeAdd:
+				return "", nil
+			}
+			return "", nil
+		},
+	}
+}
+
+func TestAddPRToolSuccess(t *testing.T) {
+	prJSON := testutil.LoadFixture(t, "../gh/testdata/same_repo_pr.json")
+	tmpDir := t.TempDir()
+
+	cfg := testConfig()
+	cfg.CopyFiles = nil
+	hctx := &HandlerContext{
+		Runner:   makePRGitRunner(),
+		GH:       newGhAuthOK(prJSON),
+		Config:   cfg,
+		RepoRoot: tmpDir,
+		Version:  "test",
+	}
+	handler := handleAdd(hctx)
+
+	result := callTool(t, handler, map[string]any{
+		"pr":         "42",
+		"skip_deps":  true,
+		"skip_hooks": true,
+	})
+	data := unmarshalJSON[addResult](t, result)
+	if data.Branch != "review/42-fix-login-redirect" {
+		t.Errorf("branch = %q, want %q", data.Branch, "review/42-fix-login-redirect")
+	}
+	if !strings.Contains(data.Path, ".worktrees") {
+		t.Errorf("path = %q, expected to contain worktree dir", data.Path)
+	}
+}
+
+func TestAddPRToolInvalidNumber(t *testing.T) {
+	hctx := testContext(&mockRunner{})
+	handler := handleAdd(hctx)
+
+	result := callTool(t, handler, map[string]any{"pr": "abc"})
+	errText := resultError(t, result)
+	if !strings.Contains(errText, "invalid pr number") {
+		t.Errorf("expected 'invalid pr number' error, got: %s", errText)
+	}
+}
+
+func TestAddPRToolZeroNumber(t *testing.T) {
+	hctx := testContext(&mockRunner{})
+	handler := handleAdd(hctx)
+
+	result := callTool(t, handler, map[string]any{"pr": "0"})
+	errText := resultError(t, result)
+	if !strings.Contains(errText, "invalid pr number") {
+		t.Errorf("expected 'invalid pr number' error for 0, got: %s", errText)
+	}
+}
+
+func TestAddPRToolFetchError(t *testing.T) {
+	ghR := &mockGhRunner{
+		run: func(_ context.Context, args ...string) ([]byte, error) {
+			if len(args) > 0 && args[0] == "auth" {
+				return []byte("Logged in"), nil
+			}
+			return nil, errors.New("HTTP 404: Not Found")
+		},
+	}
+	tmpDir := t.TempDir()
+	cfg := testConfig()
+	cfg.CopyFiles = nil
+	hctx := &HandlerContext{
+		Runner:   &mockRunner{},
+		GH:       ghR,
+		Config:   cfg,
+		RepoRoot: tmpDir,
+		Version:  "test",
+	}
+	handler := handleAdd(hctx)
+
+	result := callTool(t, handler, map[string]any{"pr": "999", "skip_deps": true, "skip_hooks": true})
+	errText := resultError(t, result)
+	if !strings.Contains(errText, "verify PR number") {
+		t.Errorf("expected 'verify PR number' hint, got: %s", errText)
+	}
+}
+
+func TestAddPRToolTaskOverride(t *testing.T) {
+	prJSON := testutil.LoadFixture(t, "../gh/testdata/same_repo_pr.json")
+	tmpDir := t.TempDir()
+
+	cfg := testConfig()
+	cfg.CopyFiles = nil
+	hctx := &HandlerContext{
+		Runner:   makePRGitRunner(),
+		GH:       newGhAuthOK(prJSON),
+		Config:   cfg,
+		RepoRoot: tmpDir,
+		Version:  "test",
+	}
+	handler := handleAdd(hctx)
+
+	result := callTool(t, handler, map[string]any{
+		"pr":         "42",
+		"task":       "my-review",
+		"skip_deps":  true,
+		"skip_hooks": true,
+	})
+	data := unmarshalJSON[addResult](t, result)
+	if data.Branch != "my-review" {
+		t.Errorf("branch with task override = %q, want %q", data.Branch, "my-review")
+	}
+}
+
+// ── Branch promotion mode ─────────────────────────────────────────────────────
+
+// makePromoteRunner returns a mockRunner for the happy-path branch promotion.
+// It simulates: default branch resolves to main, branch exists, not in other
+// worktrees, HEAD is the target branch, working tree clean, checkout and
+// worktree add both succeed.
+// Matching on first arg only keeps cyclomatic complexity well under the 15 limit.
+func makePromoteRunner(repoRoot, branch string) *mockRunner {
+	porcelain := "worktree " + repoRoot + "\nHEAD abc\nbranch refs/heads/main\n\n"
+	return &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) == 0 {
+				return "", nil
+			}
+			switch args[0] {
+			case gitSymbolicRef:
+				return refsOriginMain, nil
+			case gitRevParse:
+				return "", nil // BranchExists → true (nil error)
+			case gitWorktree:
+				return porcelain, nil // covers list --porcelain and add
+			}
+			return "", nil
+		},
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) == 0 {
+				return "", nil
+			}
+			switch args[0] {
+			case gitSymbolicRef:
+				return branch, nil // CurrentBranch via symbolic-ref --short HEAD
+			case gitStatus:
+				return "", nil // IsDirty → clean
+			}
+			return "", nil // Checkout (switch -- main) and anything else
+		},
+	}
+}
+
+func TestAddBranchToolSuccess(t *testing.T) {
+	tmpDir := t.TempDir()
+	branch := "feature/promote-me"
+
+	cfg := testConfig()
+	cfg.CopyFiles = nil
+	hctx := &HandlerContext{
+		Runner:   makePromoteRunner(tmpDir, branch),
+		Config:   cfg,
+		RepoRoot: tmpDir,
+		Version:  "test",
+	}
+	handler := handleAdd(hctx)
+
+	result := callTool(t, handler, map[string]any{"branch": branch})
+	data := unmarshalJSON[addResult](t, result)
+	if data.Branch != branch {
+		t.Errorf("branch = %q, want %q", data.Branch, branch)
+	}
+	if !strings.Contains(data.Path, ".worktrees") {
+		t.Errorf("path = %q, expected to contain worktree dir", data.Path)
+	}
+}
+
+func TestAddBranchToolValidationError(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// BranchExists returns false → validateForPromotion errors with "does not exist"
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == gitSymbolicRef {
+				return refsOriginMain, nil // DefaultBranch → "main"
+			}
+			if len(args) >= 2 && args[0] == gitRevParse && args[1] == flagVerify {
+				return "", errors.New("not found") // BranchExists → false
+			}
+			return "", nil
+		},
+	}
+	cfg := testConfig()
+	hctx := &HandlerContext{
+		Runner:   r,
+		Config:   cfg,
+		RepoRoot: tmpDir,
+		Version:  "test",
+	}
+	handler := handleAdd(hctx)
+
+	result := callTool(t, handler, map[string]any{"branch": "feature/no-such"})
+	errText := resultError(t, result)
+	if !strings.Contains(errText, "does not exist") {
+		t.Errorf("expected 'does not exist' error, got: %s", errText)
+	}
+}
+
+func TestAddBranchToolRequiresConfig(t *testing.T) {
+	hctx := &HandlerContext{
+		Runner:   &mockRunner{},
+		Config:   nil,
+		RepoRoot: "/repo",
+		Version:  "test",
+	}
+	handler := handleAdd(hctx)
+
+	result := callTool(t, handler, map[string]any{"branch": "feature/x"})
+	errText := resultError(t, result)
+	if !strings.Contains(errText, "not initialized") {
+		t.Errorf("expected config error, got: %s", errText)
+	}
+}
+
+func TestAddPRToolRequiresConfig(t *testing.T) {
+	hctx := &HandlerContext{
+		Runner:   &mockRunner{},
+		Config:   nil,
+		RepoRoot: "/repo",
+		Version:  "test",
+	}
+	handler := handleAdd(hctx)
+
+	result := callTool(t, handler, map[string]any{"pr": "42"})
+	errText := resultError(t, result)
+	if !strings.Contains(errText, "not initialized") {
+		t.Errorf("expected config error, got: %s", errText)
 	}
 }
