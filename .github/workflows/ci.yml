@@ -14,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       go: ${{ steps.filter.outputs.go }}
+      docs: ${{ steps.filter.outputs.docs }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -34,6 +35,11 @@ jobs:
             echo "go=true" >> "$GITHUB_OUTPUT"
           else
             echo "go=false" >> "$GITHUB_OUTPUT"
+          fi
+          if echo "$CHANGED" | grep -qE '^docs/'; then
+            echo "docs=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs=false" >> "$GITHUB_OUTPUT"
           fi
 
   lint:
@@ -146,3 +152,20 @@ jobs:
           cache: true
       - run: go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
       - run: govulncheck ./...
+
+  docs-build:
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ruby/setup-ruby@89f90524b88a01fe6e0b732220432cc6142926af # v1.313.0
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+          working-directory: docs
+      - run: bundle exec jekyll build --baseurl "/rimba"
+        working-directory: docs
+        env:
+          JEKYLL_ENV: production
