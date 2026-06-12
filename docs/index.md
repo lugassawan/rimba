@@ -16,27 +16,27 @@ nav_order: 1
 
 <div class="rimba-features">
   <div class="rimba-feature">
-    <h3>Worktree lifecycle</h3>
+    <h2>Worktree lifecycle</h2>
     <p>Create, list, and remove git worktrees with a single command. Each task gets its own isolated branch and directory.</p>
   </div>
   <div class="rimba-feature">
-    <h3>Smart branch naming</h3>
+    <h2>Smart branch naming</h2>
     <p>Typed prefixes (<code>feature/</code>, <code>bugfix/</code>, <code>docs/</code>, …) are applied automatically based on flags — no manual branch naming.</p>
   </div>
   <div class="rimba-feature">
-    <h3>File &amp; dependency sharing</h3>
+    <h2>File &amp; dependency sharing</h2>
     <p>Declare files and vendor directories to copy or clone into every new worktree, so dependencies are ready from the first second.</p>
   </div>
   <div class="rimba-feature">
-    <h3>Post-create hooks</h3>
+    <h2>Post-create hooks</h2>
     <p>Run arbitrary shell commands after each worktree is created — install tools, set env vars, open your editor, anything.</p>
   </div>
   <div class="rimba-feature">
-    <h3>Sync, merge &amp; cleanup</h3>
+    <h2>Sync, merge &amp; cleanup</h2>
     <p>Rebase from the default branch, merge finished work, and delete the worktree and branch in one step with <code>rimba merge</code>.</p>
   </div>
   <div class="rimba-feature">
-    <h3>MCP integration</h3>
+    <h2>MCP integration</h2>
     <p>Expose rimba operations as MCP tools so AI coding agents can create and manage worktrees on your behalf.</p>
   </div>
 </div>
