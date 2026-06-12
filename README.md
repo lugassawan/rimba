@@ -156,7 +156,7 @@ agent = 'claude'
 
 > See [docs/configuration.md](docs/configuration.md) for the full field reference, dependency management, and environment variables.
 
-Running `rimba init --agents` or `rimba init -g` additionally creates or patches MCP server config files in client tools (`.mcp.json`, `.cursor/mcp.json`, `~/.claude/settings.json`, and others). See [docs/configuration.md#mcp-server-registration](docs/configuration.md#mcp-server-registration) for the full list of patched files and entry format.
+Running `rimba init --agents` or `rimba init -g` additionally creates or patches MCP server config files in client tools (`.mcp.json`, `.cursor/mcp.json`, `~/.claude.json`, and others). See [docs/configuration.md#mcp-server-registration](docs/configuration.md#mcp-server-registration) for the full list of patched files and entry format.
 
 ## Trust model
 
