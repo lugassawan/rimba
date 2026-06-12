@@ -279,7 +279,7 @@ To fix: check write permissions for the install dir
 
 ```
 mcp servers: <error>
-To fix: check write permissions for MCP client configs (.mcp.json, .cursor/mcp.json, ~/.claude/settings.json)
+To fix: check write permissions for MCP client configs (.mcp.json, .cursor/mcp.json, ~/.claude.json)
 ```
 
 **Why:** `rimba init --agents` (or `-g`) could not write agent instruction files or register the MCP
