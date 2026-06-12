@@ -290,7 +290,7 @@ For project-level installs the target is the repo root.
 ### `config not found: ...` — run `rimba init`
 
 ```
-config not found: open .rimba/settings.toml: no such file or directory
+config not found: .rimba/settings.toml does not exist
 To fix: run 'rimba init' to create a default .rimba/settings.toml
 ```
 
@@ -306,13 +306,13 @@ rimba init
 ### `invalid config <file>: ...` — TOML syntax error
 
 ```
-invalid config settings.toml: toml: line N: <description>
+failed to read team config: invalid config settings.toml: toml: line N: <description>
 To fix: fix the TOML syntax in /path/to/.rimba/settings.toml
 ```
 
-**Why:** `.rimba/settings.toml` (or `settings.local.toml`) contains a TOML syntax error. The
-filename (`settings.toml` or `settings.local.toml`) is included in the error to identify which
-file failed to parse.
+**Why:** `.rimba/settings.toml` (or `settings.local.toml`) contains a TOML syntax error.
+`loadRaw()` emits `invalid config <filename>: ...`; `LoadDir()` wraps it with
+`failed to read team config: ...` (or `failed to read local config: ...` for `settings.local.toml`).
 
 **Fix:** Open the file and correct the syntax. Common mistakes: missing quotes around strings with
 special characters, mismatched brackets, or stray commas.
