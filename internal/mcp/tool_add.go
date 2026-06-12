@@ -17,23 +17,28 @@ import (
 
 func registerAddTool(s *server.MCPServer, hctx *HandlerContext) {
 	tool := mcp.NewTool("add",
-		mcp.WithDescription("Create a new worktree for a task (supports 'service/task' for monorepo)"),
+		mcp.WithDescription("Create a new worktree for a task, a GitHub PR review, or promote an existing local branch"),
 		mcp.WithString("task",
-			mcp.Description("Task identifier (e.g. 'my-feature', 'JIRA-123', or 'auth-api/my-feature' for monorepo)"),
-			mcp.Required(),
+			mcp.Description("Task identifier (e.g. 'my-feature', 'JIRA-123', or 'auth-api/my-feature' for monorepo); required for normal add, optional as PR name override when pr is set; ignored in branch mode"),
+		),
+		mcp.WithInteger("pr",
+			mcp.Description("GitHub PR number to open a review worktree from (branch review/<num>-<slug>); requires gh authenticated"),
+		),
+		mcp.WithString("branch",
+			mcp.Description("Existing, currently checked-out local branch to promote into its own worktree (stash-transfers dirty state)"),
 		),
 		mcp.WithString("type",
 			mcp.Description("Prefix type (default: feature)"),
 			mcp.Enum("feature", "bugfix", "hotfix", "docs", "test", "chore"),
 		),
 		mcp.WithString("source",
-			mcp.Description("Source branch to create worktree from (default from config)"),
+			mcp.Description("Source branch to create worktree from (default from config); applies to task mode only"),
 		),
 		mcp.WithBoolean("skip_deps",
-			mcp.Description("Skip dependency installation"),
+			mcp.Description("Skip dependency installation (applies to task and pr modes)"),
 		),
 		mcp.WithBoolean("skip_hooks",
-			mcp.Description("Skip post-create hooks"),
+			mcp.Description("Skip post-create hooks (applies to task and pr modes)"),
 		),
 	)
 	s.AddTool(tool, handleAdd(hctx))
@@ -41,70 +46,153 @@ func registerAddTool(s *server.MCPServer, hctx *HandlerContext) {
 
 func handleAdd(hctx *HandlerContext) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		task := req.GetString("task", "")
-		if task == "" {
-			return errorResult(errhint.WithFix(errors.New("task is required"),
-				`provide the task argument, e.g. add { task: "my-feature" }`)), nil
-		}
+		prNum := req.GetInt("pr", 0)
+		branch := req.GetString("branch", "")
 
-		service, task := operations.ResolveTaskInput(task, hctx.RepoRoot)
-
-		prefixType := req.GetString("type", "feature")
-
-		cfg, cfgErr := hctx.requireConfig()
-		if cfgErr != nil {
-			return errorResult(cfgErr), nil
-		}
-
-		if err := trust.GateNonInteractive(hctx.RepoRoot, cfg); err != nil {
-			return errorResult(err), nil
-		}
-
-		if !resolver.ValidPrefixType(prefixType) {
+		if prNum != 0 && branch != "" {
 			return errorResult(errhint.WithFix(
-				fmt.Errorf("invalid type %q", prefixType),
-				"use one of: feature, bugfix, hotfix, docs, test, chore (or omit to default to feature)",
+				errors.New("pr and branch are mutually exclusive"),
+				"provide either pr or branch, not both",
 			)), nil
 		}
 
-		prefix, _ := resolver.PrefixString(resolver.PrefixType(prefixType))
-
-		source := req.GetString("source", "")
-		if source == "" {
-			source = cfg.DefaultSource
+		switch {
+		// prNum != 0 intentionally routes negative values to handleAddPR,
+		// which validates prNum > 0 and returns a clear "invalid pr number" error.
+		case prNum != 0:
+			return handleAddPR(ctx, hctx, req, prNum)
+		case branch != "":
+			return handleAddBranch(ctx, hctx, branch)
+		default:
+			return handleAddTask(ctx, hctx, req)
 		}
+	}
+}
 
-		var configModules []config.ModuleConfig
-		if cfg.Deps != nil {
-			configModules = cfg.Deps.Modules
-		}
+func handleAddTask(ctx context.Context, hctx *HandlerContext, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	task := req.GetString("task", "")
+	if task == "" {
+		return errorResult(errhint.WithFix(errors.New("task is required"),
+			`provide the task argument, e.g. add { task: "my-feature" }`)), nil
+	}
 
-		result, err := operations.AddWorktree(ctx, hctx.Runner, operations.AddParams{
-			Task:    task,
-			Service: service,
-			Prefix:  prefix,
-			Source:  source,
-			PostCreateOptions: operations.PostCreateOptions{
-				RepoRoot:      hctx.RepoRoot,
-				WorktreeDir:   filepath.Join(hctx.RepoRoot, cfg.WorktreeDir),
-				CopyFiles:     cfg.CopyFiles,
-				SkipDeps:      req.GetBool("skip_deps", false),
-				AutoDetect:    cfg.IsAutoDetectDeps(),
-				ConfigModules: configModules,
-				SkipHooks:     req.GetBool("skip_hooks", false),
-				PostCreate:    cfg.PostCreate,
-				Concurrency:   cfg.DepsConcurrency(),
-			},
-		}, nil)
-		if err != nil {
-			return errorResult(err), nil
-		}
+	service, task := operations.ResolveTaskInput(task, hctx.RepoRoot)
 
-		return marshalResult(addResult{
-			Task:   result.Task,
-			Branch: result.Branch,
-			Path:   result.Path,
-			Source: result.Source,
-		})
+	prefixType := req.GetString("type", "feature")
+
+	cfg, cfgErr := hctx.requireConfig()
+	if cfgErr != nil {
+		return errorResult(cfgErr), nil
+	}
+
+	if err := trust.GateNonInteractive(hctx.RepoRoot, cfg); err != nil {
+		return errorResult(err), nil
+	}
+
+	if !resolver.ValidPrefixType(prefixType) {
+		return errorResult(errhint.WithFix(
+			fmt.Errorf("invalid type %q", prefixType),
+			"use one of: feature, bugfix, hotfix, docs, test, chore (or omit to default to feature)",
+		)), nil
+	}
+
+	prefix, _ := resolver.PrefixString(resolver.PrefixType(prefixType))
+
+	source := req.GetString("source", "")
+	if source == "" {
+		source = cfg.DefaultSource
+	}
+
+	result, err := operations.AddWorktree(ctx, hctx.Runner, operations.AddParams{
+		Task:              task,
+		Service:           service,
+		Prefix:            prefix,
+		Source:            source,
+		PostCreateOptions: buildPostCreateOptions(hctx, cfg, req),
+	}, nil)
+	if err != nil {
+		return errorResult(err), nil
+	}
+
+	return marshalResult(addResult{
+		Task:   result.Task,
+		Branch: result.Branch,
+		Path:   result.Path,
+		Source: result.Source,
+	})
+}
+
+func handleAddPR(ctx context.Context, hctx *HandlerContext, req mcp.CallToolRequest, prNum int) (*mcp.CallToolResult, error) {
+	if prNum <= 0 {
+		return errorResult(errhint.WithFix(
+			fmt.Errorf("invalid pr number %d", prNum),
+			"provide a positive integer, e.g. add { \"pr\": 42 }",
+		)), nil
+	}
+
+	cfg, cfgErr := hctx.requireConfig()
+	if cfgErr != nil {
+		return errorResult(cfgErr), nil
+	}
+
+	if err := trust.GateNonInteractive(hctx.RepoRoot, cfg); err != nil {
+		return errorResult(err), nil
+	}
+
+	if hctx.GH == nil {
+		return errorResult(errors.New("gh runner not configured; this is a server startup bug")), nil
+	}
+
+	result, err := operations.AddPRWorktree(ctx, hctx.Runner, hctx.GH, operations.AddPRParams{
+		PRNumber:          prNum,
+		TaskOverride:      req.GetString("task", ""),
+		PostCreateOptions: buildPostCreateOptions(hctx, cfg, req),
+	}, nil)
+	if err != nil {
+		return errorResult(err), nil
+	}
+
+	return marshalResult(addResult{
+		Task:   result.Task,
+		Branch: result.Branch,
+		Path:   result.Path,
+		Source: result.Source,
+	})
+}
+
+func handleAddBranch(ctx context.Context, hctx *HandlerContext, branch string) (*mcp.CallToolResult, error) {
+	cfg, cfgErr := hctx.requireConfig()
+	if cfgErr != nil {
+		return errorResult(cfgErr), nil
+	}
+
+	// No trust gate: PromoteBranch runs no post-create hooks, matching CLI branch: mode.
+	wtDir := filepath.Join(hctx.RepoRoot, cfg.WorktreeDir)
+	path, err := operations.PromoteBranch(ctx, wtDir, hctx.Runner, hctx.RepoRoot, branch)
+	if err != nil {
+		return errorResult(err), nil
+	}
+
+	return marshalResult(addResult{
+		Branch: branch,
+		Path:   path,
+	})
+}
+
+func buildPostCreateOptions(hctx *HandlerContext, cfg *config.Config, req mcp.CallToolRequest) operations.PostCreateOptions {
+	var configModules []config.ModuleConfig
+	if cfg.Deps != nil {
+		configModules = cfg.Deps.Modules
+	}
+	return operations.PostCreateOptions{
+		RepoRoot:      hctx.RepoRoot,
+		WorktreeDir:   filepath.Join(hctx.RepoRoot, cfg.WorktreeDir),
+		CopyFiles:     cfg.CopyFiles,
+		SkipDeps:      req.GetBool("skip_deps", false),
+		AutoDetect:    cfg.IsAutoDetectDeps(),
+		ConfigModules: configModules,
+		SkipHooks:     req.GetBool("skip_hooks", false),
+		PostCreate:    cfg.PostCreate,
+		Concurrency:   cfg.DepsConcurrency(),
 	}
 }
