@@ -1,6 +1,11 @@
+---
+title: Troubleshooting
+nav_order: 4
+---
+
 # Troubleshooting
 
-> Back to [README](../README.md) | See also: [Commands](commands.md) · [Configuration](configuration.md)
+> See also: [Commands](commands.md) · [Configuration](configuration.md)
 
 ---
 
@@ -12,7 +17,7 @@ error, why it happens, and the command to resolve it.
 ## Trust & consent gate
 
 rimba will not run committed shell commands until they are approved. See
-[README § Consent gate](../README.md#consent-gate) for the full background on the approval flow.
+[README § Consent gate](https://github.com/lugassawan/rimba#consent-gate) for the full background on the approval flow.
 
 ### `committed shell commands require approval`
 
@@ -274,7 +279,7 @@ To fix: check write permissions for the install dir
 
 ```
 mcp servers: <error>
-To fix: check write permissions for MCP client configs (.mcp.json, .cursor/mcp.json, ~/.claude/settings.json)
+To fix: check write permissions for MCP client configs (.mcp.json, .cursor/mcp.json, ~/.claude.json)
 ```
 
 **Why:** `rimba init --agents` (or `-g`) could not write agent instruction files or register the MCP
