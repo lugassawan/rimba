@@ -303,7 +303,7 @@ func TestPatchMalformedReturnsError(t *testing.T) {
 			wantInErr: "config.toml",
 		},
 		{
-			name:      "malformed JSON",
+			name:      "malformed legacy JSON (settings.json)",
 			dir:       ".claude",
 			file:      "settings.json",
 			content:   "not json {{{",
