@@ -10,7 +10,7 @@ import (
 // Created once in cmd/mcp.go, captured by handler closures.
 type HandlerContext struct {
 	Runner   git.Runner
-	GH       gh.Runner      // nil for non-PR tools; set to gh.Default() in production
+	GH       gh.Runner      // nil unless PR operations are in scope; set to gh.Default() in production
 	Config   *config.Config // may be nil if not in a rimba-initialized repo
 	RepoRoot string
 	Version  string

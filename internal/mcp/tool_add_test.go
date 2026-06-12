@@ -531,7 +531,7 @@ func TestAddToolPRBranchMutuallyExclusive(t *testing.T) {
 	hctx := testContext(&mockRunner{})
 	handler := handleAdd(hctx)
 
-	result := callTool(t, handler, map[string]any{"pr": "42", "branch": "feature/x"})
+	result := callTool(t, handler, map[string]any{"pr": 42, "branch": "feature/x"})
 	errText := resultError(t, result)
 	if !strings.Contains(errText, "mutually exclusive") {
 		t.Errorf("expected 'mutually exclusive' error, got: %s", errText)
@@ -574,7 +574,7 @@ func TestAddPRToolSuccess(t *testing.T) {
 	handler := handleAdd(hctx)
 
 	result := callTool(t, handler, map[string]any{
-		"pr":         "42",
+		"pr":         42,
 		"skip_deps":  true,
 		"skip_hooks": true,
 	})
@@ -587,25 +587,56 @@ func TestAddPRToolSuccess(t *testing.T) {
 	}
 }
 
-func TestAddPRToolInvalidNumber(t *testing.T) {
+func TestAddPRToolNegativeNumber(t *testing.T) {
 	hctx := testContext(&mockRunner{})
 	handler := handleAdd(hctx)
 
-	result := callTool(t, handler, map[string]any{"pr": "abc"})
+	result := callTool(t, handler, map[string]any{"pr": -1})
 	errText := resultError(t, result)
 	if !strings.Contains(errText, "invalid pr number") {
 		t.Errorf("expected 'invalid pr number' error, got: %s", errText)
 	}
 }
 
-func TestAddPRToolZeroNumber(t *testing.T) {
-	hctx := testContext(&mockRunner{})
+func TestAddPRToolNilGHRunner(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := testConfig()
+	cfg.CopyFiles = nil
+	hctx := &HandlerContext{
+		Runner:   &mockRunner{},
+		GH:       nil, // intentionally unset
+		Config:   cfg,
+		RepoRoot: tmpDir,
+		Version:  "test",
+	}
 	handler := handleAdd(hctx)
 
-	result := callTool(t, handler, map[string]any{"pr": "0"})
+	result := callTool(t, handler, map[string]any{"pr": 42})
 	errText := resultError(t, result)
-	if !strings.Contains(errText, "invalid pr number") {
-		t.Errorf("expected 'invalid pr number' error for 0, got: %s", errText)
+	if !strings.Contains(errText, "server startup bug") {
+		t.Errorf("expected startup bug error for nil GH, got: %s", errText)
+	}
+}
+
+func TestAddPRToolUntrustedRepo(t *testing.T) {
+	tmpDir := t.TempDir()
+	prJSON := testutil.LoadFixture(t, "../gh/testdata/same_repo_pr.json")
+	cfg := testConfig()
+	cfg.CopyFiles = nil
+	cfg.PostCreate = []string{"make install"}
+	hctx := &HandlerContext{
+		Runner:   &mockRunner{},
+		GH:       newGhAuthOK(prJSON),
+		Config:   cfg,
+		RepoRoot: tmpDir,
+		Version:  "test",
+	}
+	handler := handleAdd(hctx)
+
+	result := callTool(t, handler, map[string]any{"pr": 42})
+	errText := resultError(t, result)
+	if !strings.Contains(errText, "rimba trust") {
+		t.Errorf("untrusted PR add error should mention 'rimba trust', got: %s", errText)
 	}
 }
 
@@ -653,7 +684,7 @@ func TestAddPRToolTaskOverride(t *testing.T) {
 	handler := handleAdd(hctx)
 
 	result := callTool(t, handler, map[string]any{
-		"pr":         "42",
+		"pr":         42,
 		"task":       "my-review",
 		"skip_deps":  true,
 		"skip_hooks": true,
@@ -755,6 +786,33 @@ func TestAddBranchToolValidationError(t *testing.T) {
 	errText := resultError(t, result)
 	if !strings.Contains(errText, "does not exist") {
 		t.Errorf("expected 'does not exist' error, got: %s", errText)
+	}
+}
+
+func TestAddBranchToolPathAlreadyExists(t *testing.T) {
+	tmpDir := t.TempDir()
+	branch := "feature/promote-me"
+
+	// Pre-create the expected worktree path so PromoteBranch returns "already exists".
+	wtPath := filepath.Join(tmpDir, ".worktrees", "feature-promote-me")
+	if err := os.MkdirAll(wtPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := testConfig()
+	cfg.CopyFiles = nil
+	hctx := &HandlerContext{
+		Runner:   makePromoteRunner(tmpDir, branch),
+		Config:   cfg,
+		RepoRoot: tmpDir,
+		Version:  "test",
+	}
+	handler := handleAdd(hctx)
+
+	result := callTool(t, handler, map[string]any{"branch": branch})
+	errText := resultError(t, result)
+	if !strings.Contains(errText, "already exists") {
+		t.Errorf("expected 'already exists' error, got: %s", errText)
 	}
 }
 

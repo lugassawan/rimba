@@ -42,10 +42,10 @@ type dryMergeItem struct {
 
 // addResult holds the outcome of a worktree add.
 type addResult struct {
-	Task   string `json:"task"`
+	Task   string `json:"task,omitempty"`
 	Branch string `json:"branch"`
 	Path   string `json:"path"`
-	Source string `json:"source"`
+	Source string `json:"source,omitempty"`
 }
 
 // removeResult holds the outcome of a worktree removal.

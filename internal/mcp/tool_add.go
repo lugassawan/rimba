@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"strconv"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/errhint"
@@ -22,7 +21,7 @@ func registerAddTool(s *server.MCPServer, hctx *HandlerContext) {
 		mcp.WithString("task",
 			mcp.Description("Task identifier (e.g. 'my-feature', 'JIRA-123', or 'auth-api/my-feature' for monorepo); required for normal add, optional as PR name override when pr is set"),
 		),
-		mcp.WithString("pr",
+		mcp.WithInteger("pr",
 			mcp.Description("GitHub PR number to open a review worktree from (branch review/<num>-<slug>); requires gh authenticated"),
 		),
 		mcp.WithString("branch",
@@ -33,13 +32,13 @@ func registerAddTool(s *server.MCPServer, hctx *HandlerContext) {
 			mcp.Enum("feature", "bugfix", "hotfix", "docs", "test", "chore"),
 		),
 		mcp.WithString("source",
-			mcp.Description("Source branch to create worktree from (default from config)"),
+			mcp.Description("Source branch to create worktree from (default from config); applies to task and pr modes"),
 		),
 		mcp.WithBoolean("skip_deps",
-			mcp.Description("Skip dependency installation"),
+			mcp.Description("Skip dependency installation (applies to task and pr modes)"),
 		),
 		mcp.WithBoolean("skip_hooks",
-			mcp.Description("Skip post-create hooks"),
+			mcp.Description("Skip post-create hooks (applies to task and pr modes)"),
 		),
 	)
 	s.AddTool(tool, handleAdd(hctx))
@@ -47,10 +46,10 @@ func registerAddTool(s *server.MCPServer, hctx *HandlerContext) {
 
 func handleAdd(hctx *HandlerContext) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		prStr := req.GetString("pr", "")
+		prNum := req.GetInt("pr", 0)
 		branch := req.GetString("branch", "")
 
-		if prStr != "" && branch != "" {
+		if prNum != 0 && branch != "" {
 			return errorResult(errhint.WithFix(
 				errors.New("pr and branch are mutually exclusive"),
 				"provide either pr or branch, not both",
@@ -58,8 +57,8 @@ func handleAdd(hctx *HandlerContext) server.ToolHandlerFunc {
 		}
 
 		switch {
-		case prStr != "":
-			return handleAddPR(ctx, hctx, req, prStr)
+		case prNum != 0:
+			return handleAddPR(ctx, hctx, req, prNum)
 		case branch != "":
 			return handleAddBranch(ctx, hctx, req, branch)
 		default:
@@ -121,12 +120,11 @@ func handleAddTask(ctx context.Context, hctx *HandlerContext, req mcp.CallToolRe
 	})
 }
 
-func handleAddPR(ctx context.Context, hctx *HandlerContext, req mcp.CallToolRequest, prStr string) (*mcp.CallToolResult, error) {
-	prNum, _ := strconv.Atoi(prStr)
+func handleAddPR(ctx context.Context, hctx *HandlerContext, req mcp.CallToolRequest, prNum int) (*mcp.CallToolResult, error) {
 	if prNum <= 0 {
 		return errorResult(errhint.WithFix(
-			fmt.Errorf("invalid pr number %q", prStr),
-			"provide a positive integer, e.g. add { pr: \"42\" }",
+			fmt.Errorf("invalid pr number %d", prNum),
+			"provide a positive integer, e.g. add { \"pr\": 42 }",
 		)), nil
 	}
 
@@ -137,6 +135,10 @@ func handleAddPR(ctx context.Context, hctx *HandlerContext, req mcp.CallToolRequ
 
 	if err := trust.GateNonInteractive(hctx.RepoRoot, cfg); err != nil {
 		return errorResult(err), nil
+	}
+
+	if hctx.GH == nil {
+		return errorResult(errors.New("gh runner not configured; this is a server startup bug")), nil
 	}
 
 	result, err := operations.AddPRWorktree(ctx, hctx.Runner, hctx.GH, operations.AddPRParams{
@@ -162,6 +164,7 @@ func handleAddBranch(ctx context.Context, hctx *HandlerContext, _ mcp.CallToolRe
 		return errorResult(cfgErr), nil
 	}
 
+	// No trust gate: PromoteBranch runs no post-create hooks, matching CLI branch: mode.
 	wtDir := filepath.Join(hctx.RepoRoot, cfg.WorktreeDir)
 	path, err := operations.PromoteBranch(ctx, wtDir, hctx.Runner, hctx.RepoRoot, branch)
 	if err != nil {
