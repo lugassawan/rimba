@@ -12,13 +12,9 @@ func TestInitGlobalRegistersMCP(t *testing.T) {
 	home, restore := setupGlobalInit(t)
 	defer restore()
 
-	// Pre-seed .claude/settings.json so MCP registration doesn't skip it
-	claudeDir := filepath.Join(home, ".claude")
-	if err := os.MkdirAll(claudeDir, 0750); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(claudeDir, "settings.json"), []byte("{}\n"), 0600); err != nil {
-		t.Fatalf("write settings.json: %v", err)
+	// Pre-seed ~/.claude.json so MCP registration doesn't skip it
+	if err := os.WriteFile(filepath.Join(home, ".claude.json"), []byte("{}\n"), 0600); err != nil {
+		t.Fatalf("write .claude.json: %v", err)
 	}
 
 	cmd, buf := newTestCmd()
@@ -34,25 +30,25 @@ func TestInitGlobalRegistersMCP(t *testing.T) {
 	if !strings.Contains(out, "MCP server:") {
 		t.Errorf("output should contain 'MCP server:', got:\n%s", out)
 	}
-	if !strings.Contains(out, filepath.Join(".claude", "settings.json")) {
-		t.Errorf("output should mention settings.json, got:\n%s", out)
+	if !strings.Contains(out, ".claude.json") {
+		t.Errorf("output should mention .claude.json, got:\n%s", out)
 	}
 	if !strings.Contains(out, "registered") {
 		t.Errorf("output should say 'registered', got:\n%s", out)
 	}
 
 	// Verify the file was patched
-	data, err := os.ReadFile(filepath.Join(claudeDir, "settings.json"))
+	data, err := os.ReadFile(filepath.Join(home, ".claude.json"))
 	if err != nil {
-		t.Fatalf("read settings.json: %v", err)
+		t.Fatalf("read .claude.json: %v", err)
 	}
 	var cfg map[string]any
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		t.Fatalf("parse settings.json: %v", err)
+		t.Fatalf("parse .claude.json: %v", err)
 	}
 	servers, ok := cfg["mcpServers"].(map[string]any)
 	if !ok {
-		t.Fatal("mcpServers missing in settings.json")
+		t.Fatal("mcpServers missing in .claude.json")
 	}
 	entry, ok := servers["rimba"].(map[string]any)
 	if !ok {
@@ -83,12 +79,8 @@ func TestInitGlobalUninstallRemovesMCP(t *testing.T) {
 	home, restore := setupGlobalInit(t)
 	defer restore()
 
-	claudeDir := filepath.Join(home, ".claude")
-	if err := os.MkdirAll(claudeDir, 0750); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(claudeDir, "settings.json"), []byte("{}\n"), 0600); err != nil {
-		t.Fatalf("write settings.json: %v", err)
+	if err := os.WriteFile(filepath.Join(home, ".claude.json"), []byte("{}\n"), 0600); err != nil {
+		t.Fatalf("write .claude.json: %v", err)
 	}
 
 	// Install
@@ -111,8 +103,8 @@ func TestInitGlobalUninstallRemovesMCP(t *testing.T) {
 		t.Errorf("output should say 'unregistered', got:\n%s", out)
 	}
 
-	// rimba key should be gone
-	data, err := os.ReadFile(filepath.Join(claudeDir, "settings.json"))
+	// rimba key should be gone from ~/.claude.json
+	data, err := os.ReadFile(filepath.Join(home, ".claude.json"))
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
