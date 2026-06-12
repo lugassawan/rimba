@@ -2,8 +2,10 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -35,7 +37,8 @@ func handleClean(hctx *HandlerContext) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		mode := req.GetString("mode", "")
 		if mode == "" {
-			return mcp.NewToolResultError("mode is required"), nil
+			return errorResult(errhint.WithFix(errors.New("mode is required"),
+				"set mode to one of: prune, merged, stale")), nil
 		}
 
 		dryRun := req.GetBool("dry_run", false)
@@ -52,7 +55,10 @@ func handleClean(hctx *HandlerContext) server.ToolHandlerFunc {
 		case "stale":
 			return mcpCleanStale(ctx, r, hctx, dryRun, staleDays, force)
 		default:
-			return mcp.NewToolResultError(fmt.Sprintf("invalid mode %q; use prune, merged, or stale", mode)), nil
+			return errorResult(errhint.WithFix(
+				fmt.Errorf("invalid mode %q", mode),
+				"use mode: prune, merged, or stale",
+			)), nil
 		}
 	}
 }
@@ -60,7 +66,7 @@ func handleClean(hctx *HandlerContext) server.ToolHandlerFunc {
 func mcpCleanPrune(ctx context.Context, r git.Runner, dryRun bool) (*mcp.CallToolResult, error) {
 	output, err := git.Prune(ctx, r, dryRun)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return errorResult(err), nil
 	}
 
 	var remotePruned []string
@@ -89,20 +95,20 @@ func mcpCleanPrune(ctx context.Context, r git.Runner, dryRun bool) (*mcp.CallToo
 func mcpCleanMerged(ctx context.Context, r git.Runner, hctx *HandlerContext, dryRun bool, force bool) (*mcp.CallToolResult, error) {
 	mainBranch, err := operations.ResolveMainBranch(ctx, r, configDefault(hctx))
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return errorResult(err), nil
 	}
 
 	// Fetch latest (non-fatal; cancellation propagated as a tool error)
 	mergeRef := mainBranch
 	if fetchWarn, fetchErr := mcpFetchNonFatal(ctx, r, git.FetchArgs{Prune: true}); fetchErr != nil {
-		return mcp.NewToolResultError(fetchErr.Error()), nil
+		return errorResult(fetchErr), nil
 	} else if fetchWarn == "" {
 		mergeRef = git.DefaultRemote + "/" + mainBranch
 	}
 
 	mergedResult, err := operations.FindMergedCandidates(ctx, r, mergeRef, mainBranch)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return errorResult(err), nil
 	}
 
 	if len(mergedResult.Candidates) == 0 || dryRun {
@@ -140,12 +146,12 @@ func mcpCleanMerged(ctx context.Context, r git.Runner, hctx *HandlerContext, dry
 func mcpCleanStale(ctx context.Context, r git.Runner, hctx *HandlerContext, dryRun bool, staleDays int, force bool) (*mcp.CallToolResult, error) {
 	mainBranch, err := operations.ResolveMainBranch(ctx, r, configDefault(hctx))
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return errorResult(err), nil
 	}
 
 	staleResult, err := operations.FindStaleCandidates(ctx, r, mainBranch, staleDays)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return errorResult(err), nil
 	}
 
 	if len(staleResult.Candidates) == 0 || dryRun {

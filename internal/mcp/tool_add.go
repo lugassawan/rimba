@@ -2,10 +2,12 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/trust"
@@ -41,7 +43,8 @@ func handleAdd(hctx *HandlerContext) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		task := req.GetString("task", "")
 		if task == "" {
-			return mcp.NewToolResultError("task is required"), nil
+			return errorResult(errhint.WithFix(errors.New("task is required"),
+				`provide the task argument, e.g. add { task: "my-feature" }`)), nil
 		}
 
 		service, task := operations.ResolveTaskInput(task, hctx.RepoRoot)
@@ -50,15 +53,18 @@ func handleAdd(hctx *HandlerContext) server.ToolHandlerFunc {
 
 		cfg, cfgErr := hctx.requireConfig()
 		if cfgErr != nil {
-			return mcp.NewToolResultError(cfgErr.Error()), nil
+			return errorResult(cfgErr), nil
 		}
 
 		if err := trust.GateNonInteractive(hctx.RepoRoot, cfg); err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err), nil
 		}
 
 		if !resolver.ValidPrefixType(prefixType) {
-			return mcp.NewToolResultError(fmt.Sprintf("invalid type %q; valid types: feature, bugfix, hotfix, docs, test, chore", prefixType)), nil
+			return errorResult(errhint.WithFix(
+				fmt.Errorf("invalid type %q", prefixType),
+				"use one of: feature, bugfix, hotfix, docs, test, chore (or omit to default to feature)",
+			)), nil
 		}
 
 		prefix, _ := resolver.PrefixString(resolver.PrefixType(prefixType))
@@ -91,7 +97,7 @@ func handleAdd(hctx *HandlerContext) server.ToolHandlerFunc {
 			},
 		}, nil)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err), nil
 		}
 
 		return marshalResult(addResult{
