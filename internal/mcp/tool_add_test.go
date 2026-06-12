@@ -661,7 +661,7 @@ func TestAddPRToolFetchError(t *testing.T) {
 	}
 	handler := handleAdd(hctx)
 
-	result := callTool(t, handler, map[string]any{"pr": "999", "skip_deps": true, "skip_hooks": true})
+	result := callTool(t, handler, map[string]any{"pr": 999, "skip_deps": true, "skip_hooks": true})
 	errText := resultError(t, result)
 	if !strings.Contains(errText, "verify PR number") {
 		t.Errorf("expected 'verify PR number' hint, got: %s", errText)

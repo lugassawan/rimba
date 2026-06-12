@@ -32,7 +32,7 @@ func registerAddTool(s *server.MCPServer, hctx *HandlerContext) {
 			mcp.Enum("feature", "bugfix", "hotfix", "docs", "test", "chore"),
 		),
 		mcp.WithString("source",
-			mcp.Description("Source branch to create worktree from (default from config); applies to task and pr modes"),
+			mcp.Description("Source branch to create worktree from (default from config); applies to task mode only"),
 		),
 		mcp.WithBoolean("skip_deps",
 			mcp.Description("Skip dependency installation (applies to task and pr modes)"),
@@ -57,10 +57,12 @@ func handleAdd(hctx *HandlerContext) server.ToolHandlerFunc {
 		}
 
 		switch {
+		// prNum != 0 intentionally routes negative values to handleAddPR,
+		// which validates prNum > 0 and returns a clear "invalid pr number" error.
 		case prNum != 0:
 			return handleAddPR(ctx, hctx, req, prNum)
 		case branch != "":
-			return handleAddBranch(ctx, hctx, req, branch)
+			return handleAddBranch(ctx, hctx, branch)
 		default:
 			return handleAddTask(ctx, hctx, req)
 		}
@@ -158,7 +160,7 @@ func handleAddPR(ctx context.Context, hctx *HandlerContext, req mcp.CallToolRequ
 	})
 }
 
-func handleAddBranch(ctx context.Context, hctx *HandlerContext, _ mcp.CallToolRequest, branch string) (*mcp.CallToolResult, error) {
+func handleAddBranch(ctx context.Context, hctx *HandlerContext, branch string) (*mcp.CallToolResult, error) {
 	cfg, cfgErr := hctx.requireConfig()
 	if cfgErr != nil {
 		return errorResult(cfgErr), nil
