@@ -117,7 +117,7 @@ Patches the following files in your home directory:
 
 | File | Format |
 |------|--------|
-| `~/.claude/settings.json` | JSON (`mcpServers` object) |
+| `~/.claude.json` | JSON (`mcpServers` object) |
 | `~/.codex/config.toml` | TOML (`[[mcp_servers]]` array) |
 | `~/.gemini/settings.json` | JSON (`mcpServers` object) |
 | `~/.codeium/windsurf/mcp_config.json` | JSON (`mcpServers` object) |

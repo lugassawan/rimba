@@ -57,7 +57,7 @@ directory is already personal.
 
 When --agents or -g is used, rimba also registers itself as an MCP server (server name:
 rimba, command: rimba mcp) in client config files (.mcp.json, .cursor/mcp.json,
-~/.claude/settings.json, ~/.codex/config.toml, ~/.gemini/settings.json,
+~/.claude.json, ~/.codex/config.toml, ~/.gemini/settings.json,
 ~/.codeium/windsurf/mcp_config.json, ~/.roo/mcp.json). --agents --local does not
 register MCP — it only updates agent files. Registration is idempotent.`,
 	Annotations: map[string]string{"skipConfig": "true"},
@@ -263,7 +263,7 @@ func runInstall(
 		if err != nil {
 			return errhint.WithFix(
 				fmt.Errorf("mcp servers: %w", err),
-				"check write permissions for MCP client configs (.mcp.json, .cursor/mcp.json, ~/.claude/settings.json)",
+				"check write permissions for MCP client configs (.mcp.json, .cursor/mcp.json, ~/.claude.json)",
 			)
 		}
 	}

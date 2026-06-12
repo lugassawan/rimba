@@ -14,23 +14,19 @@ import (
 
 func TestRegisterMCPGlobalPatchesExistingJSON(t *testing.T) {
 	home := t.TempDir()
-	claudeDir := filepath.Join(home, ".claude")
-	if err := os.MkdirAll(claudeDir, 0750); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	seedJSON(t, filepath.Join(claudeDir, "settings.json"), map[string]any{"theme": "dark"})
+	seedJSON(t, filepath.Join(home, ".claude.json"), map[string]any{"theme": "dark"})
 
 	results, err := RegisterMCPGlobal(home)
 	if err != nil {
 		t.Fatalf("RegisterMCPGlobal: %v", err)
 	}
 
-	claudeResult := findResult(t, results, filepath.Join(".claude", "settings.json"))
+	claudeResult := findResult(t, results, ".claude.json")
 	if claudeResult.Action != actionRegistered {
 		t.Errorf("action = %q, want %q", claudeResult.Action, actionRegistered)
 	}
 
-	cfg := readJSONFile(t, filepath.Join(claudeDir, "settings.json"))
+	cfg := readJSONFile(t, filepath.Join(home, ".claude.json"))
 	if cfg["theme"] != "dark" {
 		t.Error("existing 'theme' key was not preserved")
 	}
@@ -45,8 +41,9 @@ func TestRegisterMCPGlobalSkipsAbsentFiles(t *testing.T) {
 		t.Fatalf("RegisterMCPGlobal: %v", err)
 	}
 
-	if len(results) != len(GlobalMCPSpecs()) {
-		t.Fatalf("len(results) = %d, want %d", len(results), len(GlobalMCPSpecs()))
+	wantLen := len(GlobalMCPSpecs()) + len(legacyClaudeSpecs())
+	if len(results) != wantLen {
+		t.Fatalf("len(results) = %d, want %d", len(results), wantLen)
 	}
 	for _, r := range results {
 		if r.Action != actionSkippedNoConfig {
@@ -62,16 +59,12 @@ func TestRegisterMCPGlobalSkipsAbsentFiles(t *testing.T) {
 
 func TestRegisterMCPGlobalIdempotent(t *testing.T) {
 	home := t.TempDir()
-	claudeDir := filepath.Join(home, ".claude")
-	if err := os.MkdirAll(claudeDir, 0750); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	seedJSON(t, filepath.Join(claudeDir, "settings.json"), map[string]any{})
+	seedJSON(t, filepath.Join(home, ".claude.json"), map[string]any{})
 
 	if _, err := RegisterMCPGlobal(home); err != nil {
 		t.Fatalf("first RegisterMCPGlobal: %v", err)
 	}
-	firstContents, err := os.ReadFile(filepath.Join(claudeDir, "settings.json"))
+	firstContents, err := os.ReadFile(filepath.Join(home, ".claude.json"))
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
@@ -80,12 +73,12 @@ func TestRegisterMCPGlobalIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second RegisterMCPGlobal: %v", err)
 	}
-	claudeResult := findResult(t, results, filepath.Join(".claude", "settings.json"))
+	claudeResult := findResult(t, results, ".claude.json")
 	if claudeResult.Action != actionUnchanged {
 		t.Errorf("second register: action = %q, want %q", claudeResult.Action, actionUnchanged)
 	}
 
-	secondContents, err := os.ReadFile(filepath.Join(claudeDir, "settings.json"))
+	secondContents, err := os.ReadFile(filepath.Join(home, ".claude.json"))
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
@@ -177,11 +170,7 @@ func TestMCPGlobalTOML(t *testing.T) {
 
 func TestUnregisterMCPGlobalRemovesOnlyRimba(t *testing.T) {
 	home := t.TempDir()
-	claudeDir := filepath.Join(home, ".claude")
-	if err := os.MkdirAll(claudeDir, 0750); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	seedJSON(t, filepath.Join(claudeDir, "settings.json"), map[string]any{
+	seedJSON(t, filepath.Join(home, ".claude.json"), map[string]any{
 		"mcpServers": map[string]any{
 			mcpServerName: map[string]any{"command": mcpServerName, "args": []any{"mcp"}},
 			"other":       map[string]any{"command": "other-tool", "args": []any{}},
@@ -193,12 +182,12 @@ func TestUnregisterMCPGlobalRemovesOnlyRimba(t *testing.T) {
 		t.Fatalf("UnregisterMCPGlobal: %v", err)
 	}
 
-	claudeResult := findResult(t, results, filepath.Join(".claude", "settings.json"))
+	claudeResult := findResult(t, results, ".claude.json")
 	if claudeResult.Action != actionUnregistered {
 		t.Errorf("action = %q, want %q", claudeResult.Action, actionUnregistered)
 	}
 
-	cfg := readJSONFile(t, filepath.Join(claudeDir, "settings.json"))
+	cfg := readJSONFile(t, filepath.Join(home, ".claude.json"))
 	servers, ok := cfg["mcpServers"].(map[string]any)
 	if !ok {
 		t.Fatal("mcpServers should still be present")
@@ -228,18 +217,14 @@ func TestUnregisterMCPGlobalSkipsAbsent(t *testing.T) {
 
 func TestUnregisterMCPGlobalSkipsWhenKeyMissing(t *testing.T) {
 	home := t.TempDir()
-	claudeDir := filepath.Join(home, ".claude")
-	if err := os.MkdirAll(claudeDir, 0750); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	seedJSON(t, filepath.Join(claudeDir, "settings.json"), map[string]any{"theme": "dark"})
+	seedJSON(t, filepath.Join(home, ".claude.json"), map[string]any{"theme": "dark"})
 
 	results, err := UnregisterMCPGlobal(home)
 	if err != nil {
 		t.Fatalf("UnregisterMCPGlobal: %v", err)
 	}
 
-	claudeResult := findResult(t, results, filepath.Join(".claude", "settings.json"))
+	claudeResult := findResult(t, results, ".claude.json")
 	if claudeResult.Action != actionUnchanged {
 		t.Errorf("action = %q, want %q", claudeResult.Action, actionUnchanged)
 	}
@@ -318,7 +303,7 @@ func TestPatchMalformedReturnsError(t *testing.T) {
 			wantInErr: "config.toml",
 		},
 		{
-			name:      "malformed JSON",
+			name:      "malformed legacy JSON (settings.json)",
 			dir:       ".claude",
 			file:      "settings.json",
 			content:   "not json {{{",
@@ -387,6 +372,22 @@ func TestUnregisterMCPProjectRemovesRimba(t *testing.T) {
 	}
 }
 
+func TestRegisterMCPGlobalPropagatesPrimaryError(t *testing.T) {
+	home := t.TempDir()
+	// Seed primary Claude target with malformed JSON to trigger a parse error.
+	if err := os.WriteFile(filepath.Join(home, ".claude.json"), []byte("not json {{{"), 0600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	_, err := RegisterMCPGlobal(home)
+	if err == nil {
+		t.Error("expected error for malformed .claude.json, got nil")
+	}
+	if !strings.Contains(err.Error(), ".claude.json") {
+		t.Errorf("error should mention .claude.json, got: %v", err)
+	}
+}
+
 func TestPatchReadErrorReturnsError(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("running as root; chmod 000 has no effect")
@@ -428,6 +429,54 @@ func TestUnregisterMCPGlobalMalformedTOMLReturnsError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "config.toml") {
 		t.Errorf("error should mention config.toml, got: %v", err)
+	}
+}
+
+// --- GlobalMCPSpecs target tests ---
+
+func TestRegisterMCPGlobalTargetsClaudeJSON(t *testing.T) {
+	home := t.TempDir()
+	seedJSON(t, filepath.Join(home, ".claude.json"), map[string]any{})
+
+	results, err := RegisterMCPGlobal(home)
+	if err != nil {
+		t.Fatalf("RegisterMCPGlobal: %v", err)
+	}
+
+	claudeResult := findResult(t, results, ".claude.json")
+	if claudeResult.Action != actionRegistered {
+		t.Errorf("action = %q, want %q", claudeResult.Action, actionRegistered)
+	}
+
+	cfg := readJSONFile(t, filepath.Join(home, ".claude.json"))
+	assertRimbaJSONEntry(t, cfg)
+}
+
+func TestRegisterMCPGlobalRemovesLegacySettingsEntry(t *testing.T) {
+	home := t.TempDir()
+	claudeDir := filepath.Join(home, ".claude")
+	if err := os.MkdirAll(claudeDir, 0750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	seedJSON(t, filepath.Join(claudeDir, "settings.json"), map[string]any{
+		"theme": "dark",
+		"mcpServers": map[string]any{
+			mcpServerName: map[string]any{"command": mcpServerName, "args": []any{"mcp"}},
+		},
+	})
+
+	_, err := RegisterMCPGlobal(home)
+	if err != nil {
+		t.Fatalf("RegisterMCPGlobal: %v", err)
+	}
+
+	cfg := readJSONFile(t, filepath.Join(claudeDir, "settings.json"))
+	if cfg["theme"] != "dark" {
+		t.Error("existing 'theme' key was not preserved in legacy settings.json")
+	}
+	servers, _ := cfg["mcpServers"].(map[string]any)
+	if _, found := servers[mcpServerName]; found {
+		t.Error("rimba entry should have been removed from legacy settings.json")
 	}
 }
 

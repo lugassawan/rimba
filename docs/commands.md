@@ -28,7 +28,7 @@ Agent files (`AGENTS.md`, `.github/copilot-instructions.md`, `.cursor/rules/rimb
 - `--agents --local` — project-personal level (gitignored)
 - `-g` / `--global` — user level (`~/`) — works outside a git repository
 
-When agent files are installed (`--agents` or `-g`), rimba also registers itself as an MCP server (server name: `rimba`, command: `rimba mcp`) in the corresponding client config files (`.mcp.json`, `.cursor/mcp.json`, `~/.claude/settings.json`, `~/.codex/config.toml`, `~/.gemini/settings.json`, `~/.codeium/windsurf/mcp_config.json`, `~/.roo/mcp.json`). Use `--uninstall` with the same flags to remove.
+When agent files are installed (`--agents` or `-g`), rimba also registers itself as an MCP server (server name: `rimba`, command: `rimba mcp`) in the corresponding client config files (`.mcp.json`, `.cursor/mcp.json`, `~/.claude.json`, `~/.codex/config.toml`, `~/.gemini/settings.json`, `~/.codeium/windsurf/mcp_config.json`, `~/.roo/mcp.json`). Use `--uninstall` with the same flags to remove.
 
 If `.rimba/` already exists, config creation is skipped but agent files are still installed or updated. If a legacy `.rimba.toml` exists, it is migrated into the new directory layout.
 
