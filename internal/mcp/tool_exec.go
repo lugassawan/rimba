@@ -2,10 +2,12 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/executor"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
@@ -52,7 +54,8 @@ func handleExec(hctx *HandlerContext) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		command := req.GetString("command", "")
 		if command == "" {
-			return mcp.NewToolResultError("command is required"), nil
+			return errorResult(errhint.WithFix(errors.New("command is required"),
+				`provide the command argument, e.g. exec { command: "npm test", all: true }`)), nil
 		}
 
 		all := req.GetBool("all", false)
@@ -63,20 +66,24 @@ func handleExec(hctx *HandlerContext) server.ToolHandlerFunc {
 
 		cfg, cfgErr := hctx.requireConfig()
 		if cfgErr != nil {
-			return mcp.NewToolResultError(cfgErr.Error()), nil
+			return errorResult(cfgErr), nil
 		}
 
 		if !all && typeFilter == "" {
-			return mcp.NewToolResultError("provide all=true or type to select worktrees"), nil
+			return errorResult(errhint.WithFix(errors.New("provide all=true or type to select worktrees"),
+				"set all=true to target every worktree, or pass type=<prefix>")), nil
 		}
 
 		if typeFilter != "" && !resolver.ValidPrefixType(typeFilter) {
-			return mcp.NewToolResultError(fmt.Sprintf("invalid type %q; valid types: feature, bugfix, hotfix, docs, test, chore", typeFilter)), nil
+			return errorResult(errhint.WithFix(
+				fmt.Errorf("invalid type %q", typeFilter),
+				"use one of: feature, bugfix, hotfix, docs, test, chore",
+			)), nil
 		}
 
 		filtered, err := resolveExecTargets(ctx, hctx.Runner, cfg, typeFilter, dirty)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err), nil
 		}
 
 		if len(filtered) == 0 {

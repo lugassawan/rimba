@@ -37,12 +37,12 @@ func handleStatus(hctx *HandlerContext) server.ToolHandlerFunc {
 
 		mainBranch, err := operations.ResolveMainBranch(ctx, r, configDefault(hctx))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err), nil
 		}
 
 		entries, err := git.ListWorktrees(ctx, r)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err), nil
 		}
 
 		candidates := git.FilterEntries(entries, mainBranch)

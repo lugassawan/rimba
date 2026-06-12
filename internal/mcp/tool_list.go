@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/resolver"
@@ -48,11 +49,14 @@ func handleList(hctx *HandlerContext) server.ToolHandlerFunc {
 
 		cfg, err := hctx.requireConfig()
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err), nil
 		}
 
 		if typeFilter != "" && !resolver.ValidPrefixType(typeFilter) {
-			return mcp.NewToolResultError(fmt.Sprintf("invalid type %q; valid types: feature, bugfix, hotfix, docs, test, chore", typeFilter)), nil
+			return errorResult(errhint.WithFix(
+				fmt.Errorf("invalid type %q", typeFilter),
+				"use one of: feature, bugfix, hotfix, docs, test, chore",
+			)), nil
 		}
 
 		res, err := operations.ListWorktrees(ctx, r, nil, operations.ListWorktreesRequest{
@@ -62,7 +66,7 @@ func handleList(hctx *HandlerContext) server.ToolHandlerFunc {
 			WorktreeDir: filepath.Join(hctx.RepoRoot, cfg.WorktreeDir),
 		})
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err), nil
 		}
 
 		return marshalResult(detailsToListItems(res.Rows))
@@ -87,12 +91,12 @@ func detailsToListItems(rows []resolver.WorktreeDetail) []listItem {
 func handleListArchived(ctx context.Context, r git.Runner, hctx *HandlerContext) (*mcp.CallToolResult, error) {
 	mainBranch, err := operations.ResolveMainBranch(ctx, r, configDefault(hctx))
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return errorResult(err), nil
 	}
 
 	archived, err := operations.ListArchivedBranches(ctx, r, mainBranch)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return errorResult(err), nil
 	}
 
 	prefixes := resolver.AllPrefixes()
@@ -115,7 +119,7 @@ func configDefault(hctx *HandlerContext) string {
 func marshalResult(data any) (*mcp.CallToolResult, error) {
 	b, err := json.Marshal(data)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to marshal result: %v", err)), nil
+		return errorResult(fmt.Errorf("failed to marshal result: %w", err)), nil
 	}
 	return mcp.NewToolResultText(string(b)), nil
 }
