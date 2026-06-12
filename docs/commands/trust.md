@@ -28,12 +28,12 @@ rimba trust --yes     # Approve without prompting (e.g. in CI)
 
 ## How it works
 
-When rimba encounters unapproved shell commands during `add`, `rename`, or dependency installation, it:
+When rimba encounters unapproved shell commands during `add`, `rename`, `duplicate`, `restore`, or dependency installation, it:
 
 1. Displays the configured commands.
 2. Prompts: `Run these commands? [y/N]`
 3. On approval, records the hash in `.rimba/trust.local.toml`.
-4. On decline (or non-interactive stdin), exits with an error and a remediation hint.
+4. On decline (or non-interactive stdin), the invoking command exits with an error and a remediation hint. (`rimba trust` itself exits 0 on decline.)
 
 Once approved, rimba runs the commands without prompting — until the command set changes.
 
@@ -86,4 +86,6 @@ rimba trust   # Hash changed; re-prompts for approval
 - [rimba init](init) · set up `.rimba/settings.toml` where shell commands are configured
 - [rimba add](add) · triggers the trust gate when `post_create` hooks are configured
 - [rimba rename](rename) · triggers the trust gate when `post_rename` hooks are configured
+- [rimba duplicate](duplicate) · triggers the trust gate when `post_create` hooks are configured
+- [rimba restore](restore) · triggers the trust gate when `post_create` hooks are configured
 - [rimba deps](deps) · triggers the trust gate when `deps.modules[].install` is configured
