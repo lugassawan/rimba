@@ -14,3 +14,19 @@ exclude:
   - Gemfile
   - Gemfile.lock
   - vendor
+logo: "/assets/rimba-512.svg"
+favicon_ico: "/assets/favicon.ico"
+color_scheme: rimba
+callouts:
+  note:
+    title: Note
+    color: green
+  tip:
+    title: Tip
+    color: blue
+  important:
+    title: Important
+    color: purple
+  warning:
+    title: Warning
+    color: red
