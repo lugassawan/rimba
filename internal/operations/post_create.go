@@ -6,6 +6,7 @@ import (
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/deps"
+	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/fileutil"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/progress"
@@ -46,7 +47,10 @@ func PostCreateSetup(ctx context.Context, r git.Runner, params PostCreateParams,
 	progress.Notify(onProgress, "Copying files...")
 	copied, skippedSymlinks, err := fileutil.CopyEntries(params.RepoRoot, params.WtPath, params.CopyFiles)
 	if err != nil {
-		return result, fmt.Errorf("failed to copy files: %w\nTo retry, manually copy files to: %s\nTo remove the worktree: rimba remove %s", err, params.WtPath, params.Task)
+		return result, errhint.WithFix(
+			fmt.Errorf("failed to copy files: %w\nTo retry, manually copy files to: %s", err, params.WtPath),
+			"rimba remove "+params.Task,
+		)
 	}
 	result.Copied = copied
 	result.Skipped = fileutil.SkippedEntries(params.CopyFiles, copied)
@@ -57,7 +61,10 @@ func PostCreateSetup(ctx context.Context, r git.Runner, params PostCreateParams,
 		progress.Notify(onProgress, "Installing dependencies...")
 		wtEntries, err := git.ListWorktrees(ctx, r)
 		if err != nil {
-			return result, fmt.Errorf("failed to list worktrees for dependency setup: %w", err)
+			return result, errhint.WithFix(
+				fmt.Errorf("failed to list worktrees for dependency setup: %w", err),
+				"rimba remove "+params.Task,
+			)
 		}
 
 		dp := DepsParams{

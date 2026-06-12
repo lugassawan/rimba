@@ -166,6 +166,47 @@ func TestPostCreateSetupProgressCallbacks(t *testing.T) {
 	}
 }
 
+func TestPostCreateSetupCopyFilesErrorIncludesRecoveryHint(t *testing.T) {
+	tmpDir := t.TempDir()
+	wtPath := filepath.Join(tmpDir, "worktree")
+	if err := os.MkdirAll(wtPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a file then revoke read permissions to force a copy error.
+	envPath := filepath.Join(tmpDir, ".env")
+	if err := os.WriteFile(envPath, []byte("SECRET=1"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(envPath, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(envPath, 0o600) })
+
+	r := &mockRunner{
+		run:      func(args ...string) (string, error) { return "", nil },
+		runInDir: noopRunInDir,
+	}
+
+	_, err := PostCreateSetup(context.Background(), r, PostCreateParams{
+		RepoRoot:  tmpDir,
+		WtPath:    wtPath,
+		Task:      "test-task",
+		CopyFiles: []string{".env"},
+		SkipDeps:  true,
+		SkipHooks: true,
+	}, nil)
+	if err == nil {
+		t.Fatal("expected error when copying unreadable file")
+	}
+	if !strings.Contains(err.Error(), "failed to copy files") {
+		t.Errorf("error = %q, want to contain 'failed to copy files'", err.Error())
+	}
+	if !strings.Contains(err.Error(), "To fix: rimba remove test-task") {
+		t.Errorf("error = %q, want recovery hint 'To fix: rimba remove test-task'", err.Error())
+	}
+}
+
 func TestPostCreateSetupListWorktreesError(t *testing.T) {
 	tmpDir := t.TempDir()
 	wtPath := filepath.Join(tmpDir, "worktree")
@@ -194,5 +235,8 @@ func TestPostCreateSetupListWorktreesError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "failed to list worktrees") {
 		t.Errorf("error = %q, want to contain 'failed to list worktrees'", err.Error())
+	}
+	if !strings.Contains(err.Error(), "To fix: rimba remove test-task") {
+		t.Errorf("error = %q, want recovery hint 'To fix: rimba remove test-task'", err.Error())
 	}
 }
