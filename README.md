@@ -207,6 +207,12 @@ As a defense-in-depth measure, the `copy_files` entries and `deps.modules[].lock
 
 ## Troubleshooting
 
+Hit an error? rimba prints an actionable `To fix:` hint with most failures. Common errors — trust-gate
+prompts, `exec` scope, dirty-worktree sync blocks, init/config issues — are documented with cause and
+fix in the troubleshooting guide.
+
+> See [docs/troubleshooting.md](docs/troubleshooting.md) for the full troubleshooting reference.
+
 Pass `--debug` to any command (or set `RIMBA_DEBUG=1`) to log git commands and their timings to stderr:
 
 ```sh
