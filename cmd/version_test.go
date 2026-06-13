@@ -13,8 +13,6 @@ func TestVersion(t *testing.T) {
 	}
 }
 
-// TestVersionString tests versionString() in isolation from I/O — it is the
-// canonical format contract, independent of the subcommand or flag path.
 func TestVersionString(t *testing.T) {
 	got := versionString()
 	for _, want := range []string{"rimba", version, "commit:", "built:", "os:", "arch:", "go:"} {
@@ -51,15 +49,16 @@ func TestVersionCmd(t *testing.T) {
 func TestVersionFlagOutput(t *testing.T) {
 	outBuf := new(bytes.Buffer)
 	errBuf := new(bytes.Buffer)
-	// rootCmd.Version is set by Execute() in production; mirror that here since
-	// the test calls rootCmd.Execute() (cobra method) directly, bypassing cmd.Execute().
+	// rootCmd.Execute() (cobra method) bypasses the package-level Execute(); mirror its version wiring.
 	origVersion := rootCmd.Version
 	rootCmd.Version = versionString()
+	rootCmd.SetVersionTemplate("{{.Version}}")
 	rootCmd.SetOut(outBuf)
 	rootCmd.SetErr(errBuf)
 	rootCmd.SetArgs([]string{"--version"})
 	t.Cleanup(func() {
 		rootCmd.Version = origVersion
+		rootCmd.SetVersionTemplate("")
 		rootCmd.SetOut(nil)
 		rootCmd.SetErr(nil)
 		rootCmd.SetArgs(nil)
@@ -78,7 +77,6 @@ func TestVersionFlagOutput(t *testing.T) {
 		t.Errorf("--version output:\ngot  %q\nwant %q", flagOut, want)
 	}
 
-	// Byte-identical to subcommand output
 	subCmd, subBuf := newTestCmd()
 	versionCmd.Run(subCmd, nil)
 	if subBuf.String() != flagOut {

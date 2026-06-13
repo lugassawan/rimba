@@ -28,8 +28,6 @@ func Version() string {
 	return version
 }
 
-// versionString returns the multi-line version block printed by both
-// `rimba version` and `rimba --version`.
 func versionString() string {
 	return fmt.Sprintf(
 		"rimba %s\ncommit: %s\nbuilt:  %s\nos:     %s\narch:   %s\ngo:     %s\n",
@@ -39,8 +37,6 @@ func versionString() string {
 
 func init() {
 	rootCmd.AddCommand(versionCmd)
-	// Pre-register --version without a -v shorthand; this prevents Cobra's
-	// InitDefaultVersionFlag from auto-adding -v when the flag is absent.
-	// See TestVersionFlagNoShorthand — if this breaks, Cobra changed InitDefaultVersionFlag.
+	// Pre-register to prevent Cobra's InitDefaultVersionFlag from auto-adding -v; see TestVersionFlagNoShorthand.
 	rootCmd.Flags().Bool("version", false, "version for rimba")
 }
