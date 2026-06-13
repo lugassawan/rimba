@@ -55,19 +55,19 @@ error, why it happens, and the command to resolve it.
 
 | Error message | Page |
 |---|---|
-| `committed shell commands require approval` | [Trust & consent gate](troubleshooting/trust-consent) |
-| `committed shell commands are not trusted for this repo` | [Trust & consent gate](troubleshooting/trust-consent) |
-| `provide --all or --type to select worktrees` | [Selecting worktrees](troubleshooting/selecting-worktrees) |
-| `invalid type "<x>"; valid types: ...` | [Selecting worktrees](troubleshooting/selecting-worktrees) |
-| `--concurrency must be >= 0` | [Selecting worktrees](troubleshooting/selecting-worktrees) |
-| `worktree "<task>" has uncommitted changes` | [Syncing](troubleshooting/syncing) |
-| `push failed for <branch>: ...` | [Syncing](troubleshooting/syncing) |
-| `--source is not valid in branch: mode` | [Adding / promoting](troubleshooting/adding-promoting) |
-| `--task requires a pr:<num> argument` | [Adding / promoting](troubleshooting/adding-promoting) |
-| `<git error about dirty state>` (remove) | [Removing](troubleshooting/removing) |
-| `--local requires --agents` | [Init & setup](troubleshooting/init-setup) |
-| `--uninstall requires -g or --agents` | [Init & setup](troubleshooting/init-setup) |
-| `failed to create worktree directory: ...` | [Init & setup](troubleshooting/init-setup) |
-| `agent files: <error>` | [Init & setup](troubleshooting/init-setup) |
-| `config not found: ...` | [Configuration loading](troubleshooting/configuration-loading) |
-| `invalid config <file>: ...` | [Configuration loading](troubleshooting/configuration-loading) |
+| `committed shell commands require approval` | [Trust & consent gate]({{ '/troubleshooting/trust-consent' | relative_url }}) |
+| `committed shell commands are not trusted for this repo` | [Trust & consent gate]({{ '/troubleshooting/trust-consent' | relative_url }}) |
+| `provide --all or --type to select worktrees` | [Selecting worktrees]({{ '/troubleshooting/selecting-worktrees' | relative_url }}) |
+| `invalid type "<x>"; valid types: ...` | [Selecting worktrees]({{ '/troubleshooting/selecting-worktrees' | relative_url }}) |
+| `--concurrency must be >= 0` | [Selecting worktrees]({{ '/troubleshooting/selecting-worktrees' | relative_url }}) |
+| `worktree "<task>" has uncommitted changes` | [Syncing]({{ '/troubleshooting/syncing' | relative_url }}) |
+| `push failed for <branch>: ...` | [Syncing]({{ '/troubleshooting/syncing' | relative_url }}) |
+| `--source is not valid in branch: mode` | [Adding / promoting]({{ '/troubleshooting/adding-promoting' | relative_url }}) |
+| `--task requires a pr:<num> argument` | [Adding / promoting]({{ '/troubleshooting/adding-promoting' | relative_url }}) |
+| `<git error about dirty state>` (remove) | [Removing]({{ '/troubleshooting/removing' | relative_url }}) |
+| `--local requires --agents` | [Init & setup]({{ '/troubleshooting/init-setup' | relative_url }}) |
+| `--uninstall requires -g or --agents` | [Init & setup]({{ '/troubleshooting/init-setup' | relative_url }}) |
+| `failed to create worktree directory: ...` | [Init & setup]({{ '/troubleshooting/init-setup' | relative_url }}) |
+| `agent files: <error>` | [Init & setup]({{ '/troubleshooting/init-setup' | relative_url }}) |
+| `config not found: ...` | [Configuration loading]({{ '/troubleshooting/configuration-loading' | relative_url }}) |
+| `invalid config <file>: ...` | [Configuration loading]({{ '/troubleshooting/configuration-loading' | relative_url }}) |

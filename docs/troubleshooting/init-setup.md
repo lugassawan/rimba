@@ -56,7 +56,7 @@ To fix: check directory permissions for the worktree dir, or set worktree.dir in
 dir = "../my-worktrees"
 ```
 
-See [Configuration]({{ '../configuration' | relative_url }}) for all `[worktree]` options.
+See [Configuration]({{ '/configuration' | relative_url }}) for all `[worktree]` options.
 
 ### Agent-file / MCP-server permission errors
 
