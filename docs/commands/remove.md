@@ -1,6 +1,6 @@
 ---
 title: rimba remove
-parent: Command Reference
+parent: Command
 nav_order: 3
 ---
 

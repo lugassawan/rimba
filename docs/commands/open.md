@@ -1,6 +1,6 @@
 ---
 title: rimba open
-parent: Command Reference
+parent: Command
 nav_order: 11
 ---
 
@@ -55,7 +55,7 @@ rimba open my-feature npm run lint
 ```
 
 {: .warning }
-> `--ide`, `--agent`, and `--with` are mutually exclusive with each other and with inline command arguments. Shortcuts are configured in the `[open]` section of `.rimba/settings.toml` — see [Configuration](../configuration.md).
+> `--ide`, `--agent`, and `--with` are mutually exclusive with each other and with inline command arguments. Shortcuts are configured in the `[open]` section of `.rimba/settings.toml` — see [Configuration]({{ '/configuration' | relative_url }}).
 
 ## Flags
 

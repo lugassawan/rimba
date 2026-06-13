@@ -1,6 +1,6 @@
 ---
 title: rimba merge
-parent: Command Reference
+parent: Command
 nav_order: 12
 ---
 

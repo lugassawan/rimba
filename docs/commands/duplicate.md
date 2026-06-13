@@ -1,6 +1,6 @@
 ---
 title: rimba duplicate
-parent: Command Reference
+parent: Command
 nav_order: 5
 ---
 

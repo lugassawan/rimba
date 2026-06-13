@@ -5,7 +5,10 @@ nav_order: 3
 
 # Configuration Reference
 
-> See also: [Command Reference](commands.md)
+> See also: [Command]({{ '/commands' | relative_url }})
+
+Configure rimba via `.rimba/settings.toml` (team-shared) and `.rimba/settings.local.toml` (personal overrides) — all fields are optional with sensible defaults.
+{: .fs-6 .fw-300 }
 
 ---
 

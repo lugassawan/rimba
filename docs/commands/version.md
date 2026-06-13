@@ -1,6 +1,6 @@
 ---
 title: rimba version
-parent: Command Reference
+parent: Command
 nav_order: 23
 ---
 

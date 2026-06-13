@@ -1,6 +1,6 @@
 ---
 title: rimba log
-parent: Command Reference
+parent: Command
 nav_order: 10
 ---
 

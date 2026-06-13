@@ -1,6 +1,6 @@
 ---
 title: rimba archive
-parent: Command Reference
+parent: Command
 nav_order: 6
 ---
 

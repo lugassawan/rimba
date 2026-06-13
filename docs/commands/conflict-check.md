@@ -1,6 +1,6 @@
 ---
 title: rimba conflict-check
-parent: Command Reference
+parent: Command
 nav_order: 15
 ---
 
