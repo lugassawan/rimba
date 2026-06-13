@@ -43,6 +43,22 @@ jobs:
             # If the gem is upgraded, verify this sentinel still matches and update if needed.
           done
           echo "OK: representative pages include the theme layout"
+      - name: Assert feature cards are not broken by nested anchors
+        working-directory: docs
+        run: |
+          # just-the-docs injects an <a class="anchor-heading"> into every heading.
+          # A heading inside a clickable card (<a class="rimba-feature">) produces an
+          # invalid nested <a> that the browser collapses, emptying the card.
+          # Guard: clickable cards must use <span class="rimba-feature-title">, never a heading.
+          for f in _site/commands.html _site/troubleshooting.html; do
+            if grep -Pzo '<a class="rimba-feature"[^>]*>\s*<h[1-6]' "$f"; then
+              echo "::error file=$f::clickable feature card wraps a heading — nested <a> will break it"
+              exit 1
+            fi
+            grep -q 'class="rimba-feature-title"' "$f" \
+              || { echo "::error file=$f::expected rimba-feature-title in cards"; exit 1; }
+          done
+          echo "OK: clickable feature cards use valid non-heading titles"
       - uses: actions/upload-pages-artifact@v5
         with:
           path: docs/_site
