@@ -13,6 +13,8 @@ func TestVersion(t *testing.T) {
 	}
 }
 
+// TestVersionString tests versionString() in isolation from I/O — it is the
+// canonical format contract, independent of the subcommand or flag path.
 func TestVersionString(t *testing.T) {
 	got := versionString()
 	for _, want := range []string{"rimba", version, "commit:", "built:", "os:", "arch:", "go:"} {
@@ -23,6 +25,9 @@ func TestVersionString(t *testing.T) {
 	lines := strings.Split(strings.TrimSpace(got), "\n")
 	if len(lines) != 6 {
 		t.Errorf("expected 6 lines, got %d: %q", len(lines), got)
+	}
+	if !strings.HasSuffix(got, "\n") {
+		t.Errorf("versionString() must end with newline; got %q", got)
 	}
 }
 
@@ -44,11 +49,17 @@ func TestVersionCmd(t *testing.T) {
 }
 
 func TestVersionFlagOutput(t *testing.T) {
-	buf := new(bytes.Buffer)
-	rootCmd.SetOut(buf)
-	rootCmd.SetErr(buf)
+	outBuf := new(bytes.Buffer)
+	errBuf := new(bytes.Buffer)
+	// rootCmd.Version is set by Execute() in production; mirror that here since
+	// the test calls rootCmd.Execute() (cobra method) directly, bypassing cmd.Execute().
+	origVersion := rootCmd.Version
+	rootCmd.Version = versionString()
+	rootCmd.SetOut(outBuf)
+	rootCmd.SetErr(errBuf)
 	rootCmd.SetArgs([]string{"--version"})
 	t.Cleanup(func() {
+		rootCmd.Version = origVersion
 		rootCmd.SetOut(nil)
 		rootCmd.SetErr(nil)
 		rootCmd.SetArgs(nil)
@@ -58,7 +69,10 @@ func TestVersionFlagOutput(t *testing.T) {
 		t.Fatalf("rootCmd.Execute() error: %v", err)
 	}
 
-	flagOut := buf.String()
+	if errBuf.Len() > 0 {
+		t.Errorf("unexpected stderr: %q", errBuf.String())
+	}
+	flagOut := outBuf.String()
 	want := versionString()
 	if flagOut != want {
 		t.Errorf("--version output:\ngot  %q\nwant %q", flagOut, want)

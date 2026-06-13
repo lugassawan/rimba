@@ -39,9 +39,8 @@ func versionString() string {
 
 func init() {
 	rootCmd.AddCommand(versionCmd)
-	rootCmd.Version = versionString()
-	rootCmd.SetVersionTemplate("{{.Version}}")
 	// Pre-register --version without a -v shorthand; this prevents Cobra's
 	// InitDefaultVersionFlag from auto-adding -v when the flag is absent.
+	// See TestVersionFlagNoShorthand — if this breaks, Cobra changed InitDefaultVersionFlag.
 	rootCmd.Flags().Bool("version", false, "version for rimba")
 }
