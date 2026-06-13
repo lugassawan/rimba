@@ -29,6 +29,20 @@ jobs:
         working-directory: docs
         env:
           JEKYLL_ENV: production
+      - name: Assert pages render with the theme layout
+        working-directory: docs
+        run: |
+          for f in _site/commands/init.html _site/commands/add.html \
+                   _site/configuration.html \
+                   _site/troubleshooting.html _site/troubleshooting/adding-promoting.html; do
+            [[ -f "$f" ]] || { echo "::error::expected built file $f not found"; exit 1; }
+            grep -q '<html' "$f" \
+              && grep -q 'class="site-header"' "$f" \
+              || { echo "::error file=$f::page rendered without theme layout (missing _config.yml defaults?)"; exit 1; }
+            # class="site-header" is emitted by just-the-docs _layouts/default.html.
+            # If the gem is upgraded, verify this sentinel still matches and update if needed.
+          done
+          echo "OK: representative pages include the theme layout"
       - uses: actions/upload-pages-artifact@v5
         with:
           path: docs/_site
