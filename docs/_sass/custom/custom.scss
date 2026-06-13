@@ -48,3 +48,11 @@
     color: $body-text-color;
   }
 }
+
+a.rimba-feature {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+
+  h2 { color: $link-color; }
+}

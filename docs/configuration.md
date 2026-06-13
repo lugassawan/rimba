@@ -7,6 +7,9 @@ nav_order: 3
 
 > See also: [Command](commands.md)
 
+Configure rimba via `.rimba/settings.toml` (team-shared) and `.rimba/settings.local.toml` (personal overrides) — all fields are optional with sensible defaults.
+{: .fs-6 .fw-300 }
+
 ---
 
 ## Overview
