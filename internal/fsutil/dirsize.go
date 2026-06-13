@@ -18,6 +18,9 @@ type dirSizeResult struct {
 // Returns (0, ctx.Err()) immediately on cancellation. The WalkDir goroutine
 // continues until the OS returns — it cannot be interrupted mid-syscall.
 func DirSize(ctx context.Context, path string) (int64, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 	ch := make(chan dirSizeResult, 1)
 	go func() {
 		size, err := walkDirSize(path)

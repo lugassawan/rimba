@@ -36,10 +36,15 @@
     border-color: $rimba-green-mid;
   }
 
-  h2 {
+  h2,
+  .rimba-feature-title {
     margin-top: 0;
     font-size: 1rem;
     font-weight: 600;
+  }
+
+  .rimba-feature-title {
+    display: block;
   }
 
   p {
@@ -54,5 +59,6 @@ a.rimba-feature {
   text-decoration: none;
   color: inherit;
 
-  h2 { color: $link-color; }
+  h2,
+  .rimba-feature-title { color: $link-color; }
 }

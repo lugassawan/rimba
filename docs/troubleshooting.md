@@ -16,35 +16,35 @@ error, why it happens, and the command to resolve it.
 
 <div class="rimba-features">
   <a class="rimba-feature" href="{{ '/troubleshooting/trust-consent' | relative_url }}">
-    <h2>Trust &amp; consent gate</h2>
+    <span class="rimba-feature-title">Trust &amp; consent gate</span>
     <p>Committed shell commands require approval before running. Resolve approval errors and CI non-interactive flows.</p>
   </a>
   <a class="rimba-feature" href="{{ '/troubleshooting/selecting-worktrees' | relative_url }}">
-    <h2>Selecting worktrees</h2>
+    <span class="rimba-feature-title">Selecting worktrees</span>
     <p>Errors from <code>rimba exec</code> when no target selector or invalid type is provided.</p>
   </a>
   <a class="rimba-feature" href="{{ '/troubleshooting/syncing' | relative_url }}">
-    <h2>Syncing</h2>
+    <span class="rimba-feature-title">Syncing</span>
     <p>Uncommitted-changes and push-rejection errors from <code>rimba sync</code>.</p>
   </a>
   <a class="rimba-feature" href="{{ '/troubleshooting/adding-promoting' | relative_url }}">
-    <h2>Adding / promoting</h2>
+    <span class="rimba-feature-title">Adding / promoting</span>
     <p>Flag-conflict errors when using <code>rimba add</code> in branch or PR mode.</p>
   </a>
   <a class="rimba-feature" href="{{ '/troubleshooting/removing' | relative_url }}">
-    <h2>Removing</h2>
+    <span class="rimba-feature-title">Removing</span>
     <p>Dirty-state errors that block <code>rimba remove</code> from discarding work.</p>
   </a>
   <a class="rimba-feature" href="{{ '/troubleshooting/init-setup' | relative_url }}">
-    <h2>Init &amp; setup</h2>
+    <span class="rimba-feature-title">Init &amp; setup</span>
     <p>Flag errors, permission failures, and worktree-directory creation problems from <code>rimba init</code>.</p>
   </a>
   <a class="rimba-feature" href="{{ '/troubleshooting/configuration-loading' | relative_url }}">
-    <h2>Configuration loading</h2>
+    <span class="rimba-feature-title">Configuration loading</span>
     <p>Missing config file and TOML syntax errors surfaced on every command invocation.</p>
   </a>
   <a class="rimba-feature" href="{{ '/troubleshooting/debugging-git' | relative_url }}">
-    <h2>Debugging git operations</h2>
+    <span class="rimba-feature-title">Debugging git operations</span>
     <p>Enable <code>--debug</code> or <code>RIMBA_DEBUG=1</code> to trace git commands and timings to stderr.</p>
   </a>
 </div>
