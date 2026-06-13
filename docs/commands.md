@@ -1,10 +1,10 @@
 ---
-title: Command Reference
+title: Command
 nav_order: 2
 has_children: true
 ---
 
-# Command Reference
+# Command
 
 > See also: [Configuration](configuration.md)
 

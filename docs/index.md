@@ -62,6 +62,6 @@ rimba merge
 
 ## Reference
 
-- [Command Reference](commands.md) — all commands, flags, and examples
+- [Command](commands.md) — all commands, flags, and examples
 - [Configuration](configuration.md) — `.rimba/settings.toml` options
 - [Troubleshooting](troubleshooting.md) — error messages, hints, and fixes

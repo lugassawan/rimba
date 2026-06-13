@@ -1,6 +1,6 @@
 ---
 title: rimba hook
-parent: Command Reference
+parent: Command
 nav_order: 17
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: rimba trust
-parent: Command Reference
+parent: Command
 nav_order: 21
 ---
 

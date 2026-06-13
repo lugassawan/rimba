@@ -1,6 +1,6 @@
 ---
 title: rimba exec
-parent: Command Reference
+parent: Command
 nav_order: 16
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: rimba restore
-parent: Command Reference
+parent: Command
 nav_order: 7
 ---
 

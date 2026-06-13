@@ -1,6 +1,6 @@
 ---
 title: rimba open
-parent: Command Reference
+parent: Command
 nav_order: 11
 ---
 

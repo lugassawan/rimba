@@ -1,6 +1,6 @@
 ---
 title: rimba init
-parent: Command Reference
+parent: Command
 nav_order: 1
 ---
 

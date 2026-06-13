@@ -1,6 +1,6 @@
 ---
 title: rimba update
-parent: Command Reference
+parent: Command
 nav_order: 22
 ---
 

@@ -5,7 +5,7 @@ nav_order: 3
 
 # Configuration Reference
 
-> See also: [Command Reference](commands.md)
+> See also: [Command](commands.md)
 
 ---
 
