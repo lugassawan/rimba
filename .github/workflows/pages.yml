@@ -51,6 +51,7 @@ jobs:
           # invalid nested <a> that the browser collapses, emptying the card.
           # Guard: clickable cards must use <span class="rimba-feature-title">, never a heading.
           for f in _site/commands.html _site/troubleshooting.html; do
+            [[ -f "$f" ]] || { echo "::error::expected built file $f not found"; exit 1; }
             if grep -Pzo '<a class="rimba-feature"[^>]*>\s*<h[1-6]' "$f"; then
               echo "::error file=$f::clickable feature card wraps a heading — nested <a> will break it"
               exit 1
