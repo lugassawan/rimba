@@ -30,3 +30,9 @@ callouts:
   warning:
     title: Warning
     color: red
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
