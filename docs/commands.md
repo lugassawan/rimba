@@ -6,7 +6,7 @@ has_children: true
 
 # Command
 
-> See also: [Configuration](configuration.md)
+> See also: [Configuration]({{ '/configuration' | relative_url }})
 
 Browse the full list of rimba commands below. Each command has its own page with synopsis, examples, common workflows, flags, and related commands.
 {: .fs-6 .fw-300 }

@@ -6,7 +6,7 @@ has_children: true
 
 # Troubleshooting
 
-> See also: [Command](commands.md) · [Configuration](configuration.md)
+> See also: [Command]({{ '/commands' | relative_url }}) · [Configuration]({{ '/configuration' | relative_url }})
 
 rimba prints an actionable `To fix:` hint with most failures. Each section below shows the exact
 error, why it happens, and the command to resolve it.
