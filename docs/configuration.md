@@ -114,7 +114,7 @@ When `auto_detect` is enabled (default), rimba recognizes these lockfiles automa
 | Variable | Description |
 |----------|-------------|
 | `RIMBA_DEBUG` | Log git command timing to stderr (set to any value, e.g. `RIMBA_DEBUG=1`). The `--debug` flag on any command has the same effect. |
-| `RIMBA_QUIET` | Suppress pre-execution hints (set to any value, e.g. `RIMBA_QUIET=1`) |
+| `RIMBA_QUIET` | Suppress optional rimba hints (pre-execution flag hints and post-update tips). Set to any value (e.g. `RIMBA_QUIET=1`). Does **not** suppress errors, normal command output, or output from programs launched via `rimba exec` / `rimba open`. |
 | `NO_COLOR` | Disable colored output globally (per [no-color.org](https://no-color.org)) |
 
 ## MCP server registration
