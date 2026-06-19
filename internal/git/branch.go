@@ -131,6 +131,29 @@ func AheadBehind(ctx context.Context, r Runner, dir string) (ahead, behind int, 
 	return ahead, behind, nil
 }
 
+// HasOwnCommits reports whether branch contains any commits that are not already
+// reachable from mergeRef. It is true when the branch's tip differs from its
+// merge-base with mergeRef. A false result means the branch contributed nothing:
+// either a fresh branch sitting on the base commit, or one that was
+// fast-forward-merged (its tip is an ancestor of mergeRef and adds no new commit).
+//
+// This is used to protect such branches from being treated as "merged" by
+// `git branch --merged`, which lists every branch reachable from the ref —
+// including a brand-new branch whose tip *is* the base commit.
+func HasOwnCommits(ctx context.Context, r Runner, mergeRef, branch string) (bool, error) {
+	mergeBase, err := MergeBase(ctx, r, mergeRef, branch)
+	if err != nil {
+		return false, err
+	}
+
+	tip, err := r.Run(ctx, cmdRevParse, flagVerify, branch)
+	if err != nil {
+		return false, err
+	}
+
+	return strings.TrimSpace(mergeBase) != strings.TrimSpace(tip), nil
+}
+
 // IsSquashMerged reports whether branch's diff patch-id matches any commit in
 // mergeRef since their common merge-base, indicating a squash merge.
 func IsSquashMerged(ctx context.Context, r Runner, mergeRef, branch string) (bool, error) {

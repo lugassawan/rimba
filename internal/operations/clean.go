@@ -69,7 +69,18 @@ func FindMergedCandidates(ctx context.Context, r git.Runner, mergeRef, mainBranc
 	var result MergedResult
 	for _, e := range git.FilterEntries(entries, mainBranch) {
 		if mergedSet[e.Branch] {
-			result.Candidates = append(result.Candidates, CleanCandidate{Path: e.Path, Branch: e.Branch})
+			// `git branch --merged` lists every branch reachable from mergeRef,
+			// including a fresh worktree branch whose tip *is* the base commit.
+			// Guard against removing such branches: only treat a --merged hit as
+			// a candidate when the branch actually contributed commits of its own.
+			hasOwn, err := git.HasOwnCommits(ctx, r, mergeRef, e.Branch)
+			if err != nil {
+				result.Warnings = append(result.Warnings, fmt.Sprintf("skipped %s: own-commits check failed: %v", e.Branch, err))
+				continue
+			}
+			if hasOwn {
+				result.Candidates = append(result.Candidates, CleanCandidate{Path: e.Path, Branch: e.Branch})
+			}
 			continue
 		}
 

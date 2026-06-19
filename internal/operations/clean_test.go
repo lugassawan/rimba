@@ -47,6 +47,13 @@ func TestFindMergedCandidatesNormalMerge(t *testing.T) {
 			if len(args) > 0 && args[0] == gitCmdWorktree {
 				return wt, nil
 			}
+			// HasOwnCommits: merge-base differs from tip → branch has own commits.
+			if len(args) > 0 && args[0] == git.CmdMergeBase {
+				return "base123", nil
+			}
+			if len(args) > 0 && args[0] == "rev-parse" {
+				return "tip456", nil
+			}
 			return "", nil
 		},
 		runInDir: noopRunInDir,
@@ -64,6 +71,46 @@ func TestFindMergedCandidatesNormalMerge(t *testing.T) {
 	}
 	if result.Candidates[1].Branch != "bugfix/fixed" {
 		t.Errorf("expected bugfix/fixed, got %s", result.Candidates[1].Branch)
+	}
+}
+
+// TestFindMergedCandidatesFreshWorktreeNotRemoved guards against issue #335:
+// a fresh worktree whose branch has no commits of its own appears in
+// `git branch --merged` output (its tip is the base commit, trivially reachable),
+// but must NOT be treated as a removal candidate.
+func TestFindMergedCandidatesFreshWorktreeNotRemoved(t *testing.T) {
+	wt := porcelainEntries(
+		struct{ path, branch string }{"/repo", "main"},
+		struct{ path, branch string }{"/wt/fresh", "feature/fresh"},
+	)
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			// feature/fresh is reported as "merged" because its tip is the base commit.
+			if len(args) > 0 && args[0] == gitCmdBranch {
+				return "  feature/fresh\n", nil
+			}
+			if len(args) > 0 && args[0] == gitCmdWorktree {
+				return wt, nil
+			}
+			// HasOwnCommits: merge-base == tip → branch contributed nothing.
+			if len(args) > 0 && args[0] == git.CmdMergeBase {
+				return "samecommit", nil
+			}
+			if len(args) > 0 && args[0] == "rev-parse" {
+				return "samecommit", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	result, err := FindMergedCandidates(context.Background(), r, "origin/main", "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Candidates) != 0 {
+		t.Fatalf("expected 0 candidates (fresh worktree must be protected), got %d: %+v", len(result.Candidates), result.Candidates)
 	}
 }
 
