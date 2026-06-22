@@ -31,7 +31,7 @@ func TestRenameWorktreeSuccess(t *testing.T) {
 	}
 
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	res, err := RenameWorktree(context.Background(), r, wt, "auth", wtDir, false)
+	res, err := RenameWorktree(context.Background(), r, RenameParams{WT: wt, NewTask: "auth", WtDir: wtDir})
 	if err != nil {
 		t.Fatalf("RenameWorktree: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestRenameWorktreeBranchExists(t *testing.T) {
 	}
 
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	_, err := RenameWorktree(context.Background(), r, wt, "auth", wtDir, false)
+	_, err := RenameWorktree(context.Background(), r, RenameParams{WT: wt, NewTask: "auth", WtDir: wtDir})
 	if err == nil {
 		t.Fatal("expected error for existing branch")
 	}
@@ -87,12 +87,12 @@ func TestRenameWorktreeSameName(t *testing.T) {
 	}
 
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	_, err := RenameWorktree(context.Background(), r, wt, "login", wtDir, false)
+	_, err := RenameWorktree(context.Background(), r, RenameParams{WT: wt, NewTask: "login", WtDir: wtDir})
 	if err == nil {
 		t.Fatal("expected error for same-name rename")
 	}
-	if !strings.Contains(err.Error(), "same as the current name") {
-		t.Errorf("error = %q, want same-name message", err.Error())
+	if !strings.Contains(err.Error(), "nothing to change") {
+		t.Errorf("error = %q, want 'nothing to change' message", err.Error())
 	}
 	if strings.Contains(err.Error(), "git branch -D") {
 		t.Errorf("error = %q, must not include destructive branch delete hint", err.Error())
@@ -120,7 +120,7 @@ func TestRenameWorktreeMoveFails(t *testing.T) {
 	}
 
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	_, err := RenameWorktree(context.Background(), r, wt, "auth", wtDir, false)
+	_, err := RenameWorktree(context.Background(), r, RenameParams{WT: wt, NewTask: "auth", WtDir: wtDir})
 	if err == nil {
 		t.Fatal("expected error from move failure")
 	}
@@ -152,7 +152,7 @@ func TestRenameWorktreeBranchRenameFails(t *testing.T) {
 	}
 
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	_, err := RenameWorktree(context.Background(), r, wt, "auth", wtDir, false)
+	_, err := RenameWorktree(context.Background(), r, RenameParams{WT: wt, NewTask: "auth", WtDir: wtDir})
 	if err == nil {
 		t.Fatal("expected error from branch rename failure")
 	}
@@ -196,7 +196,7 @@ func TestRenameWorktreeBranchRenameFailsRollbackFails(t *testing.T) {
 	}
 
 	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
-	_, err := RenameWorktree(context.Background(), r, wt, "auth", wtDir, false)
+	_, err := RenameWorktree(context.Background(), r, RenameParams{WT: wt, NewTask: "auth", WtDir: wtDir})
 	if err == nil {
 		t.Fatal("expected error from branch rename + rollback failure")
 	}
@@ -215,7 +215,6 @@ func TestRenameWorktreeBranchRenameFailsRollbackFails(t *testing.T) {
 }
 
 func TestRenameWorktreeNoPrefixMatch(t *testing.T) {
-	// Branch without a recognized prefix falls back to default prefix
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			if len(args) >= 1 && args[0] == cmdRevParse {
@@ -227,12 +226,95 @@ func TestRenameWorktreeNoPrefixMatch(t *testing.T) {
 	}
 
 	wt := resolver.WorktreeInfo{Branch: "plain-branch", Path: "/wt/plain-branch"}
-	res, err := RenameWorktree(context.Background(), r, wt, "new-task", wtDir, false)
+	res, err := RenameWorktree(context.Background(), r, RenameParams{WT: wt, NewTask: "new-task", WtDir: wtDir})
 	if err != nil {
 		t.Fatalf("RenameWorktree: %v", err)
 	}
-	// Should use default prefix (feature/)
 	if !strings.HasPrefix(res.NewBranch, "feature/") {
 		t.Errorf("NewBranch = %q, want feature/ prefix", res.NewBranch)
+	}
+}
+
+func TestRenameWorktreeTypeOnly(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return "", errGitFailed // BranchExists returns false
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	// feature/auth → bugfix/auth (same task, different prefix)
+	wt := resolver.WorktreeInfo{Branch: branchAuth, Path: "/wt/feature-auth"}
+	res, err := RenameWorktree(context.Background(), r, RenameParams{
+		WT:        wt,
+		NewTask:   "auth",
+		NewPrefix: "bugfix/",
+		WtDir:     wtDir,
+	})
+	if err != nil {
+		t.Fatalf("RenameWorktree: %v", err)
+	}
+	if res.OldBranch != branchAuth {
+		t.Errorf("OldBranch = %q, want %q", res.OldBranch, branchAuth)
+	}
+	if res.NewBranch != "bugfix/auth" {
+		t.Errorf("NewBranch = %q, want %q", res.NewBranch, "bugfix/auth")
+	}
+}
+
+func TestRenameWorktreeTaskAndType(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return "", errGitFailed // BranchExists returns false
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	// feature/auth → bugfix/login (different task and prefix)
+	wt := resolver.WorktreeInfo{Branch: branchAuth, Path: "/wt/feature-auth"}
+	res, err := RenameWorktree(context.Background(), r, RenameParams{
+		WT:        wt,
+		NewTask:   "login",
+		NewPrefix: "bugfix/",
+		WtDir:     wtDir,
+	})
+	if err != nil {
+		t.Fatalf("RenameWorktree: %v", err)
+	}
+	if res.NewBranch != "bugfix/login" {
+		t.Errorf("NewBranch = %q, want %q", res.NewBranch, "bugfix/login")
+	}
+}
+
+func TestRenameWorktreeMonorepoTypeOnly(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return "", errGitFailed // BranchExists returns false
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	// Monorepo: auth-api/feature/auth → auth-api/bugfix/auth (service preserved)
+	wt := resolver.WorktreeInfo{Branch: "auth-api/feature/auth", Path: "/wt/auth-api-feature-auth"}
+	res, err := RenameWorktree(context.Background(), r, RenameParams{
+		WT:        wt,
+		NewTask:   "auth",
+		NewPrefix: "bugfix/",
+		WtDir:     wtDir,
+	})
+	if err != nil {
+		t.Fatalf("RenameWorktree: %v", err)
+	}
+	if res.NewBranch != "auth-api/bugfix/auth" {
+		t.Errorf("NewBranch = %q, want %q", res.NewBranch, "auth-api/bugfix/auth")
 	}
 }
