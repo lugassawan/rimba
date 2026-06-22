@@ -192,6 +192,8 @@ func TestRenameNoOpExplicitSameType(t *testing.T) {
 	}
 
 	// Explicit --bugfix on an already-bugfix/ branch → no-op error.
+	// --bugfix is a cobra flag, not a positional arg; RunE receives one arg ("retype-same"),
+	// so newTask == task and the no-op guard fires.
 	repo := setupInitializedRepo(t)
 	rimbaSuccess(t, repo, "add", "--bugfix", "retype-same")
 
