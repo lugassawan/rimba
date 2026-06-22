@@ -217,13 +217,14 @@ func TestRenameRetypeOnly(t *testing.T) {
 
 	// Old branch and directory gone
 	assertFileNotExists(t, resolver.WorktreePath(wtDir, "feature/retype-auth"))
+
+	// New branch and directory exist
+	assertFileExists(t, resolver.WorktreePath(wtDir, "bugfix/retype-auth"))
+
 	branches := testutil.GitCmd(t, repo, "branch", flagBranchList)
 	if strings.Contains(branches, "feature/retype-auth") {
 		t.Errorf("expected feature/retype-auth to be gone")
 	}
-
-	// New branch and directory exist
-	assertFileExists(t, resolver.WorktreePath(wtDir, "bugfix/retype-auth"))
 	if !strings.Contains(branches, "bugfix/retype-auth") {
 		t.Errorf("expected bugfix/retype-auth branch to exist, got:\n%s", branches)
 	}

@@ -64,6 +64,6 @@ rimba rename auth --bugfix
 
 ## Related commands
 
-- [rimba add]({{ '/docs/commands/add' | relative_url }}) · create a worktree
-- [rimba duplicate]({{ '/docs/commands/duplicate' | relative_url }}) · create a copy with a new name
-- [rimba trust]({{ '/docs/commands/trust' | relative_url }}) · approve post-rename shell commands
+- [rimba add](add) · create a worktree
+- [rimba duplicate](duplicate) · create a copy with a new name
+- [rimba trust](trust) · approve post-rename shell commands
