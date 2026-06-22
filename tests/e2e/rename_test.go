@@ -186,6 +186,19 @@ func TestRenameNoOpReportsCleanly(t *testing.T) {
 	assertContains(t, r.Stderr, "nothing to change")
 }
 
+func TestRenameNoOpExplicitSameType(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	// Explicit --bugfix on an already-bugfix/ branch → no-op error.
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", "--bugfix", "retype-same")
+
+	r := rimbaFail(t, repo, "rename", "retype-same", "--bugfix")
+	assertContains(t, r.Stderr, "nothing to change")
+}
+
 func TestRenameRetypeOnly(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)

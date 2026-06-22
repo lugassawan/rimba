@@ -6,7 +6,7 @@ nav_order: 4
 
 # rimba rename
 
-Rename a worktree's task, branch, and directory, or change its type (prefix). The branch is renamed to `<prefix>/<new-task>`, where the prefix is inherited from the current branch unless a prefix flag is given.
+Rename a worktree's task, branch, and directory, or change its type (prefix). The branch is renamed to `<prefix>/<new-task>`, where the prefix is inherited from the current branch unless a prefix flag is given. Branches without a recognized prefix (e.g. created directly with `git branch`) are promoted to `feature/` on rename.
 
 ## Synopsis
 
@@ -60,7 +60,7 @@ rimba rename auth --bugfix
 | `--test` | Change branch type to `test/` |
 | `--chore` | Change branch type to `chore/` |
 
-> **Note:** There is no `--feature` flag. `feature/` is the default prefix and cannot be selected explicitly. To retype a branch back to `feature/`, use `rimba remove <task>` followed by `rimba add <task>`, or rename the branch directly with `git branch -m`.
+> **Note:** There is no `--feature` flag. `feature/` is the default prefix and cannot be selected explicitly. To retype a branch back to `feature/`, use `rimba remove <task>` followed by `rimba add <task>`. Direct `git branch -m` is not recommended because it renames the branch ref but not the worktree directory, leaving them out of sync.
 
 ## Related commands
 
