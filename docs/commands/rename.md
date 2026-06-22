@@ -6,12 +6,12 @@ nav_order: 4
 
 # rimba rename
 
-Rename a worktree's task, branch, and directory. The branch is renamed to `<prefix>/<new-task>`, where the prefix is inherited from the current branch.
+Rename a worktree's task, branch, and directory, or change its type (prefix). The branch is renamed to `<prefix>/<new-task>`, where the prefix is inherited from the current branch unless a prefix flag is given.
 
 ## Synopsis
 
 ```sh
-rimba rename <old-task> <new-task> [flags]
+rimba rename <old-task> [new-task] [flags]
 ```
 
 ## Examples
@@ -20,6 +20,8 @@ rimba rename <old-task> <new-task> [flags]
 rimba rename old-task new-task
 rimba rename old-task new-task -f       # Force rename even if locked
 rimba rename old-task new-task --skip-deps   # Skip dep refresh
+rimba rename auth --bugfix              # Retype feature/auth → bugfix/auth
+rimba rename auth auth-v2 --bugfix      # Rename and retype in one step
 ```
 
 ## Common workflows
@@ -36,6 +38,15 @@ rimba rename auth-changes auth-jwt-migration
 rimba rename my-task my-task-v2 --skip-hooks
 ```
 
+**Retype a misclassified branch**
+```sh
+# Started with the wrong type? Change it without recreating the worktree.
+rimba rename auth --bugfix
+# Branch: feature/auth → bugfix/auth
+# Directory: feature-auth → bugfix-auth
+# All uncommitted changes are preserved
+```
+
 ## Flags
 
 | Flag | Description |
@@ -43,9 +54,14 @@ rimba rename my-task my-task-v2 --skip-hooks
 | `-f`, `--force` | Force rename even if the worktree is locked |
 | `--skip-deps` | Skip dependency refresh after rename |
 | `--skip-hooks` | Skip post-rename hooks |
+| `--bugfix` | Change branch type to `bugfix/` |
+| `--hotfix` | Change branch type to `hotfix/` |
+| `--docs` | Change branch type to `docs/` |
+| `--test` | Change branch type to `test/` |
+| `--chore` | Change branch type to `chore/` |
 
 ## Related commands
 
-- [rimba add](add) · create a worktree
-- [rimba duplicate](duplicate) · create a copy with a new name
-- [rimba trust](trust) · approve post-rename shell commands
+- [rimba add]({{ '/docs/commands/add' | relative_url }}) · create a worktree
+- [rimba duplicate]({{ '/docs/commands/duplicate' | relative_url }}) · create a copy with a new name
+- [rimba trust]({{ '/docs/commands/trust' | relative_url }}) · approve post-rename shell commands

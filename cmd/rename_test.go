@@ -293,3 +293,28 @@ func TestRenameMoveFails(t *testing.T) {
 		t.Fatal("expected error from move failure")
 	}
 }
+
+func TestRenameRetypeFlag(t *testing.T) {
+	repoDir := t.TempDir()
+	cfg := &config.Config{WorktreeDir: defaultRelativeWtDir, DefaultSource: branchMain}
+	worktreeOut := makeRenameWorktreeOut(repoDir)
+	restore := overrideNewRunner(makeRenameRunner(repoDir, worktreeOut))
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().BoolP("force", "f", false, "")
+	cmd.Flags().Bool(flagSkipDeps, false, "")
+	cmd.Flags().Bool(flagSkipHooks, false, "")
+	addPrefixFlags(cmd)
+	_ = cmd.Flags().Set(flagSkipDeps, "true")
+	_ = cmd.Flags().Set(flagSkipHooks, "true")
+	_ = cmd.Flags().Set("bugfix", "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	if err := renameCmd.RunE(cmd, []string{"login"}); err != nil {
+		t.Fatalf("renameCmd.RunE: %v", err)
+	}
+	if !strings.Contains(buf.String(), "feature/login -> bugfix/login") {
+		t.Errorf("output = %q, want 'feature/login -> bugfix/login'", buf.String())
+	}
+}
