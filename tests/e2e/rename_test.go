@@ -232,6 +232,9 @@ func TestRenameTaskAndType(t *testing.T) {
 	assertFileExists(t, resolver.WorktreePath(wtDir, "bugfix/retype-dst"))
 
 	branches := testutil.GitCmd(t, repo, "branch", flagBranchList)
+	if strings.Contains(branches, "feature/retype-src") {
+		t.Errorf("expected feature/retype-src to be gone after rename, got:\n%s", branches)
+	}
 	if !strings.Contains(branches, "bugfix/retype-dst") {
 		t.Errorf("expected bugfix/retype-dst branch to exist, got:\n%s", branches)
 	}

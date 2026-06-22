@@ -60,6 +60,8 @@ rimba rename auth --bugfix
 | `--test` | Change branch type to `test/` |
 | `--chore` | Change branch type to `chore/` |
 
+> **Note:** There is no `--feature` flag. `feature/` is the default prefix and cannot be selected explicitly. To retype a branch back to `feature/`, use `rimba remove <task>` followed by `rimba add <task>`, or rename the branch directly with `git branch -m`.
+
 ## Related commands
 
 - [rimba add]({{ '/docs/commands/add' | relative_url }}) · create a worktree
