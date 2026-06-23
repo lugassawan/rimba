@@ -9,14 +9,11 @@ import (
 	"strings"
 
 	"github.com/lugassawan/rimba/internal/errhint"
+	"github.com/lugassawan/rimba/internal/gitref"
 )
 
 // safeNameRe matches strings safe to embed in git remote names and URLs.
 var safeNameRe = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
-
-// branchNameRe matches valid branch names. Allows slashes for namespaced refs
-// (e.g. feature/foo, dependabot/go_modules/x) but excludes shell-special chars.
-var branchNameRe = regexp.MustCompile(`^[a-zA-Z0-9._/-]+$`)
 
 const ghShapeHint = "gh CLI returned an unexpected response shape — update gh: gh --version"
 
@@ -89,15 +86,8 @@ func FetchPRMeta(ctx context.Context, r Runner, num int) (PRMeta, error) {
 // validateBranchName rejects headRefName values that could inject options or
 // traverse paths when used in git commands.
 func validateBranchName(num int, name string) error {
-	switch {
-	case strings.HasPrefix(name, "-"):
-		return errhint.WithFix(fmt.Errorf("PR #%d: unsafe headRefName %q (leading dash)", num, name), ghShapeHint)
-	case strings.Contains(name, ".."):
-		return errhint.WithFix(fmt.Errorf("PR #%d: unsafe headRefName %q (contains ..)", num, name), ghShapeHint)
-	case strings.HasPrefix(name, "/"):
-		return errhint.WithFix(fmt.Errorf("PR #%d: unsafe headRefName %q (leading slash)", num, name), ghShapeHint)
-	case !branchNameRe.MatchString(name):
-		return errhint.WithFix(fmt.Errorf("PR #%d: unsafe headRefName %q", num, name), ghShapeHint)
+	if err := gitref.Validate(name); err != nil {
+		return errhint.WithFix(fmt.Errorf("PR #%d: %w", num, err), ghShapeHint)
 	}
 	return nil
 }
