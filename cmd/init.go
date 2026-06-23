@@ -72,7 +72,7 @@ register MCP — it only updates agent files. Registration is idempotent.`,
 			return runInitGlobal(cmd, m.uninstall)
 		}
 
-		r := newRunner()
+		r := newRunner(cmd.Context())
 
 		ctx := cmd.Context()
 		repoRoot, err := git.RepoRoot(ctx, r)

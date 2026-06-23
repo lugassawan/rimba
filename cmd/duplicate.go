@@ -40,7 +40,7 @@ var duplicateCmd = &cobra.Command{
 		task := args[0]
 		cfg := config.FromContext(cmd.Context())
 
-		r := newRunner()
+		r := newRunner(cmd.Context())
 		ctx := cmd.Context()
 
 		repoRoot, err := git.MainRepoRoot(ctx, r)

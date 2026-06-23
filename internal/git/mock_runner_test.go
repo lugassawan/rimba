@@ -1095,3 +1095,26 @@ func TestAddWorktreeFromBranchInsertsDashDash(t *testing.T) {
 		t.Errorf("args = %v, want %v", capturedArgs, want)
 	}
 }
+
+func TestAddWorktreeInsertsDashDash(t *testing.T) {
+	const (
+		branch = "feature/my-task"
+		source = "main"
+	)
+	var capturedArgs []string
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			capturedArgs = args
+			return "", nil
+		},
+	}
+
+	if err := AddWorktree(context.Background(), r, fakePath, branch, source); err != nil {
+		t.Fatalf("AddWorktree: %v", err)
+	}
+
+	want := []string{cmdWorktree, "add", "-b", branch, "--", fakePath, source}
+	if !slices.Equal(capturedArgs, want) {
+		t.Errorf("args = %v, want %v", capturedArgs, want)
+	}
+}

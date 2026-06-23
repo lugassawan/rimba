@@ -44,7 +44,7 @@ var execCmd = &cobra.Command{
   rimba exec --type bugfix "npm test"`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runExec(cmd, args, newRunner(), executor.Run)
+		return runExec(cmd, args, newRunner(cmd.Context()), executor.Run)
 	},
 }
 

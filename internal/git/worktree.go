@@ -28,7 +28,7 @@ type WorktreeEntry struct {
 
 // AddWorktree creates a new worktree at the given path with a new branch from source.
 func AddWorktree(ctx context.Context, r Runner, path, branch, source string) error {
-	_, err := r.Run(ctx, cmdWorktree, "add", "-b", branch, path, source)
+	_, err := r.Run(ctx, cmdWorktree, "add", "-b", branch, "--", path, source)
 	return err
 }
 

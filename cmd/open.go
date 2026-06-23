@@ -48,7 +48,7 @@ Shortcuts are configured in .rimba/settings.toml:
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		task := args[0]
-		r := newRunner()
+		r := newRunner(cmd.Context())
 
 		wt, err := findWorktree(cmd.Context(), r, task)
 		if err != nil {

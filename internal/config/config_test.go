@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/lugassawan/rimba/internal/config"
 )
@@ -698,6 +699,32 @@ func TestConfigValidate(t *testing.T) {
 			cfg:     &config.Config{},
 			wantErr: false,
 		},
+		{
+			name: "valid default_source",
+			cfg: &config.Config{
+				WorktreeDir:   "../wt",
+				DefaultSource: "develop",
+			},
+			wantErr: false,
+		},
+		{
+			name: "default_source with leading dash rejected",
+			cfg: &config.Config{
+				WorktreeDir:   "../wt",
+				DefaultSource: "-foo",
+			},
+			wantErr:    true,
+			wantSubstr: []string{"default_source", "leading dash"},
+		},
+		{
+			name: "default_source with dotdot rejected",
+			cfg: &config.Config{
+				WorktreeDir:   "../wt",
+				DefaultSource: "../x",
+			},
+			wantErr:    true,
+			wantSubstr: []string{"default_source", "contains .."},
+		},
 	}
 
 	for _, tt := range tests {
@@ -785,5 +812,77 @@ func TestDepsConcurrency(t *testing.T) {
 				t.Errorf("DepsConcurrency() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestEffectiveCommandTimeout(t *testing.T) {
+	tests := []struct {
+		name  string
+		field string
+		want  time.Duration
+	}{
+		{name: "unset returns 120s default", field: "", want: 120 * time.Second},
+		{name: "explicit 30s", field: "30s", want: 30 * time.Second},
+		{name: "explicit 2m", field: "2m", want: 2 * time.Minute},
+		{name: "negative duration falls back to default", field: "-5s", want: 120 * time.Second},
+		{name: "zero duration falls back to default", field: "0s", want: 120 * time.Second},
+		{name: "garbage falls back to default", field: "not-a-duration", want: 120 * time.Second},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.Config{CommandTimeout: tt.field}
+			got := cfg.EffectiveCommandTimeout()
+			if got != tt.want {
+				t.Errorf("EffectiveCommandTimeout() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidateCommandTimeout(t *testing.T) {
+	tests := []struct {
+		name       string
+		field      string
+		wantErr    bool
+		wantSubstr string
+	}{
+		{name: "empty is valid", field: ""},
+		{name: "valid duration", field: "30s"},
+		{name: "valid 2m", field: "2m"},
+		{name: "negative rejected", field: "-5s", wantErr: true, wantSubstr: "command_timeout"},
+		{name: "zero rejected", field: "0s", wantErr: true, wantSubstr: "command_timeout"},
+		{name: "garbage rejected", field: "bad", wantErr: true, wantSubstr: "command_timeout"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.Config{WorktreeDir: "../wt", CommandTimeout: tt.field}
+			err := cfg.Validate()
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("Validate() returned nil, want error containing %q", tt.wantSubstr)
+				}
+				if tt.wantSubstr != "" && !strings.Contains(err.Error(), tt.wantSubstr) {
+					t.Errorf("Validate() error = %q, want %q", err, tt.wantSubstr)
+				}
+			} else if err != nil {
+				t.Errorf("Validate() returned unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestMergeCommandTimeout(t *testing.T) {
+	team := &config.Config{WorktreeDir: "../wt", CommandTimeout: "60s"}
+	local := &config.Config{CommandTimeout: "30s"}
+	merged := config.Merge(team, local)
+	if merged.CommandTimeout != "30s" {
+		t.Errorf("Merge CommandTimeout = %q, want %q", merged.CommandTimeout, "30s")
+	}
+
+	// local empty → team value preserved
+	localEmpty := &config.Config{}
+	merged2 := config.Merge(team, localEmpty)
+	if merged2.CommandTimeout != "60s" {
+		t.Errorf("Merge CommandTimeout with empty local = %q, want %q", merged2.CommandTimeout, "60s")
 	}
 }
