@@ -137,6 +137,12 @@ func AheadBehind(ctx context.Context, r Runner, dir string) (ahead, behind int, 
 // either a fresh branch sitting on the base commit, or one that was
 // fast-forward-merged (its tip is an ancestor of mergeRef and adds no new commit).
 //
+// Note: HasOwnCommits cannot distinguish a fresh branch from a fast-forward-merged
+// branch — both have merge-base == tip and return false. Users who use plain
+// git merge (fast-forward allowed) will find FF-merged branches surviving
+// `rimba clean --merged`. Document this gap in `clean --help` if it causes
+// confusion in practice.
+//
 // This is used to protect such branches from being treated as "merged" by
 // `git branch --merged`, which lists every branch reachable from the ref —
 // including a brand-new branch whose tip *is* the base commit.
@@ -146,7 +152,8 @@ func HasOwnCommits(ctx context.Context, r Runner, mergeRef, branch string) (bool
 		return false, err
 	}
 
-	tip, err := r.Run(ctx, cmdRevParse, flagVerify, branch)
+	// Use refs/heads/ prefix to avoid ambiguity when a tag shares the branch name.
+	tip, err := r.Run(ctx, cmdRevParse, flagVerify, refsHeadsPrefix+branch)
 	if err != nil {
 		return false, err
 	}

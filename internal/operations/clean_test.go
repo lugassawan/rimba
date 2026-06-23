@@ -423,6 +423,46 @@ func TestFindStaleCandidatesLastCommitError(t *testing.T) {
 	}
 }
 
+// TestFindMergedCandidatesMergedBranchOwnCommitsError guards the error→warning
+// promotion path added alongside the fresh-worktree guard: when a branch appears
+// in `git branch --merged` but HasOwnCommits fails (e.g. merge-base error),
+// the entry must be skipped with a warning rather than propagating the error.
+func TestFindMergedCandidatesMergedBranchOwnCommitsError(t *testing.T) {
+	wt := porcelainEntries(
+		struct{ path, branch string }{"/repo", branchMain},
+		struct{ path, branch string }{"/wt/active", "feature/active"},
+	)
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			// MergedBranches: feature/active reported as merged
+			if len(args) > 0 && args[0] == gitCmdBranch {
+				return "  feature/active\n", nil
+			}
+			// ListWorktrees
+			if len(args) > 0 && args[0] == gitCmdWorktree {
+				return wt, nil
+			}
+			// HasOwnCommits → MergeBase fails
+			if len(args) > 0 && args[0] == git.CmdMergeBase {
+				return "", errors.New("merge-base failed")
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	result, err := FindMergedCandidates(context.Background(), r, "origin/main", branchMain)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.Candidates) != 0 {
+		t.Errorf("expected 0 candidates (own-commits error must skip branch), got %d", len(result.Candidates))
+	}
+	if len(result.Warnings) != 1 {
+		t.Errorf("expected 1 warning for skipped branch, got %d: %v", len(result.Warnings), result.Warnings)
+	}
+}
+
 func TestFindMergedCandidatesListWorktreesError(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
