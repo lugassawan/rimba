@@ -30,7 +30,7 @@ Use --yes to approve without prompting (e.g. in CI, combined with RIMBA_TRUST_YE
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.FromContext(cmd.Context())
 
-		r := newRunner()
+		r := newRunner(cmd.Context())
 		repoRoot, err := git.MainRepoRoot(cmd.Context(), r)
 		if err != nil {
 			return err

@@ -35,7 +35,7 @@ var cleanCmd = &cobra.Command{
   rimba clean --stale --stale-days 7`,
 	Annotations: map[string]string{"skipConfig": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		r := newRunner()
+		r := newRunner(cmd.Context())
 		merged, _ := cmd.Flags().GetBool(flagMerged)
 		stale, _ := cmd.Flags().GetBool(flagStale)
 

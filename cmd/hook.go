@@ -21,7 +21,7 @@ var hookInstallCmd = &cobra.Command{
 	Short:   "Install post-merge and pre-commit hooks",
 	Example: "  rimba hook install",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		r := newRunner()
+		r := newRunner(cmd.Context())
 
 		branch, err := resolveMainBranch(cmd.Context(), r)
 		if err != nil {
@@ -64,7 +64,7 @@ var hookUninstallCmd = &cobra.Command{
 	Short:   "Remove post-merge and pre-commit hooks",
 	Example: "  rimba hook uninstall",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		r := newRunner()
+		r := newRunner(cmd.Context())
 
 		hooksDir, err := git.HooksDir(cmd.Context(), r)
 		if err != nil {
@@ -108,7 +108,7 @@ var hookStatusCmd = &cobra.Command{
 	Short:   "Show hook status",
 	Example: "  rimba hook status",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		r := newRunner()
+		r := newRunner(cmd.Context())
 
 		hooksDir, err := git.HooksDir(cmd.Context(), r)
 		if err != nil {

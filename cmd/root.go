@@ -67,7 +67,7 @@ Persistent flags (available on every command):
 			}
 		}
 
-		r := newRunner()
+		r := newRunner(cmd.Context())
 		repoRoot, err := git.MainRepoRoot(cmd.Context(), r)
 		if err != nil {
 			return err

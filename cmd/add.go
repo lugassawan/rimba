@@ -28,8 +28,6 @@ const (
 var prArgRe = regexp.MustCompile(`^pr:(\d+)$`)
 var branchArgRe = regexp.MustCompile(`^branch:(.+)$`)
 
-var newGHRunner = gh.Default
-
 var addCmd = &cobra.Command{
 	Use:   "add <task|pr:<num>|branch:<branch>> or add <service>/<task>",
 	Short: "Create a new worktree for a task, GitHub PR, or promote the current branch",
@@ -54,7 +52,7 @@ main repo and is not the default branch. --source is not valid in branch: mode.`
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.FromContext(cmd.Context())
 
-		r := newRunner()
+		r := newRunner(cmd.Context())
 
 		repoRoot, err := git.MainRepoRoot(cmd.Context(), r)
 		if err != nil {
@@ -73,7 +71,7 @@ main repo and is not the default branch. --source is not valid in branch: mode.`
 			if err := ensureTrust(cmd, repoRoot, cfg); err != nil {
 				return err
 			}
-			return runAddPR(cmd, r, newGHRunner(), prNum, postOpts, s)
+			return runAddPR(cmd, r, newGHRunner(cmd.Context()), prNum, postOpts, s)
 		}
 
 		// branch: mode promotes an existing branch without running hooks — no trust gate.

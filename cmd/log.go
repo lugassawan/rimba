@@ -42,7 +42,7 @@ var logCmd = &cobra.Command{
 	Annotations: map[string]string{"skipConfig": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		r := newRunner()
+		r := newRunner(cmd.Context())
 
 		mainBranch, err := resolveMainBranch(ctx, r)
 		if err != nil {

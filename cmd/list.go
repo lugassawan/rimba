@@ -49,7 +49,7 @@ and CI rollup. CI symbols: ✓ success · ● pending · ✗ failure · – unkn
 
 		ctx := cmd.Context()
 		if opts.archived {
-			r := newRunner()
+			r := newRunner(cmd.Context())
 			mainBranch, err := resolveMainBranch(ctx, r)
 			if err != nil {
 				return err
@@ -61,7 +61,7 @@ and CI rollup. CI symbols: ✓ success · ● pending · ✗ failure · – unkn
 			return err
 		}
 
-		r := newRunner()
+		r := newRunner(cmd.Context())
 		cfg := config.FromContext(cmd.Context())
 		repoRoot, err := git.MainRepoRoot(ctx, r)
 		if err != nil {
@@ -71,7 +71,7 @@ and CI rollup. CI symbols: ✓ success · ● pending · ✗ failure · – unkn
 
 		var ghR gh.Runner
 		if opts.full {
-			ghR = gh.Default()
+			ghR = newGHRunner(cmd.Context())
 		}
 
 		listShowHints(cmd)

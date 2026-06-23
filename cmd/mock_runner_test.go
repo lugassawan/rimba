@@ -115,7 +115,7 @@ func newTestCmd() (*cobra.Command, *bytes.Buffer) {
 // overrideNewRunner temporarily replaces the newRunner function for testing.
 func overrideNewRunner(r git.Runner) func() {
 	orig := newRunner
-	newRunner = func() git.Runner { return r }
+	newRunner = func(_ context.Context) git.Runner { return r }
 	return func() { newRunner = orig }
 }
 
@@ -131,6 +131,6 @@ func (m *mockGhRunner) Run(ctx context.Context, args ...string) ([]byte, error) 
 // overrideGHRunner temporarily replaces the newGHRunner function for testing.
 func overrideGHRunner(r gh.Runner) func() {
 	orig := newGHRunner
-	newGHRunner = func() gh.Runner { return r }
+	newGHRunner = func(_ context.Context) gh.Runner { return r }
 	return func() { newGHRunner = orig }
 }
