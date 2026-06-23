@@ -10,7 +10,8 @@ import (
 // ErrUnsafeRefName is the sentinel returned by Validate for unsafe ref names.
 var ErrUnsafeRefName = errors.New("unsafe git ref name")
 
-// refNameRe matches ref names that are safe to use as git branch/source arguments.
+// refNameRe is a structural allowlist; git itself enforces remaining naming rules
+// (e.g. no trailing dot, no .lock suffix, no consecutive dots within a component).
 var refNameRe = regexp.MustCompile(`^[a-zA-Z0-9._/-]+$`)
 
 // Validate returns ErrUnsafeRefName (wrapped) if name is unsafe for use as a

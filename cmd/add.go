@@ -11,6 +11,7 @@ import (
 	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/gh"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/gitref"
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/resolver"
@@ -131,6 +132,8 @@ func runAddTask(cmd *cobra.Command, r git.Runner, arg string, cfg *config.Config
 	source, _ := cmd.Flags().GetString(flagSource)
 	if source == "" {
 		source = cfg.DefaultSource
+	} else if err := gitref.Validate(source); err != nil {
+		return fmt.Errorf("--source: %w", err)
 	}
 
 	hint.New(cmd, hintPainter(cmd)).

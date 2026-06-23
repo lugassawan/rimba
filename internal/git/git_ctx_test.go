@@ -40,7 +40,7 @@ func TestExecRunnerTimeoutExpires(t *testing.T) {
 		t.Fatal("expected error from nanosecond timeout, got nil")
 	}
 	if !strings.Contains(err.Error(), "context deadline exceeded") {
-		t.Errorf("expected 'context deadline exceeded', got: %v", err)
+		t.Fatalf("expected 'context deadline exceeded', got: %v", err)
 	}
 }
 

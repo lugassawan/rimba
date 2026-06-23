@@ -718,6 +718,34 @@ func conflictBranchRunInDirFn(stashDropped *bool) func(dir string, args ...strin
 	}
 }
 
+func TestAddTaskRejectsUnsafeSource(t *testing.T) {
+	cfg := &config.Config{WorktreeDir: "worktrees", DefaultSource: "main"}
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return "", nil },
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, _ := newTestCmd()
+	addPrefixFlags(cmd)
+	_ = cmd.Flags().String(flagSource, "", "")
+	_ = cmd.Flags().String(flagTask, "", "")
+	_ = cmd.Flags().Bool(flagSkipDeps, false, "")
+	_ = cmd.Flags().Bool(flagSkipHooks, false, "")
+	_ = cmd.Flags().SetAnnotation(flagNoColor, cobra.BashCompOneRequiredFlag, nil)
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+	_ = cmd.Flags().Set(flagSource, "-foo")
+
+	err := addCmd.RunE(cmd, []string{"my-task"})
+	if err == nil {
+		t.Fatal("expected error for --source=-foo, got nil")
+	}
+	if !strings.Contains(err.Error(), "leading dash") {
+		t.Errorf("error %q should mention 'leading dash'", err)
+	}
+}
+
 func TestAddBranchStashApplyConflict(t *testing.T) {
 	repoDir := t.TempDir()
 	wtDir := filepath.Join(repoDir, "worktrees")
