@@ -733,7 +733,6 @@ func TestAddTaskRejectsUnsafeSource(t *testing.T) {
 	_ = cmd.Flags().String(flagTask, "", "")
 	_ = cmd.Flags().Bool(flagSkipDeps, false, "")
 	_ = cmd.Flags().Bool(flagSkipHooks, false, "")
-	_ = cmd.Flags().SetAnnotation(flagNoColor, cobra.BashCompOneRequiredFlag, nil)
 	cmd.SetContext(config.WithConfig(context.Background(), cfg))
 	_ = cmd.Flags().Set(flagSource, "-foo")
 
