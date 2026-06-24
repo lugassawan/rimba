@@ -41,6 +41,11 @@ func handleClean(hctx *HandlerContext) server.ToolHandlerFunc {
 				"set mode to one of: prune, merged, stale")), nil
 		}
 
+		cfg, cfgErr := hctx.requireConfig()
+		if cfgErr != nil {
+			return mcp.NewToolResultError(cfgErr.Error()), nil
+		}
+
 		dryRun := req.GetBool("dry_run", false)
 		force := req.GetBool("force", false)
 		staleDays := req.GetInt("stale_days", 14)
@@ -51,9 +56,9 @@ func handleClean(hctx *HandlerContext) server.ToolHandlerFunc {
 		case "prune":
 			return mcpCleanPrune(ctx, r, dryRun)
 		case "merged":
-			return mcpCleanMerged(ctx, r, hctx, dryRun, force)
+			return mcpCleanMerged(ctx, r, cfg.DefaultSource, dryRun, force)
 		case "stale":
-			return mcpCleanStale(ctx, r, hctx, dryRun, staleDays, force)
+			return mcpCleanStale(ctx, r, cfg.DefaultSource, dryRun, staleDays, force)
 		default:
 			return errorResult(errhint.WithFix(
 				fmt.Errorf("invalid mode %q", mode),
@@ -92,8 +97,8 @@ func mcpCleanPrune(ctx context.Context, r git.Runner, dryRun bool) (*mcp.CallToo
 	})
 }
 
-func mcpCleanMerged(ctx context.Context, r git.Runner, hctx *HandlerContext, dryRun bool, force bool) (*mcp.CallToolResult, error) {
-	mainBranch, err := operations.ResolveMainBranch(ctx, r, configDefault(hctx))
+func mcpCleanMerged(ctx context.Context, r git.Runner, defaultSource string, dryRun bool, force bool) (*mcp.CallToolResult, error) {
+	mainBranch, err := operations.ResolveMainBranch(ctx, r, defaultSource)
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -143,8 +148,8 @@ func mcpCleanMerged(ctx context.Context, r git.Runner, hctx *HandlerContext, dry
 	})
 }
 
-func mcpCleanStale(ctx context.Context, r git.Runner, hctx *HandlerContext, dryRun bool, staleDays int, force bool) (*mcp.CallToolResult, error) {
-	mainBranch, err := operations.ResolveMainBranch(ctx, r, configDefault(hctx))
+func mcpCleanStale(ctx context.Context, r git.Runner, defaultSource string, dryRun bool, staleDays int, force bool) (*mcp.CallToolResult, error) {
+	mainBranch, err := operations.ResolveMainBranch(ctx, r, defaultSource)
 	if err != nil {
 		return errorResult(err), nil
 	}

@@ -132,6 +132,22 @@ func TestCleanToolRequiresMode(t *testing.T) {
 	}
 }
 
+func TestCleanToolRequiresConfig(t *testing.T) {
+	hctx := &HandlerContext{
+		Runner:   &mockRunner{},
+		Config:   nil,
+		RepoRoot: "/repo",
+		Version:  "test",
+	}
+	handler := handleClean(hctx)
+
+	result := callTool(t, handler, map[string]any{"mode": modePrune})
+	errText := resultError(t, result)
+	if !strings.Contains(errText, errConfigRequired.Error()) {
+		t.Errorf("expected config required error, got: %s", errText)
+	}
+}
+
 func TestCleanToolInvalidMode(t *testing.T) {
 	hctx := testContext(&mockRunner{})
 	handler := handleClean(hctx)
@@ -450,28 +466,9 @@ func TestCleanToolStaleListWorktreesError(t *testing.T) {
 	}
 }
 
-func TestCleanToolMergedNoConfig(t *testing.T) {
-	// When config is nil, resolveMainBranch falls back to git.DefaultBranch
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			// symbolic-ref for DefaultBranch detection
-			if len(args) >= 1 && args[0] == gitSymbolicRef {
-				return refsOriginMain, nil
-			}
-			if len(args) > 0 && args[0] == gitFetch {
-				return "", nil
-			}
-			if len(args) >= 2 && args[0] == gitBranch && args[1] == gitMerged {
-				return "", nil
-			}
-			porcelain := worktreePorcelain(
-				struct{ path, branch string }{"/repo", "main"},
-			)
-			return porcelain, nil
-		},
-	}
+func TestCleanToolMergedRequiresConfig(t *testing.T) {
 	hctx := &HandlerContext{
-		Runner:   r,
+		Runner:   &mockRunner{},
 		Config:   nil,
 		RepoRoot: "/repo",
 		Version:  "test",
@@ -479,9 +476,9 @@ func TestCleanToolMergedNoConfig(t *testing.T) {
 	handler := handleClean(hctx)
 
 	result := callTool(t, handler, map[string]any{"mode": modeMerged})
-	data := unmarshalJSON[cleanResult](t, result)
-	if data.Mode != modeMerged {
-		t.Errorf("mode = %q, want %q", data.Mode, modeMerged)
+	errText := resultError(t, result)
+	if !strings.Contains(errText, errConfigRequired.Error()) {
+		t.Errorf("expected config required error, got: %s", errText)
 	}
 }
 

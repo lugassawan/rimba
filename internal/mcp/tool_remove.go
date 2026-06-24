@@ -35,6 +35,10 @@ func handleRemove(hctx *HandlerContext) server.ToolHandlerFunc {
 				`provide the task argument, e.g. remove { task: "my-task" }`)), nil
 		}
 
+		if _, cfgErr := hctx.requireConfig(); cfgErr != nil {
+			return mcp.NewToolResultError(cfgErr.Error()), nil
+		}
+
 		service, task := operations.ResolveTaskInput(task, hctx.RepoRoot)
 
 		keepBranch := req.GetBool("keep_branch", false)
