@@ -322,6 +322,50 @@ func TestCheckoutError(t *testing.T) {
 	}
 }
 
+func TestHasOwnCommitsBranchWithCommit(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	testutil.GitCmd(t, repo, "checkout", "-b", "feature/has-own-commit")
+	testutil.CreateFile(t, repo, "own.txt", "content")
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "own commit")
+	testutil.GitCmd(t, repo, "checkout", "main")
+
+	has, err := git.HasOwnCommits(context.Background(), r, "main", "feature/has-own-commit")
+	if err != nil {
+		t.Fatalf("HasOwnCommits: %v", err)
+	}
+	if !has {
+		t.Error("expected HasOwnCommits=true for branch with its own commit")
+	}
+}
+
+func TestHasOwnCommitsFreshBranch(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	// A branch created from main with no additional commits has tip == merge-base.
+	testutil.GitCmd(t, repo, "checkout", "-b", "feature/fresh")
+	testutil.GitCmd(t, repo, "checkout", "main")
+
+	has, err := git.HasOwnCommits(context.Background(), r, "main", "feature/fresh")
+	if err != nil {
+		t.Fatalf("HasOwnCommits: %v", err)
+	}
+	if has {
+		t.Error("expected HasOwnCommits=false for fresh branch with no own commits")
+	}
+}
+
 func TestCurrentBranchDetachedHead(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipIntegration)
