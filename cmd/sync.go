@@ -64,7 +64,7 @@ var syncCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.FromContext(cmd.Context())
 
-		r := newRunner()
+		r := newRunner(cmd.Context())
 		all, _ := cmd.Flags().GetBool(flagAll)
 		useMerge, _ := cmd.Flags().GetBool(flagSyncMerge)
 		includeInherited, _ := cmd.Flags().GetBool(flagIncludeInherited)

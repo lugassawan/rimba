@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRunInDirCancelled(t *testing.T) {
@@ -26,6 +27,28 @@ func TestRunDelegatesToRunInDir(t *testing.T) {
 	out, err := r.Run(context.Background(), "--version")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
+	}
+	if !strings.Contains(out, "git") {
+		t.Errorf("expected git version output, got: %q", out)
+	}
+}
+
+func TestExecRunnerTimeoutExpires(t *testing.T) {
+	r := &ExecRunner{Timeout: time.Nanosecond}
+	_, err := r.Run(context.Background(), "--version")
+	if err == nil {
+		t.Fatal("expected error from nanosecond timeout, got nil")
+	}
+	if !strings.Contains(err.Error(), "context deadline exceeded") {
+		t.Fatalf("expected 'context deadline exceeded', got: %v", err)
+	}
+}
+
+func TestExecRunnerZeroTimeoutNoDeadline(t *testing.T) {
+	r := &ExecRunner{Timeout: 0}
+	out, err := r.Run(context.Background(), "--version")
+	if err != nil {
+		t.Fatalf("Run with zero timeout: %v", err)
 	}
 	if !strings.Contains(out, "git") {
 		t.Errorf("expected git version output, got: %q", out)

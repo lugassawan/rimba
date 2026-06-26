@@ -33,7 +33,7 @@ to see available archived branches.`,
 		return completeArchivedTasks(cmd, toComplete), cobra.ShellCompDirectiveNoFileComp
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		r := newRunner()
+		r := newRunner(cmd.Context())
 
 		repoRoot, err := git.MainRepoRoot(cmd.Context(), r)
 		if err != nil {

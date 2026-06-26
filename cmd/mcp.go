@@ -4,7 +4,6 @@ import (
 	"path/filepath"
 
 	"github.com/lugassawan/rimba/internal/config"
-	"github.com/lugassawan/rimba/internal/gh"
 	"github.com/lugassawan/rimba/internal/git"
 	mcppkg "github.com/lugassawan/rimba/internal/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -21,7 +20,7 @@ Any MCP-compatible client can connect to this server to discover and invoke
 rimba commands with structured parameters and typed responses.`,
 	Annotations: map[string]string{"skipConfig": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		r := newRunner()
+		r := newRunner(cmd.Context())
 
 		repoRoot, err := git.MainRepoRoot(cmd.Context(), r)
 		if err != nil {
@@ -41,7 +40,7 @@ rimba commands with structured parameters and typed responses.`,
 
 		hctx := &mcppkg.HandlerContext{
 			Runner:   r,
-			GH:       gh.Default(),
+			GH:       newGHRunner(cmd.Context()),
 			Config:   cfg,
 			RepoRoot: repoRoot,
 			Version:  version,

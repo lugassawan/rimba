@@ -45,7 +45,7 @@ func TestRenameSuccess(t *testing.T) {
 	defer restore()
 
 	cmd, buf := newTestCmd()
-	cmd.Flags().BoolP("force", "f", false, "")
+	cmd.Flags().BoolP(flagForce, "f", false, "")
 	cmd.SetContext(config.WithConfig(context.Background(), cfg))
 
 	err := renameCmd.RunE(cmd, []string{"login", "auth"})
@@ -89,7 +89,7 @@ func TestRenameBranchAlreadyExists(t *testing.T) {
 	defer restore()
 
 	cmd, _ := newTestCmd()
-	cmd.Flags().BoolP("force", "f", false, "")
+	cmd.Flags().BoolP(flagForce, "f", false, "")
 	cmd.SetContext(config.WithConfig(context.Background(), cfg))
 
 	err := renameCmd.RunE(cmd, []string{"login", "auth"})
@@ -121,7 +121,7 @@ func TestRenameWorktreeNotFound(t *testing.T) {
 	defer restore()
 
 	cmd, _ := newTestCmd()
-	cmd.Flags().BoolP("force", "f", false, "")
+	cmd.Flags().BoolP(flagForce, "f", false, "")
 	cmd.SetContext(config.WithConfig(context.Background(), cfg))
 
 	err := renameCmd.RunE(cmd, []string{"nonexistent", "new-name"})
@@ -180,7 +180,7 @@ func TestRenameRunsHooksWhenConfigured(t *testing.T) {
 	defer restore()
 
 	cmd, _ := newTestCmd()
-	cmd.Flags().BoolP("force", "f", false, "")
+	cmd.Flags().BoolP(flagForce, "f", false, "")
 	cmd.Flags().Bool(flagSkipDeps, false, "")
 	cmd.Flags().Bool(flagSkipHooks, false, "")
 	_ = cmd.Flags().Set(flagSkipDeps, "true")
@@ -209,7 +209,7 @@ func TestRenameSkipHooks(t *testing.T) {
 	defer restore()
 
 	cmd, buf := newTestCmd()
-	cmd.Flags().BoolP("force", "f", false, "")
+	cmd.Flags().BoolP(flagForce, "f", false, "")
 	cmd.Flags().Bool(flagSkipDeps, false, "")
 	cmd.Flags().Bool(flagSkipHooks, false, "")
 	_ = cmd.Flags().Set(flagSkipDeps, "true")
@@ -235,7 +235,7 @@ func TestRenameSkipDeps(t *testing.T) {
 	defer restore()
 
 	cmd, buf := newTestCmd()
-	cmd.Flags().BoolP("force", "f", false, "")
+	cmd.Flags().BoolP(flagForce, "f", false, "")
 	cmd.Flags().Bool(flagSkipDeps, false, "")
 	cmd.Flags().Bool(flagSkipHooks, false, "")
 	_ = cmd.Flags().Set(flagSkipDeps, "true")
@@ -285,11 +285,36 @@ func TestRenameMoveFails(t *testing.T) {
 	defer restore()
 
 	cmd, _ := newTestCmd()
-	cmd.Flags().BoolP("force", "f", false, "")
+	cmd.Flags().BoolP(flagForce, "f", false, "")
 	cmd.SetContext(config.WithConfig(context.Background(), cfg))
 
 	err := renameCmd.RunE(cmd, []string{"login", "auth"})
 	if err == nil {
 		t.Fatal("expected error from move failure")
+	}
+}
+
+func TestRenameRetypeFlag(t *testing.T) {
+	repoDir := t.TempDir()
+	cfg := &config.Config{WorktreeDir: defaultRelativeWtDir, DefaultSource: branchMain}
+	worktreeOut := makeRenameWorktreeOut(repoDir)
+	restore := overrideNewRunner(makeRenameRunner(repoDir, worktreeOut))
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().BoolP(flagForce, "f", false, "")
+	cmd.Flags().Bool(flagSkipDeps, false, "")
+	cmd.Flags().Bool(flagSkipHooks, false, "")
+	addPrefixFlags(cmd)
+	_ = cmd.Flags().Set(flagSkipDeps, "true")
+	_ = cmd.Flags().Set(flagSkipHooks, "true")
+	_ = cmd.Flags().Set("bugfix", "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	if err := renameCmd.RunE(cmd, []string{"login"}); err != nil {
+		t.Fatalf("renameCmd.RunE: %v", err)
+	}
+	if !strings.Contains(buf.String(), "feature/login -> bugfix/login") {
+		t.Errorf("output = %q, want 'feature/login -> bugfix/login'", buf.String())
 	}
 }

@@ -173,13 +173,87 @@ func TestRenameFailsNoArgs(t *testing.T) {
 	rimbaFail(t, repo, "rename")
 }
 
-func TestRenameFailsOneArg(t *testing.T) {
+func TestRenameNoOpReportsCleanly(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	// 1-arg invocation with no prefix flag — same task, same prefix → no-op error.
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", "retype-noop")
+
+	r := rimbaFail(t, repo, "rename", "retype-noop")
+	assertContains(t, r.Stderr, "nothing to change")
+}
+
+func TestRenameNoOpExplicitSameType(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	// Explicit --bugfix on an already-bugfix/ branch → no-op error.
+	// --bugfix is a cobra flag, not a positional arg; RunE receives one arg ("retype-same"),
+	// so newTask == task and the no-op guard fires.
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", "--bugfix", "retype-same")
+
+	r := rimbaFail(t, repo, "rename", "retype-same", "--bugfix")
+	assertContains(t, r.Stderr, "nothing to change")
+}
+
+func TestRenameRetypeOnly(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
 	}
 
 	repo := setupInitializedRepo(t)
-	rimbaFail(t, repo, "rename", "some-task")
+	rimbaSuccess(t, repo, "add", "retype-auth")
+
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+
+	r := rimbaSuccess(t, repo, "rename", "retype-auth", "--bugfix")
+	assertContains(t, r.Stdout, "feature/retype-auth -> bugfix/retype-auth")
+
+	// Old branch and directory gone
+	assertFileNotExists(t, resolver.WorktreePath(wtDir, "feature/retype-auth"))
+
+	// New branch and directory exist
+	assertFileExists(t, resolver.WorktreePath(wtDir, "bugfix/retype-auth"))
+
+	branches := testutil.GitCmd(t, repo, "branch", flagBranchList)
+	if strings.Contains(branches, "feature/retype-auth") {
+		t.Errorf("expected feature/retype-auth to be gone")
+	}
+	if !strings.Contains(branches, "bugfix/retype-auth") {
+		t.Errorf("expected bugfix/retype-auth branch to exist, got:\n%s", branches)
+	}
+}
+
+func TestRenameTaskAndType(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", "retype-src")
+
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+
+	r := rimbaSuccess(t, repo, "rename", "retype-src", "retype-dst", "--bugfix")
+	assertContains(t, r.Stdout, "feature/retype-src -> bugfix/retype-dst")
+
+	assertFileNotExists(t, resolver.WorktreePath(wtDir, "feature/retype-src"))
+	assertFileExists(t, resolver.WorktreePath(wtDir, "bugfix/retype-dst"))
+
+	branches := testutil.GitCmd(t, repo, "branch", flagBranchList)
+	if strings.Contains(branches, "feature/retype-src") {
+		t.Errorf("expected feature/retype-src to be gone after rename, got:\n%s", branches)
+	}
+	if !strings.Contains(branches, "bugfix/retype-dst") {
+		t.Errorf("expected bugfix/retype-dst branch to exist, got:\n%s", branches)
+	}
 }
 
 func TestRenamePostRenameHookRuns(t *testing.T) {

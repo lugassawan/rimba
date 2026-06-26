@@ -37,7 +37,7 @@ var conflictCheckCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		cfg := config.FromContext(cmd.Context())
 
-		r := newRunner()
+		r := newRunner(cmd.Context())
 
 		worktrees, err := listWorktreeInfos(cmd.Context(), r)
 		if err != nil {

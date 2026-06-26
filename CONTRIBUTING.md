@@ -74,7 +74,7 @@ rimba uses a two-tier test layout:
 Use `cmd/add.go` as the canonical recent reference (added in #138 with the `pr:<num>` variant).
 
 1. Create `cmd/<name>.go`. Declare per-file `flag*` / `hint*` consts at the top.
-2. Declare `var <name>Cmd = &cobra.Command{Use, Short, Long, Args, RunE}`. In `RunE`, read config via `config.FromContext(cmd.Context())`, build a `git.Runner` via `newRunner()`, and (if needed) a `gh.Runner` via the package-level overridable `var newGHRunner = gh.Default` so tests can swap it.
+2. Declare `var <name>Cmd = &cobra.Command{Use, Short, Long, Args, RunE}`. In `RunE`, read config via `config.FromContext(cmd.Context())`, build a `git.Runner` via `newRunner(cmd.Context())`, and (if needed) a `gh.Runner` via `newGHRunner(cmd.Context())` — both are package-level `func(context.Context) Runner` vars that tests override via `overrideNewRunner` / `overrideGHRunner` in `cmd/mock_runner_test.go`.
 3. Keep business logic out of `cmd/`. Delegate to `internal/operations/<name>.go` so the same pipeline can back an MCP tool (see `internal/operations.ListWorktrees` / `internal/mcp/tool_list.go`).
 4. Wrap user-facing errors with `errhint.WithFix(err, "<actionable fix>")`.
 5. Bind flags and register the command in `init()` via `rootCmd.AddCommand(<name>Cmd)`.
@@ -82,7 +82,7 @@ Use `cmd/add.go` as the canonical recent reference (added in #138 with the `pr:<
 
 ## Project Conventions
 
-- **`internal/gh`** — thin wrapper around the `gh` CLI. `runner.go` defines the `Runner` interface; package-level helpers: `IsAvailable` (`detect.go`), `CheckAuth` (`auth.go`), `FetchPRMeta` (`pr_meta.go`), `QueryPRStatus` (`pr_status.go`). Use `gh.Default()` in production; inject a fake in tests.
+- **`internal/gh`** — thin wrapper around the `gh` CLI. `runner.go` defines the `Runner` interface; package-level helpers: `IsAvailable` (`detect.go`), `CheckAuth` (`auth.go`), `FetchPRMeta` (`pr_meta.go`), `QueryPRStatus` (`pr_status.go`). Use `gh.Default(timeout)` in production (timeout flows from `config.EffectiveCommandTimeout()`); inject a fake in tests.
 - **`internal/operations.ListWorktrees`** (`internal/operations/list_worktrees.go`) — the shared pipeline behind both `cmd/list.go` and the MCP `list` tool (`internal/mcp/tool_list.go`). Mirror this pattern when adding a subcommand that should also be reachable from MCP.
 - **`internal/errhint.WithFix`** (`internal/errhint/errhint.go`) — wrap user-facing errors with an actionable fix line. Preserves sentinel via `%w`. See `cmd/add.go`, `cmd/exec.go`, `cmd/sync.go` for examples.
 
