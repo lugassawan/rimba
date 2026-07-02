@@ -304,7 +304,7 @@ If not found, **ask the user** before installing. Never install automatically.
 func globalClaudeSkillContent() string {
 	return `---
 name: rimba
-description: Use when user wants to manage git worktrees — creating, listing, syncing, merging, or cleaning up parallel working directories
+description: Use when the user wants to create, list, sync, merge, remove, or clean up git worktrees, or before starting new feature/bugfix work that should be isolated in its own branch and directory — covers parallel development across multiple tasks without branch-switching
 ---
 
 # rimba — Git Worktree Manager
@@ -492,7 +492,7 @@ If not found, ask the user before installing. Never install automatically.
 func claudeSkillContent() string {
 	return `---
 name: rimba
-description: Use when user wants to manage git worktrees — creating, listing, syncing, merging, or cleaning up parallel working directories
+description: Use when the user wants to create, list, sync, merge, remove, or clean up git worktrees, or before starting new feature/bugfix work that should be isolated in its own branch and directory — covers parallel development across multiple tasks without branch-switching
 ---
 
 # rimba — Git Worktree Manager
