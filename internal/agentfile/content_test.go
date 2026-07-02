@@ -5,6 +5,28 @@ import (
 	"testing"
 )
 
+type labeledSpec struct {
+	label string
+	spec  Spec
+}
+
+type mcpToolPair struct {
+	mcp string
+	cli string
+}
+
+var mcpToolPairs = []mcpToolPair{
+	{"mcp__rimba__add", "rimba add <task>"},
+	{"mcp__rimba__list", "rimba list"},
+	{"mcp__rimba__status", "rimba status"},
+	{"mcp__rimba__sync", "rimba sync [task]"},
+	{"mcp__rimba__merge", "rimba merge <task>"},
+	{"mcp__rimba__remove", "rimba remove <task>"},
+	{"mcp__rimba__clean", "rimba clean --merged"},
+	{"mcp__rimba__exec", "rimba exec <cmd>"},
+	{"mcp__rimba__conflict-check", "rimba conflict-check"},
+}
+
 func TestAgentsBlockHasMarkers(t *testing.T) {
 	content := agentsBlock()
 	if !strings.HasPrefix(content, BeginMarker) {
@@ -157,5 +179,62 @@ func TestGlobalRooContentNotEmpty(t *testing.T) {
 	}
 	if !strings.Contains(content, "rimba") {
 		t.Error("global roo content should mention rimba")
+	}
+}
+
+func TestMcpToolsSection(t *testing.T) {
+	cases := []struct {
+		name    string
+		heading string
+	}{
+		{"h2", "##"},
+		{"h3", "###"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			section := mcpToolsSection(c.heading)
+
+			if !strings.HasPrefix(section, c.heading+" MCP Tools") {
+				t.Errorf("mcp tools section should start with %q heading", c.heading+" MCP Tools")
+			}
+			if !strings.Contains(section, "prefer the native") || !strings.Contains(section, "mcp__rimba__*") {
+				t.Error("mcp tools section should explain preferring native mcp__rimba__* tools")
+			}
+			if !strings.Contains(section, "Fall back to the CLI") {
+				t.Error("mcp tools section should explain the CLI fallback")
+			}
+
+			for _, tool := range mcpToolPairs {
+				if !strings.Contains(section, tool.mcp) {
+					t.Errorf("mcp tools section should mention %s", tool.mcp)
+				}
+				if !strings.Contains(section, tool.cli) {
+					t.Errorf("mcp tools section should mention CLI equivalent %s", tool.cli)
+				}
+			}
+		})
+	}
+}
+
+func TestAllSpecsIncludeMcpToolsSection(t *testing.T) {
+	projectSpecs := ProjectSpecs()
+	globalSpecs := GlobalSpecs()
+
+	specs := make([]labeledSpec, 0, len(projectSpecs)+len(globalSpecs))
+	for _, s := range projectSpecs {
+		specs = append(specs, labeledSpec{"project", s})
+	}
+	for _, s := range globalSpecs {
+		specs = append(specs, labeledSpec{"global", s})
+	}
+
+	for _, ls := range specs {
+		content := ls.spec.Content()
+		for _, tool := range mcpToolPairs {
+			if !strings.Contains(content, tool.mcp) {
+				t.Errorf("%s spec %s should mention %s", ls.label, ls.spec.RelPath, tool.mcp)
+			}
+		}
 	}
 }
