@@ -64,7 +64,7 @@ rimba rename auth --bugfix
 
 > **Note:** There is no `--feature` flag. `feature/` is the default prefix and cannot be selected explicitly. To retype a branch back to `feature/`, use `rimba remove <task>` followed by `rimba add <task>` — note that this discards uncommitted changes, so stash or commit first. Direct `git branch -m` is not recommended because it renames the branch ref but not the worktree directory, leaving them out of sync.
 
-> **Warning:** The `--push` flag deletes the old remote branch after publishing the renamed branch. This is a destructive remote operation and cannot be undone. Use with caution, especially on shared or CI-integrated branches.
+> **Note:** The `--push` flag deletes the old remote branch after publishing the renamed branch. This is a destructive remote operation and cannot be undone. Use with caution, especially on shared or CI-integrated branches.
 
 ## Related commands
 
