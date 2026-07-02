@@ -1,13 +1,36 @@
 package agentfile
 
+import "strings"
+
 // Content functions return the template text for each agent instruction file.
 // Each function embeds the content directly — no external files.
+
+// mcpToolEntry pairs an mcp__rimba__* MCP tool with its rimba CLI equivalent.
+type mcpToolEntry struct {
+	mcp string
+	cli string
+}
+
+// mcpToolEntries is the single source of truth for the MCP tool <-> CLI command
+// mapping, consumed by mcpToolsSection and asserted against directly in tests.
+var mcpToolEntries = []mcpToolEntry{
+	{"mcp__rimba__add", "rimba add <task>"},
+	{"mcp__rimba__list", "rimba list"},
+	{"mcp__rimba__status", "rimba status"},
+	{"mcp__rimba__sync", "rimba sync [task]"},
+	{"mcp__rimba__merge", "rimba merge <task>"},
+	{"mcp__rimba__remove", "rimba remove <task>"},
+	{"mcp__rimba__clean", "rimba clean --merged"},
+	{"mcp__rimba__exec", "rimba exec <cmd>"},
+	{"mcp__rimba__conflict-check", "rimba conflict-check"},
+}
 
 // mcpToolsSection returns a markdown block documenting the mcp__rimba__* MCP tools
 // alongside their rimba CLI equivalents, plus when-to-use guidance. heading sets the
 // nesting level ("##" or "###") so callers can match their surrounding structure.
 func mcpToolsSection(heading string) string {
-	return heading + ` MCP Tools
+	var b strings.Builder
+	b.WriteString(heading + ` MCP Tools
 
 When running inside an MCP-connected agent, prefer the native ` + "`" + `mcp__rimba__*` + "`" + ` tools over
 shelling out to the ` + "`" + `rimba` + "`" + ` CLI — they skip a subprocess round-trip. Fall back to the CLI
@@ -15,15 +38,11 @@ when no MCP connection is available.
 
 | MCP tool | CLI equivalent |
 |----------|----------------|
-| ` + "`" + `mcp__rimba__add` + "`" + `            | ` + "`" + `rimba add <task>` + "`" + `     |
-| ` + "`" + `mcp__rimba__list` + "`" + `           | ` + "`" + `rimba list` + "`" + `           |
-| ` + "`" + `mcp__rimba__status` + "`" + `         | ` + "`" + `rimba status` + "`" + `         |
-| ` + "`" + `mcp__rimba__sync` + "`" + `           | ` + "`" + `rimba sync [task]` + "`" + `    |
-| ` + "`" + `mcp__rimba__merge` + "`" + `          | ` + "`" + `rimba merge <task>` + "`" + `   |
-| ` + "`" + `mcp__rimba__remove` + "`" + `         | ` + "`" + `rimba remove <task>` + "`" + `  |
-| ` + "`" + `mcp__rimba__clean` + "`" + `          | ` + "`" + `rimba clean --merged` + "`" + ` |
-| ` + "`" + `mcp__rimba__exec` + "`" + `           | ` + "`" + `rimba exec <cmd>` + "`" + `     |
-| ` + "`" + `mcp__rimba__conflict-check` + "`" + ` | ` + "`" + `rimba conflict-check` + "`" + ` |`
+`)
+	for _, e := range mcpToolEntries {
+		b.WriteString("| `" + e.mcp + "` | `" + e.cli + "` |\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
 
 // agentsBlock returns the rimba block for AGENTS.md (shared file, block-based).

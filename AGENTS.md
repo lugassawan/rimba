@@ -84,14 +84,14 @@ when no MCP connection is available.
 
 | MCP tool | CLI equivalent |
 |----------|----------------|
-| `mcp__rimba__add`            | `rimba add <task>`     |
-| `mcp__rimba__list`           | `rimba list`           |
-| `mcp__rimba__status`         | `rimba status`         |
-| `mcp__rimba__sync`           | `rimba sync [task]`    |
-| `mcp__rimba__merge`          | `rimba merge <task>`   |
-| `mcp__rimba__remove`         | `rimba remove <task>`  |
-| `mcp__rimba__clean`          | `rimba clean --merged` |
-| `mcp__rimba__exec`           | `rimba exec <cmd>`     |
+| `mcp__rimba__add` | `rimba add <task>` |
+| `mcp__rimba__list` | `rimba list` |
+| `mcp__rimba__status` | `rimba status` |
+| `mcp__rimba__sync` | `rimba sync [task]` |
+| `mcp__rimba__merge` | `rimba merge <task>` |
+| `mcp__rimba__remove` | `rimba remove <task>` |
+| `mcp__rimba__clean` | `rimba clean --merged` |
+| `mcp__rimba__exec` | `rimba exec <cmd>` |
 | `mcp__rimba__conflict-check` | `rimba conflict-check` |
 
 <!-- END RIMBA -->

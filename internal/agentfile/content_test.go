@@ -10,23 +10,6 @@ type labeledSpec struct {
 	spec  Spec
 }
 
-type mcpToolPair struct {
-	mcp string
-	cli string
-}
-
-var mcpToolPairs = []mcpToolPair{
-	{"mcp__rimba__add", "rimba add <task>"},
-	{"mcp__rimba__list", "rimba list"},
-	{"mcp__rimba__status", "rimba status"},
-	{"mcp__rimba__sync", "rimba sync [task]"},
-	{"mcp__rimba__merge", "rimba merge <task>"},
-	{"mcp__rimba__remove", "rimba remove <task>"},
-	{"mcp__rimba__clean", "rimba clean --merged"},
-	{"mcp__rimba__exec", "rimba exec <cmd>"},
-	{"mcp__rimba__conflict-check", "rimba conflict-check"},
-}
-
 func TestAgentsBlockHasMarkers(t *testing.T) {
 	content := agentsBlock()
 	if !strings.HasPrefix(content, BeginMarker) {
@@ -205,7 +188,7 @@ func TestMcpToolsSection(t *testing.T) {
 				t.Error("mcp tools section should explain the CLI fallback")
 			}
 
-			for _, tool := range mcpToolPairs {
+			for _, tool := range mcpToolEntries {
 				if !strings.Contains(section, tool.mcp) {
 					t.Errorf("mcp tools section should mention %s", tool.mcp)
 				}
@@ -231,7 +214,7 @@ func TestAllSpecsIncludeMcpToolsSection(t *testing.T) {
 
 	for _, ls := range specs {
 		content := ls.spec.Content()
-		for _, tool := range mcpToolPairs {
+		for _, tool := range mcpToolEntries {
 			if !strings.Contains(content, tool.mcp) {
 				t.Errorf("%s spec %s should mention %s", ls.label, ls.spec.RelPath, tool.mcp)
 			}
