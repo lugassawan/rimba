@@ -47,12 +47,12 @@ func TestFindMergedCandidatesNormalMerge(t *testing.T) {
 			if len(args) > 0 && args[0] == gitCmdWorktree {
 				return wt, nil
 			}
-			// HasOwnCommits: merge-base differs from tip → branch has own commits.
-			if len(args) > 0 && args[0] == git.CmdMergeBase {
-				return "base123", nil
-			}
-			if len(args) > 0 && args[0] == "rev-parse" {
+			// IsTipOnFirstParentChain: merge-commit merges leave the tip off mainline.
+			if len(args) > 0 && args[0] == cmdRevParse {
 				return "tip456", nil
+			}
+			if len(args) > 0 && args[0] == gitCmdRevList {
+				return "otherSha1\notherSha2", nil
 			}
 			return "", nil
 		},
@@ -74,10 +74,8 @@ func TestFindMergedCandidatesNormalMerge(t *testing.T) {
 	}
 }
 
-// TestFindMergedCandidatesFreshWorktreeNotRemoved guards against issue #335:
-// a fresh worktree whose branch has no commits of its own appears in
-// `git branch --merged` output (its tip is the base commit, trivially reachable),
-// but must NOT be treated as a removal candidate.
+// TestFindMergedCandidatesFreshWorktreeNotRemoved guards issue #335: a fresh
+// worktree's branch appears in `git branch --merged` but must not be removed.
 func TestFindMergedCandidatesFreshWorktreeNotRemoved(t *testing.T) {
 	wt := porcelainEntries(
 		struct{ path, branch string }{"/repo", "main"},
@@ -93,12 +91,12 @@ func TestFindMergedCandidatesFreshWorktreeNotRemoved(t *testing.T) {
 			if len(args) > 0 && args[0] == gitCmdWorktree {
 				return wt, nil
 			}
-			// HasOwnCommits: merge-base == tip → branch contributed nothing.
-			if len(args) > 0 && args[0] == git.CmdMergeBase {
+			// IsTipOnFirstParentChain: tip is on mergeRef's mainline → protected.
+			if len(args) > 0 && args[0] == cmdRevParse {
 				return "samecommit", nil
 			}
-			if len(args) > 0 && args[0] == "rev-parse" {
-				return "samecommit", nil
+			if len(args) > 0 && args[0] == gitCmdRevList {
+				return "samecommit\nolder", nil
 			}
 			return "", nil
 		},
@@ -111,6 +109,45 @@ func TestFindMergedCandidatesFreshWorktreeNotRemoved(t *testing.T) {
 	}
 	if len(result.Candidates) != 0 {
 		t.Fatalf("expected 0 candidates (fresh worktree must be protected), got %d: %+v", len(result.Candidates), result.Candidates)
+	}
+}
+
+// TestFindMergedCandidatesMergeCommitRemoved locks in the merge-commit-merged
+// case: the branch tip is off mainline, so it must still be removed.
+func TestFindMergedCandidatesMergeCommitRemoved(t *testing.T) {
+	wt := porcelainEntries(
+		struct{ path, branch string }{"/repo", "main"},
+		struct{ path, branch string }{"/wt/merged", "feature/merged"},
+	)
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == gitCmdBranch {
+				return "  feature/merged\n", nil
+			}
+			if len(args) > 0 && args[0] == gitCmdWorktree {
+				return wt, nil
+			}
+			if len(args) > 0 && args[0] == cmdRevParse {
+				return "mergeCommitSecondParent", nil
+			}
+			if len(args) > 0 && args[0] == gitCmdRevList {
+				return "mainlineSha1\nmainlineSha2", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	result, err := FindMergedCandidates(context.Background(), r, "origin/main", "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Candidates) != 1 {
+		t.Fatalf("expected 1 candidate (merge-commit-merged branch must be removed), got %d", len(result.Candidates))
+	}
+	if result.Candidates[0].Branch != "feature/merged" {
+		t.Errorf("expected feature/merged, got %s", result.Candidates[0].Branch)
 	}
 }
 
@@ -139,7 +176,7 @@ func TestFindMergedCandidatesSquashMerge(t *testing.T) {
 			if len(args) > 0 && args[0] == git.CmdMergeBase {
 				return "base123", nil
 			}
-			if len(args) > 0 && args[0] == "rev-parse" {
+			if len(args) > 0 && args[0] == cmdRevParse {
 				return "tip456", nil
 			}
 			if len(args) > 0 && args[0] == git.CmdDiff {
@@ -423,10 +460,8 @@ func TestFindStaleCandidatesLastCommitError(t *testing.T) {
 	}
 }
 
-// TestFindMergedCandidatesMergedBranchOwnCommitsError guards the error→warning
-// promotion path added alongside the fresh-worktree guard: when a branch appears
-// in `git branch --merged` but HasOwnCommits fails (e.g. merge-base error),
-// the entry must be skipped with a warning rather than propagating the error.
+// TestFindMergedCandidatesMergedBranchOwnCommitsError checks that a failed
+// mainline check skips the branch with a warning instead of erroring out.
 func TestFindMergedCandidatesMergedBranchOwnCommitsError(t *testing.T) {
 	wt := porcelainEntries(
 		struct{ path, branch string }{"/repo", branchMain},
@@ -442,9 +477,12 @@ func TestFindMergedCandidatesMergedBranchOwnCommitsError(t *testing.T) {
 			if len(args) > 0 && args[0] == gitCmdWorktree {
 				return wt, nil
 			}
-			// HasOwnCommits → MergeBase fails
-			if len(args) > 0 && args[0] == git.CmdMergeBase {
-				return "", errors.New("merge-base failed")
+			// IsTipOnFirstParentChain: rev-parse succeeds, rev-list fails
+			if len(args) > 0 && args[0] == cmdRevParse {
+				return "tip789", nil
+			}
+			if len(args) > 0 && args[0] == gitCmdRevList {
+				return "", errors.New("rev-list failed")
 			}
 			return "", nil
 		},

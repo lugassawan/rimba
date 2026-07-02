@@ -131,34 +131,44 @@ func AheadBehind(ctx context.Context, r Runner, dir string) (ahead, behind int, 
 	return ahead, behind, nil
 }
 
-// HasOwnCommits reports whether branch contains any commits that are not already
-// reachable from mergeRef. It is true when the branch's tip differs from its
-// merge-base with mergeRef. A false result means the branch contributed nothing:
-// either a fresh branch sitting on the base commit, or one that was
-// fast-forward-merged (its tip is an ancestor of mergeRef and adds no new commit).
-//
-// Note: HasOwnCommits cannot distinguish a fresh branch from a fast-forward-merged
-// branch — both have merge-base == tip and return false. Users who use plain
-// git merge (fast-forward allowed) will find FF-merged branches surviving
-// `rimba clean --merged`. Document this gap in `clean --help` if it causes
-// confusion in practice.
-//
-// This is used to protect such branches from being treated as "merged" by
-// `git branch --merged`, which lists every branch reachable from the ref —
-// including a brand-new branch whose tip *is* the base commit.
-func HasOwnCommits(ctx context.Context, r Runner, mergeRef, branch string) (bool, error) {
-	mergeBase, err := MergeBase(ctx, r, mergeRef, branch)
-	if err != nil {
-		return false, err
-	}
-
+// BranchTipSHA returns the commit SHA that branch currently points to.
+func BranchTipSHA(ctx context.Context, r Runner, branch string) (string, error) {
 	// Use refs/heads/ prefix to avoid ambiguity when a tag shares the branch name.
 	tip, err := r.Run(ctx, cmdRevParse, flagVerify, refsHeadsPrefix+branch)
 	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(tip), nil
+}
+
+// FirstParentChainSHAs returns the set of commit SHAs on mergeRef's mainline
+// (first-parent) history.
+func FirstParentChainSHAs(ctx context.Context, r Runner, mergeRef string) (map[string]bool, error) {
+	out, err := r.Run(ctx, cmdRevList, flagFirstParent, mergeRef)
+	if err != nil {
+		return nil, err
+	}
+	shas := make(map[string]bool)
+	for line := range strings.SplitSeq(out, "\n") {
+		if sha := strings.TrimSpace(line); sha != "" {
+			shas[sha] = true
+		}
+	}
+	return shas, nil
+}
+
+// IsTipOnFirstParentChain reports whether branch's tip is on mergeRef's
+// mainline history — true for a fresh or fast-forwarded branch, false for a merge commit.
+func IsTipOnFirstParentChain(ctx context.Context, r Runner, mergeRef, branch string) (bool, error) {
+	tip, err := BranchTipSHA(ctx, r, branch)
+	if err != nil {
 		return false, err
 	}
-
-	return strings.TrimSpace(mergeBase) != strings.TrimSpace(tip), nil
+	mainline, err := FirstParentChainSHAs(ctx, r, mergeRef)
+	if err != nil {
+		return false, err
+	}
+	return mainline[tip], nil
 }
 
 // IsSquashMerged reports whether branch's diff patch-id matches any commit in

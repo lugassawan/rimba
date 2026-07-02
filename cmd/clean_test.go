@@ -364,6 +364,14 @@ func cleanMergedTestRunner(t *testing.T, mergedOut, worktreeOut string) *mockRun
 			if len(args) >= 1 && args[0] == cmdFetch {
 				return "", errors.New("no remote")
 			}
+			// IsTipOnFirstParentChain: branchDone's tip is off mainline, simulating
+			// a regular (merge-commit) merge rather than a fresh or FF-merged branch.
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return "branchDoneTip", nil
+			}
+			if len(args) >= 1 && args[0] == cmdRevList {
+				return "mainlineSha1\nmainlineSha2", nil
+			}
 			return "", nil
 		},
 		runInDir: noopRunInDir,

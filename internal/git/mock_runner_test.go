@@ -1096,75 +1096,53 @@ func TestAddWorktreeFromBranchInsertsDashDash(t *testing.T) {
 	}
 }
 
-func TestHasOwnCommitsDifferentSHA(t *testing.T) {
+func TestIsTipOnFirstParentChainOnChain(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
-			if args[0] == CmdMergeBase {
-				return fakeSHA, nil
-			}
 			if args[0] == cmdRevParse {
-				return fakeTip, nil // tip differs from merge-base
+				return fakeTip, nil
+			}
+			if args[0] == cmdRevList {
+				return "sha1\n" + fakeTip + "\nsha2", nil
 			}
 			return "", errors.New("unexpected call: " + args[0])
 		},
 	}
 
-	has, err := HasOwnCommits(context.Background(), r, branchMain, branchFeature)
+	onChain, err := IsTipOnFirstParentChain(context.Background(), r, branchMain, branchFeature)
 	if err != nil {
-		t.Fatalf("HasOwnCommits: %v", err)
+		t.Fatalf("IsTipOnFirstParentChain: %v", err)
 	}
-	if !has {
-		t.Error("expected true when branch tip differs from merge-base")
+	if !onChain {
+		t.Error("expected true when tip is in the first-parent chain")
 	}
 }
 
-func TestHasOwnCommitsSameSHA(t *testing.T) {
+func TestIsTipOnFirstParentChainOffChain(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
-			if args[0] == CmdMergeBase {
-				return fakeSHA, nil
-			}
 			if args[0] == cmdRevParse {
-				return fakeSHA, nil // tip equals merge-base → no own commits
+				return fakeTip, nil
+			}
+			if args[0] == cmdRevList {
+				return "sha1\nsha2", nil
 			}
 			return "", errors.New("unexpected call: " + args[0])
 		},
 	}
 
-	has, err := HasOwnCommits(context.Background(), r, branchMain, branchFeature)
+	onChain, err := IsTipOnFirstParentChain(context.Background(), r, branchMain, branchFeature)
 	if err != nil {
-		t.Fatalf("HasOwnCommits: %v", err)
+		t.Fatalf("IsTipOnFirstParentChain: %v", err)
 	}
-	if has {
-		t.Error("expected false when branch tip equals merge-base")
-	}
-}
-
-func TestHasOwnCommitsMergeBaseError(t *testing.T) {
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if args[0] == CmdMergeBase {
-				return "", errors.New("merge-base failed")
-			}
-			return "", errors.New("unexpected call: " + args[0])
-		},
-	}
-
-	has, err := HasOwnCommits(context.Background(), r, branchMain, branchFeature)
-	if err == nil {
-		t.Fatal("expected error from MergeBase failure")
-	}
-	if has {
-		t.Error("expected false on error")
+	if onChain {
+		t.Error("expected false when tip is not in the first-parent chain")
 	}
 }
 
-func TestHasOwnCommitsRevParseError(t *testing.T) {
+func TestIsTipOnFirstParentChainRevParseError(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
-			if args[0] == CmdMergeBase {
-				return fakeSHA, nil
-			}
 			if args[0] == cmdRevParse {
 				return "", errors.New("rev-parse failed")
 			}
@@ -1172,32 +1150,54 @@ func TestHasOwnCommitsRevParseError(t *testing.T) {
 		},
 	}
 
-	has, err := HasOwnCommits(context.Background(), r, branchMain, branchFeature)
+	onChain, err := IsTipOnFirstParentChain(context.Background(), r, branchMain, branchFeature)
 	if err == nil {
 		t.Fatal("expected error from rev-parse failure")
 	}
-	if has {
+	if onChain {
 		t.Error("expected false on error")
 	}
 }
 
-func TestHasOwnCommitsUsesRefsHeadsPrefix(t *testing.T) {
+func TestIsTipOnFirstParentChainRevListError(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == cmdRevParse {
+				return fakeTip, nil
+			}
+			if args[0] == cmdRevList {
+				return "", errors.New("rev-list failed")
+			}
+			return "", errors.New("unexpected call: " + args[0])
+		},
+	}
+
+	onChain, err := IsTipOnFirstParentChain(context.Background(), r, branchMain, branchFeature)
+	if err == nil {
+		t.Fatal("expected error from rev-list failure")
+	}
+	if onChain {
+		t.Error("expected false on error")
+	}
+}
+
+func TestIsTipOnFirstParentChainUsesRefsHeadsPrefix(t *testing.T) {
 	var capturedRevParseArg string
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
-			if args[0] == CmdMergeBase {
-				return fakeSHA, nil
-			}
 			if args[0] == cmdRevParse {
 				capturedRevParseArg = args[len(args)-1]
+				return fakeTip, nil
+			}
+			if args[0] == cmdRevList {
 				return fakeTip, nil
 			}
 			return "", errors.New("unexpected call: " + args[0])
 		},
 	}
 
-	if _, err := HasOwnCommits(context.Background(), r, branchMain, branchFeature); err != nil {
-		t.Fatalf("HasOwnCommits: %v", err)
+	if _, err := IsTipOnFirstParentChain(context.Background(), r, branchMain, branchFeature); err != nil {
+		t.Fatalf("IsTipOnFirstParentChain: %v", err)
 	}
 	if capturedRevParseArg != refsHeadsPrefix+branchFeature {
 		t.Errorf("rev-parse arg = %q, want %q", capturedRevParseArg, refsHeadsPrefix+branchFeature)

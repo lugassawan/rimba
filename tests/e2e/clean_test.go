@@ -68,9 +68,8 @@ func TestCleanWorksWithoutInit(t *testing.T) {
 	rimbaSuccess(t, repo, "clean")
 }
 
-// cleanMergeSetup creates a worktree, makes a commit, and merges it into main
-// (using git directly) so the branch shows as merged.
-// Returns the worktree path.
+// cleanMergeSetup creates a worktree, commits, and --no-ff merges it into main
+// so it becomes a real merge commit, not a fast-forward. Returns the worktree path.
 func cleanMergeSetup(t *testing.T, repo, task string) string {
 	t.Helper()
 	rimbaSuccess(t, repo, "add", task)
@@ -85,8 +84,8 @@ func cleanMergeSetup(t *testing.T, repo, task string) string {
 	testutil.GitCmd(t, wtPath, "add", ".")
 	testutil.GitCmd(t, wtPath, "commit", "-m", "add "+task)
 
-	// Merge into main (from repo root)
-	testutil.GitCmd(t, repo, "merge", branch)
+	// Merge into main via a merge commit (from repo root)
+	testutil.GitCmd(t, repo, "merge", "--no-ff", "-m", "merge "+task, branch)
 
 	return wtPath
 }
@@ -179,6 +178,30 @@ func TestCleanMergedNoMerged(t *testing.T) {
 
 	r := rimbaSuccess(t, repo, "clean", flagMergedE2E, flagForceE2E)
 	assertContains(t, r.Stdout, "No merged worktrees found")
+}
+
+// TestCleanMergedProtectsFreshWorktree pins issue #335 at the CLI boundary:
+// a worktree with no commits of its own must survive `clean --merged`.
+func TestCleanMergedProtectsFreshWorktree(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupCleanInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", "fresh-task")
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch := resolver.BranchName(defaultPrefix, "fresh-task")
+	wtPath := resolver.WorktreePath(wtDir, branch)
+
+	r := rimbaSuccess(t, repo, "clean", flagMergedE2E, flagForceE2E)
+	assertContains(t, r.Stdout, "No merged worktrees found")
+	assertFileExists(t, wtPath)
+
+	out := testutil.GitCmd(t, repo, "branch", flagBranchList)
+	if !strings.Contains(out, branch) {
+		t.Error("expected fresh branch to survive clean --merged")
+	}
 }
 
 func TestCleanMergedKeepsUnmerged(t *testing.T) {
@@ -580,7 +603,7 @@ func cleanMergeSetupWithRemote(t *testing.T, repo, task string) (wtPath, branch 
 	testutil.GitCmd(t, wtPath, "add", ".")
 	testutil.GitCmd(t, wtPath, "commit", "-m", "add "+task)
 	testutil.GitCmd(t, wtPath, "push", "-u", "origin", branch)
-	testutil.GitCmd(t, repo, "merge", branch)
+	testutil.GitCmd(t, repo, "merge", "--no-ff", "-m", "merge "+task, branch)
 	testutil.GitCmd(t, repo, "push", "origin", "main")
 	return wtPath, branch
 }
