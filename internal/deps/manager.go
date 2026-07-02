@@ -180,7 +180,7 @@ func tryCloneFromExisting(ctx context.Context, worktreePath string, mh ModuleWit
 
 // cloneAndPost clones the module from srcWT to dstWT and runs the PostClone hook.
 func cloneAndPost(ctx context.Context, dstWT, srcWT string, mod Module) InstallResult {
-	if err := CloneModule(srcWT, dstWT, mod); err != nil {
+	if err := CloneModule(ctx, srcWT, dstWT, mod); err != nil {
 		if !mod.CloneOnly {
 			installErr := runInstall(ctx, dstWT, mod)
 			return InstallResult{Module: mod, Error: installErr}
