@@ -159,7 +159,7 @@ var hookStatusCmd = &cobra.Command{
 	},
 }
 
-const corruptBlockMsg = "corrupt rimba hook block (BEGIN without END) in %s; resolve manually"
+const corruptBlockMsg = "corrupt or duplicated rimba hook block in %s; resolve manually"
 
 func corruptBlockErr(hookPath string) error {
 	return fmt.Errorf(corruptBlockMsg, hookPath)
