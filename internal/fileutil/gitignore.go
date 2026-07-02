@@ -4,13 +4,28 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/lugassawan/rimba/internal/config"
 )
 
-var gitignoreLockTimeout = 2 * time.Second
+const (
+	gitignoreLockDirName   = ".gitignore.lock"
+	gitignoreLockOwnerFile = "owner"
+)
+
+var (
+	gitignoreLockTimeout  atomic.Int64
+	gitignoreStaleLockAge atomic.Int64
+)
+
+func init() {
+	gitignoreLockTimeout.Store(int64(2 * time.Second))
+	gitignoreStaleLockAge.Store(int64(5 * time.Minute))
+}
 
 // EnsureGitignore ensures that entry is present as a line in the .gitignore
 // file at repoRoot. If the file does not exist it is created. Returns true
@@ -19,12 +34,6 @@ func EnsureGitignore(repoRoot string, entry string) (added bool, retErr error) {
 	return withGitignoreLock(repoRoot, func() (bool, error) {
 		return ensureGitignoreLocked(repoRoot, entry)
 	})
-}
-
-// HasGitignoreEntry reports whether entry is present as a trimmed line in the
-// .gitignore file at repoRoot. Returns false (not error) when the file is absent.
-func HasGitignoreEntry(repoRoot, entry string) (bool, error) {
-	return hasGitignoreEntry(repoRoot, entry)
 }
 
 // EnsureLocalGlobIgnored consolidates *.local.toml overrides under a single
@@ -40,7 +49,7 @@ func EnsureLocalGlobIgnored(repoRoot string) (added bool, err error) {
 		// Best-effort cleanup: the glob below covers both files even if removal fails.
 		removeGitignoreEntryVariantsLocked(repoRoot, config.DirName, config.LocalFile)
 		removeGitignoreEntryVariantsLocked(repoRoot, config.DirName, config.TrustFile)
-		return ensureGitignoreLocked(repoRoot, gitignorePattern(config.DirName, config.LocalGlob))
+		return ensureGitignoreLocked(repoRoot, config.DirName+"/"+config.LocalGlob)
 	})
 }
 
@@ -95,6 +104,12 @@ func ensureGitignoreLocked(repoRoot string, entry string) (added bool, retErr er
 	return true, nil
 }
 
+// hasGitignoreEntry reports whether entry is present as a trimmed line in the
+// .gitignore file at repoRoot. Returns false (not error) when the file is absent.
+//
+// Not lock-guarded: pairing this with a later Ensure/Remove call re-opens the
+// TOCTOU window those functions close. Only call it as a standalone read, and
+// take the result as advisory the instant a concurrent writer might run.
 func hasGitignoreEntry(repoRoot, entry string) (bool, error) {
 	path := filepath.Join(repoRoot, ".gitignore")
 	data, err := os.ReadFile(filepath.Clean(path))
@@ -142,13 +157,17 @@ func removeGitignoreEntryLocked(repoRoot string, entry string) (bool, error) {
 }
 
 func withGitignoreLock(repoRoot string, fn func() (bool, error)) (retAdded bool, retErr error) {
-	lockPath := filepath.Join(repoRoot, ".gitignore.lock")
+	lockPath, err := ensureGitignoreLockDir(repoRoot)
+	if err != nil {
+		return false, err
+	}
+
 	unlock, err := acquireGitignoreLock(lockPath)
 	if err != nil {
 		return false, err
 	}
 	defer func() {
-		if err := unlock(); retErr == nil && err != nil && !os.IsNotExist(err) {
+		if err := unlock(); retErr == nil && err != nil {
 			retErr = err
 		}
 	}()
@@ -156,16 +175,34 @@ func withGitignoreLock(repoRoot string, fn func() (bool, error)) (retAdded bool,
 	return fn()
 }
 
+// ensureGitignoreLockDir makes sure repoRoot/.rimba exists and returns the
+// path of the lock directory beneath it. repoRoot itself must already exist;
+// a missing repoRoot surfaces as an error here rather than being silently
+// created.
+func ensureGitignoreLockDir(repoRoot string) (string, error) {
+	lockDir := filepath.Join(repoRoot, config.DirName)
+	if err := os.Mkdir(lockDir, 0700); err != nil && !os.IsExist(err) {
+		return "", err
+	}
+	return filepath.Join(lockDir, gitignoreLockDirName), nil
+}
+
 func acquireGitignoreLock(lockPath string) (func() error, error) {
-	deadline := time.Now().Add(gitignoreLockTimeout)
+	deadline := time.Now().Add(time.Duration(gitignoreLockTimeout.Load()))
 	for {
 		if err := os.Mkdir(lockPath, 0700); err == nil {
+			writeGitignoreLockOwner(lockPath)
 			return func() error {
-				return os.Remove(lockPath)
+				return os.RemoveAll(lockPath)
 			}, nil
 		} else if !os.IsExist(err) {
 			return nil, err
 		}
+
+		if reclaimStaleGitignoreLock(lockPath) {
+			continue
+		}
+
 		if time.Now().After(deadline) {
 			return nil, errors.New("timed out waiting for .gitignore lock")
 		}
@@ -173,14 +210,53 @@ func acquireGitignoreLock(lockPath string) (func() error, error) {
 	}
 }
 
-func gitignorePattern(dir, file string) string {
-	return dir + "/" + file
+// reclaimStaleGitignoreLock removes lockPath when it looks abandoned: either
+// its owning process is provably dead (Unix liveness check) or it has aged
+// past gitignoreStaleLockAge. The age fallback is what recovers orphaned
+// locks on Windows and covers PID reuse everywhere. A failed reclaim (e.g.
+// another process already cleaned it up) is reported as "not reclaimed" so
+// the caller just spins and retries — it is never treated as an error.
+func reclaimStaleGitignoreLock(lockPath string) bool {
+	info, err := os.Stat(lockPath)
+	if err != nil {
+		return false
+	}
+
+	stale := time.Since(info.ModTime()) > time.Duration(gitignoreStaleLockAge.Load())
+	if !stale {
+		if pid, ok := readGitignoreLockOwner(lockPath); ok && !gitignoreLockOwnerAlive(pid) {
+			stale = true
+		}
+	}
+	if !stale {
+		return false
+	}
+
+	return os.RemoveAll(lockPath) == nil
+}
+
+// writeGitignoreLockOwner records the acquiring process's PID inside the
+// lock directory so a later holder can attempt a liveness-based reclaim.
+// Best-effort: a failed write just leaves reclaim to the age fallback.
+func writeGitignoreLockOwner(lockPath string) {
+	_ = os.WriteFile(filepath.Join(lockPath, gitignoreLockOwnerFile), []byte(strconv.Itoa(os.Getpid())), 0600)
+}
+
+func readGitignoreLockOwner(lockPath string) (int, bool) {
+	data, err := os.ReadFile(filepath.Join(lockPath, gitignoreLockOwnerFile))
+	if err != nil {
+		return 0, false
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		return 0, false
+	}
+	return pid, true
 }
 
 func removeGitignoreEntryVariantsLocked(repoRoot, dir, file string) {
-	entry := gitignorePattern(dir, file)
-	_, _ = removeGitignoreEntryLocked(repoRoot, entry)
-	if legacyEntry := dir + "\\" + file; legacyEntry != entry {
-		_, _ = removeGitignoreEntryLocked(repoRoot, legacyEntry)
-	}
+	_, _ = removeGitignoreEntryLocked(repoRoot, dir+"/"+file)
+	// Pre-normalization .gitignore files may still carry the legacy
+	// Windows-style backslash separator; migrate those too.
+	_, _ = removeGitignoreEntryLocked(repoRoot, dir+"\\"+file)
 }
