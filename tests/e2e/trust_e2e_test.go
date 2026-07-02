@@ -214,7 +214,7 @@ func TestTrustInitAddsGitignoreEntry(t *testing.T) {
 	repo := setupRepo(t)
 	rimbaSuccess(t, repo, "init")
 
-	globEntry := filepath.Join(configDir, localGlob)
+	globEntry := configDir + "/" + localGlob
 	assertGitignoreContains(t, repo, globEntry)
 	// Specific trust.local.toml entry must NOT be added (the glob covers it).
 	assertGitignoreNotContains(t, repo, filepath.Join(configDir, trust.FileName))
