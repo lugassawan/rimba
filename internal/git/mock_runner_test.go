@@ -1096,6 +1096,114 @@ func TestAddWorktreeFromBranchInsertsDashDash(t *testing.T) {
 	}
 }
 
+func TestHasOwnCommitsDifferentSHA(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == CmdMergeBase {
+				return fakeSHA, nil
+			}
+			if args[0] == cmdRevParse {
+				return fakeTip, nil // tip differs from merge-base
+			}
+			return "", errors.New("unexpected call: " + args[0])
+		},
+	}
+
+	has, err := HasOwnCommits(context.Background(), r, branchMain, branchFeature)
+	if err != nil {
+		t.Fatalf("HasOwnCommits: %v", err)
+	}
+	if !has {
+		t.Error("expected true when branch tip differs from merge-base")
+	}
+}
+
+func TestHasOwnCommitsSameSHA(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == CmdMergeBase {
+				return fakeSHA, nil
+			}
+			if args[0] == cmdRevParse {
+				return fakeSHA, nil // tip equals merge-base → no own commits
+			}
+			return "", errors.New("unexpected call: " + args[0])
+		},
+	}
+
+	has, err := HasOwnCommits(context.Background(), r, branchMain, branchFeature)
+	if err != nil {
+		t.Fatalf("HasOwnCommits: %v", err)
+	}
+	if has {
+		t.Error("expected false when branch tip equals merge-base")
+	}
+}
+
+func TestHasOwnCommitsMergeBaseError(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == CmdMergeBase {
+				return "", errors.New("merge-base failed")
+			}
+			return "", errors.New("unexpected call: " + args[0])
+		},
+	}
+
+	has, err := HasOwnCommits(context.Background(), r, branchMain, branchFeature)
+	if err == nil {
+		t.Fatal("expected error from MergeBase failure")
+	}
+	if has {
+		t.Error("expected false on error")
+	}
+}
+
+func TestHasOwnCommitsRevParseError(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == CmdMergeBase {
+				return fakeSHA, nil
+			}
+			if args[0] == cmdRevParse {
+				return "", errors.New("rev-parse failed")
+			}
+			return "", errors.New("unexpected call: " + args[0])
+		},
+	}
+
+	has, err := HasOwnCommits(context.Background(), r, branchMain, branchFeature)
+	if err == nil {
+		t.Fatal("expected error from rev-parse failure")
+	}
+	if has {
+		t.Error("expected false on error")
+	}
+}
+
+func TestHasOwnCommitsUsesRefsHeadsPrefix(t *testing.T) {
+	var capturedRevParseArg string
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == CmdMergeBase {
+				return fakeSHA, nil
+			}
+			if args[0] == cmdRevParse {
+				capturedRevParseArg = args[len(args)-1]
+				return fakeTip, nil
+			}
+			return "", errors.New("unexpected call: " + args[0])
+		},
+	}
+
+	if _, err := HasOwnCommits(context.Background(), r, branchMain, branchFeature); err != nil {
+		t.Fatalf("HasOwnCommits: %v", err)
+	}
+	if capturedRevParseArg != refsHeadsPrefix+branchFeature {
+		t.Errorf("rev-parse arg = %q, want %q", capturedRevParseArg, refsHeadsPrefix+branchFeature)
+	}
+}
+
 func TestAddWorktreeInsertsDashDash(t *testing.T) {
 	const (
 		branch = "feature/my-task"
