@@ -50,6 +50,20 @@ func TestPrintSyncDryRunMerge(t *testing.T) {
 	}
 }
 
+func TestPrintSyncDryRunRebaseNoPush(t *testing.T) {
+	cmd, buf := newTestCmd()
+
+	printSyncDryRun(cmd, "feature/login", "main", false, false)
+
+	got := buf.String()
+	if !strings.Contains(got, "would rebase") {
+		t.Errorf("output = %q, want 'would rebase'", got)
+	}
+	if strings.Contains(got, "would push") {
+		t.Errorf("output = %q, should not contain 'would push'", got)
+	}
+}
+
 func TestSyncOneSuccess(t *testing.T) {
 	worktrees := testSyncWorktrees()
 

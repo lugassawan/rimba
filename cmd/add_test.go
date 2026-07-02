@@ -57,7 +57,7 @@ func makeWorktreeGitRunner(repoDir string) *mockRunner {
 	}
 }
 
-func TestPrintWorktreeResultCopySkipBranches(t *testing.T) {
+func TestPrintWorktreeResultAllFields(t *testing.T) {
 	cmd, buf := newTestCmd()
 
 	printWorktreeResult(cmd, "Created worktree", operations.AddResult{
@@ -79,6 +79,31 @@ func TestPrintWorktreeResultCopySkipBranches(t *testing.T) {
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("output missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestPrintWorktreeResultMinimal(t *testing.T) {
+	cmd, buf := newTestCmd()
+
+	printWorktreeResult(cmd, "Created worktree", operations.AddResult{
+		Branch: "feature/presentation",
+		Path:   "/repo/.rimba/worktrees/presentation",
+	})
+
+	got := buf.String()
+	for _, want := range []string{
+		"Created worktree\n",
+		"  Branch: feature/presentation\n",
+		"  Path:   /repo/.rimba/worktrees/presentation\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("output missing %q:\n%s", want, got)
+		}
+	}
+	for _, notWant := range []string{"Copied:", "Skipped", "symlinks"} {
+		if strings.Contains(got, notWant) {
+			t.Fatalf("output should not contain %q:\n%s", notWant, got)
 		}
 	}
 }
