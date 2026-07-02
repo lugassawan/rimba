@@ -1,14 +1,19 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/spf13/cobra"
 )
+
+const remoteURLStub = "https://example.com/repo.git"
 
 func TestRenameSuccess(t *testing.T) {
 	repoDir := t.TempDir()
@@ -144,20 +149,69 @@ func makeRenameWorktreeOut(repoDir string) string {
 }
 
 func makeRenameRunner(repoDir, worktreeOut string) *mockRunner {
+	return makeRenamePushRunner(repoDir, worktreeOut, renamePushMockOpts{})
+}
+
+// renamePushMockOpts configures makeRenamePushRunner's simulated remote/push responses,
+// mirroring pushRenameMockOpts in internal/operations/rename_test.go.
+type renamePushMockOpts struct {
+	remoteExists bool
+	hasUpstream  bool
+	pushErr      error
+	deleteErr    error
+}
+
+// makeRenamePushRunner extends makeRenameRunner's worktree-listing/branch-exists behavior
+// with the remote/push subcommands exercised by RenameWorktree's --push path: `remote
+// get-url origin` (RemoteExists), `push -u origin <new>` in the new worktree dir
+// (PushSetUpstream), and `push origin --delete <old>` (DeleteRemoteBranch).
+func makeRenamePushRunner(repoDir, worktreeOut string, opts renamePushMockOpts) *mockRunner {
 	return &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[1] == cmdGitCommonDir {
-				return filepath.Join(repoDir, ".git"), nil
+		run:      renamePushRunFn(repoDir, worktreeOut, opts),
+		runInDir: renamePushRunInDirFn(opts),
+	}
+}
+
+// renamePushRunFn answers the repo-wide git commands RenameWorktree issues via Run:
+// worktree listing/lookup, BranchExists, RemoteExists, and DeleteRemoteBranch.
+func renamePushRunFn(repoDir, worktreeOut string, opts renamePushMockOpts) func(args ...string) (string, error) {
+	return func(args ...string) (string, error) {
+		if len(args) >= 2 && args[1] == cmdGitCommonDir {
+			return filepath.Join(repoDir, ".git"), nil
+		}
+		if len(args) >= 2 && args[1] == cmdShowToplevel {
+			return repoDir, nil
+		}
+		if len(args) >= 2 && args[0] == cmdRemote && args[1] == "get-url" {
+			if opts.remoteExists {
+				return remoteURLStub, nil
 			}
-			if len(args) >= 2 && args[1] == cmdShowToplevel {
-				return repoDir, nil
+			return "", errGitFailed
+		}
+		if len(args) >= 1 && args[0] == cmdRevParse {
+			return "", errGitFailed // BranchExists returns false
+		}
+		if len(args) >= 1 && args[0] == gitCmdPush {
+			return "", opts.deleteErr // push origin --delete <old>
+		}
+		return worktreeOut, nil
+	}
+}
+
+// renamePushRunInDirFn answers the worktree-directory-scoped git commands RenameWorktree
+// issues via RunInDir: HasUpstream and PushSetUpstream.
+func renamePushRunInDirFn(opts renamePushMockOpts) func(dir string, args ...string) (string, error) {
+	return func(_ string, args ...string) (string, error) {
+		if len(args) >= 1 && args[0] == cmdRevParse {
+			if opts.hasUpstream {
+				return refsRemotesOriginMain, nil
 			}
-			if len(args) >= 1 && args[0] == cmdRevParse {
-				return "", errGitFailed
-			}
-			return worktreeOut, nil
-		},
-		runInDir: noopRunInDir,
+			return "", errGitFailed
+		}
+		if len(args) >= 1 && args[0] == gitCmdPush {
+			return "", opts.pushErr // push -u origin <new>
+		}
+		return "", nil
 	}
 }
 
@@ -316,5 +370,139 @@ func TestRenameRetypeFlag(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "feature/login -> bugfix/login") {
 		t.Errorf("output = %q, want 'feature/login -> bugfix/login'", buf.String())
+	}
+}
+
+// newRenamePushTestCmd builds a test command with the flags --push relies on
+// (--force, --skip-deps, --skip-hooks, --push) registered the same way the real
+// init() registers them, with --skip-deps set so PostRenameSetup does no real work.
+func newRenamePushTestCmd(cfg *config.Config) (*cobra.Command, *bytes.Buffer) {
+	cmd, buf := newTestCmd()
+	cmd.Flags().BoolP(flagForce, "f", false, "")
+	cmd.Flags().Bool(flagSkipDeps, false, "")
+	cmd.Flags().Bool(flagSkipHooks, false, "")
+	cmd.Flags().Bool(flagPush, false, "")
+	_ = cmd.Flags().Set(flagSkipDeps, "true")
+	_ = cmd.Flags().Set(flagPush, "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+	return cmd, buf
+}
+
+func TestRenamePushPublishAndDeleteSuccess(t *testing.T) {
+	repoDir := t.TempDir()
+	cfg := &config.Config{WorktreeDir: defaultRelativeWtDir, DefaultSource: branchMain}
+	worktreeOut := makeRenameWorktreeOut(repoDir)
+	opts := renamePushMockOpts{remoteExists: true, hasUpstream: true}
+	restore := overrideNewRunner(makeRenamePushRunner(repoDir, worktreeOut, opts))
+	defer restore()
+
+	cmd, buf := newRenamePushTestCmd(cfg)
+
+	if err := renameCmd.RunE(cmd, []string{"login", "auth"}); err != nil {
+		t.Fatalf("renameCmd.RunE: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Published branch: origin/feature/auth") {
+		t.Errorf("output = %q, want 'Published branch: origin/feature/auth'", out)
+	}
+	if !strings.Contains(out, "Deleted remote branch: origin/feature/login") {
+		t.Errorf("output = %q, want 'Deleted remote branch: origin/feature/login'", out)
+	}
+}
+
+func TestRenamePushNoUpstreamSkipsDeleteQuietly(t *testing.T) {
+	repoDir := t.TempDir()
+	cfg := &config.Config{WorktreeDir: defaultRelativeWtDir, DefaultSource: branchMain}
+	worktreeOut := makeRenameWorktreeOut(repoDir)
+	opts := renamePushMockOpts{remoteExists: true, hasUpstream: false}
+	restore := overrideNewRunner(makeRenamePushRunner(repoDir, worktreeOut, opts))
+	defer restore()
+
+	cmd, buf := newRenamePushTestCmd(cfg)
+
+	if err := renameCmd.RunE(cmd, []string{"login", "auth"}); err != nil {
+		t.Fatalf("renameCmd.RunE: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Published branch: origin/feature/auth") {
+		t.Errorf("output = %q, want 'Published branch: origin/feature/auth'", out)
+	}
+	if strings.Contains(out, "Deleted remote branch") || strings.Contains(out, "Failed to delete") {
+		t.Errorf("output = %q, want no delete-related output when there was no upstream to delete", out)
+	}
+}
+
+func TestRenamePushPublishFailureShowsRecoveryHint(t *testing.T) {
+	repoDir := t.TempDir()
+	cfg := &config.Config{WorktreeDir: defaultRelativeWtDir, DefaultSource: branchMain}
+	worktreeOut := makeRenameWorktreeOut(repoDir)
+	opts := renamePushMockOpts{remoteExists: true, hasUpstream: true, pushErr: errors.New("connection refused")}
+	restore := overrideNewRunner(makeRenamePushRunner(repoDir, worktreeOut, opts))
+	defer restore()
+
+	cmd, buf := newRenamePushTestCmd(cfg)
+
+	if err := renameCmd.RunE(cmd, []string{"login", "auth"}); err != nil {
+		t.Fatalf("renameCmd.RunE: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Failed to publish branch feature/auth: connection refused") {
+		t.Errorf("output = %q, want publish failure message", out)
+	}
+	if !strings.Contains(out, "To publish: git push -u origin feature/auth") {
+		t.Errorf("output = %q, want 'To publish: git push -u origin feature/auth'", out)
+	}
+	if strings.Contains(out, "Deleted remote branch") {
+		t.Errorf("output = %q, want no delete attempted after a failed publish", out)
+	}
+}
+
+func TestRenamePushDeleteFailureShowsRecoveryHint(t *testing.T) {
+	repoDir := t.TempDir()
+	cfg := &config.Config{WorktreeDir: defaultRelativeWtDir, DefaultSource: branchMain}
+	worktreeOut := makeRenameWorktreeOut(repoDir)
+	opts := renamePushMockOpts{remoteExists: true, hasUpstream: true, deleteErr: errors.New("network error")}
+	restore := overrideNewRunner(makeRenamePushRunner(repoDir, worktreeOut, opts))
+	defer restore()
+
+	cmd, buf := newRenamePushTestCmd(cfg)
+
+	if err := renameCmd.RunE(cmd, []string{"login", "auth"}); err != nil {
+		t.Fatalf("renameCmd.RunE: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Published branch: origin/feature/auth") {
+		t.Errorf("output = %q, want 'Published branch: origin/feature/auth'", out)
+	}
+	if !strings.Contains(out, "Failed to delete remote branch origin/feature/login") {
+		t.Errorf("output = %q, want 'Failed to delete remote branch origin/feature/login'", out)
+	}
+	if !strings.Contains(out, "network error") {
+		t.Errorf("output = %q, want remote error reason 'network error'", out)
+	}
+	if !strings.Contains(out, "To delete remote: git push origin --delete feature/login") {
+		t.Errorf("output = %q, want 'To delete remote: git push origin --delete feature/login'", out)
+	}
+}
+
+func TestRenamePushNoOriginRemoteSkipsQuietly(t *testing.T) {
+	repoDir := t.TempDir()
+	cfg := &config.Config{WorktreeDir: defaultRelativeWtDir, DefaultSource: branchMain}
+	worktreeOut := makeRenameWorktreeOut(repoDir)
+	opts := renamePushMockOpts{remoteExists: false}
+	restore := overrideNewRunner(makeRenamePushRunner(repoDir, worktreeOut, opts))
+	defer restore()
+
+	cmd, buf := newRenamePushTestCmd(cfg)
+
+	if err := renameCmd.RunE(cmd, []string{"login", "auth"}); err != nil {
+		t.Fatalf("renameCmd.RunE: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "No origin remote; skipped publishing.") {
+		t.Errorf("output = %q, want 'No origin remote; skipped publishing.'", out)
+	}
+	if strings.Contains(out, "Published branch") || strings.Contains(out, "Deleted remote branch") {
+		t.Errorf("output = %q, want no publish/delete output when there is no origin remote", out)
 	}
 }

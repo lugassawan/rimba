@@ -16,12 +16,13 @@ import (
 var renameCmd = &cobra.Command{
 	Use:   "rename <task> [new-task]",
 	Short: "Rename a worktree's task, branch, and directory",
-	Long:  "Renames the worktree for the given task, updating its branch name and directory to match the new task name. Use a prefix flag (--bugfix, --hotfix, etc.) to change the branch type. Use --skip-deps to skip dependency refresh and --skip-hooks to skip post-rename hooks.",
+	Long:  "Renames the worktree for the given task, updating its branch name and directory to match the new task name. Use a prefix flag (--bugfix, --hotfix, etc.) to change the branch type. Use --skip-deps to skip dependency refresh, --skip-hooks to skip post-rename hooks, and --push to publish the renamed branch and delete the old remote branch.",
 	Example: `  rimba rename auth auth-v2                    # rename auth worktree
   rimba rename auth --bugfix                   # retype feature/auth → bugfix/auth
   rimba rename auth auth-v2 --bugfix           # rename and retype in one step
   rimba rename auth auth-v2 --skip-hooks       # skip post-rename hooks
-  rimba rename auth auth-v2 --skip-deps        # skip dep refresh`,
+  rimba rename auth auth-v2 --skip-deps        # skip dep refresh
+  rimba rename auth auth-v2 --push             # rename and publish to remote`,
 	Args: cobra.RangeArgs(1, 2),
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
@@ -73,7 +74,12 @@ var renameCmd = &cobra.Command{
 		defer s.Stop()
 
 		force, _ := cmd.Flags().GetBool(flagForce)
-		s.Start("Renaming worktree...")
+		push, _ := cmd.Flags().GetBool(flagPush)
+		startMsg := "Renaming worktree..."
+		if push {
+			startMsg = "Renaming and publishing worktree..."
+		}
+		s.Start(startMsg)
 
 		result, err := operations.RenameWorktree(cmd.Context(), r, operations.RenameParams{
 			WT:        wt,
@@ -81,6 +87,7 @@ var renameCmd = &cobra.Command{
 			NewPrefix: newPrefix,
 			WtDir:     wtDir,
 			Force:     force,
+			Push:      push,
 		})
 		if err != nil {
 			return err
@@ -107,14 +114,48 @@ var renameCmd = &cobra.Command{
 
 		s.Stop()
 		fmt.Fprintf(cmd.OutOrStdout(), "Renamed worktree: %s -> %s\n", result.OldBranch, result.NewBranch)
+		if push {
+			reportRenamePush(cmd, result)
+		}
 		return nil
 	},
+}
+
+// reportRenamePush prints the outcome of the remote publish/delete steps triggered by
+// --push, mirroring the remote-cleanup reporting style in cmd/merge.go: a confirmation
+// line on success, a "\nTo fix: <command>" recovery hint on a best-effort failure, and a
+// quiet skip note (no failure framing) when there simply was no origin remote. When there
+// was no upstream to delete (RemoteSkipped), nothing is printed — there is nothing to do.
+func reportRenamePush(cmd *cobra.Command, result operations.RenameResult) {
+	out := cmd.OutOrStdout()
+
+	if result.NoOriginRemote {
+		fmt.Fprintf(out, "No %s remote; skipped publishing.\n", git.DefaultRemote)
+		return
+	}
+
+	switch {
+	case result.Published:
+		fmt.Fprintf(out, "Published branch: %s/%s\n", git.DefaultRemote, result.NewBranch)
+	case result.PublishError != nil:
+		fmt.Fprintf(out, "Failed to publish branch %s: %v\nTo publish: git push -u %s %s\n",
+			result.NewBranch, result.PublishError, git.DefaultRemote, result.NewBranch)
+	}
+
+	switch {
+	case result.RemoteDeleted:
+		fmt.Fprintf(out, "Deleted remote branch: %s/%s\n", git.DefaultRemote, result.OldBranch)
+	case result.RemoteError != nil:
+		fmt.Fprintf(out, "Failed to delete remote branch %s/%s: %v\nTo delete remote: git push %s --delete %s\n",
+			git.DefaultRemote, result.OldBranch, result.RemoteError, git.DefaultRemote, result.OldBranch)
+	}
 }
 
 func init() {
 	renameCmd.Flags().BoolP(flagForce, "f", false, "force rename even if worktree is locked")
 	renameCmd.Flags().Bool(flagSkipDeps, false, "skip dependency refresh after rename")
 	renameCmd.Flags().Bool(flagSkipHooks, false, "skip post-rename hooks")
+	renameCmd.Flags().Bool(flagPush, false, "publish the renamed branch and delete the old remote branch")
 	addPrefixFlags(renameCmd)
 	rootCmd.AddCommand(renameCmd)
 }
