@@ -294,25 +294,20 @@ func TestRenameSkipHooksSkipsPostRenameHook(t *testing.T) {
 	assertFileNotExists(t, marker)
 }
 
-// renameSetupWithRemote creates a test repo backed by a bare remote, initialises rimba,
-// adds a worktree for task, and pushes its branch to origin so there is an existing
-// remote branch for rename --push to publish over and delete. Follows the same bare-repo
-// fixture pattern as syncSetupWithRemote in sync_test.go, but skips the "commit on main"
-// step since rename --push has no need for anything to sync.
+// renameSetupWithRemote mirrors syncSetupWithRemote's bare-repo fixture pattern,
+// minus the "commit on main" step, which --push doesn't need.
 // Returns (repo path, bare remote path).
 func renameSetupWithRemote(t *testing.T, task string) (string, string) {
 	t.Helper()
 
 	dir := t.TempDir()
 
-	// 1. Create a bare repo as fake origin.
 	bareDir := filepath.Join(dir, "origin.git")
 	if err := os.MkdirAll(bareDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	gitBare(t, bareDir, "init", "--bare", "-b", "main")
 
-	// 2. Clone the bare repo to create the working repo.
 	repo := filepath.Join(dir, "repo")
 	cmd := exec.Command("git", "clone", bareDir, repo)
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -321,19 +316,16 @@ func renameSetupWithRemote(t *testing.T, task string) (string, string) {
 	testutil.GitCmd(t, repo, "config", "user.email", "test@test.com")
 	testutil.GitCmd(t, repo, "config", "user.name", "Test")
 
-	// Create initial commit and push to origin.
 	testutil.CreateFile(t, repo, "README.md", "# Test\n")
 	testutil.GitCmd(t, repo, "add", ".")
 	testutil.GitCmd(t, repo, "commit", "-m", "initial commit")
 	testutil.GitCmd(t, repo, "push", "-u", "origin", "main")
 
-	// 3. rimba init + commit artifacts
 	rimbaSuccess(t, repo, "init")
 	testutil.GitCmd(t, repo, "add", ".")
 	testutil.GitCmd(t, repo, "commit", "-m", "rimba init")
 	testutil.GitCmd(t, repo, "push")
 
-	// 4. rimba add <task>
 	rimbaSuccess(t, repo, "add", task)
 
 	cfg := loadConfig(t, repo)
@@ -341,8 +333,7 @@ func renameSetupWithRemote(t *testing.T, task string) (string, string) {
 	branch := resolver.BranchName(defaultPrefix, task)
 	wtPath := resolver.WorktreePath(wtDir, branch)
 
-	// 5. Push the worktree branch to origin so there's a remote branch for --push to
-	// publish over and delete.
+	// Give --push an existing remote branch to publish over and delete.
 	testutil.GitCmd(t, wtPath, "push", "-u", "origin", branch)
 
 	return repo, bareDir

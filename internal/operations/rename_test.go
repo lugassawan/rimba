@@ -296,21 +296,16 @@ func TestRenameWorktreeTaskAndType(t *testing.T) {
 	}
 }
 
-// pushRenameMockOpts configures buildPushRenameRunner's simulated git responses.
 type pushRenameMockOpts struct {
 	remoteExists bool
 	hasUpstream  bool
-	// upstreamRemote is the remote name reported for the upstream check when
-	// hasUpstream is true; defaults to git.DefaultRemote when empty.
+	// upstreamRemote defaults to git.DefaultRemote when empty.
 	upstreamRemote string
 	pushErr        error
 	deleteErr      error
 }
 
-// pushRenameCalls records which remote commands buildPushRenameRunner's mock observed,
-// plus the directory each dir-scoped command ran in — this locks down the ordering
-// invariant that the upstream check runs against the pre-move path and the publish
-// push runs against the post-move path.
+// upstreamCheckDir/pushDir let tests assert the pre-move vs. post-move ordering.
 type pushRenameCalls struct {
 	pushArgs         []string
 	deleteArgs       []string
@@ -318,8 +313,6 @@ type pushRenameCalls struct {
 	pushDir          string
 }
 
-// buildPushRenameRunner assembles a mockRunner for RenameWorktree's Push path,
-// recording the `push -u` and `push --delete` invocations (if any) into calls.
 func buildPushRenameRunner(opts pushRenameMockOpts, calls *pushRenameCalls) *mockRunner {
 	return &mockRunner{
 		run:      pushRenameRunFn(opts, calls),

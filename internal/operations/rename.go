@@ -64,10 +64,8 @@ func RenameWorktree(ctx context.Context, r git.Runner, p RenameParams) (RenameRe
 
 	newPath := resolver.WorktreePath(p.WtDir, newBranch)
 
-	// Capture upstream status before the move/rename: `git branch -m` preserves tracking
-	// config, so checking after the rename would still report the stale origin/<old-branch>
-	// upstream. This is the only unambiguous read. Only an upstream on git.DefaultRemote
-	// counts — a branch tracking a different remote has nothing on origin to delete.
+	// Must capture before the move: `git branch -m` preserves tracking config, so
+	// checking after would still report the stale origin/<old-branch> upstream.
 	var hadOriginUpstream bool
 	if p.Push {
 		upstreamRemote, hasUpstream := git.UpstreamRemote(ctx, r, p.WT.Path)
@@ -111,15 +109,10 @@ func RenameWorktree(ctx context.Context, r git.Runner, p RenameParams) (RenameRe
 	return result, nil
 }
 
-// publishRenamed publishes the renamed branch to the origin remote and, if the old
-// branch previously had an upstream on that same remote, deletes the stale remote
-// branch. It never aborts the rename: all outcomes are recorded on result for the
-// caller to report.
-//
-// Ordering matters: the old remote branch is only deleted after a *successful* publish
-// of the new branch — deleting it first (or after a failed publish) could leave the
-// remote with neither branch. An idempotent delete (already handled by
-// git.DeleteRemoteBranch) covers the case where the old remote branch is already gone.
+// publishRenamed never aborts the rename; outcomes are recorded on result for the
+// caller to report. The old remote branch is deleted only after a successful publish
+// of the new one — deleting first, or after a failed publish, could leave the remote
+// with neither branch.
 func publishRenamed(ctx context.Context, r git.Runner, newBranch, newPath, oldBranch string, hadOriginUpstream bool, result *RenameResult) {
 	if !git.RemoteExists(ctx, r, git.DefaultRemote) {
 		result.NoOriginRemote = true

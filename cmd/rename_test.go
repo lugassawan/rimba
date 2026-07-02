@@ -153,8 +153,7 @@ func makeRenameRunner(repoDir, worktreeOut string) *mockRunner {
 	return makeRenamePushRunner(repoDir, worktreeOut, renamePushMockOpts{})
 }
 
-// renamePushMockOpts configures makeRenamePushRunner's simulated remote/push responses,
-// mirroring pushRenameMockOpts in internal/operations/rename_test.go.
+// renamePushMockOpts mirrors pushRenameMockOpts in internal/operations/rename_test.go.
 type renamePushMockOpts struct {
 	remoteExists bool
 	hasUpstream  bool
@@ -162,10 +161,6 @@ type renamePushMockOpts struct {
 	deleteErr    error
 }
 
-// makeRenamePushRunner extends makeRenameRunner's worktree-listing/branch-exists behavior
-// with the remote/push subcommands exercised by RenameWorktree's --push path: `remote
-// get-url origin` (RemoteExists), `push -u origin <new>` in the new worktree dir
-// (PushSetUpstream), and `push origin --delete <old>` (DeleteRemoteBranch).
 func makeRenamePushRunner(repoDir, worktreeOut string, opts renamePushMockOpts) *mockRunner {
 	return &mockRunner{
 		run:      renamePushRunFn(repoDir, worktreeOut, opts),
@@ -173,8 +168,6 @@ func makeRenamePushRunner(repoDir, worktreeOut string, opts renamePushMockOpts) 
 	}
 }
 
-// renamePushRunFn answers the repo-wide git commands RenameWorktree issues via Run:
-// worktree listing/lookup, BranchExists, RemoteExists, and DeleteRemoteBranch.
 func renamePushRunFn(repoDir, worktreeOut string, opts renamePushMockOpts) func(args ...string) (string, error) {
 	return func(args ...string) (string, error) {
 		if len(args) >= 2 && args[1] == cmdGitCommonDir {
@@ -199,8 +192,6 @@ func renamePushRunFn(repoDir, worktreeOut string, opts renamePushMockOpts) func(
 	}
 }
 
-// renamePushRunInDirFn answers the worktree-directory-scoped git commands RenameWorktree
-// issues via RunInDir: HasUpstream and PushSetUpstream.
 func renamePushRunInDirFn(opts renamePushMockOpts) func(dir string, args ...string) (string, error) {
 	return func(_ string, args ...string) (string, error) {
 		if len(args) >= 1 && args[0] == cmdRevParse {
@@ -374,9 +365,7 @@ func TestRenameRetypeFlag(t *testing.T) {
 	}
 }
 
-// newRenamePushTestCmd builds a test command with the flags --push relies on
-// (--force, --skip-deps, --skip-hooks, --push) registered the same way the real
-// init() registers them, with --skip-deps set so PostRenameSetup does no real work.
+// --skip-deps is set so PostRenameSetup does no real work.
 func newRenamePushTestCmd(cfg *config.Config) (*cobra.Command, *bytes.Buffer) {
 	cmd, buf := newTestCmd()
 	cmd.Flags().BoolP(flagForce, "f", false, "")
