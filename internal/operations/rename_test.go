@@ -17,7 +17,10 @@ const (
 	branchAuth      = "feature/auth"
 	errMoveFailed   = "move failed"
 	errRenameFailed = "rename failed"
+	remoteURLStub   = "https://example.com/repo.git"
 )
+
+var errNoSuchRemote = errors.New("no such remote")
 
 func TestRenameWorktreeSuccess(t *testing.T) {
 	r := &mockRunner{
@@ -289,6 +292,214 @@ func TestRenameWorktreeTaskAndType(t *testing.T) {
 	}
 	if res.NewBranch != "bugfix/login" {
 		t.Errorf("NewBranch = %q, want %q", res.NewBranch, "bugfix/login")
+	}
+}
+
+// pushRenameMockOpts configures buildPushRenameRunner's simulated git responses.
+type pushRenameMockOpts struct {
+	remoteExists bool
+	hasUpstream  bool
+	pushErr      error
+	deleteErr    error
+}
+
+// pushRenameCalls records which remote commands buildPushRenameRunner's mock observed.
+type pushRenameCalls struct {
+	pushArgs   []string
+	deleteArgs []string
+}
+
+// buildPushRenameRunner assembles a mockRunner for RenameWorktree's Push path,
+// recording the `push -u` and `push --delete` invocations (if any) into calls.
+func buildPushRenameRunner(opts pushRenameMockOpts, calls *pushRenameCalls) *mockRunner {
+	return &mockRunner{
+		run:      pushRenameRunFn(opts, calls),
+		runInDir: pushRenameRunInDirFn(opts, calls),
+	}
+}
+
+func pushRenameRunFn(opts pushRenameMockOpts, calls *pushRenameCalls) func(args ...string) (string, error) {
+	return func(args ...string) (string, error) {
+		if len(args) >= 1 && args[0] == cmdRevParse {
+			return "", errGitFailed // BranchExists returns false
+		}
+		if len(args) >= 2 && args[0] == gitCmdRemote && args[1] == gitSubcmdGetURL {
+			if opts.remoteExists {
+				return remoteURLStub, nil
+			}
+			return "", errNoSuchRemote
+		}
+		if len(args) >= 1 && args[0] == gitCmdPush {
+			calls.deleteArgs = args
+			return "", opts.deleteErr
+		}
+		return "", nil
+	}
+}
+
+func pushRenameRunInDirFn(opts pushRenameMockOpts, calls *pushRenameCalls) func(dir string, args ...string) (string, error) {
+	return func(_ string, args ...string) (string, error) {
+		if len(args) >= 1 && args[0] == cmdRevParse {
+			if opts.hasUpstream {
+				return refsRemotesOriginMain, nil
+			}
+			return "", errGitFailed
+		}
+		if len(args) >= 1 && args[0] == gitCmdPush {
+			calls.pushArgs = args
+			return "", opts.pushErr
+		}
+		return "", nil
+	}
+}
+
+func TestRenameWorktreePushSuccess(t *testing.T) {
+	calls := &pushRenameCalls{}
+	r := buildPushRenameRunner(pushRenameMockOpts{remoteExists: true, hasUpstream: true}, calls)
+
+	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
+	res, err := RenameWorktree(context.Background(), r, RenameParams{WT: wt, NewTask: "auth", WtDir: wtDir, Push: true})
+	if err != nil {
+		t.Fatalf("RenameWorktree: %v", err)
+	}
+	if calls.pushArgs == nil {
+		t.Fatal("expected push -u to run")
+	}
+	if len(calls.pushArgs) < 4 || calls.pushArgs[1] != "-u" || calls.pushArgs[3] != branchAuth {
+		t.Errorf("push args = %v, want [push -u origin %s]", calls.pushArgs, branchAuth)
+	}
+	if calls.deleteArgs == nil {
+		t.Fatal("expected push --delete to run")
+	}
+	if len(calls.deleteArgs) < 4 || calls.deleteArgs[2] != "--delete" || calls.deleteArgs[3] != branchFeature {
+		t.Errorf("delete args = %v, want [push origin --delete %s]", calls.deleteArgs, branchFeature)
+	}
+	if !res.Published {
+		t.Error("expected Published = true")
+	}
+	if !res.RemoteDeleted {
+		t.Error("expected RemoteDeleted = true")
+	}
+}
+
+func TestRenameWorktreePushNoUpstream(t *testing.T) {
+	calls := &pushRenameCalls{}
+	r := buildPushRenameRunner(pushRenameMockOpts{remoteExists: true, hasUpstream: false}, calls)
+
+	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
+	res, err := RenameWorktree(context.Background(), r, RenameParams{WT: wt, NewTask: "auth", WtDir: wtDir, Push: true})
+	if err != nil {
+		t.Fatalf("RenameWorktree: %v", err)
+	}
+	if calls.pushArgs == nil {
+		t.Error("expected push -u to run")
+	}
+	if calls.deleteArgs != nil {
+		t.Error("expected delete to never be invoked when there was no upstream")
+	}
+	if !res.RemoteSkipped {
+		t.Error("expected RemoteSkipped = true")
+	}
+	if res.RemoteDeleted {
+		t.Error("expected RemoteDeleted = false")
+	}
+	if !res.Published {
+		t.Error("expected Published = true")
+	}
+}
+
+func TestRenameWorktreePushOldRemoteAlreadyGone(t *testing.T) {
+	calls := &pushRenameCalls{}
+	opts := pushRenameMockOpts{
+		remoteExists: true,
+		hasUpstream:  true,
+		deleteErr:    errors.New("error: remote ref does not exist"),
+	}
+	r := buildPushRenameRunner(opts, calls)
+
+	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
+	res, err := RenameWorktree(context.Background(), r, RenameParams{WT: wt, NewTask: "auth", WtDir: wtDir, Push: true})
+	if err != nil {
+		t.Fatalf("RenameWorktree: %v", err)
+	}
+	if !res.RemoteDeleted {
+		t.Error("expected RemoteDeleted = true for an already-gone remote branch (idempotent delete)")
+	}
+	if res.RemoteError != nil {
+		t.Errorf("expected nil RemoteError, got %v", res.RemoteError)
+	}
+}
+
+func TestRenameWorktreePushPublishFails(t *testing.T) {
+	calls := &pushRenameCalls{}
+	opts := pushRenameMockOpts{
+		remoteExists: true,
+		hasUpstream:  true,
+		pushErr:      errors.New("connection refused"),
+	}
+	r := buildPushRenameRunner(opts, calls)
+
+	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
+	res, err := RenameWorktree(context.Background(), r, RenameParams{WT: wt, NewTask: "auth", WtDir: wtDir, Push: true})
+	if err != nil {
+		t.Fatalf("RenameWorktree: %v", err)
+	}
+	if res.PublishError == nil {
+		t.Error("expected PublishError to be set")
+	}
+	if res.Published {
+		t.Error("expected Published = false")
+	}
+	if calls.deleteArgs != nil {
+		t.Error("expected delete to never be invoked after a failed publish (old remote branch preserved)")
+	}
+}
+
+func TestRenameWorktreePushNoOriginRemote(t *testing.T) {
+	calls := &pushRenameCalls{}
+	r := buildPushRenameRunner(pushRenameMockOpts{remoteExists: false, hasUpstream: true}, calls)
+
+	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
+	res, err := RenameWorktree(context.Background(), r, RenameParams{WT: wt, NewTask: "auth", WtDir: wtDir, Push: true})
+	if err != nil {
+		t.Fatalf("RenameWorktree: %v", err)
+	}
+	if !res.NoOriginRemote {
+		t.Error("expected NoOriginRemote = true")
+	}
+	if calls.pushArgs != nil {
+		t.Error("expected no push -u call when there is no origin remote")
+	}
+	if calls.deleteArgs != nil {
+		t.Error("expected no delete call when there is no origin remote")
+	}
+}
+
+func TestRenameWorktreeNoPushMakesNoRemoteCalls(t *testing.T) {
+	runInDirCalled := false
+	calls := &pushRenameCalls{}
+	inner := buildPushRenameRunner(pushRenameMockOpts{remoteExists: true, hasUpstream: true}, calls)
+	r := &mockRunner{
+		run: inner.run,
+		runInDir: func(dir string, args ...string) (string, error) {
+			runInDirCalled = true
+			return inner.runInDir(dir, args...)
+		},
+	}
+
+	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
+	res, err := RenameWorktree(context.Background(), r, RenameParams{WT: wt, NewTask: "auth", WtDir: wtDir})
+	if err != nil {
+		t.Fatalf("RenameWorktree: %v", err)
+	}
+	if calls.pushArgs != nil || calls.deleteArgs != nil {
+		t.Error("expected zero remote/push commands when Push=false")
+	}
+	if runInDirCalled {
+		t.Error("expected zero RunInDir calls when Push=false (HasUpstream/PushSetUpstream must be skipped)")
+	}
+	if res.Published || res.RemoteDeleted || res.RemoteSkipped || res.NoOriginRemote {
+		t.Error("expected all push-related result fields to remain zero-value when Push=false")
 	}
 }
 
