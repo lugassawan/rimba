@@ -93,12 +93,19 @@ var renameCmd = &cobra.Command{
 			return err
 		}
 
+		s.Stop()
+		fmt.Fprintf(cmd.OutOrStdout(), "Renamed worktree: %s -> %s\n", result.OldBranch, result.NewBranch)
+		if push {
+			reportRenamePush(cmd, result)
+		}
+
 		prefixes := resolver.AllPrefixes()
 		svc, _, _ := resolver.ServiceFromBranch(result.NewBranch, prefixes)
 		var configModules []config.ModuleConfig
 		if cfg.Deps != nil {
 			configModules = cfg.Deps.Modules
 		}
+		s.Start("Running post-rename setup...")
 		if _, err := operations.PostRenameSetup(cmd.Context(), r, operations.PostRenameParams{
 			WtPath:        result.NewPath,
 			Service:       svc,
@@ -113,10 +120,6 @@ var renameCmd = &cobra.Command{
 		}
 
 		s.Stop()
-		fmt.Fprintf(cmd.OutOrStdout(), "Renamed worktree: %s -> %s\n", result.OldBranch, result.NewBranch)
-		if push {
-			reportRenamePush(cmd, result)
-		}
 		return nil
 	},
 }

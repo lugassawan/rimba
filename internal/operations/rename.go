@@ -66,10 +66,12 @@ func RenameWorktree(ctx context.Context, r git.Runner, p RenameParams) (RenameRe
 
 	// Capture upstream status before the move/rename: `git branch -m` preserves tracking
 	// config, so checking after the rename would still report the stale origin/<old-branch>
-	// upstream. This is the only unambiguous read.
-	var hadUpstream bool
+	// upstream. This is the only unambiguous read. Only an upstream on git.DefaultRemote
+	// counts — a branch tracking a different remote has nothing on origin to delete.
+	var hadOriginUpstream bool
 	if p.Push {
-		hadUpstream = git.HasUpstream(ctx, r, p.WT.Path)
+		upstreamRemote, hasUpstream := git.UpstreamRemote(ctx, r, p.WT.Path)
+		hadOriginUpstream = hasUpstream && upstreamRemote == git.DefaultRemote
 	}
 
 	if err := git.MoveWorktree(r, p.WT.Path, newPath, p.Force); err != nil {
@@ -103,21 +105,22 @@ func RenameWorktree(ctx context.Context, r git.Runner, p RenameParams) (RenameRe
 	}
 
 	if p.Push {
-		publishRenamed(ctx, r, newBranch, newPath, p.WT.Branch, hadUpstream, &result)
+		publishRenamed(ctx, r, newBranch, newPath, p.WT.Branch, hadOriginUpstream, &result)
 	}
 
 	return result, nil
 }
 
 // publishRenamed publishes the renamed branch to the origin remote and, if the old
-// branch previously had an upstream, deletes the stale remote branch. It never aborts
-// the rename: all outcomes are recorded on result for the caller to report.
+// branch previously had an upstream on that same remote, deletes the stale remote
+// branch. It never aborts the rename: all outcomes are recorded on result for the
+// caller to report.
 //
 // Ordering matters: the old remote branch is only deleted after a *successful* publish
 // of the new branch — deleting it first (or after a failed publish) could leave the
 // remote with neither branch. An idempotent delete (already handled by
 // git.DeleteRemoteBranch) covers the case where the old remote branch is already gone.
-func publishRenamed(ctx context.Context, r git.Runner, newBranch, newPath, oldBranch string, hadUpstream bool, result *RenameResult) {
+func publishRenamed(ctx context.Context, r git.Runner, newBranch, newPath, oldBranch string, hadOriginUpstream bool, result *RenameResult) {
 	if !git.RemoteExists(ctx, r, git.DefaultRemote) {
 		result.NoOriginRemote = true
 		return
@@ -129,7 +132,7 @@ func publishRenamed(ctx context.Context, r git.Runner, newBranch, newPath, oldBr
 	}
 	result.Published = true
 
-	if !hadUpstream {
+	if !hadOriginUpstream {
 		result.RemoteSkipped = true
 		return
 	}

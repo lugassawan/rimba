@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/git"
 	"github.com/spf13/cobra"
 )
 
@@ -204,7 +205,7 @@ func renamePushRunInDirFn(opts renamePushMockOpts) func(dir string, args ...stri
 	return func(_ string, args ...string) (string, error) {
 		if len(args) >= 1 && args[0] == cmdRevParse {
 			if opts.hasUpstream {
-				return refsRemotesOriginMain, nil
+				return git.DefaultRemote + "/" + branchFeature, nil
 			}
 			return "", errGitFailed
 		}

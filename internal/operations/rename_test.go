@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/resolver"
 )
 
@@ -299,14 +300,22 @@ func TestRenameWorktreeTaskAndType(t *testing.T) {
 type pushRenameMockOpts struct {
 	remoteExists bool
 	hasUpstream  bool
-	pushErr      error
-	deleteErr    error
+	// upstreamRemote is the remote name reported for the upstream check when
+	// hasUpstream is true; defaults to git.DefaultRemote when empty.
+	upstreamRemote string
+	pushErr        error
+	deleteErr      error
 }
 
-// pushRenameCalls records which remote commands buildPushRenameRunner's mock observed.
+// pushRenameCalls records which remote commands buildPushRenameRunner's mock observed,
+// plus the directory each dir-scoped command ran in — this locks down the ordering
+// invariant that the upstream check runs against the pre-move path and the publish
+// push runs against the post-move path.
 type pushRenameCalls struct {
-	pushArgs   []string
-	deleteArgs []string
+	pushArgs         []string
+	deleteArgs       []string
+	upstreamCheckDir string
+	pushDir          string
 }
 
 // buildPushRenameRunner assembles a mockRunner for RenameWorktree's Push path,
@@ -338,15 +347,21 @@ func pushRenameRunFn(opts pushRenameMockOpts, calls *pushRenameCalls) func(args 
 }
 
 func pushRenameRunInDirFn(opts pushRenameMockOpts, calls *pushRenameCalls) func(dir string, args ...string) (string, error) {
-	return func(_ string, args ...string) (string, error) {
+	return func(dir string, args ...string) (string, error) {
 		if len(args) >= 1 && args[0] == cmdRevParse {
+			calls.upstreamCheckDir = dir
 			if opts.hasUpstream {
-				return refsRemotesOriginMain, nil
+				remote := opts.upstreamRemote
+				if remote == "" {
+					remote = git.DefaultRemote
+				}
+				return remote + "/" + branchFeature, nil
 			}
 			return "", errGitFailed
 		}
 		if len(args) >= 1 && args[0] == gitCmdPush {
 			calls.pushArgs = args
+			calls.pushDir = dir
 			return "", opts.pushErr
 		}
 		return "", nil
@@ -380,6 +395,12 @@ func TestRenameWorktreePushSuccess(t *testing.T) {
 	if !res.RemoteDeleted {
 		t.Error("expected RemoteDeleted = true")
 	}
+	if calls.upstreamCheckDir != pathWtFeatureLogin {
+		t.Errorf("upstream check ran in %q, want the pre-move path %q", calls.upstreamCheckDir, pathWtFeatureLogin)
+	}
+	if calls.pushDir != res.NewPath {
+		t.Errorf("push -u ran in %q, want the post-move path %q", calls.pushDir, res.NewPath)
+	}
 }
 
 func TestRenameWorktreePushNoUpstream(t *testing.T) {
@@ -399,6 +420,37 @@ func TestRenameWorktreePushNoUpstream(t *testing.T) {
 	}
 	if !res.RemoteSkipped {
 		t.Error("expected RemoteSkipped = true")
+	}
+	if res.RemoteDeleted {
+		t.Error("expected RemoteDeleted = false")
+	}
+	if !res.Published {
+		t.Error("expected Published = true")
+	}
+}
+
+func TestRenameWorktreePushUpstreamOnOtherRemote(t *testing.T) {
+	calls := &pushRenameCalls{}
+	opts := pushRenameMockOpts{
+		remoteExists:   true,
+		hasUpstream:    true,
+		upstreamRemote: "upstream",
+	}
+	r := buildPushRenameRunner(opts, calls)
+
+	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
+	res, err := RenameWorktree(context.Background(), r, RenameParams{WT: wt, NewTask: "auth", WtDir: wtDir, Push: true})
+	if err != nil {
+		t.Fatalf("RenameWorktree: %v", err)
+	}
+	if calls.pushArgs == nil {
+		t.Error("expected push -u to run")
+	}
+	if calls.deleteArgs != nil {
+		t.Error("expected delete to never be invoked when the upstream is on a different remote")
+	}
+	if !res.RemoteSkipped {
+		t.Error("expected RemoteSkipped = true when the upstream isn't on git.DefaultRemote")
 	}
 	if res.RemoteDeleted {
 		t.Error("expected RemoteDeleted = false")

@@ -1,6 +1,9 @@
 package git
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 // FetchArgs configures Fetch. The zero value performs a plain `git fetch <remote>`.
 type FetchArgs struct {
@@ -48,6 +51,17 @@ func IsMergeBaseAncestor(ctx context.Context, r Runner, ancestor, descendant str
 func HasUpstream(ctx context.Context, r Runner, dir string) bool {
 	_, err := r.RunInDir(ctx, dir, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
 	return err == nil
+}
+
+// UpstreamRemote returns the remote name of the current branch's upstream tracking
+// branch in dir, and whether an upstream exists at all.
+func UpstreamRemote(ctx context.Context, r Runner, dir string) (string, bool) {
+	out, err := r.RunInDir(ctx, dir, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+	if err != nil {
+		return "", false
+	}
+	remote, _, _ := strings.Cut(strings.TrimSpace(out), "/")
+	return remote, true
 }
 
 // Push runs `git push` inside the given directory.

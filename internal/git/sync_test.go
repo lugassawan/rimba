@@ -9,6 +9,7 @@ import (
 
 const (
 	remoteOrigin       = "origin"
+	remoteUpstream     = "upstream"
 	branchMain         = "main"
 	branchFeature      = "feature/test"
 	fakeSHA            = "abc123"
@@ -202,6 +203,56 @@ func TestHasUpstream(t *testing.T) {
 
 	if !HasUpstream(context.Background(), r, fakeDir) {
 		t.Error("expected true when upstream exists")
+	}
+}
+
+func TestUpstreamRemote(t *testing.T) {
+	r := &mockRunner{
+		runInDir: func(_ string, args ...string) (string, error) {
+			if slices.Contains(args, "@{upstream}") {
+				return "origin/feature/test", nil
+			}
+			return "", errors.New("unexpected")
+		},
+	}
+
+	remote, ok := UpstreamRemote(context.Background(), r, fakeDir)
+	if !ok {
+		t.Fatal("expected true when upstream exists")
+	}
+	if remote != remoteOrigin {
+		t.Errorf("remote = %q, want %q", remote, remoteOrigin)
+	}
+}
+
+func TestUpstreamRemoteOtherRemote(t *testing.T) {
+	r := &mockRunner{
+		runInDir: func(_ string, args ...string) (string, error) {
+			if slices.Contains(args, "@{upstream}") {
+				return remoteUpstream + "/" + branchFeature, nil
+			}
+			return "", errors.New("unexpected")
+		},
+	}
+
+	remote, ok := UpstreamRemote(context.Background(), r, fakeDir)
+	if !ok {
+		t.Fatal("expected true when upstream exists")
+	}
+	if remote != remoteUpstream {
+		t.Errorf("remote = %q, want %q", remote, remoteUpstream)
+	}
+}
+
+func TestUpstreamRemoteNoUpstream(t *testing.T) {
+	r := &mockRunner{
+		runInDir: func(_ string, _ ...string) (string, error) {
+			return "", errors.New("no upstream configured")
+		},
+	}
+
+	if _, ok := UpstreamRemote(context.Background(), r, fakeDir); ok {
+		t.Error("expected false when no upstream is configured")
 	}
 }
 
