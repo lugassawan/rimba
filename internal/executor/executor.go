@@ -81,13 +81,7 @@ func Run(ctx context.Context, cfg Config) []Result {
 			}
 
 			stdout, stderr, exitCode, err := cfg.Runner(ctx, target.Path, cfg.Command)
-			results[idx] = Result{
-				Target:   target,
-				ExitCode: exitCode,
-				Stdout:   stdout,
-				Stderr:   stderr,
-				Err:      err,
-			}
+			results[idx] = classifyResult(ctx, target, stdout, stderr, exitCode, err)
 
 			if cfg.FailFast && (exitCode != 0 || err != nil) {
 				cancel()
@@ -140,4 +134,20 @@ func (b *safeBuffer) Bytes() []byte {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return append([]byte(nil), b.buf...)
+}
+
+// classifyResult relabels a ctx-aborted target as Cancelled instead of a genuine failure.
+// Scoped to this Runner call being interrupted (err wraps ctx.Err(), or a negative exit
+// code from a signal-killed process) so a sibling's cancel() never swallows a genuine failure.
+func classifyResult(ctx context.Context, target Target, stdout, stderr []byte, exitCode int, err error) Result {
+	if ctxErr := ctx.Err(); ctxErr != nil && (errors.Is(err, ctxErr) || exitCode < 0) {
+		return Result{Target: target, Cancelled: true}
+	}
+	return Result{
+		Target:   target,
+		ExitCode: exitCode,
+		Stdout:   stdout,
+		Stderr:   stderr,
+		Err:      err,
+	}
 }

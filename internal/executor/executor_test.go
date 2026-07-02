@@ -138,11 +138,117 @@ func TestRunFailFastCancels(t *testing.T) {
 		t.Errorf("first result: expected exit 1, got %d", results[0].ExitCode)
 	}
 
-	// The remaining targets should either be cancelled or have a context error.
+	// The remaining targets were aborted by fail-fast cancellation, not a
+	// genuine failure — they must be reported as Cancelled, not Err/ExitCode.
 	for i, r := range results[1:] {
-		if !r.Cancelled && r.Err == nil {
-			t.Errorf("result[%d]: expected cancelled or error, got ExitCode=%d Err=%v Cancelled=%v",
-				i+1, r.ExitCode, r.Err, r.Cancelled)
+		if !r.Cancelled {
+			t.Errorf("result[%d]: expected Cancelled=true, got false", i+1)
+		}
+		if r.Err != nil {
+			t.Errorf("result[%d]: expected Err=nil, got %v", i+1, r.Err)
+		}
+		if r.ExitCode != 0 {
+			t.Errorf("result[%d]: expected ExitCode=0, got %d", i+1, r.ExitCode)
+		}
+	}
+}
+
+func TestRunFailFastKilledMidRunIsCancelled(t *testing.T) {
+	// Simulates a target that was already running when fail-fast cancelled
+	// the context and got killed mid-flight: ShellRunner reports exitCode -1,
+	// err nil for a killed process, indistinguishable at face value from a
+	// genuine non-zero exit.
+	results := Run(context.Background(), Config{
+		Targets: []Target{
+			{Path: "/a", Task: "a"},
+			{Path: "/b", Task: "b"},
+		},
+		Command:  "cmd",
+		FailFast: true,
+		Runner: func(ctx context.Context, dir, _ string) ([]byte, []byte, int, error) {
+			if dir == "/a" {
+				return nil, nil, 1, nil // fails → cancels context
+			}
+			<-ctx.Done()
+			return nil, nil, -1, nil // killed by cancellation
+		},
+	})
+
+	b := results[1]
+	if !b.Cancelled {
+		t.Errorf("expected Cancelled=true, got false (ExitCode=%d Err=%v)", b.ExitCode, b.Err)
+	}
+}
+
+func TestRunSuccessAfterCancelStaysSuccess(t *testing.T) {
+	// A target that genuinely completes successfully after another target
+	// triggered fail-fast cancellation must never be mislabeled Cancelled.
+	//
+	// bStarted forces /a to fail only after /b's Runner has actually started,
+	// so /b is guaranteed to be mid-flight (not pre-empted by the pre-run
+	// cancellation checks) when the context is cancelled.
+	bStarted := make(chan struct{})
+	results := Run(context.Background(), Config{
+		Targets: []Target{
+			{Path: "/a", Task: "a"},
+			{Path: "/b", Task: "b"},
+		},
+		Command:  "cmd",
+		FailFast: true,
+		Runner: func(ctx context.Context, dir, _ string) ([]byte, []byte, int, error) {
+			if dir == "/a" {
+				<-bStarted
+				return nil, nil, 1, nil // fails → cancels context
+			}
+			close(bStarted)
+			<-ctx.Done()
+			return nil, nil, 0, nil // clean success after cancel
+		},
+	})
+
+	b := results[1]
+	if b.Cancelled {
+		t.Error("expected Cancelled=false, got true")
+	}
+	if b.ExitCode != 0 {
+		t.Errorf("expected ExitCode=0, got %d", b.ExitCode)
+	}
+	if b.Err != nil {
+		t.Errorf("expected Err=nil, got %v", b.Err)
+	}
+}
+
+func TestRunConcurrentGenuineFailuresBothPreserved(t *testing.T) {
+	// Two targets fail independently and never touch ctx themselves. bStarted
+	// forces /a to fail only after /b's Runner has actually started (so /b is
+	// mid-flight, not pre-empted by the pre-run cancellation checks), then /b
+	// waits for /a's cancel() to fire before returning its own genuine failure —
+	// the exact race that must not swallow a real ExitCode/Err into Cancelled.
+	bStarted := make(chan struct{})
+	results := Run(context.Background(), Config{
+		Targets: []Target{
+			{Path: "/a", Task: "a"},
+			{Path: "/b", Task: "b"},
+		},
+		Command:  "cmd",
+		FailFast: true,
+		Runner: func(ctx context.Context, dir, _ string) ([]byte, []byte, int, error) {
+			if dir == "/a" {
+				<-bStarted
+				return nil, nil, 1, nil // fails → cancels context
+			}
+			close(bStarted)
+			<-ctx.Done()
+			return nil, nil, 1, nil // genuinely fails on its own, never interrupted
+		},
+	})
+
+	for i, r := range results {
+		if r.Cancelled {
+			t.Errorf("result[%d]: expected genuine failure, got Cancelled=true", i)
+		}
+		if r.ExitCode != 1 {
+			t.Errorf("result[%d]: expected ExitCode=1, got %d", i, r.ExitCode)
 		}
 	}
 }
