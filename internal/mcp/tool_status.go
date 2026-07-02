@@ -35,6 +35,10 @@ func handleStatus(hctx *HandlerContext) server.ToolHandlerFunc {
 		staleDays := req.GetInt("stale_days", 14)
 		r := hctx.Runner
 
+		if _, err := hctx.requireConfig(); err != nil {
+			return errorResult(err), nil
+		}
+
 		mainBranch, err := operations.ResolveMainBranch(ctx, r, configDefault(hctx))
 		if err != nil {
 			return errorResult(err), nil
