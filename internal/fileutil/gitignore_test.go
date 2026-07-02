@@ -334,10 +334,8 @@ func TestEnsureGitignoreReclaimsDeadPIDLock(t *testing.T) {
 	}
 }
 
-// TestStaleOwnerUnlockDoesNotDeleteReclaimedLock proves a slow holder's
-// unlock doesn't delete a lock that's since been reclaimed and re-acquired
-// by someone else. Without the owner-token check this deletes the new
-// holder's active lock, letting both believe they hold it.
+// TestStaleOwnerUnlockDoesNotDeleteReclaimedLock proves a slow holder's unlock doesn't delete a lock reclaimed by someone else.
+// Without the owner-token check this would delete the new holder's active lock, letting both believe they hold it.
 func TestStaleOwnerUnlockDoesNotDeleteReclaimedLock(t *testing.T) {
 	dir := t.TempDir()
 	lockDir := filepath.Join(dir, config.DirName)
@@ -381,6 +379,28 @@ func TestStaleOwnerUnlockDoesNotDeleteReclaimedLock(t *testing.T) {
 	}
 	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
 		t.Fatalf("expected lock to be gone after B's unlock, stat error: %v", err)
+	}
+}
+
+// TestReleaseGitignoreLockIfOwnedRemovesWhenOwnerFileMissing proves a lock still releases if writeGitignoreLockOwner failed to persist the owner file.
+// Without this, a missing owner file looks like "someone else's lock" and the release becomes a no-op, leaking it until the stale-age fallback.
+func TestReleaseGitignoreLockIfOwnedRemovesWhenOwnerFileMissing(t *testing.T) {
+	dir := t.TempDir()
+	lockDir := filepath.Join(dir, config.DirName)
+	if err := os.MkdirAll(lockDir, 0750); err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(lockDir, gitignoreLockDirName)
+	if err := os.Mkdir(lockPath, 0700); err != nil {
+		t.Fatal(err)
+	}
+	// No owner file written here, simulating a failed writeGitignoreLockOwner.
+
+	if err := releaseGitignoreLockIfOwned(lockPath, "some-token"); err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
+		t.Fatalf("expected lock to be removed even without an owner file, stat error: %v", err)
 	}
 }
 

@@ -13,9 +13,8 @@ import (
 )
 
 const (
-	// gitignoreLockDirName is actually a directory (an os.Mkdir-based lock),
-	// not a TOML file. Named to match *.local.toml so the existing
-	// .rimba/*.local.toml gitignore glob already hides it.
+	// Actually a directory (os.Mkdir-based lock), not a TOML file — named to
+	// match *.local.toml so the existing .rimba/*.local.toml glob hides it.
 	gitignoreLockDirName   = "gitignore-lock.local.toml"
 	gitignoreLockOwnerFile = "owner"
 )
@@ -107,12 +106,8 @@ func ensureGitignoreLocked(repoRoot string, entry string) (added bool, retErr er
 	return true, nil
 }
 
-// hasGitignoreEntry reports whether entry is present as a trimmed line in the
-// .gitignore file at repoRoot. Returns false (not error) when the file is absent.
-//
-// Not lock-guarded: calling this and then a separate Ensure/Remove call
-// re-opens the TOCTOU race those functions close. Use it as a standalone
-// read only.
+// hasGitignoreEntry reports whether entry is a line in .gitignore. Not
+// lock-guarded — pairing it with a later Ensure/Remove re-opens the TOCTOU race.
 func hasGitignoreEntry(repoRoot, entry string) (bool, error) {
 	path := filepath.Join(repoRoot, ".gitignore")
 	data, err := os.ReadFile(filepath.Clean(path))
@@ -159,15 +154,8 @@ func removeGitignoreEntryLocked(repoRoot string, entry string) (bool, error) {
 	return true, os.WriteFile(path, []byte(strings.Join(filtered, "\n")), 0644) //nolint:gosec // .gitignore must be world-readable for git
 }
 
-// withGitignoreLock creates the lock dir, runs fn while holding it, then
-// removes it.
-//
-// Known residual: on a repo that doesn't yet have .rimba/ or
-// .rimba/*.local.toml in .gitignore (i.e. this is the very first call that
-// would establish it), a crash between creating the lock dir and fn()
-// writing that entry leaves an orphaned lock dir not yet covered by any
-// gitignore pattern. This is narrow — it needs a crash in that one
-// first-ever call — and self-heals as soon as any later call succeeds.
+// withGitignoreLock creates the lock dir, runs fn while holding it, then removes it.
+// A crash before .gitignore has ever been covered can leave it briefly untracked; self-heals next call.
 func withGitignoreLock(repoRoot string, fn func() (bool, error)) (retAdded bool, retErr error) {
 	lockPath, err := ensureGitignoreLockDir(repoRoot)
 	if err != nil {
@@ -187,14 +175,8 @@ func withGitignoreLock(repoRoot string, fn func() (bool, error)) (retAdded bool,
 	return fn()
 }
 
-// ensureGitignoreLockDir makes sure repoRoot/.rimba exists and returns the
-// path of the lock directory beneath it. repoRoot itself must already exist;
-// a missing repoRoot surfaces as an error here rather than being silently
-// created.
-//
-// Note: an older build still locking at the pre-relocation path
-// (<repoRoot>/.gitignore.lock) won't serialize against this lock — the two
-// builds would run their .gitignore updates concurrently, unguarded.
+// ensureGitignoreLockDir makes sure repoRoot/.rimba exists; a missing repoRoot errors here rather than being silently created.
+// Older builds still lock at the flat <repoRoot>/.gitignore.lock path and won't serialize against this one.
 func ensureGitignoreLockDir(repoRoot string) (string, error) {
 	lockDir := filepath.Join(repoRoot, config.DirName)
 	if err := os.Mkdir(lockDir, 0750); err != nil && !os.IsExist(err) {
@@ -226,12 +208,8 @@ func acquireGitignoreLock(lockPath string) (func() error, error) {
 	}
 }
 
-// reclaimStaleGitignoreLock removes lockPath when it looks abandoned: either
-// its owning process is provably dead (Unix liveness check) or it has aged
-// past gitignoreStaleLockAge. The age fallback is what recovers orphaned
-// locks on Windows and covers PID reuse everywhere. A failed reclaim (e.g.
-// someone else already reclaimed it) is reported as "not reclaimed" so the
-// caller just spins and retries — never treated as an error.
+// reclaimStaleGitignoreLock removes lockPath if its owner is provably dead (Unix) or it's aged past gitignoreStaleLockAge (covers Windows and PID reuse).
+// A failed reclaim just means spin and retry — never an error.
 func reclaimStaleGitignoreLock(lockPath string) bool {
 	info, err := os.Stat(lockPath)
 	if err != nil {
@@ -252,19 +230,15 @@ func reclaimStaleGitignoreLock(lockPath string) bool {
 		// written. Just remove it.
 		return os.RemoveAll(lockPath) == nil
 	}
-	// Re-check the owner right before deleting: if it changed since we
-	// read it above, someone else already released and re-acquired the
-	// lock, so back off instead of deleting their active lock.
+	// Re-check right before deleting: a change since means someone else already reclaimed it — back off.
 	if !gitignoreLockTokenMatches(lockPath, token) {
 		return false
 	}
 	return os.RemoveAll(lockPath) == nil
 }
 
-// writeGitignoreLockOwner records this process's PID and a unique token in
-// the lock directory, and returns that token so it can be checked later
-// before deleting the directory. Best-effort: a failed write just leaves
-// this one acquisition unfenced.
+// writeGitignoreLockOwner records this process's PID and a unique token in the lock dir, returning that token for a later ownership check.
+// Best-effort: a failed write just leaves this acquisition unfenced.
 func writeGitignoreLockOwner(lockPath string) string {
 	token := strconv.Itoa(os.Getpid()) + ":" + strconv.FormatInt(time.Now().UnixNano(), 10)
 	_ = os.WriteFile(filepath.Join(lockPath, gitignoreLockOwnerFile), []byte(token), 0600)
@@ -295,12 +269,10 @@ func gitignoreLockTokenMatches(lockPath, token string) bool {
 	return ok && current == token
 }
 
-// releaseGitignoreLockIfOwned removes lockPath only if its owner file still
-// holds token — i.e. nobody has reclaimed the lock since this acquisition
-// wrote it. A mismatch means a different process now owns this path, so
-// this is a no-op rather than an error.
+// releaseGitignoreLockIfOwned removes lockPath unless a different, readable token now owns it, i.e. someone else reclaimed it.
+// Missing/unreadable owner metadata is treated as still ours: writeGitignoreLockOwner is best-effort and can fail to write.
 func releaseGitignoreLockIfOwned(lockPath, token string) error {
-	if !gitignoreLockTokenMatches(lockPath, token) {
+	if _, current, ok := readGitignoreLockOwner(lockPath); ok && current != token {
 		return nil
 	}
 	return os.RemoveAll(lockPath)

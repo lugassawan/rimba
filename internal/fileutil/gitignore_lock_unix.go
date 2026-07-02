@@ -8,15 +8,8 @@ import (
 	"syscall"
 )
 
-// gitignoreLockOwnerAlive reports whether pid is still running, using a
-// signal-0 liveness probe. Unix-only: Windows has no equivalent, so
-// stale-lock reclaim there relies on the age fallback in
-// reclaimStaleGitignoreLock instead.
-//
-// Only a confirmed-dead signal (ESRCH, or Go's own ErrProcessDone for a pid
-// it already reaped) counts as dead. Other errors like EPERM (process
-// exists but owned by another user) don't prove the process is gone, so
-// they're treated as alive.
+// gitignoreLockOwnerAlive uses a signal-0 liveness probe (Unix-only; Windows relies on the age fallback instead).
+// Only ESRCH or Go's ErrProcessDone count as confirmed-dead; other errors like EPERM are treated as alive.
 func gitignoreLockOwnerAlive(pid int) bool {
 	proc, err := os.FindProcess(pid)
 	if err != nil {
