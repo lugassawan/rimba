@@ -157,6 +157,12 @@ func FirstParentChainSHAs(ctx context.Context, r Runner, mergeRef string) (map[s
 	return shas, nil
 }
 
+// IsSHAOnChain reports whether sha is in chain (e.g. from FirstParentChainSHAs).
+// Shared by IsTipOnFirstParentChain and callers that hoist the chain lookup.
+func IsSHAOnChain(sha string, chain map[string]bool) bool {
+	return chain[sha]
+}
+
 // IsTipOnFirstParentChain reports whether branch's tip is on mergeRef's
 // mainline history — true for a fresh or fast-forwarded branch, false for a merge commit.
 func IsTipOnFirstParentChain(ctx context.Context, r Runner, mergeRef, branch string) (bool, error) {
@@ -168,7 +174,7 @@ func IsTipOnFirstParentChain(ctx context.Context, r Runner, mergeRef, branch str
 	if err != nil {
 		return false, err
 	}
-	return mainline[tip], nil
+	return IsSHAOnChain(tip, mainline), nil
 }
 
 // IsSquashMerged reports whether branch's diff patch-id matches any commit in

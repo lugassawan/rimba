@@ -152,11 +152,7 @@ func classifyMergedEntry(ctx context.Context, r git.Runner, mergeRef string, e g
 		if mainline.err != nil {
 			return nil, fmt.Sprintf("skipped %s: mainline check failed: %v", e.Branch, mainline.err)
 		}
-		tip, err := git.BranchTipSHA(ctx, r, e.Branch)
-		if err != nil {
-			return nil, fmt.Sprintf("skipped %s: mainline check failed: %v", e.Branch, err)
-		}
-		if mainline.shas[tip] {
+		if git.IsSHAOnChain(e.HEAD, mainline.shas) {
 			return nil, ""
 		}
 		return &CleanCandidate{Path: e.Path, Branch: e.Branch}, ""

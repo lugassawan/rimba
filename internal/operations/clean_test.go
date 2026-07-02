@@ -91,12 +91,10 @@ func TestFindMergedCandidatesFreshWorktreeNotRemoved(t *testing.T) {
 			if len(args) > 0 && args[0] == gitCmdWorktree {
 				return wt, nil
 			}
-			// IsTipOnFirstParentChain: tip is on mergeRef's mainline → protected.
-			if len(args) > 0 && args[0] == cmdRevParse {
-				return "samecommit", nil
-			}
+			// classifyMergedEntry checks e.HEAD (from the porcelain "HEAD abc123"
+			// line) against the mainline set — it's on it, so the entry is protected.
 			if len(args) > 0 && args[0] == gitCmdRevList {
-				return "samecommit\nolder", nil
+				return "abc123\nolder", nil
 			}
 			return "", nil
 		},
@@ -128,9 +126,8 @@ func TestFindMergedCandidatesMergeCommitRemoved(t *testing.T) {
 			if len(args) > 0 && args[0] == gitCmdWorktree {
 				return wt, nil
 			}
-			if len(args) > 0 && args[0] == cmdRevParse {
-				return "mergeCommitSecondParent", nil
-			}
+			// classifyMergedEntry checks e.HEAD ("abc123") against the mainline
+			// set — it's absent, so the entry is off mainline and removable.
 			if len(args) > 0 && args[0] == gitCmdRevList {
 				return "mainlineSha1\nmainlineSha2", nil
 			}
@@ -477,10 +474,7 @@ func TestFindMergedCandidatesMergedBranchOwnCommitsError(t *testing.T) {
 			if len(args) > 0 && args[0] == gitCmdWorktree {
 				return wt, nil
 			}
-			// IsTipOnFirstParentChain: rev-parse succeeds, rev-list fails
-			if len(args) > 0 && args[0] == cmdRevParse {
-				return "tip789", nil
-			}
+			// FirstParentChainSHAs fails, so the mainline check is skipped with a warning.
 			if len(args) > 0 && args[0] == gitCmdRevList {
 				return "", errors.New("rev-list failed")
 			}

@@ -28,9 +28,8 @@ const (
 
 	mergedFeatureDoneOutput = "  feature/done\n"
 
-	// mergedBranchTip and mainlineHistory simulate a merge-commit merge: the
-	// tip is off the mainline chain, so it counts as removable.
-	mergedBranchTip = "mergedBranchTipSha"
+	// mainlineHistory simulates a merge-commit merge: worktreePorcelain's
+	// fixed "HEAD abc123" is off this chain, so the entry counts as removable.
 	mainlineHistory = "mainlineSha1\nmainlineSha2"
 )
 
@@ -62,7 +61,6 @@ func newCleanMergedRunner(porcelain, mergedBranches string, fetchOK, allowRemove
 		gitBranch + " " + gitMerged:       mergedBranches,
 		gitWorktree + " " + gitList:       porcelain,
 		gitWorktree + " " + gitRemove:     "",
-		gitRevParse + " " + flagVerify:    mergedBranchTip,
 		gitRevList + " " + gitFirstParent: mainlineHistory,
 	}
 
@@ -777,7 +775,6 @@ func newCleanMergedWithRemoteRunner(porcelain, mergedBranches string, pushErr er
 		gitBranch + " " + gitMerged:       mergedBranches,
 		gitWorktree + " " + gitList:       porcelain,
 		gitWorktree + " " + gitRemove:     "",
-		gitRevParse + " " + flagVerify:    mergedBranchTip,
 		gitRevList + " " + gitFirstParent: mainlineHistory,
 	}
 
