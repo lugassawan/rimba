@@ -62,6 +62,13 @@
 curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/install.sh | bash
 ```
 
+By default the binary is installed to `$HOME/.local/bin`. Set `INSTALL_DIR` to
+install elsewhere:
+
+```sh
+curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/install.sh | INSTALL_DIR=/usr/local/bin bash
+```
+
 ### Go install
 
 ```sh
