@@ -322,7 +322,7 @@ func TestCheckoutError(t *testing.T) {
 	}
 }
 
-func TestIsTipOnFirstParentChainFreshBranch(t *testing.T) {
+func TestFirstParentChainSHAsFreshBranch(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipIntegration)
 	}
@@ -332,18 +332,19 @@ func TestIsTipOnFirstParentChainFreshBranch(t *testing.T) {
 
 	// A branch created from main with no additional commits has its tip on main's mainline.
 	testutil.GitCmd(t, repo, "checkout", "-b", "feature/fresh")
+	tip := strings.TrimSpace(testutil.GitCmd(t, repo, "rev-parse", "feature/fresh"))
 	testutil.GitCmd(t, repo, "checkout", "main")
 
-	onChain, err := git.IsTipOnFirstParentChain(context.Background(), r, "main", "feature/fresh")
+	mainline, err := git.FirstParentChainSHAs(context.Background(), r, "main")
 	if err != nil {
-		t.Fatalf("IsTipOnFirstParentChain: %v", err)
+		t.Fatalf("FirstParentChainSHAs: %v", err)
 	}
-	if !onChain {
+	if !git.IsSHAOnChain(tip, mainline) {
 		t.Error("expected true for a fresh branch with no own commits")
 	}
 }
 
-func TestIsTipOnFirstParentChainMergeCommitMerged(t *testing.T) {
+func TestFirstParentChainSHAsMergeCommitMerged(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipIntegration)
 	}
@@ -355,19 +356,20 @@ func TestIsTipOnFirstParentChainMergeCommitMerged(t *testing.T) {
 	testutil.CreateFile(t, repo, "own.txt", "content")
 	testutil.GitCmd(t, repo, "add", ".")
 	testutil.GitCmd(t, repo, "commit", "-m", "own commit")
+	tip := strings.TrimSpace(testutil.GitCmd(t, repo, "rev-parse", "feature/merge-commit"))
 	testutil.GitCmd(t, repo, "checkout", "main")
 	testutil.GitCmd(t, repo, "merge", "--no-ff", "feature/merge-commit", "-m", "merge commit")
 
-	onChain, err := git.IsTipOnFirstParentChain(context.Background(), r, "main", "feature/merge-commit")
+	mainline, err := git.FirstParentChainSHAs(context.Background(), r, "main")
 	if err != nil {
-		t.Fatalf("IsTipOnFirstParentChain: %v", err)
+		t.Fatalf("FirstParentChainSHAs: %v", err)
 	}
-	if onChain {
+	if git.IsSHAOnChain(tip, mainline) {
 		t.Error("expected false: branch tip is the merge's second parent, off mainline")
 	}
 }
 
-func TestIsTipOnFirstParentChainFastForward(t *testing.T) {
+func TestFirstParentChainSHAsFastForward(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipIntegration)
 	}
@@ -379,16 +381,17 @@ func TestIsTipOnFirstParentChainFastForward(t *testing.T) {
 	testutil.CreateFile(t, repo, "own.txt", "content")
 	testutil.GitCmd(t, repo, "add", ".")
 	testutil.GitCmd(t, repo, "commit", "-m", "own commit")
+	tip := strings.TrimSpace(testutil.GitCmd(t, repo, "rev-parse", "feature/ff"))
 	testutil.GitCmd(t, repo, "checkout", "main")
 	testutil.GitCmd(t, repo, "merge", "feature/ff")
 
 	// Accepted false-negative: a fast-forward merge leaves the branch tip on
 	// mainline, so clean --merged will not remove it.
-	onChain, err := git.IsTipOnFirstParentChain(context.Background(), r, "main", "feature/ff")
+	mainline, err := git.FirstParentChainSHAs(context.Background(), r, "main")
 	if err != nil {
-		t.Fatalf("IsTipOnFirstParentChain: %v", err)
+		t.Fatalf("FirstParentChainSHAs: %v", err)
 	}
-	if !onChain {
+	if !git.IsSHAOnChain(tip, mainline) {
 		t.Error("expected true: fast-forward merge leaves branch tip on mainline")
 	}
 }

@@ -1096,111 +1096,50 @@ func TestAddWorktreeFromBranchInsertsDashDash(t *testing.T) {
 	}
 }
 
-func TestIsTipOnFirstParentChainOnChain(t *testing.T) {
+func TestFirstParentChainSHAsParsesLines(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
-			if args[0] == cmdRevParse {
-				return fakeTip, nil
-			}
 			if args[0] == cmdRevList {
-				return "sha1\n" + fakeTip + "\nsha2", nil
+				return "sha1\n" + fakeTip + "\n\nsha2\n", nil
 			}
 			return "", errors.New("unexpected call: " + args[0])
 		},
 	}
 
-	onChain, err := IsTipOnFirstParentChain(context.Background(), r, branchMain, branchFeature)
+	shas, err := FirstParentChainSHAs(context.Background(), r, branchMain)
 	if err != nil {
-		t.Fatalf("IsTipOnFirstParentChain: %v", err)
+		t.Fatalf("FirstParentChainSHAs: %v", err)
 	}
-	if !onChain {
-		t.Error("expected true when tip is in the first-parent chain")
+	want := []string{"sha1", fakeTip, "sha2"}
+	if len(shas) != len(want) {
+		t.Fatalf("shas = %v, want %v", shas, want)
 	}
-}
-
-func TestIsTipOnFirstParentChainOffChain(t *testing.T) {
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if args[0] == cmdRevParse {
-				return fakeTip, nil
-			}
-			if args[0] == cmdRevList {
-				return "sha1\nsha2", nil
-			}
-			return "", errors.New("unexpected call: " + args[0])
-		},
-	}
-
-	onChain, err := IsTipOnFirstParentChain(context.Background(), r, branchMain, branchFeature)
-	if err != nil {
-		t.Fatalf("IsTipOnFirstParentChain: %v", err)
-	}
-	if onChain {
-		t.Error("expected false when tip is not in the first-parent chain")
+	for _, sha := range want {
+		if !shas[sha] {
+			t.Errorf("missing %q in %v", sha, shas)
+		}
 	}
 }
 
-func TestIsTipOnFirstParentChainRevParseError(t *testing.T) {
+func TestFirstParentChainSHAsError(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
-			if args[0] == cmdRevParse {
-				return "", errors.New("rev-parse failed")
-			}
-			return "", errors.New("unexpected call: " + args[0])
+			return "", errors.New("rev-list failed")
 		},
 	}
 
-	onChain, err := IsTipOnFirstParentChain(context.Background(), r, branchMain, branchFeature)
-	if err == nil {
-		t.Fatal("expected error from rev-parse failure")
-	}
-	if onChain {
-		t.Error("expected false on error")
-	}
-}
-
-func TestIsTipOnFirstParentChainRevListError(t *testing.T) {
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if args[0] == cmdRevParse {
-				return fakeTip, nil
-			}
-			if args[0] == cmdRevList {
-				return "", errors.New("rev-list failed")
-			}
-			return "", errors.New("unexpected call: " + args[0])
-		},
-	}
-
-	onChain, err := IsTipOnFirstParentChain(context.Background(), r, branchMain, branchFeature)
-	if err == nil {
+	if _, err := FirstParentChainSHAs(context.Background(), r, branchMain); err == nil {
 		t.Fatal("expected error from rev-list failure")
 	}
-	if onChain {
-		t.Error("expected false on error")
-	}
 }
 
-func TestIsTipOnFirstParentChainUsesRefsHeadsPrefix(t *testing.T) {
-	var capturedRevParseArg string
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if args[0] == cmdRevParse {
-				capturedRevParseArg = args[len(args)-1]
-				return fakeTip, nil
-			}
-			if args[0] == cmdRevList {
-				return fakeTip, nil
-			}
-			return "", errors.New("unexpected call: " + args[0])
-		},
+func TestIsSHAOnChain(t *testing.T) {
+	chain := map[string]bool{fakeTip: true}
+	if !IsSHAOnChain(fakeTip, chain) {
+		t.Error("expected true for a SHA present in the chain")
 	}
-
-	if _, err := IsTipOnFirstParentChain(context.Background(), r, branchMain, branchFeature); err != nil {
-		t.Fatalf("IsTipOnFirstParentChain: %v", err)
-	}
-	if capturedRevParseArg != refsHeadsPrefix+branchFeature {
-		t.Errorf("rev-parse arg = %q, want %q", capturedRevParseArg, refsHeadsPrefix+branchFeature)
+	if IsSHAOnChain("missing", chain) {
+		t.Error("expected false for a SHA absent from the chain")
 	}
 }
 

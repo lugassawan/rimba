@@ -131,16 +131,6 @@ func AheadBehind(ctx context.Context, r Runner, dir string) (ahead, behind int, 
 	return ahead, behind, nil
 }
 
-// BranchTipSHA returns the commit SHA that branch currently points to.
-func BranchTipSHA(ctx context.Context, r Runner, branch string) (string, error) {
-	// Use refs/heads/ prefix to avoid ambiguity when a tag shares the branch name.
-	tip, err := r.Run(ctx, cmdRevParse, flagVerify, refsHeadsPrefix+branch)
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(tip), nil
-}
-
 // FirstParentChainSHAs returns the set of commit SHAs on mergeRef's mainline
 // (first-parent) history.
 func FirstParentChainSHAs(ctx context.Context, r Runner, mergeRef string) (map[string]bool, error) {
@@ -158,23 +148,8 @@ func FirstParentChainSHAs(ctx context.Context, r Runner, mergeRef string) (map[s
 }
 
 // IsSHAOnChain reports whether sha is in chain (e.g. from FirstParentChainSHAs).
-// Shared by IsTipOnFirstParentChain and callers that hoist the chain lookup.
 func IsSHAOnChain(sha string, chain map[string]bool) bool {
 	return chain[sha]
-}
-
-// IsTipOnFirstParentChain reports whether branch's tip is on mergeRef's
-// mainline history — true for a fresh or fast-forwarded branch, false for a merge commit.
-func IsTipOnFirstParentChain(ctx context.Context, r Runner, mergeRef, branch string) (bool, error) {
-	tip, err := BranchTipSHA(ctx, r, branch)
-	if err != nil {
-		return false, err
-	}
-	mainline, err := FirstParentChainSHAs(ctx, r, mergeRef)
-	if err != nil {
-		return false, err
-	}
-	return IsSHAOnChain(tip, mainline), nil
 }
 
 // IsSquashMerged reports whether branch's diff patch-id matches any commit in

@@ -47,10 +47,11 @@ func TestFindMergedCandidatesNormalMerge(t *testing.T) {
 			if len(args) > 0 && args[0] == gitCmdWorktree {
 				return wt, nil
 			}
-			// IsTipOnFirstParentChain: merge-commit merges leave the tip off mainline.
+			// IsSquashMerged fallback (feature/active): rev-parse tip for merge-base comparison.
 			if len(args) > 0 && args[0] == cmdRevParse {
 				return "tip456", nil
 			}
+			// classifyMergedEntry: merge-commit merges leave the tip off mainline.
 			if len(args) > 0 && args[0] == gitCmdRevList {
 				return "otherSha1\notherSha2", nil
 			}
