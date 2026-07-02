@@ -217,6 +217,8 @@ func reclaimStaleGitignoreLock(lockPath string) bool {
 	}
 
 	pid, token, hasOwner := readGitignoreLockOwner(lockPath)
+	// Age alone can reclaim a still-alive owner past gitignoreStaleLockAge — intentional, since
+	// gitignoreLockOwnerAlive always reports true on Windows and this is the only recovery path there.
 	stale := time.Since(info.ModTime()) > time.Duration(gitignoreStaleLockAge.Load())
 	if !stale && hasOwner && !gitignoreLockOwnerAlive(pid) {
 		stale = true
