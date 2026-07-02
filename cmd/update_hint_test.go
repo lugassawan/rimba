@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -40,15 +41,15 @@ func TestCheckUpdateHintNewVersionAvailable(t *testing.T) {
 		_, _ = w.Write([]byte(`{
 			"tag_name":"` + testVersionNew + `",
 			"assets":[
-				{"name":"rimba_2.0.0_linux_amd64.tar.gz","browser_download_url":"https://example.com/download"},
-				{"name":"checksums.txt","browser_download_url":"https://example.com/checksums.txt"}
+				{"name":"rimba_2.0.0_linux_amd64.tar.gz","browser_download_url":"https://github.com/lugassawan/rimba/releases/download/v2.0.0/rimba_2.0.0_linux_amd64.tar.gz"},
+				{"name":"checksums.txt","browser_download_url":"https://github.com/lugassawan/rimba/releases/download/v2.0.0/checksums.txt"}
 			]
 		}`))
 	}))
 	t.Cleanup(srv.Close)
 	overrideNewUpdater(t, srv)
 
-	ch := checkUpdateHint(testVersionHint, 2*time.Second)
+	ch := checkUpdateHint(context.Background(), testVersionHint, 2*time.Second)
 	result := collectHint(ch)
 	if result == nil {
 		t.Fatal("expected non-nil result for available update")
@@ -67,7 +68,7 @@ func TestCheckUpdateHintUpToDate(t *testing.T) {
 	t.Cleanup(srv.Close)
 	overrideNewUpdater(t, srv)
 
-	ch := checkUpdateHint(testVersionHint, 2*time.Second)
+	ch := checkUpdateHint(context.Background(), testVersionHint, 2*time.Second)
 	result := collectHint(ch)
 	if result != nil {
 		t.Errorf("expected nil result for up-to-date version, got %+v", result)
@@ -76,12 +77,12 @@ func TestCheckUpdateHintUpToDate(t *testing.T) {
 
 func TestCheckUpdateHintDevVersion(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Error("unexpected HTTP request for dev version")
+		t.Fatal("unexpected HTTP request for dev version")
 	}))
 	t.Cleanup(srv.Close)
 	overrideNewUpdater(t, srv)
 
-	ch := checkUpdateHint("dev", 2*time.Second)
+	ch := checkUpdateHint(context.Background(), "dev", 2*time.Second)
 	result := collectHint(ch)
 	if result != nil {
 		t.Errorf("expected nil result for dev version, got %+v", result)
@@ -95,14 +96,14 @@ func TestCheckUpdateHintTimeout(t *testing.T) {
 		_, _ = w.Write([]byte(`{
 			"tag_name":"` + testVersionNew + `",
 			"assets":[
-				{"name":"rimba_2.0.0_linux_amd64.tar.gz","browser_download_url":"https://example.com/download"}
+				{"name":"rimba_2.0.0_linux_amd64.tar.gz","browser_download_url":"https://github.com/lugassawan/rimba/releases/download/v2.0.0/rimba_2.0.0_linux_amd64.tar.gz"}
 			]
 		}`))
 	}))
 	t.Cleanup(srv.Close)
 	overrideNewUpdater(t, srv)
 
-	ch := checkUpdateHint(testVersionHint, 50*time.Millisecond)
+	ch := checkUpdateHint(context.Background(), testVersionHint, 50*time.Millisecond)
 	result := collectHint(ch)
 	if result != nil {
 		t.Errorf("expected nil result on timeout, got %+v", result)
@@ -148,5 +149,50 @@ func TestCollectHintValue(t *testing.T) {
 	}
 	if result.LatestVersion != testVersionOther {
 		t.Errorf("LatestVersion = %q, want %q", result.LatestVersion, testVersionOther)
+	}
+}
+
+func TestCheckUpdateHintNeverDropsResult(t *testing.T) {
+	// Regression guard for the #301 select race: a successfully-fetched, newer
+	// version must never be dropped. The race is scheduler-biased (reliably lost
+	// on linux CI, won on macOS), so this asserts the invariant over many runs.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set(hdrContentType, mimeJSON)
+		_, _ = w.Write([]byte(`{"tag_name":"v99.0.0","assets":[
+			{"name":"rimba_99.0.0_linux_amd64.tar.gz","browser_download_url":"https://github.com/lugassawan/rimba/releases/download/v99.0.0/rimba_99.0.0_linux_amd64.tar.gz"},
+			{"name":"checksums.txt","browser_download_url":"https://github.com/lugassawan/rimba/releases/download/v99.0.0/checksums.txt"}]}`))
+	}))
+	t.Cleanup(srv.Close)
+	overrideNewUpdater(t, srv)
+
+	for i := range 500 {
+		if got := collectHint(checkUpdateHint(context.Background(), testVersionHint, 2*time.Second)); got == nil {
+			t.Fatalf("iteration %d: update hint dropped (nil result) for a newer version", i)
+		}
+	}
+}
+
+func TestCheckUpdateHintCancelledContext(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// A pre-cancelled context should cause the HTTP client to fail before
+		// sending a request, so the handler must never complete a response.
+		t.Fatal("unexpected HTTP round-trip for pre-cancelled context")
+	}))
+	t.Cleanup(srv.Close)
+	overrideNewUpdater(t, srv)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // already cancelled
+
+	start := time.Now()
+	ch := checkUpdateHint(ctx, testVersionHint, 2*time.Second)
+	result := collectHint(ch)
+	elapsed := time.Since(start)
+
+	if result != nil {
+		t.Errorf("expected nil result for cancelled context, got %+v", result)
+	}
+	if elapsed > 400*time.Millisecond {
+		t.Errorf("expected fast return on cancelled context, took %v", elapsed)
 	}
 }

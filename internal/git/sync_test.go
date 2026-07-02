@@ -9,6 +9,7 @@ import (
 
 const (
 	remoteOrigin       = "origin"
+	remoteUpstream     = "upstream"
 	branchMain         = "main"
 	branchFeature      = "feature/test"
 	fakeSHA            = "abc123"
@@ -134,14 +135,14 @@ func TestAbortRebase(t *testing.T) {
 func TestMergeBase(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
-			if len(args) == 3 && args[0] == "merge-base" {
+			if len(args) == 3 && args[0] == CmdMergeBase {
 				return fakeSHA, nil
 			}
 			return "", errors.New("unexpected")
 		},
 	}
 
-	sha, err := MergeBase(r, branchMain, branchFeature)
+	sha, err := MergeBase(context.Background(), r, branchMain, branchFeature)
 	if err != nil {
 		t.Fatalf("MergeBase: %v", err)
 	}
@@ -157,7 +158,7 @@ func TestMergeBaseError(t *testing.T) {
 		},
 	}
 
-	_, err := MergeBase(r, branchMain, branchFeature)
+	_, err := MergeBase(context.Background(), r, branchMain, branchFeature)
 	if err == nil {
 		t.Fatal("expected error from MergeBase")
 	}
@@ -173,7 +174,7 @@ func TestIsMergeBaseAncestor(t *testing.T) {
 		},
 	}
 
-	if !IsMergeBaseAncestor(r, branchMain, branchFeature) {
+	if !IsMergeBaseAncestor(context.Background(), r, branchMain, branchFeature) {
 		t.Error("expected true for ancestor check")
 	}
 }
@@ -185,7 +186,7 @@ func TestIsMergeBaseAncestorFalse(t *testing.T) {
 		},
 	}
 
-	if IsMergeBaseAncestor(r, branchMain, branchFeature) {
+	if IsMergeBaseAncestor(context.Background(), r, branchMain, branchFeature) {
 		t.Error("expected false for non-ancestor")
 	}
 }
@@ -200,8 +201,58 @@ func TestHasUpstream(t *testing.T) {
 		},
 	}
 
-	if !HasUpstream(r, fakeDir) {
+	if !HasUpstream(context.Background(), r, fakeDir) {
 		t.Error("expected true when upstream exists")
+	}
+}
+
+func TestUpstreamRemote(t *testing.T) {
+	r := &mockRunner{
+		runInDir: func(_ string, args ...string) (string, error) {
+			if slices.Contains(args, "@{upstream}") {
+				return "origin/feature/test", nil
+			}
+			return "", errors.New("unexpected")
+		},
+	}
+
+	remote, ok := UpstreamRemote(context.Background(), r, fakeDir)
+	if !ok {
+		t.Fatal("expected true when upstream exists")
+	}
+	if remote != remoteOrigin {
+		t.Errorf("remote = %q, want %q", remote, remoteOrigin)
+	}
+}
+
+func TestUpstreamRemoteOtherRemote(t *testing.T) {
+	r := &mockRunner{
+		runInDir: func(_ string, args ...string) (string, error) {
+			if slices.Contains(args, "@{upstream}") {
+				return remoteUpstream + "/" + branchFeature, nil
+			}
+			return "", errors.New("unexpected")
+		},
+	}
+
+	remote, ok := UpstreamRemote(context.Background(), r, fakeDir)
+	if !ok {
+		t.Fatal("expected true when upstream exists")
+	}
+	if remote != remoteUpstream {
+		t.Errorf("remote = %q, want %q", remote, remoteUpstream)
+	}
+}
+
+func TestUpstreamRemoteNoUpstream(t *testing.T) {
+	r := &mockRunner{
+		runInDir: func(_ string, _ ...string) (string, error) {
+			return "", errors.New("no upstream configured")
+		},
+	}
+
+	if _, ok := UpstreamRemote(context.Background(), r, fakeDir); ok {
+		t.Error("expected false when no upstream is configured")
 	}
 }
 
@@ -212,7 +263,7 @@ func TestHasUpstreamFalse(t *testing.T) {
 		},
 	}
 
-	if HasUpstream(r, fakeDir) {
+	if HasUpstream(context.Background(), r, fakeDir) {
 		t.Error("expected false when no upstream")
 	}
 }
@@ -287,6 +338,44 @@ func TestPushForceWithLeaseError(t *testing.T) {
 	err := PushForceWithLease(context.Background(), r, fakeDir)
 	if err == nil {
 		t.Fatal("expected error from PushForceWithLease")
+	}
+	assertContains(t, err, errPushFail)
+}
+
+func TestPushSetUpstream(t *testing.T) {
+	var capturedDir string
+	var capturedArgs []string
+	r := &mockRunner{
+		runInDir: func(dir string, args ...string) (string, error) {
+			capturedDir = dir
+			capturedArgs = args
+			return "", nil
+		},
+	}
+
+	if err := PushSetUpstream(context.Background(), r, fakeDir, remoteOrigin, branchFeature); err != nil {
+		t.Fatalf("PushSetUpstream: %v", err)
+	}
+
+	if capturedDir != fakeDir {
+		t.Errorf("dir = %q, want %q", capturedDir, fakeDir)
+	}
+	wantArgs := []string{"push", "-u", remoteOrigin, branchFeature}
+	if !slices.Equal(capturedArgs, wantArgs) {
+		t.Errorf("args = %v, want %v", capturedArgs, wantArgs)
+	}
+}
+
+func TestPushSetUpstreamError(t *testing.T) {
+	r := &mockRunner{
+		runInDir: func(_ string, _ ...string) (string, error) {
+			return "", errors.New(errPushFail)
+		},
+	}
+
+	err := PushSetUpstream(context.Background(), r, fakeDir, remoteOrigin, branchFeature)
+	if err == nil {
+		t.Fatal("expected error from PushSetUpstream")
 	}
 	assertContains(t, err, errPushFail)
 }

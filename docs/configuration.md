@@ -1,6 +1,14 @@
+---
+title: Configuration
+nav_order: 3
+---
+
 # Configuration Reference
 
-> Back to [README](../README.md) | See also: [Command Reference](commands.md)
+> See also: [Command]({{ '/commands' | relative_url }})
+
+Configure rimba via `.rimba/settings.toml` (team-shared) and `.rimba/settings.local.toml` (personal overrides) — all fields are optional with sensible defaults.
+{: .fs-6 .fw-300 }
 
 ---
 
@@ -95,8 +103,10 @@ When `auto_detect` is enabled (default), rimba recognizes these lockfiles automa
 | `uv.lock` / `poetry.lock` | `.venv` | — | Clone only + path relocation |
 | `settings.gradle` / `build.gradle` (+ `.kts`) | `.gradle` (+ `build/`) | — | Clone only (skip if no match) |
 
-> **Note:** Dependencies are shared using copy-on-write clones (`cp -c` on macOS, `cp --reflink=auto` on Linux) for near-instant copies on supported filesystems (APFS, Btrfs). Falls back to regular copy on other systems.
+{: .note }
+> Dependencies are shared using copy-on-write clones (`cp -c` on macOS, `cp --reflink=auto` on Linux) for near-instant copies on supported filesystems (APFS, Btrfs). Falls back to regular copy on other systems.
 
+{: .note }
 > **Gradle design note:** rimba clones project-local build state (`.gradle/` and `build/`) from a sibling worktree when lockfile content hashes match. A stale clone is a harmless warm cache — Gradle re-validates via content hashes on next invocation. Global caches (`~/.gradle/caches`) and Maven's `~/.m2` are **not** cloned; rimba's CoW model is scoped to project-local directories only. Maven support (project-local `target/`) is deferred.
 
 ## Environment Variables
@@ -104,7 +114,7 @@ When `auto_detect` is enabled (default), rimba recognizes these lockfiles automa
 | Variable | Description |
 |----------|-------------|
 | `RIMBA_DEBUG` | Log git command timing to stderr (set to any value, e.g. `RIMBA_DEBUG=1`). The `--debug` flag on any command has the same effect. |
-| `RIMBA_QUIET` | Suppress pre-execution hints (set to any value, e.g. `RIMBA_QUIET=1`) |
+| `RIMBA_QUIET` | Suppress informational hints and tips — the pre-execution option hints and the post-update agent-file tip (set to any value, e.g. `RIMBA_QUIET=1`). Does not suppress errors or command output. |
 | `NO_COLOR` | Disable colored output globally (per [no-color.org](https://no-color.org)) |
 
 ## MCP server registration
@@ -117,7 +127,7 @@ Patches the following files in your home directory:
 
 | File | Format |
 |------|--------|
-| `~/.claude/settings.json` | JSON (`mcpServers` object) |
+| `~/.claude.json` | JSON (`mcpServers` object) |
 | `~/.codex/config.toml` | TOML (`[[mcp_servers]]` array) |
 | `~/.gemini/settings.json` | JSON (`mcpServers` object) |
 | `~/.codeium/windsurf/mcp_config.json` | JSON (`mcpServers` object) |

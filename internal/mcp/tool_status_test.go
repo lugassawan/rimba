@@ -108,36 +108,19 @@ func TestStatusToolResolvesMainBranch(t *testing.T) {
 	}
 }
 
-func TestStatusToolNoConfig(t *testing.T) {
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) > 0 && args[0] == gitSymbolicRef {
-				return refsOriginMain, nil
-			}
-			if len(args) > 0 && args[0] == gitWorktree {
-				return worktreePorcelain(
-					struct{ path, branch string }{"/repo", "main"},
-				), nil
-			}
-			return "", nil
-		},
-	}
+func TestStatusToolRequiresConfig(t *testing.T) {
 	hctx := &HandlerContext{
-		Runner:   r,
+		Runner:   &mockRunner{},
 		Config:   nil,
 		RepoRoot: "/repo",
 		Version:  "test",
 	}
 	handler := handleStatus(hctx)
 
-	// Status should work without config (uses git detection)
 	result := callTool(t, handler, nil)
-	if result.IsError {
-		errMsg := resultError(t, result)
-		// Only fail if the error is about config — git detection errors are acceptable
-		if strings.Contains(errMsg, "not initialized") {
-			t.Errorf("status should work without config, got: %s", errMsg)
-		}
+	errText := resultError(t, result)
+	if !strings.Contains(errText, "not initialized") {
+		t.Errorf("expected config error, got: %s", errText)
 	}
 }
 
@@ -287,6 +270,51 @@ func TestStatusToolSummaryCounters(t *testing.T) {
 				t.Errorf("behind = %d, want %d", data.Summary.Behind, tt.wantBehind)
 			}
 		})
+	}
+}
+
+func TestStatusToolUnknownWorktree(t *testing.T) {
+	porcelain := worktreePorcelain(
+		struct{ path, branch string }{"/repo", "main"},
+		struct{ path, branch string }{"/wt/feature-stalled", "feature/stalled"},
+	)
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == gitSymbolicRef {
+				return refsOriginMain, nil
+			}
+			if len(args) > 0 && args[0] == gitWorktree {
+				return porcelain, nil
+			}
+			return "", nil
+		},
+		// Simulate a stalled NFS mount: all runInDir calls fail.
+		runInDir: func(dir string, args ...string) (string, error) {
+			return "", errors.New("input/output error")
+		},
+	}
+	hctx := testContext(r)
+	handler := handleStatus(hctx)
+
+	result := callTool(t, handler, nil)
+	data := unmarshalJSON[statusData](t, result)
+
+	if data.Summary.Total != 1 {
+		t.Errorf("total = %d, want 1", data.Summary.Total)
+	}
+	if data.Summary.Dirty != 0 {
+		t.Errorf("dirty = %d, want 0 (unknown worktrees must not be counted dirty)", data.Summary.Dirty)
+	}
+	if data.Summary.Behind != 0 {
+		t.Errorf("behind = %d, want 0 (unknown worktrees must not be counted behind)", data.Summary.Behind)
+	}
+
+	if len(data.Worktrees) != 1 {
+		t.Fatalf("worktrees len = %d, want 1", len(data.Worktrees))
+	}
+	if !data.Worktrees[0].Status.Unknown {
+		t.Error("expected Status.Unknown=true for stalled worktree")
 	}
 }
 

@@ -6,24 +6,32 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // Runner abstracts git command execution for testability.
 type Runner interface {
-	Run(args ...string) (string, error)
-	RunInDir(dir string, args ...string) (string, error)
-	RunContext(ctx context.Context, args ...string) (string, error)
-	RunInDirContext(ctx context.Context, dir string, args ...string) (string, error)
+	Run(ctx context.Context, args ...string) (string, error)
+	RunInDir(ctx context.Context, dir string, args ...string) (string, error)
 }
 
 // ExecRunner is the production implementation of Runner.
 type ExecRunner struct {
 	// Dir is the working directory for git commands. If empty, uses the current directory.
 	Dir string
+	// Timeout, when positive, applies a per-invocation deadline to every subprocess.
+	// Zero means no timeout (relies solely on the caller's context).
+	Timeout time.Duration
 }
 
-// RunInDirContext is the single execution primitive: all other methods delegate here.
-func (r *ExecRunner) RunInDirContext(ctx context.Context, dir string, args ...string) (string, error) {
+// RunInDir is the single execution primitive: all other methods delegate here.
+func (r *ExecRunner) RunInDir(ctx context.Context, dir string, args ...string) (string, error) {
+	if r.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, r.Timeout)
+		defer cancel()
+	}
+
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Env = stableGitEnv(os.Environ())
 	if dir != "" {
@@ -51,14 +59,6 @@ func stableGitEnv(environ []string) []string {
 	return append(env, "LANG=C", "LC_ALL=C")
 }
 
-func (r *ExecRunner) RunContext(ctx context.Context, args ...string) (string, error) {
-	return r.RunInDirContext(ctx, r.Dir, args...)
-}
-
-func (r *ExecRunner) Run(args ...string) (string, error) {
-	return r.RunInDirContext(context.Background(), r.Dir, args...)
-}
-
-func (r *ExecRunner) RunInDir(dir string, args ...string) (string, error) {
-	return r.RunInDirContext(context.Background(), dir, args...)
+func (r *ExecRunner) Run(ctx context.Context, args ...string) (string, error) {
+	return r.RunInDir(ctx, r.Dir, args...)
 }

@@ -35,20 +35,12 @@ type mockRunner struct {
 
 var errGitFailed = errors.New("git worktree list failed")
 
-func (m *mockRunner) Run(args ...string) (string, error) {
+func (m *mockRunner) Run(_ context.Context, args ...string) (string, error) {
 	return m.worktreeOutput, nil
 }
 
-func (m *mockRunner) RunInDir(dir string, args ...string) (string, error) {
-	return m.Run(args...)
-}
-
-func (m *mockRunner) RunContext(_ context.Context, args ...string) (string, error) {
-	return m.Run(args...)
-}
-
-func (m *mockRunner) RunInDirContext(_ context.Context, dir string, args ...string) (string, error) {
-	return m.Run(args...)
+func (m *mockRunner) RunInDir(_ context.Context, dir string, args ...string) (string, error) {
+	return m.worktreeOutput, nil
 }
 
 func mockWorktreeList(paths ...string) string {
@@ -614,10 +606,8 @@ type errorRunner struct {
 	err error
 }
 
-func (e *errorRunner) Run(_ ...string) (string, error)                           { return "", e.err }
-func (e *errorRunner) RunInDir(_ string, _ ...string) (string, error)            { return "", e.err }
-func (e *errorRunner) RunContext(_ context.Context, _ ...string) (string, error) { return "", e.err }
-func (e *errorRunner) RunInDirContext(_ context.Context, _ string, _ ...string) (string, error) {
+func (e *errorRunner) Run(_ context.Context, _ ...string) (string, error) { return "", e.err }
+func (e *errorRunner) RunInDir(_ context.Context, _ string, _ ...string) (string, error) {
 	return "", e.err
 }
 

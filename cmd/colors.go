@@ -30,6 +30,10 @@ func typeColor(t string) termcolor.Color {
 
 // colorStatus applies colors to each component of a formatted status string.
 func colorStatus(p *termcolor.Painter, s resolver.WorktreeStatus) string {
+	if s.Unknown {
+		return p.Paint("unknown", termcolor.Gray)
+	}
+
 	formatted := resolver.FormatStatus(s)
 
 	if !s.Dirty && s.Ahead == 0 && s.Behind == 0 {

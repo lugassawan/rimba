@@ -4,18 +4,29 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"testing"
 )
+
+type testRepoT interface {
+	Helper()
+	Fatalf(format string, args ...any)
+	TempDir() string
+}
+
+type testFatalT interface {
+	Helper()
+	Fatalf(format string, args ...any)
+}
 
 // NewTestRepo creates a temporary git repository with an initial commit.
 // Returns the path to the repo. The repo is cleaned up when the test finishes.
-func NewTestRepo(t *testing.T) string {
+func NewTestRepo(t testRepoT) string {
 	t.Helper()
 
 	dir := t.TempDir()
 	repo := filepath.Join(dir, "test-repo")
 	if err := os.MkdirAll(repo, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
+		return ""
 	}
 
 	cmds := [][]string{
@@ -29,6 +40,7 @@ func NewTestRepo(t *testing.T) string {
 		cmd.Dir = repo
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("cmd %v: %s: %v", args, out, err)
+			return ""
 		}
 	}
 
@@ -36,6 +48,7 @@ func NewTestRepo(t *testing.T) string {
 	readmePath := filepath.Join(repo, "README.md")
 	if err := os.WriteFile(readmePath, []byte("# Test\n"), 0644); err != nil {
 		t.Fatalf("write: %v", err)
+		return ""
 	}
 
 	cmds = [][]string{
@@ -48,6 +61,7 @@ func NewTestRepo(t *testing.T) string {
 		cmd.Dir = repo
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("cmd %v: %s: %v", args, out, err)
+			return ""
 		}
 	}
 
@@ -55,22 +69,24 @@ func NewTestRepo(t *testing.T) string {
 }
 
 // CreateFile creates a file in the given directory with the given content.
-func CreateFile(t *testing.T, dir, name, content string) {
+func CreateFile(t testFatalT, dir, name, content string) {
 	t.Helper()
 	path := filepath.Join(dir, name)
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
+		return
 	}
 }
 
 // GitCmd runs a git command in the given directory.
-func GitCmd(t *testing.T, dir string, args ...string) string {
+func GitCmd(t testFatalT, dir string, args ...string) string {
 	t.Helper()
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %v: %s: %v", args, out, err)
+		return ""
 	}
 	return string(out)
 }

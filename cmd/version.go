@@ -19,13 +19,7 @@ var versionCmd = &cobra.Command{
 	Example:     "  rimba version",
 	Annotations: map[string]string{"skipConfig": "true"},
 	Run: func(cmd *cobra.Command, args []string) {
-		w := cmd.OutOrStdout()
-		fmt.Fprintf(w, "rimba %s\n", version)
-		fmt.Fprintf(w, "commit: %s\n", commit)
-		fmt.Fprintf(w, "built:  %s\n", date)
-		fmt.Fprintf(w, "os:     %s\n", runtime.GOOS)
-		fmt.Fprintf(w, "arch:   %s\n", runtime.GOARCH)
-		fmt.Fprintf(w, "go:     %s\n", runtime.Version())
+		fmt.Fprint(cmd.OutOrStdout(), versionString())
 	},
 }
 
@@ -34,6 +28,15 @@ func Version() string {
 	return version
 }
 
+func versionString() string {
+	return fmt.Sprintf(
+		"rimba %s\ncommit: %s\nbuilt:  %s\nos:     %s\narch:   %s\ngo:     %s\n",
+		version, commit, date, runtime.GOOS, runtime.GOARCH, runtime.Version(),
+	)
+}
+
 func init() {
 	rootCmd.AddCommand(versionCmd)
+	// Pre-register to prevent Cobra's InitDefaultVersionFlag from auto-adding -v; see TestVersionFlagNoShorthand.
+	rootCmd.Flags().Bool("version", false, "version for rimba")
 }

@@ -2,7 +2,9 @@ package mcp
 
 import (
 	"context"
+	"errors"
 
+	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -35,7 +37,8 @@ func handleMerge(hctx *HandlerContext) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		sourceTask := req.GetString("source", "")
 		if sourceTask == "" {
-			return mcp.NewToolResultError("source is required"), nil
+			return errorResult(errhint.WithFix(errors.New("source is required"),
+				`provide the source argument, e.g. merge { source: "my-feature" }`)), nil
 		}
 
 		sourceService, sourceTask := operations.ResolveTaskInput(sourceTask, hctx.RepoRoot)
@@ -48,7 +51,7 @@ func handleMerge(hctx *HandlerContext) server.ToolHandlerFunc {
 
 		cfg, cfgErr := hctx.requireConfig()
 		if cfgErr != nil {
-			return mcp.NewToolResultError(cfgErr.Error()), nil
+			return errorResult(cfgErr), nil
 		}
 
 		result, err := operations.MergeWorktree(ctx, hctx.Runner, operations.MergeParams{
@@ -63,13 +66,14 @@ func handleMerge(hctx *HandlerContext) server.ToolHandlerFunc {
 			Delete:        req.GetBool("delete", false),
 		}, nil)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err), nil
 		}
 
 		return marshalResult(mergeResult{
 			Source:        result.SourceBranch,
 			Into:          result.TargetLabel,
 			SourceRemoved: result.SourceRemoved,
+			RemoteDeleted: result.RemoteDeleted,
 		})
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -25,6 +26,13 @@ const (
 	checksumsFileName  = "checksums.txt"
 	goosWindows        = "windows"
 )
+
+// allowedAssetHosts pins asset downloads to GitHub-controlled hosts.
+// objects.githubusercontent.com is included for CDN redirects followed at HTTP fetch time.
+var allowedAssetHosts = map[string]bool{
+	"github.com":                    true,
+	"objects.githubusercontent.com": true,
+}
 
 // maxBinarySize is the decompressed size limit for the extracted binary (100 MiB).
 // Tests may override this to exercise the size-limit path.
@@ -137,6 +145,12 @@ func (u *Updater) Check(ctx context.Context) (*CheckResult, error) {
 		}
 		if checksumsURL == "" {
 			return nil, fmt.Errorf("%s not found in release %s", checksumsFileName, release.TagName)
+		}
+		if err := validateAssetURL(downloadURL); err != nil {
+			return nil, fmt.Errorf("untrusted download URL: %w", err)
+		}
+		if err := validateAssetURL(checksumsURL); err != nil {
+			return nil, fmt.Errorf("untrusted checksums URL: %w", err)
 		}
 		result.DownloadURL = downloadURL
 		result.AssetName = assetName
@@ -353,10 +367,7 @@ func assetNameFor(goos, goarch, version string) string {
 }
 
 // findReleaseAssets scans release assets for the platform archive and checksums file.
-// Returns empty strings for any asset not found.
-// BrowserDownloadURL values are used verbatim; checksum verification (issue #222) is
-// the intended mitigation against redirected-URL attacks rather than host-prefix
-// validation, which would need to enumerate all valid GitHub CDN hostnames.
+// Returns empty strings for any asset not found. URLs are validated by Check before use.
 func findReleaseAssets(assetName string, assets []Asset) (downloadURL, checksumsURL string) {
 	for _, a := range assets {
 		if a.Name == assetName {
@@ -367,4 +378,24 @@ func findReleaseAssets(assetName string, assets []Asset) (downloadURL, checksums
 		}
 	}
 	return
+}
+
+// validateAssetURL rejects asset URLs with a non-https scheme or untrusted host,
+// guarding against a tampered API response redirecting downloads to an attacker (#281).
+func validateAssetURL(rawURL string) error {
+	// Check() pre-screens for empty, but guard here for direct callers.
+	if rawURL == "" {
+		return errors.New("asset URL must not be empty")
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("parsing asset URL %q: %w", rawURL, err)
+	}
+	if u.Scheme != "https" {
+		return fmt.Errorf("asset URL %q must use https, got scheme %q", rawURL, u.Scheme)
+	}
+	if !allowedAssetHosts[u.Hostname()] {
+		return fmt.Errorf("asset URL %q host %q is not a trusted GitHub host", rawURL, u.Hostname())
+	}
+	return nil
 }

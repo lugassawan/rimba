@@ -2,14 +2,16 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
-	"sync"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/executor"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
+	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -52,7 +54,8 @@ func handleExec(hctx *HandlerContext) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		command := req.GetString("command", "")
 		if command == "" {
-			return mcp.NewToolResultError("command is required"), nil
+			return errorResult(errhint.WithFix(errors.New("command is required"),
+				`provide the command argument, e.g. exec { command: "npm test", all: true }`)), nil
 		}
 
 		all := req.GetBool("all", false)
@@ -63,20 +66,24 @@ func handleExec(hctx *HandlerContext) server.ToolHandlerFunc {
 
 		cfg, cfgErr := hctx.requireConfig()
 		if cfgErr != nil {
-			return mcp.NewToolResultError(cfgErr.Error()), nil
+			return errorResult(cfgErr), nil
 		}
 
 		if !all && typeFilter == "" {
-			return mcp.NewToolResultError("provide all=true or type to select worktrees"), nil
+			return errorResult(errhint.WithFix(errors.New("provide all=true or type to select worktrees"),
+				"set all=true to target every worktree, or pass type=<prefix>")), nil
 		}
 
 		if typeFilter != "" && !resolver.ValidPrefixType(typeFilter) {
-			return mcp.NewToolResultError(fmt.Sprintf("invalid type %q; valid types: feature, bugfix, hotfix, docs, test, chore", typeFilter)), nil
+			return errorResult(errhint.WithFix(
+				fmt.Errorf("invalid type %q", typeFilter),
+				"use one of: feature, bugfix, hotfix, docs, test, chore",
+			)), nil
 		}
 
-		filtered, err := resolveExecTargets(hctx.Runner, cfg, typeFilter, dirty)
+		filtered, err := resolveExecTargets(ctx, hctx.Runner, cfg, typeFilter, dirty)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err), nil
 		}
 
 		if len(filtered) == 0 {
@@ -92,8 +99,8 @@ func handleExec(hctx *HandlerContext) server.ToolHandlerFunc {
 }
 
 // resolveExecTargets collects and filters worktrees for exec.
-func resolveExecTargets(r git.Runner, cfg *config.Config, typeFilter string, dirty bool) ([]resolver.WorktreeInfo, error) {
-	worktrees, err := operations.ListWorktreeInfos(r)
+func resolveExecTargets(ctx context.Context, r git.Runner, cfg *config.Config, typeFilter string, dirty bool) ([]resolver.WorktreeInfo, error) {
+	worktrees, err := operations.ListWorktreeInfos(ctx, r)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +116,7 @@ func resolveExecTargets(r git.Runner, cfg *config.Config, typeFilter string, dir
 	}
 
 	if dirty {
-		filtered = filterDirty(r, filtered)
+		filtered = filterDirty(ctx, r, filtered)
 	}
 
 	return filtered, nil
@@ -169,45 +176,35 @@ func buildExecData(command string, results []executor.Result) execData {
 	}
 }
 
+type dirtyCheckResult struct {
+	dirty   bool
+	warning string
+}
+
 // filterDirty filters worktrees to only those with uncommitted changes.
 // If IsDirty returns an error, the worktree is treated as dirty (included)
 // and a warning is written to os.Stderr so the operator can investigate.
-func filterDirty(r git.Runner, worktrees []resolver.WorktreeInfo) []resolver.WorktreeInfo {
-	isDirtyFlags := make([]bool, len(worktrees))
-	warnings := make([]string, len(worktrees))
-	var wg sync.WaitGroup
-	sem := make(chan struct{}, 8)
+func filterDirty(ctx context.Context, r git.Runner, worktrees []resolver.WorktreeInfo) []resolver.WorktreeInfo {
+	results := parallel.Collect(ctx, len(worktrees), 8, func(ctx context.Context, i int) dirtyCheckResult {
+		itemCtx, cancel := git.WithItemTimeout(ctx)
+		defer cancel()
+		d, err := git.IsDirty(itemCtx, r, worktrees[i].Path)
+		if err != nil {
+			return dirtyCheckResult{dirty: true, warning: fmt.Sprintf("Warning: cannot check dirty status for %s: %v", worktrees[i].Path, err)}
+		}
+		return dirtyCheckResult{dirty: d}
+	})
 
-	for i, wt := range worktrees {
-		wg.Add(1)
-		go func(idx int, path string) {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
-			d, err := git.IsDirty(r, path)
-			if err != nil {
-				warnings[idx] = fmt.Sprintf("Warning: cannot check dirty status for %s: %v", path, err)
-				isDirtyFlags[idx] = true
-				return
-			}
-			if d {
-				isDirtyFlags[idx] = true
-			}
-		}(i, wt.Path)
-	}
-	wg.Wait()
-
-	for _, w := range warnings {
-		if w != "" {
-			fmt.Fprintln(os.Stderr, w)
+	for _, res := range results {
+		if res.warning != "" {
+			fmt.Fprintln(os.Stderr, res.warning)
 		}
 	}
 
 	var out []resolver.WorktreeInfo
-	for i, wt := range worktrees {
-		if isDirtyFlags[i] {
-			out = append(out, wt)
+	for i, res := range results {
+		if res.dirty {
+			out = append(out, worktrees[i])
 		}
 	}
 	return out

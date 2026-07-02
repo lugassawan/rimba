@@ -19,7 +19,7 @@ func TestMergeBasic(t *testing.T) {
 
 	// Create a branch with a commit
 	wtPath := filepath.Join(filepath.Dir(repo), "wt-merge-basic")
-	if err := git.AddWorktree(r, wtPath, "feat/merge-basic", "main"); err != nil {
+	if err := git.AddWorktree(context.Background(), r, wtPath, "feat/merge-basic", "main"); err != nil {
 		t.Fatalf(fatalAddWorktree, err)
 	}
 
@@ -46,7 +46,7 @@ func TestMergeNoFF(t *testing.T) {
 
 	// Create a branch with a commit
 	wtPath := filepath.Join(filepath.Dir(repo), "wt-merge-noff")
-	if err := git.AddWorktree(r, wtPath, "feat/merge-noff", "main"); err != nil {
+	if err := git.AddWorktree(context.Background(), r, wtPath, "feat/merge-noff", "main"); err != nil {
 		t.Fatalf(fatalAddWorktree, err)
 	}
 
@@ -88,7 +88,7 @@ func TestMergeInProgress(t *testing.T) {
 	r := &git.ExecRunner{Dir: repo}
 
 	// Clean repo: no merge in progress
-	inProgress, err := git.MergeInProgress(r, repo)
+	inProgress, err := git.MergeInProgress(context.Background(), r, repo)
 	if err != nil {
 		t.Fatalf("MergeInProgress on clean repo: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestMergeInProgress(t *testing.T) {
 
 	// Set up a conflicting merge: two branches edit the same file differently.
 	wtPath := filepath.Join(filepath.Dir(repo), "wt-merge-in-progress")
-	if err := git.AddWorktree(r, wtPath, "feat/conflict-source", "main"); err != nil {
+	if err := git.AddWorktree(context.Background(), r, wtPath, "feat/conflict-source", "main"); err != nil {
 		t.Fatalf(fatalAddWorktree, err)
 	}
 	testutil.CreateFile(t, wtPath, "conflict.txt", "source version")
@@ -116,7 +116,7 @@ func TestMergeInProgress(t *testing.T) {
 	}
 
 	// Now a merge should be in progress.
-	inProgress, err = git.MergeInProgress(r, repo)
+	inProgress, err = git.MergeInProgress(context.Background(), r, repo)
 	if err != nil {
 		t.Fatalf("MergeInProgress after conflict: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestMergeAbort(t *testing.T) {
 
 	// Set up a conflicting merge (same steps as TestMergeInProgress).
 	wtPath := filepath.Join(filepath.Dir(repo), "wt-merge-abort")
-	if err := git.AddWorktree(r, wtPath, "feat/abort-source", "main"); err != nil {
+	if err := git.AddWorktree(context.Background(), r, wtPath, "feat/abort-source", "main"); err != nil {
 		t.Fatalf(fatalAddWorktree, err)
 	}
 	testutil.CreateFile(t, wtPath, "conflict.txt", "source version")
@@ -156,14 +156,14 @@ func TestMergeAbort(t *testing.T) {
 	}
 
 	// Repo should be clean and no merge in progress.
-	dirty, err := git.IsDirty(r, repo)
+	dirty, err := git.IsDirty(context.Background(), r, repo)
 	if err != nil {
 		t.Fatalf("IsDirty after abort: %v", err)
 	}
 	if dirty {
 		t.Error("expected repo to be clean after MergeAbort")
 	}
-	inProgress, err := git.MergeInProgress(r, repo)
+	inProgress, err := git.MergeInProgress(context.Background(), r, repo)
 	if err != nil {
 		t.Fatalf("MergeInProgress after abort: %v", err)
 	}

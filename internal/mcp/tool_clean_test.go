@@ -450,24 +450,42 @@ func TestCleanToolStaleListWorktreesError(t *testing.T) {
 	}
 }
 
-func TestCleanToolMergedNoConfig(t *testing.T) {
-	// When config is nil, resolveMainBranch falls back to git.DefaultBranch
+func TestCleanToolMergedRequiresConfig(t *testing.T) {
+	hctx := &HandlerContext{
+		Runner:   &mockRunner{},
+		Config:   nil,
+		RepoRoot: "/repo",
+		Version:  "test",
+	}
+	handler := handleClean(hctx)
+
+	result := callTool(t, handler, map[string]any{"mode": modeMerged})
+	errText := resultError(t, result)
+	if !strings.Contains(errText, "not initialized") {
+		t.Errorf("expected config error, got: %s", errText)
+	}
+}
+
+func TestCleanToolStaleRequiresConfig(t *testing.T) {
+	hctx := &HandlerContext{
+		Runner:   &mockRunner{},
+		Config:   nil,
+		RepoRoot: "/repo",
+		Version:  "test",
+	}
+	handler := handleClean(hctx)
+
+	result := callTool(t, handler, map[string]any{"mode": modeStale})
+	errText := resultError(t, result)
+	if !strings.Contains(errText, "not initialized") {
+		t.Errorf("expected config error, got: %s", errText)
+	}
+}
+
+func TestCleanToolPruneNoConfig(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
-			// symbolic-ref for DefaultBranch detection
-			if len(args) >= 1 && args[0] == gitSymbolicRef {
-				return refsOriginMain, nil
-			}
-			if len(args) > 0 && args[0] == gitFetch {
-				return "", nil
-			}
-			if len(args) >= 2 && args[0] == gitBranch && args[1] == gitMerged {
-				return "", nil
-			}
-			porcelain := worktreePorcelain(
-				struct{ path, branch string }{"/repo", "main"},
-			)
-			return porcelain, nil
+			return "", nil
 		},
 	}
 	hctx := &HandlerContext{
@@ -478,10 +496,13 @@ func TestCleanToolMergedNoConfig(t *testing.T) {
 	}
 	handler := handleClean(hctx)
 
-	result := callTool(t, handler, map[string]any{"mode": modeMerged})
+	result := callTool(t, handler, map[string]any{"mode": "prune"})
+	if result.IsError {
+		t.Fatalf("prune should work without config, got error: %s", resultError(t, result))
+	}
 	data := unmarshalJSON[cleanResult](t, result)
-	if data.Mode != modeMerged {
-		t.Errorf("mode = %q, want %q", data.Mode, modeMerged)
+	if data.Mode != "prune" {
+		t.Errorf("mode = %q, want %q", data.Mode, "prune")
 	}
 }
 
@@ -564,7 +585,7 @@ func TestCleanToolMergedResolveMainBranchError(t *testing.T) {
 	}
 	hctx := &HandlerContext{
 		Runner:   r,
-		Config:   nil,
+		Config:   testConfig(),
 		RepoRoot: "/repo",
 		Version:  "test",
 	}
@@ -584,7 +605,7 @@ func TestCleanToolStaleResolveMainBranchError(t *testing.T) {
 	}
 	hctx := &HandlerContext{
 		Runner:   r,
-		Config:   nil,
+		Config:   testConfig(),
 		RepoRoot: "/repo",
 		Version:  "test",
 	}

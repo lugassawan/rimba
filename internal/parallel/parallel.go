@@ -1,11 +1,17 @@
 package parallel
 
-import "sync"
+import (
+	"context"
+	"sync"
+)
 
 // Collect runs fn for each index [0, n) with bounded concurrency,
 // collecting results into a slice that preserves index order.
 // A concurrency value <= 0 is treated as "auto" (= n, i.e. unlimited).
-func Collect[T any](n, concurrency int, fn func(i int) T) []T {
+// ctx is passed to each fn invocation so callers can enforce per-item deadlines.
+// On cancellation, goroutines waiting for a semaphore slot exit early; their
+// result entries hold the zero value of T.
+func Collect[T any](ctx context.Context, n, concurrency int, fn func(ctx context.Context, i int) T) []T {
 	if n == 0 {
 		return nil
 	}
@@ -21,10 +27,14 @@ func Collect[T any](n, concurrency int, fn func(i int) T) []T {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			sem <- struct{}{}
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
 			defer func() { <-sem }()
 
-			results[idx] = fn(idx)
+			results[idx] = fn(ctx, idx)
 		}(i)
 	}
 	wg.Wait()

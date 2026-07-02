@@ -4,8 +4,8 @@ go 1.26.4
 
 require (
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
-	github.com/mark3labs/mcp-go v0.54.1
-	github.com/pelletier/go-toml/v2 v2.3.1
+	github.com/mark3labs/mcp-go v0.55.1
+	github.com/pelletier/go-toml/v2 v2.4.2
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 )
@@ -17,5 +17,5 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
-	golang.org/x/text v0.14.0 // indirect
+	golang.org/x/text v0.38.0 // indirect
 )

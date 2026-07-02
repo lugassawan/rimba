@@ -57,10 +57,12 @@ const (
 	secretContent = "SECRET=test"
 
 	// Merge test constants.
-	taskMergeMain   = "merge-main"
-	taskMergeKeep   = "merge-keep"
-	taskMergeSrc    = "merge-src"
-	taskMergeDelSrc = "merge-del-src"
+	taskMergeMain       = "merge-main"
+	taskMergeKeep       = "merge-keep"
+	taskMergeSrc        = "merge-src"
+	taskMergeDelSrc     = "merge-del-src"
+	taskMergeRemote     = "merge-remote"
+	taskMergeRemoteKeep = "merge-remote-keep"
 
 	// Conflict-check and merge-plan test constants.
 	taskConflictA = "cc-task-a"

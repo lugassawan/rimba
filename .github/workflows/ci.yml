@@ -10,16 +10,50 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+      docs: ${{ steps.filter.outputs.docs }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            CHANGED=$(git diff --name-only "origin/${BASE_REF}"...HEAD)
+          else
+            CHANGED=$(git diff --name-only "${BEFORE_SHA}" HEAD 2>/dev/null \
+              || git diff --name-only HEAD~1 HEAD)  # fallback: BEFORE_SHA is "0000..." on first push
+          fi
+          if echo "$CHANGED" | grep -qvE '^docs/'; then
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          fi
+          if echo "$CHANGED" | grep -qE '^docs/'; then
+            echo "docs=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs=false" >> "$GITHUB_OUTPUT"
+          fi
+
   lint:
+    needs: [changes]
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: ~/go/bin/golangci-lint
           key: golangci-lint-v2.12.2
@@ -27,10 +61,12 @@ jobs:
       - run: make lint
 
   coverage:
+    needs: [changes]
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
@@ -48,10 +84,12 @@ jobs:
           fi
 
   build:
+    needs: [changes]
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
@@ -59,10 +97,12 @@ jobs:
       - run: make build
 
   e2e:
+    needs: [changes]
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
@@ -70,10 +110,12 @@ jobs:
       - run: make test-e2e
 
   race:
+    needs: [changes]
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
@@ -81,10 +123,12 @@ jobs:
       - run: make test-race
 
   build-cross:
+    needs: [changes]
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
@@ -96,13 +140,32 @@ jobs:
       - run: CGO_ENABLED=0 GOOS=darwin  GOARCH=arm64 go build ./...
 
   vuln:
+    needs: [changes]
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
       - run: go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
       - run: govulncheck ./...
+
+  docs-build:
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ruby/setup-ruby@9eb537ca036ebaed86729dcb9309076e4c5c3b74 # v1.314.0
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+          working-directory: docs
+      - run: bundle exec jekyll build --baseurl "/rimba"
+        working-directory: docs
+        env:
+          JEKYLL_ENV: production
