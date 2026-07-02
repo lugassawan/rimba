@@ -567,6 +567,52 @@ func TestSyncAllDryRun(t *testing.T) {
 	}
 }
 
+func TestPrintSyncDryRun(t *testing.T) {
+	tests := []struct {
+		name     string
+		useMerge bool
+		push     bool
+		want     []string
+		notWant  []string
+	}{
+		{
+			name:    "rebase without push",
+			want:    []string{"[dry-run] would rebase " + branchFeature + " onto " + branchMain + "\n"},
+			notWant: []string{"would push"},
+		},
+		{
+			name:     "merge with push",
+			useMerge: true,
+			push:     true,
+			want: []string{
+				"[dry-run] would merge " + branchFeature + " onto " + branchMain + "\n",
+				"[dry-run] would push " + branchFeature + " to origin\n",
+			},
+			notWant: []string{"would rebase"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd, buf := newTestCmd()
+
+			printSyncDryRun(cmd, branchFeature, branchMain, tt.useMerge, tt.push)
+
+			out := buf.String()
+			for _, want := range tt.want {
+				if !strings.Contains(out, want) {
+					t.Errorf("output = %q, want %q", out, want)
+				}
+			}
+			for _, notWant := range tt.notWant {
+				if strings.Contains(out, notWant) {
+					t.Errorf("output = %q, must not contain %q", out, notWant)
+				}
+			}
+		})
+	}
+}
+
 func TestSyncWorktreeSkipWarningOnStderr(t *testing.T) {
 	var outBuf, errBuf bytes.Buffer
 	cmd := &cobra.Command{}

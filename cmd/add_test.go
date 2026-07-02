@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/testutil"
 	"github.com/spf13/cobra"
 )
@@ -198,6 +199,33 @@ func TestAddWithSource(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "Created worktree") {
 		t.Errorf("output = %q, want 'Created worktree'", buf.String())
+	}
+}
+
+func TestPrintWorktreeResult(t *testing.T) {
+	cmd, buf := newTestCmd()
+	result := operations.AddResult{
+		Branch:          branchFeature,
+		Path:            pathWtFeatureLogin,
+		Copied:          []string{".env", "config/local.json"},
+		Skipped:         []string{"missing.env"},
+		SkippedSymlinks: []string{"linked-dir"},
+	}
+
+	printWorktreeResult(cmd, "Created worktree", result)
+
+	out := buf.String()
+	for _, want := range []string{
+		"Created worktree\n",
+		"  Branch: " + branchFeature + "\n",
+		"  Path:   " + pathWtFeatureLogin + "\n",
+		"  Copied: [.env config/local.json]\n",
+		"  Skipped (not found): [missing.env]\n",
+		"  Skipped (symlinks): [linked-dir]\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output = %q, want %q", out, want)
+		}
 	}
 }
 
