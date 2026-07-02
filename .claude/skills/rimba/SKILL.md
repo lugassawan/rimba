@@ -1,6 +1,6 @@
 ---
 name: rimba
-description: Use when user wants to manage git worktrees — creating, listing, syncing, merging, or cleaning up parallel working directories
+description: Use when the user wants to create, list, sync, merge, remove, or clean up git worktrees, or before starting new feature/bugfix work that should be isolated in its own branch and directory — covers parallel development across multiple tasks without branch-switching
 ---
 
 # rimba — Git Worktree Manager
@@ -65,3 +65,21 @@ Commands supporting `--json`: `list`, `status`, `exec`, `conflict-check`, `deps 
 - Use `--force` only when you understand the implications
 - Never modify `.rimba/settings.toml` without asking the user
 - Always check `rimba status` before bulk operations
+
+## MCP Tools
+
+When running inside an MCP-connected agent, prefer the native `mcp__rimba__*` tools over
+shelling out to the `rimba` CLI — they skip a subprocess round-trip. Fall back to the CLI
+when no MCP connection is available.
+
+| MCP tool | CLI equivalent |
+|----------|----------------|
+| `mcp__rimba__add` | `rimba add <task>` |
+| `mcp__rimba__list` | `rimba list` |
+| `mcp__rimba__status` | `rimba status` |
+| `mcp__rimba__sync` | `rimba sync [task]` |
+| `mcp__rimba__merge` | `rimba merge <task>` |
+| `mcp__rimba__remove` | `rimba remove <task>` |
+| `mcp__rimba__clean` | `rimba clean --merged` |
+| `mcp__rimba__exec` | `rimba exec <cmd>` |
+| `mcp__rimba__conflict-check` | `rimba conflict-check` |
