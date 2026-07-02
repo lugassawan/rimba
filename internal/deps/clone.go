@@ -34,6 +34,10 @@ var cowCopyCmd = func(ctx context.Context, src, dst string) *exec.Cmd {
 // CloneDir copies a directory from src to dst using CoW (copy-on-write) when available.
 // Falls back to regular copy if CoW is not supported.
 func CloneDir(ctx context.Context, src, dst string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	if err := os.MkdirAll(filepath.Dir(dst), 0750); err != nil {
 		return err
 	}
@@ -100,13 +104,13 @@ func cloneRecursive(ctx context.Context, srcWT, dstWT string, mod Module) error 
 // remaining directory.
 func walkCloneFunc(ctx context.Context, srcWT, dstWT, baseName string, errs *[]error) fs.WalkDirFunc {
 	return func(path string, d os.DirEntry, err error) error {
-		if ctx.Err() != nil {
-			*errs = append(*errs, ctx.Err())
-			return ctx.Err()
-		}
 		if err != nil {
 			*errs = append(*errs, err)
 			return nil // keep walking
+		}
+		if ctx.Err() != nil {
+			*errs = append(*errs, ctx.Err())
+			return ctx.Err()
 		}
 		if !d.IsDir() {
 			return nil
