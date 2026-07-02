@@ -22,6 +22,7 @@ const (
 	flagForce        = "force"
 	flagJSON         = "json"
 	flagNoColor      = "no-color"
+	flagPush         = "push"
 	flagSkipDeps     = "skip-deps"
 	flagSkipHooks    = "skip-hooks"
 	flagStaleDays    = "stale-days"

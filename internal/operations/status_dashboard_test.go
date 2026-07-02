@@ -368,6 +368,76 @@ func TestSortEntriesBySizeDescAllNil(t *testing.T) {
 	}
 }
 
+// ctxAwareRunner wraps a mockRunner but honors ctx expiration for
+// `rev-list --count`, modeling a real git subprocess that fails fast
+// against an already-expired context. mockRunner itself discards ctx,
+// which can't reproduce the shared-budget starvation this test targets.
+type ctxAwareRunner struct {
+	inner *mockRunner
+	count string
+}
+
+func (r *ctxAwareRunner) Run(ctx context.Context, args ...string) (string, error) {
+	if len(args) >= 2 && args[0] == gitCmdRevList && args[1] == "--count" {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		return r.count, nil
+	}
+	return r.inner.run(args...)
+}
+
+func (r *ctxAwareRunner) RunInDir(_ context.Context, dir string, args ...string) (string, error) {
+	return r.inner.runInDir(dir, args...)
+}
+
+// TestStatusDashboardDetailSlowSizeDoesNotStarveVelocity reproduces issue #334:
+// a slow DirSize walk on one worktree must not exhaust the same worktree's
+// budget for CommitCountSince (the 7D column). Before the fix, both ops
+// shared one itemCtx budget; after, each gets its own.
+func TestStatusDashboardDetailSlowSizeDoesNotStarveVelocity(t *testing.T) {
+	origTimeout, origDirSize := withItemTimeout, dirSizeFn
+	defer func() {
+		withItemTimeout = origTimeout
+		dirSizeFn = origDirSize
+	}()
+
+	const testBudget = 30 * time.Millisecond
+	withItemTimeout = func(_ context.Context) (context.Context, context.CancelFunc) {
+		return context.WithTimeout(context.Background(), testBudget)
+	}
+	dirSizeFn = func(ctx context.Context, _ string) (int64, error) {
+		<-ctx.Done() // models an un-interruptible walk that consumes its whole budget
+		return 0, ctx.Err()
+	}
+
+	branchSlow := "feature/slow"
+	porcelain := porcelainEntries(
+		struct{ path, branch string }{pathMainRepo, "main"},
+		struct{ path, branch string }{pathWtFeatureAuth, branchSlow},
+	)
+	base := (&statusDashboardRunner{
+		porcelain:   porcelain,
+		commitTimes: map[string]string{branchSlow: "1700000000"},
+	}).build()
+	r := &ctxAwareRunner{inner: base, count: "5"}
+
+	res, err := StatusDashboard(context.Background(), r, StatusDashboardRequest{Detail: true})
+	if err != nil {
+		t.Fatalf("StatusDashboard: %v", err)
+	}
+	if len(res.Entries) != 1 {
+		t.Fatalf("Entries = %d, want 1", len(res.Entries))
+	}
+
+	if res.Entries[0].SizeBytes != nil {
+		t.Error("SizeBytes is non-nil: the slow dirSizeFn should have timed out")
+	}
+	if res.Entries[0].Recent7D == nil {
+		t.Error("Recent7D is nil: a slow SIZE walk starved the 7D velocity budget for the same worktree")
+	}
+}
+
 // resolverStatus is a small helper to build a WorktreeStatus for test entries.
 func resolverStatus(dirty bool, behind int) resolver.WorktreeStatus {
 	return resolver.WorktreeStatus{Dirty: dirty, Behind: behind}

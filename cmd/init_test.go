@@ -112,7 +112,7 @@ func TestInitMigrationFromLegacy(t *testing.T) {
 	if strings.Contains(content, config.FileName) {
 		t.Error(".gitignore should not contain legacy entry after migration")
 	}
-	globEntry := filepath.Join(config.DirName, config.LocalGlob)
+	globEntry := config.DirName + "/" + config.LocalGlob
 	if !strings.Contains(content, globEntry) {
 		t.Errorf(".gitignore should contain %q, got:\n%s", globEntry, content)
 	}
@@ -344,7 +344,7 @@ func TestInitFreshGitignoreAlreadyPresent(t *testing.T) {
 	repoDir := t.TempDir()
 
 	// Pre-seed .gitignore with the glob entry that rimba now writes
-	gitignoreEntry := filepath.Join(config.DirName, config.LocalGlob)
+	gitignoreEntry := config.DirName + "/" + config.LocalGlob
 	if err := os.WriteFile(filepath.Join(repoDir, ".gitignore"), []byte(gitignoreEntry+"\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -402,7 +402,7 @@ func TestInitReInitMigratesPerFileEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := string(data)
-	globEntry := filepath.Join(config.DirName, config.LocalGlob)
+	globEntry := config.DirName + "/" + config.LocalGlob
 	if !strings.Contains(content, globEntry) {
 		t.Errorf(".gitignore should contain %q after re-init, got:\n%s", globEntry, content)
 	}

@@ -19,6 +19,22 @@ func TestRemoveToolRequiresTask(t *testing.T) {
 	}
 }
 
+func TestRemoveToolRequiresConfig(t *testing.T) {
+	hctx := &HandlerContext{
+		Runner:   &mockRunner{},
+		Config:   nil,
+		RepoRoot: "/repo",
+		Version:  "test",
+	}
+	handler := handleRemove(hctx)
+
+	result := callTool(t, handler, map[string]any{"task": "test"})
+	errText := resultError(t, result)
+	if !strings.Contains(errText, "not initialized") {
+		t.Errorf("expected config error, got: %s", errText)
+	}
+}
+
 func TestRemoveToolNotFound(t *testing.T) {
 	porcelain := worktreePorcelain(
 		struct{ path, branch string }{"/repo", "main"},

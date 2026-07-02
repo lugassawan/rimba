@@ -1,6 +1,7 @@
 package deps
 
 import (
+	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -29,7 +30,7 @@ func TestCloneDirBasic(t *testing.T) {
 	}
 	writeFile(t, filepath.Join(src, "sub"), "nested.txt", "world")
 
-	if err := CloneDir(src, dst); err != nil {
+	if err := CloneDir(context.Background(), src, dst); err != nil {
 		t.Fatal(err)
 	}
 
@@ -44,7 +45,7 @@ func TestCloneDirSuccess(t *testing.T) {
 
 	writeFile(t, src, testDataTxt, "some data")
 
-	if err := CloneDir(src, dst); err != nil {
+	if err := CloneDir(context.Background(), src, dst); err != nil {
 		t.Fatalf("CloneDir failed: %v", err)
 	}
 
@@ -62,7 +63,7 @@ func TestCloneDirOverwritesExisting(t *testing.T) {
 	}
 	writeFile(t, dst, "old.txt", "old content")
 
-	if err := CloneDir(src, dst); err != nil {
+	if err := CloneDir(context.Background(), src, dst); err != nil {
 		t.Fatal(err)
 	}
 
@@ -86,7 +87,7 @@ func TestCloneDirOverwriteExisting(t *testing.T) {
 	// Create src with new content
 	writeFile(t, src, "fresh.txt", "fresh data")
 
-	if err := CloneDir(src, dst); err != nil {
+	if err := CloneDir(context.Background(), src, dst); err != nil {
 		t.Fatalf("CloneDir failed: %v", err)
 	}
 
@@ -111,7 +112,7 @@ func TestCloneModuleSingle(t *testing.T) {
 
 	mod := Module{Dir: DirVendor}
 
-	if err := CloneModule(srcWT, dstWT, mod); err != nil {
+	if err := CloneModule(context.Background(), srcWT, dstWT, mod); err != nil {
 		t.Fatal(err)
 	}
 
@@ -137,7 +138,7 @@ func TestCloneModuleSingleWithExtraDirs(t *testing.T) {
 		ExtraDirs: []string{DirYarnCache},
 	}
 
-	if err := CloneModule(srcWT, dstWT, mod); err != nil {
+	if err := CloneModule(context.Background(), srcWT, dstWT, mod); err != nil {
 		t.Fatal(err)
 	}
 
@@ -169,7 +170,7 @@ func TestCloneModuleRecursive(t *testing.T) {
 		Recursive: true,
 	}
 
-	if err := CloneModule(srcWT, dstWT, mod); err != nil {
+	if err := CloneModule(context.Background(), srcWT, dstWT, mod); err != nil {
 		t.Fatal(err)
 	}
 
@@ -191,7 +192,7 @@ func TestCloneModuleRecursiveSkipsMissingParent(t *testing.T) {
 		Recursive: true,
 	}
 
-	if err := CloneModule(srcWT, dstWT, mod); err != nil {
+	if err := CloneModule(context.Background(), srcWT, dstWT, mod); err != nil {
 		t.Fatal(err)
 	}
 
@@ -206,7 +207,7 @@ func TestCloneSingleSourceNotFound(t *testing.T) {
 
 	mod := Module{Dir: "nonexistent_deps"}
 
-	err := cloneSingle(srcWT, dstWT, mod)
+	err := cloneSingle(context.Background(), srcWT, dstWT, mod)
 	if err == nil {
 		t.Fatal("expected error when source dir does not exist")
 	}
@@ -227,7 +228,7 @@ func TestCloneExtraDirsSuccess(t *testing.T) {
 	}
 	writeFile(t, yarnCacheDir, "dep-1.0.0.zip", "cached-content")
 
-	err := cloneExtraDirs(srcWT, dstWT, []string{DirYarnCache})
+	err := cloneExtraDirs(context.Background(), srcWT, dstWT, []string{DirYarnCache})
 	if err != nil {
 		t.Fatalf("cloneExtraDirs failed: %v", err)
 	}
@@ -240,7 +241,7 @@ func TestCloneExtraDirsMissing(t *testing.T) {
 	dstWT := t.TempDir()
 
 	// Call with a non-existent extra dir — should not error
-	err := cloneExtraDirs(srcWT, dstWT, []string{"does/not/exist"})
+	err := cloneExtraDirs(context.Background(), srcWT, dstWT, []string{"does/not/exist"})
 	if err != nil {
 		t.Fatalf("expected no error for missing extra dir, got: %v", err)
 	}
@@ -266,7 +267,7 @@ func TestCloneIfParentExistsNoParent(t *testing.T) {
 	relPath := filepath.Join("packages", "foo", "node_modules")
 
 	var errs []error
-	err := cloneIfParentExists(srcPath, dstWT, relPath, &errs)
+	err := cloneIfParentExists(context.Background(), srcPath, dstWT, relPath, &errs)
 	if !errors.Is(err, filepath.SkipDir) {
 		t.Errorf("expected filepath.SkipDir, got: %v", err)
 	}
@@ -297,7 +298,7 @@ func TestCowCopySuccess(t *testing.T) {
 
 	writeFile(t, src, testDataTxt, "cow-content")
 
-	if err := cowCopy(src, dst); err != nil {
+	if err := cowCopy(context.Background(), src, dst); err != nil {
 		t.Fatalf("cowCopy failed: %v", err)
 	}
 
@@ -306,7 +307,7 @@ func TestCowCopySuccess(t *testing.T) {
 
 func TestCowCopyNonexistentSource(t *testing.T) {
 	dst := filepath.Join(t.TempDir(), "dst")
-	err := cowCopy("/nonexistent/path/src", dst)
+	err := cowCopy(context.Background(), "/nonexistent/path/src", dst)
 	if err == nil {
 		t.Fatal("expected error for nonexistent source")
 	}
@@ -326,7 +327,7 @@ func TestCloneDirMkdirAllError(t *testing.T) {
 	}
 
 	dst := filepath.Join(blockFile, "child", "target")
-	err := CloneDir(src, dst)
+	err := CloneDir(context.Background(), src, dst)
 	if err == nil {
 		t.Fatal("expected error when MkdirAll cannot create parent")
 	}
@@ -354,7 +355,7 @@ func TestCloneRecursiveWithWorkDir(t *testing.T) {
 		WorkDir:   "api",
 	}
 
-	if err := CloneModule(srcWT, dstWT, mod); err != nil {
+	if err := CloneModule(context.Background(), srcWT, dstWT, mod); err != nil {
 		t.Fatalf("CloneModule with WorkDir failed: %v", err)
 	}
 
@@ -366,7 +367,7 @@ func TestWalkCloneFuncSkipsErrors(t *testing.T) {
 	dstWT := t.TempDir()
 
 	var errs []error
-	fn := walkCloneFunc(srcWT, dstWT, DirNodeModules, &errs)
+	fn := walkCloneFunc(context.Background(), srcWT, dstWT, DirNodeModules, &errs)
 
 	// Call the returned WalkDirFunc with a non-nil error — should return nil (keep walking)
 	err := fn("/some/path", nil, os.ErrPermission)
@@ -405,7 +406,7 @@ func TestWalkCloneFuncSkipsFiles(t *testing.T) {
 	}
 
 	var errs []error
-	fn := walkCloneFunc(srcWT, dstWT, DirNodeModules, &errs)
+	fn := walkCloneFunc(context.Background(), srcWT, dstWT, DirNodeModules, &errs)
 
 	result := fn(filePath, fileEntry, nil)
 	if result != nil {
@@ -427,7 +428,7 @@ func TestCloneIfParentExistsCloneFails(t *testing.T) {
 	relPath := filepath.Join("packages", "foo", "node_modules")
 
 	var errs []error
-	err := cloneIfParentExists(srcPath, dstWT, relPath, &errs)
+	err := cloneIfParentExists(context.Background(), srcPath, dstWT, relPath, &errs)
 	if !errors.Is(err, filepath.SkipDir) {
 		t.Errorf("expected filepath.SkipDir on clone failure, got: %v", err)
 	}
@@ -453,7 +454,7 @@ func TestCloneExtraDirsCloneError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err := cloneExtraDirs(srcWT, dstWT, []string{".yarn/cache"})
+	err := cloneExtraDirs(context.Background(), srcWT, dstWT, []string{".yarn/cache"})
 	if err == nil {
 		t.Fatal("expected error when extra dir clone fails")
 	}
@@ -480,7 +481,7 @@ func TestCloneDirRemoveAllError(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(parent, 0755) })
 
-	err := CloneDir(src, dst)
+	err := CloneDir(context.Background(), src, dst)
 	if err == nil {
 		t.Fatal("expected error when RemoveAll fails on read-only parent")
 	}
@@ -520,7 +521,7 @@ func TestCloneRecursiveWithExtraDirs(t *testing.T) {
 		ExtraDirs: []string{DirYarnCache},
 	}
 
-	if err := CloneModule(srcWT, dstWT, mod); err != nil {
+	if err := CloneModule(context.Background(), srcWT, dstWT, mod); err != nil {
 		t.Fatalf("CloneModule recursive with ExtraDirs failed: %v", err)
 	}
 
@@ -540,7 +541,7 @@ func TestCloneModuleRecursiveSearchRootNotFound(t *testing.T) {
 
 	// WorkDir points to a non-existent directory — WalkDir fails on Lstat
 	mod := Module{Dir: DirNodeModules, Recursive: true, WorkDir: "nonexistent"}
-	err := CloneModule(srcWT, dstWT, mod)
+	err := CloneModule(context.Background(), srcWT, dstWT, mod)
 	if err == nil {
 		t.Fatal("expected error when WorkDir does not exist")
 	}
@@ -569,7 +570,7 @@ func TestCloneModuleRecursiveExtraDirError(t *testing.T) {
 	}
 
 	mod := Module{Dir: DirNodeModules, Recursive: true, ExtraDirs: []string{DirYarnCache}}
-	err := CloneModule(srcWT, dstWT, mod)
+	err := CloneModule(context.Background(), srcWT, dstWT, mod)
 	if err == nil {
 		t.Fatal("expected error when ExtraDir clone fails in recursive mode")
 	}
@@ -594,10 +595,10 @@ func TestCowCopyFallbackNotNested(t *testing.T) {
 	}
 
 	orig := cowCopyCmd
-	cowCopyCmd = func(s, d string) *exec.Cmd { return exec.Command("false") }
+	cowCopyCmd = func(ctx context.Context, s, d string) *exec.Cmd { return exec.Command("false") }
 	t.Cleanup(func() { cowCopyCmd = orig })
 
-	if err := cowCopy(src, dst); err != nil {
+	if err := cowCopy(context.Background(), src, dst); err != nil {
 		t.Fatalf("cowCopy returned unexpected error: %v", err)
 	}
 
@@ -624,12 +625,12 @@ func TestCowCopyDoubleFailurePreservesBothCauses(t *testing.T) {
 	dst := filepath.Join(t.TempDir(), "dst")
 
 	orig := cowCopyCmd
-	cowCopyCmd = func(s, d string) *exec.Cmd { return exec.Command("false") }
+	cowCopyCmd = func(ctx context.Context, s, d string) *exec.Cmd { return exec.Command("false") }
 	t.Cleanup(func() { cowCopyCmd = orig })
 
 	// /nonexistent/... is guaranteed absent on any POSIX host; cp -R will fail,
 	// exercising the fallback-failure branch and the double-cause error chain.
-	err := cowCopy("/nonexistent/does/not/exist/src", dst)
+	err := cowCopy(context.Background(), "/nonexistent/does/not/exist/src", dst)
 	if err == nil {
 		t.Fatal("expected error when both CoW and fallback copy fail")
 	}
@@ -662,10 +663,10 @@ func TestCowCopyRemoveAllError(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(parent, 0755) })
 
 	orig := cowCopyCmd
-	cowCopyCmd = func(s, d string) *exec.Cmd { return exec.Command("false") }
+	cowCopyCmd = func(ctx context.Context, s, d string) *exec.Cmd { return exec.Command("false") }
 	t.Cleanup(func() { cowCopyCmd = orig })
 
-	if err := cowCopy("/some/src", dst); err == nil {
+	if err := cowCopy(context.Background(), "/some/src", dst); err == nil {
 		t.Fatal("expected error when RemoveAll cannot delete dst")
 	}
 }
@@ -694,7 +695,7 @@ func TestCloneModuleRecursiveAggregatesErrors(t *testing.T) {
 	}
 
 	mod := Module{Dir: DirNodeModules, Recursive: true}
-	err := CloneModule(srcWT, dstWT, mod)
+	err := CloneModule(context.Background(), srcWT, dstWT, mod)
 
 	// app-a should have been cloned successfully despite app-b failing
 	assertFileContent(t, filepath.Join(dstWT, "app-a", DirNodeModules, "pkg.json"), "app-a")

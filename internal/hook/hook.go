@@ -22,6 +22,7 @@ const (
 var (
 	ErrAlreadyInstalled = errors.New("rimba hook is already installed")
 	ErrNotInstalled     = errors.New("rimba hook is not installed")
+	ErrCorruptBlock     = errors.New("corrupt rimba hook block; resolve manually")
 )
 
 // Status describes the current state of a hook.
@@ -29,6 +30,7 @@ type Status struct {
 	Installed bool
 	HookPath  string
 	HasOther  bool // true if hook file has non-rimba content
+	Corrupt   bool // true if file has a BEGIN marker without a matching END
 }
 
 // PostMergeBlock returns the marker-delimited block with the branch guard embedded.
@@ -58,6 +60,9 @@ func Install(hooksDir, hookName, block string) error {
 	}
 
 	content := string(existing)
+	if isCorruptBlock(content) {
+		return ErrCorruptBlock
+	}
 	if containsBlock(content) {
 		return ErrAlreadyInstalled
 	}
@@ -88,11 +93,17 @@ func Uninstall(hooksDir, hookName string) error {
 	}
 
 	content := string(existing)
+	if isCorruptBlock(content) {
+		return ErrCorruptBlock
+	}
 	if !containsBlock(content) {
 		return ErrNotInstalled
 	}
 
-	cleaned := removeBlock(content)
+	cleaned, err := removeBlock(content)
+	if err != nil {
+		return err
+	}
 	if isShebangOnly(cleaned) {
 		if err := os.Remove(hookPath); err != nil {
 			return fmt.Errorf("remove hook file: %w", err)
@@ -115,11 +126,16 @@ func Check(hooksDir, hookName string) Status {
 	}
 
 	content := string(existing)
+	if isCorruptBlock(content) {
+		return Status{HookPath: hookPath, Corrupt: true}
+	}
+
 	installed := containsBlock(content)
 
 	var hasOther bool
 	if installed {
-		cleaned := removeBlock(content)
+		// isCorruptBlock already ruled out an orphaned BEGIN, so removeBlock cannot error here.
+		cleaned, _ := removeBlock(content)
 		hasOther = !isShebangOnly(cleaned)
 	} else {
 		hasOther = !isShebangOnly(content)
@@ -151,20 +167,15 @@ func containsBlock(content string) bool {
 	return strings.Contains(content, BeginMarker) && strings.Contains(content, EndMarker)
 }
 
-func removeBlock(content string) string {
+func removeBlock(content string) (string, error) {
 	before, afterBegin, found := strings.Cut(content, BeginMarker)
 	if !found {
-		return content
+		return content, nil
 	}
 
 	_, afterEnd, found := strings.Cut(afterBegin, EndMarker)
 	if !found {
-		// Corrupt: BEGIN without END — remove from BEGIN to end of file
-		before = strings.TrimRight(before, "\n")
-		if before == "" {
-			return ""
-		}
-		return before + "\n"
+		return "", ErrCorruptBlock
 	}
 
 	// Remove from BEGIN marker through END marker (including trailing newline)
@@ -172,15 +183,23 @@ func removeBlock(content string) string {
 	before = strings.TrimRight(before, "\n")
 
 	if before == "" {
-		return after
+		return after, nil
 	}
 	if after == "" {
-		return before + "\n"
+		return before + "\n", nil
 	}
-	return before + "\n" + after
+	return before + "\n" + after, nil
 }
 
 func isShebangOnly(content string) bool {
 	trimmed := strings.TrimSpace(content)
 	return trimmed == "" || trimmed == shebang
+}
+
+func isCorruptBlock(content string) bool {
+	if strings.Count(content, BeginMarker) > 1 {
+		return true
+	}
+	_, err := removeBlock(content)
+	return errors.Is(err, ErrCorruptBlock)
 }
