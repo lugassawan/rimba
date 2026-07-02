@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -56,7 +57,7 @@ directory is already personal.
 
 When --agents or -g is used, rimba also registers itself as an MCP server (server name:
 rimba, command: rimba mcp) in client config files (.mcp.json, .cursor/mcp.json,
-~/.claude/settings.json, ~/.codex/config.toml, ~/.gemini/settings.json,
+~/.claude.json, ~/.codex/config.toml, ~/.gemini/settings.json,
 ~/.codeium/windsurf/mcp_config.json, ~/.roo/mcp.json). --agents --local does not
 register MCP — it only updates agent files. Registration is idempotent.`,
 	Annotations: map[string]string{"skipConfig": "true"},
@@ -71,9 +72,10 @@ register MCP — it only updates agent files. Registration is idempotent.`,
 			return runInitGlobal(cmd, m.uninstall)
 		}
 
-		r := newRunner()
+		r := newRunner(cmd.Context())
 
-		repoRoot, err := git.RepoRoot(r)
+		ctx := cmd.Context()
+		repoRoot, err := git.RepoRoot(ctx, r)
 		if err != nil {
 			return err
 		}
@@ -104,7 +106,7 @@ register MCP — it only updates agent files. Registration is idempotent.`,
 			}
 
 		default:
-			if err := runInitFresh(cmd, r, repoRoot, dirPath, gitignoreEntry, personal); err != nil {
+			if err := runInitFresh(ctx, cmd, r, repoRoot, dirPath, gitignoreEntry, personal); err != nil {
 				return err
 			}
 		}
@@ -118,13 +120,13 @@ register MCP — it only updates agent files. Registration is idempotent.`,
 	},
 }
 
-func runInitFresh(cmd *cobra.Command, r git.Runner, repoRoot, dirPath, gitignoreEntry string, personal bool) error {
-	repoName, err := git.RepoName(r)
+func runInitFresh(ctx context.Context, cmd *cobra.Command, r git.Runner, repoRoot, dirPath, gitignoreEntry string, personal bool) error {
+	repoName, err := git.RepoName(ctx, r)
 	if err != nil {
 		return err
 	}
 
-	defaultBranch, err := git.DefaultBranch(r)
+	defaultBranch, err := git.DefaultBranch(ctx, r)
 	if err != nil {
 		return err
 	}
@@ -261,7 +263,7 @@ func runInstall(
 		if err != nil {
 			return errhint.WithFix(
 				fmt.Errorf("mcp servers: %w", err),
-				"check write permissions for MCP client configs (.mcp.json, .cursor/mcp.json, ~/.claude/settings.json)",
+				"check write permissions for MCP client configs (.mcp.json, .cursor/mcp.json, ~/.claude.json)",
 			)
 		}
 	}

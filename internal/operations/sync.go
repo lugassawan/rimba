@@ -40,7 +40,7 @@ func SyncBranch(ctx context.Context, r git.Runner, dir, mainBranch string, useMe
 // Uses force-with-lease after rebase, regular push after merge.
 // Returns (pushed, skipped, error). pushed is true only on success.
 func PushBranch(ctx context.Context, r git.Runner, dir string, useMerge bool) (bool, bool, error) {
-	if !git.HasUpstream(r, dir) {
+	if !git.HasUpstream(ctx, r, dir) {
 		return false, true, nil
 	}
 	var err error
@@ -84,7 +84,7 @@ func FilterEligible(worktrees []resolver.WorktreeInfo, prefixes []string, mainBr
 func SyncWorktree(ctx context.Context, r git.Runner, mainBranch string, wt resolver.WorktreeInfo, useMerge, push bool) SyncWorktreeResult {
 	res := SyncWorktreeResult{Branch: wt.Branch}
 
-	dirty, err := git.IsDirty(r, wt.Path)
+	dirty, err := git.IsDirty(ctx, r, wt.Path)
 	if err != nil {
 		res.Skipped = true
 		res.SkipReason = fmt.Sprintf("could not check status: %v", err)

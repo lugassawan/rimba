@@ -163,6 +163,51 @@ func TestTrustTrustShow(t *testing.T) {
 	assertContains(t, r.Stdout, "not trusted")
 }
 
+// TestTrustReArmsOnPostRenameChange covers the full trust-gate lifecycle for
+// post_rename: initial approval → command change → gate blocks rename → rimba
+// trust re-arms → rename succeeds and new hook runs.
+func TestTrustReArmsOnPostRenameChange(t *testing.T) {
+	repo := setupCleanInitializedRepo(t)
+
+	markerA := filepath.Join(repo, "rename-hook-a")
+	markerB := filepath.Join(repo, "rename-hook-b")
+
+	// Write initial post_rename hook and commit.
+	cfg := &config.Config{
+		WorktreeDir:   "../rimba-trust-rename-wt",
+		DefaultSource: "main",
+		PostRename:    []string{"touch " + markerA},
+	}
+	writeTeamConfig(t, repo, cfg)
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "add post_rename hook")
+
+	// Create the worktree to rename, bypassing the gate for initial setup.
+	rimbaWithEnv(t, repo, []string{"RIMBA_TRUST_YES=1"}, "add", "rename-src", "--skip-deps", "--skip-hooks")
+
+	// Change the hook content — this re-arms the trust gate.
+	cfg.PostRename = []string{"touch " + markerB}
+	writeTeamConfig(t, repo, cfg)
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "change post_rename hook")
+
+	// Rename without trust consent must be blocked.
+	r := rimbaFail(t, repo, "rename", "rename-src", "rename-dst", "--skip-deps")
+	assertFileNotExists(t, markerB)
+	combined := r.Stdout + r.Stderr
+	if !strings.Contains(combined, "rimba trust") {
+		t.Errorf("blocked rename should mention 'rimba trust', got:\nstdout: %s\nstderr: %s", r.Stdout, r.Stderr)
+	}
+
+	// Re-arm by approving the new hash.
+	rimbaSuccess(t, repo, "trust", "--yes")
+
+	// Rename now succeeds and the re-approved hook runs.
+	r2 := rimbaSuccess(t, repo, "rename", "rename-src", "rename-dst", "--skip-deps")
+	assertContains(t, r2.Stdout, "Renamed worktree")
+	assertFileExists(t, markerB)
+}
+
 // rimba init adds .rimba/*.local.toml glob to .gitignore (covers both
 // settings.local.toml and trust.local.toml under a single entry).
 func TestTrustInitAddsGitignoreEntry(t *testing.T) {

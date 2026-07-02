@@ -1,0 +1,79 @@
+name: Deploy docs to GitHub Pages
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ruby/setup-ruby@9eb537ca036ebaed86729dcb9309076e4c5c3b74 # v1.314.0
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+          working-directory: docs
+      - id: pages
+        uses: actions/configure-pages@v6
+      - run: bundle exec jekyll build --baseurl "${{ steps.pages.outputs.base_path }}"
+        working-directory: docs
+        env:
+          JEKYLL_ENV: production
+      - name: Assert pages render with the theme layout
+        working-directory: docs
+        run: |
+          for f in _site/commands/init.html _site/commands/add.html \
+                   _site/configuration.html \
+                   _site/troubleshooting.html _site/troubleshooting/adding-promoting.html; do
+            [[ -f "$f" ]] || { echo "::error::expected built file $f not found"; exit 1; }
+            grep -q '<html' "$f" \
+              && grep -q 'class="site-header"' "$f" \
+              || { echo "::error file=$f::page rendered without theme layout (missing _config.yml defaults?)"; exit 1; }
+            # class="site-header" is emitted by just-the-docs _layouts/default.html.
+            # If the gem is upgraded, verify this sentinel still matches and update if needed.
+          done
+          echo "OK: representative pages include the theme layout"
+      - name: Assert feature cards are not broken by nested anchors
+        working-directory: docs
+        run: |
+          # just-the-docs injects an <a class="anchor-heading"> into every heading.
+          # A heading inside a clickable card (<a class="rimba-feature">) produces an
+          # invalid nested <a> that the browser collapses, emptying the card.
+          # Guard: clickable cards must use <span class="rimba-feature-title">, never a heading.
+          for f in _site/commands.html _site/troubleshooting.html; do
+            [[ -f "$f" ]] || { echo "::error::expected built file $f not found"; exit 1; }
+            if grep -Pzo '<a class="rimba-feature"[^>]*>\s*<h[1-6]' "$f"; then
+              echo "::error file=$f::clickable feature card wraps a heading — nested <a> will break it"
+              exit 1
+            fi
+            grep -q 'class="rimba-feature-title"' "$f" \
+              || { echo "::error file=$f::expected rimba-feature-title in cards"; exit 1; }
+          done
+          echo "OK: clickable feature cards use valid non-heading titles"
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/_site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

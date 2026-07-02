@@ -1,0 +1,38 @@
+title: rimba
+description: Git worktree workflow manager — command & configuration reference
+theme: just-the-docs
+url: https://lugassawan.github.io
+baseurl: "/rimba"
+search_enabled: true
+aux_links:
+  rimba on GitHub:
+    - https://github.com/lugassawan/rimba
+aux_links_new_tab: true
+plugins:
+  - jekyll-sitemap
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - vendor
+logo: "/assets/rimba-512.svg"
+favicon_ico: "/assets/favicon.ico"
+color_scheme: rimba
+callouts:
+  note:
+    title: Note
+    color: green
+  tip:
+    title: Tip
+    color: blue
+  important:
+    title: Important
+    color: purple
+  warning:
+    title: Warning
+    color: red
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default

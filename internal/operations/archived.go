@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/lugassawan/rimba/internal/git"
@@ -9,13 +10,13 @@ import (
 
 // FindArchivedBranch finds a branch for the given service+task that is not
 // associated with any active worktree. service may be empty for non-monorepo repos.
-func FindArchivedBranch(r git.Runner, service, task string) (string, error) {
-	branches, err := git.LocalBranches(r)
+func FindArchivedBranch(ctx context.Context, r git.Runner, service, task string) (string, error) {
+	branches, err := git.LocalBranches(ctx, r)
 	if err != nil {
 		return "", fmt.Errorf("list branches: %w", err)
 	}
 
-	active, err := buildActiveSet(r)
+	active, err := buildActiveSet(ctx, r)
 	if err != nil {
 		return "", err
 	}
@@ -37,13 +38,13 @@ func FindArchivedBranch(r git.Runner, service, task string) (string, error) {
 
 // ListArchivedBranches returns branches that are not associated with any active
 // worktree and not the main branch.
-func ListArchivedBranches(r git.Runner, mainBranch string) ([]string, error) {
-	branches, err := git.LocalBranches(r)
+func ListArchivedBranches(ctx context.Context, r git.Runner, mainBranch string) ([]string, error) {
+	branches, err := git.LocalBranches(ctx, r)
 	if err != nil {
 		return nil, err
 	}
 
-	active, err := buildActiveSet(r)
+	active, err := buildActiveSet(ctx, r)
 	if err != nil {
 		return nil, err
 	}
@@ -106,8 +107,8 @@ func searchByTaskExtraction(branches []string, active map[string]bool, prefixes 
 }
 
 // buildActiveSet returns a set of branch names that are checked out in active worktrees.
-func buildActiveSet(r git.Runner) (map[string]bool, error) {
-	entries, err := git.ListWorktrees(r)
+func buildActiveSet(ctx context.Context, r git.Runner) (map[string]bool, error) {
+	entries, err := git.ListWorktrees(ctx, r)
 	if err != nil {
 		return nil, fmt.Errorf("list worktrees: %w", err)
 	}

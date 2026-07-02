@@ -14,15 +14,7 @@ type ctxMockRunner struct {
 	capturedCtx context.Context
 }
 
-func (m *ctxMockRunner) Run(args ...string) (string, error) {
-	return m.RunContext(context.Background(), args...)
-}
-
-func (m *ctxMockRunner) RunInDir(dir string, args ...string) (string, error) {
-	return m.RunInDirContext(context.Background(), dir, args...)
-}
-
-func (m *ctxMockRunner) RunContext(ctx context.Context, args ...string) (string, error) {
+func (m *ctxMockRunner) Run(ctx context.Context, args ...string) (string, error) {
 	m.capturedCtx = ctx
 	if m.run != nil {
 		return m.run(ctx, args...)
@@ -30,7 +22,7 @@ func (m *ctxMockRunner) RunContext(ctx context.Context, args ...string) (string,
 	return "", nil
 }
 
-func (m *ctxMockRunner) RunInDirContext(ctx context.Context, dir string, args ...string) (string, error) {
+func (m *ctxMockRunner) RunInDir(ctx context.Context, dir string, args ...string) (string, error) {
 	m.capturedCtx = ctx
 	if m.runInDir != nil {
 		return m.runInDir(ctx, dir, args...)

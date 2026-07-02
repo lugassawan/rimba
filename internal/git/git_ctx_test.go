@@ -5,14 +5,15 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
-func TestRunInDirContextCancelled(t *testing.T) {
+func TestRunInDirCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // pre-cancel
 
 	r := &ExecRunner{}
-	_, err := r.RunInDirContext(ctx, "", "status")
+	_, err := r.RunInDir(ctx, "", "status")
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
 	}
@@ -21,10 +22,9 @@ func TestRunInDirContextCancelled(t *testing.T) {
 	}
 }
 
-func TestRunDelegatesToContext(t *testing.T) {
+func TestRunDelegatesToRunInDir(t *testing.T) {
 	r := &ExecRunner{}
-	// git --version is a fast, safe command available everywhere
-	out, err := r.Run("--version")
+	out, err := r.Run(context.Background(), "--version")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -33,11 +33,22 @@ func TestRunDelegatesToContext(t *testing.T) {
 	}
 }
 
-func TestRunContextDelegatesToRunInDirContext(t *testing.T) {
-	r := &ExecRunner{}
-	out, err := r.RunContext(context.Background(), "--version")
+func TestExecRunnerTimeoutExpires(t *testing.T) {
+	r := &ExecRunner{Timeout: time.Nanosecond}
+	_, err := r.Run(context.Background(), "--version")
+	if err == nil {
+		t.Fatal("expected error from nanosecond timeout, got nil")
+	}
+	if !strings.Contains(err.Error(), "context deadline exceeded") {
+		t.Fatalf("expected 'context deadline exceeded', got: %v", err)
+	}
+}
+
+func TestExecRunnerZeroTimeoutNoDeadline(t *testing.T) {
+	r := &ExecRunner{Timeout: 0}
+	out, err := r.Run(context.Background(), "--version")
 	if err != nil {
-		t.Fatalf("RunContext: %v", err)
+		t.Fatalf("Run with zero timeout: %v", err)
 	}
 	if !strings.Contains(out, "git") {
 		t.Errorf("expected git version output, got: %q", out)

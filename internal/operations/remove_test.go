@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"strings"
@@ -26,7 +27,7 @@ func TestRemoveWorktreeSuccess(t *testing.T) {
 	}
 
 	wt := resolver.WorktreeInfo{Path: "/wt/feature-login", Branch: "feature/login"}
-	result, err := RemoveWorktree(r, wt, "login", false, false, nil)
+	result, err := RemoveWorktree(context.Background(), r, wt, "login", false, false, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -62,7 +63,7 @@ func TestRemoveWorktreeKeepBranch(t *testing.T) {
 	}
 
 	wt := resolver.WorktreeInfo{Path: "/wt/feature-login", Branch: "feature/login"}
-	result, err := RemoveWorktree(r, wt, "login", true, false, nil)
+	result, err := RemoveWorktree(context.Background(), r, wt, "login", true, false, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -86,7 +87,7 @@ func TestRemoveWorktreeRemovalFails(t *testing.T) {
 	}
 
 	wt := resolver.WorktreeInfo{Path: "/wt/feature-login", Branch: "feature/login"}
-	result, err := RemoveWorktree(r, wt, "login", false, false, nil)
+	result, err := RemoveWorktree(context.Background(), r, wt, "login", false, false, nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -111,7 +112,7 @@ func TestRemoveWorktreeBranchDeleteFails(t *testing.T) {
 	}
 
 	wt := resolver.WorktreeInfo{Path: "/wt/feature-login", Branch: "feature/login"}
-	result, err := RemoveWorktree(r, wt, "login", false, false, nil)
+	result, err := RemoveWorktree(context.Background(), r, wt, "login", false, false, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v (partial success should not return error)", err)
 	}
@@ -141,7 +142,7 @@ func TestRemoveWorktreeProgressCallbacks(t *testing.T) {
 	onProgress := progress.Func(func(msg string) { messages = append(messages, msg) })
 
 	wt := resolver.WorktreeInfo{Path: "/wt/feature-login", Branch: "feature/login"}
-	_, err := RemoveWorktree(r, wt, "login", false, false, onProgress)
+	_, err := RemoveWorktree(context.Background(), r, wt, "login", false, false, onProgress)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -164,7 +165,7 @@ func TestRemoveAndCleanupSuccess(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	wtRemoved, brDeleted, err := removeAndCleanup(r, "/wt/test", "feature/test", false)
+	wtRemoved, brDeleted, err := removeAndCleanup(context.Background(), r, "/wt/test", "feature/test", false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -181,7 +182,7 @@ func TestRemoveAndCleanupWtRemovalFails(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	wtRemoved, brDeleted, err := removeAndCleanup(r, "/wt/test", "feature/test", false)
+	wtRemoved, brDeleted, err := removeAndCleanup(context.Background(), r, "/wt/test", "feature/test", false)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -202,7 +203,7 @@ func TestRemoveAndCleanupBranchDeleteFails(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	wtRemoved, brDeleted, err := removeAndCleanup(r, "/wt/test", "feature/test", false)
+	wtRemoved, brDeleted, err := removeAndCleanup(context.Background(), r, "/wt/test", "feature/test", false)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -241,7 +242,7 @@ func TestRemoveAndCleanupForceFlag(t *testing.T) {
 				},
 				runInDir: noopRunInDir,
 			}
-			_, _, err := removeAndCleanup(r, "/wt/test", "feature/test", tt.force)
+			_, _, err := removeAndCleanup(context.Background(), r, "/wt/test", "feature/test", tt.force)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}

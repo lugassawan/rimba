@@ -35,14 +35,18 @@ func handleStatus(hctx *HandlerContext) server.ToolHandlerFunc {
 		staleDays := req.GetInt("stale_days", 14)
 		r := hctx.Runner
 
-		mainBranch, err := operations.ResolveMainBranch(r, configDefault(hctx))
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+		if _, err := hctx.requireConfig(); err != nil {
+			return errorResult(err), nil
 		}
 
-		entries, err := git.ListWorktrees(r)
+		mainBranch, err := operations.ResolveMainBranch(ctx, r, configDefault(hctx))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err), nil
+		}
+
+		entries, err := git.ListWorktrees(ctx, r)
+		if err != nil {
+			return errorResult(err), nil
 		}
 
 		candidates := git.FilterEntries(entries, mainBranch)
@@ -55,12 +59,14 @@ func handleStatus(hctx *HandlerContext) server.ToolHandlerFunc {
 			})
 		}
 
-		results := parallel.Collect(len(candidates), 8, func(i int) statusCollectedEntry {
+		results := parallel.Collect(ctx, len(candidates), 8, func(ctx context.Context, i int) statusCollectedEntry {
+			itemCtx, cancel := git.WithItemTimeout(ctx)
+			defer cancel()
 			e := candidates[i]
-			st := operations.CollectWorktreeStatus(r, e.Path)
+			st := operations.CollectWorktreeStatus(itemCtx, r, e.Path)
 			var ct time.Time
 			var hasTime bool
-			if t, err := git.LastCommitTime(r, e.Branch); err == nil {
+			if t, err := git.LastCommitTime(itemCtx, r, e.Branch); err == nil {
 				ct = t
 				hasTime = true
 			}

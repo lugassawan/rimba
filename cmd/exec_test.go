@@ -10,6 +10,7 @@ import (
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/executor"
+	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
@@ -234,7 +235,7 @@ func TestFilterDirtyWorktrees(t *testing.T) {
 	s := testExecSpinner(cmd)
 	defer s.Stop()
 
-	result := filterDirtyWorktrees(cmd, r, s, worktrees)
+	result := filterDirtyWorktrees(context.Background(), cmd, r, s, worktrees)
 	if len(result) != 1 {
 		t.Fatalf("expected 1 dirty worktree, got %d", len(result))
 	}
@@ -262,7 +263,7 @@ func TestFilterDirtyWorktreesIsDirtyErrorIncludedAndWarned(t *testing.T) {
 	s := testExecSpinner(cmd)
 	defer s.Stop()
 
-	result := filterDirtyWorktrees(cmd, r, s, worktrees)
+	result := filterDirtyWorktrees(context.Background(), cmd, r, s, worktrees)
 
 	if len(result) != 1 {
 		t.Fatalf("expected erroring worktree to be included (treated as dirty), got %d", len(result))
@@ -548,5 +549,152 @@ func TestExecShowHintsJSONEarlyReturn(t *testing.T) {
 	execShowHints(cmd)
 	if buf.Len() != 0 {
 		t.Errorf("expected no output in JSON mode, got %q", buf.String())
+	}
+}
+
+// newExecCmd builds a testable exec command with injected runner and executor.
+func newExecCmd(r git.Runner, execFn execRunner) (*cobra.Command, *bytes.Buffer) {
+	buf := &bytes.Buffer{}
+	cfg := &config.Config{DefaultSource: "main"}
+	c := buildExecCmd(r, execFn)
+	c.SetOut(buf)
+	c.SetErr(buf)
+	c.SetContext(config.WithConfig(context.Background(), cfg))
+	return c, buf
+}
+
+func TestExecCmdMissingTargetFlag(t *testing.T) {
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return "", nil },
+		runInDir: noopRunInDir,
+	}
+	cmd, _ := newExecCmd(r, func(_ context.Context, _ executor.Config) []executor.Result { return nil })
+	cmd.SetArgs([]string{"echo hi"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error when neither --all nor --type is set")
+	}
+	if !strings.Contains(err.Error(), "provide --all or --type") {
+		t.Errorf("error = %q, want 'provide --all or --type'", err.Error())
+	}
+}
+
+func TestExecCmdInvokesExecutor(t *testing.T) {
+	porcelain := strings.Join([]string{
+		"worktree /repo",
+		"HEAD abc",
+		"branch refs/heads/main",
+		"",
+		"worktree /wt/foo",
+		"HEAD def",
+		"branch refs/heads/feature/foo",
+		"",
+	}, "\n")
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return porcelain, nil },
+		runInDir: noopRunInDir,
+	}
+
+	var capturedCfg executor.Config
+	fakeExec := func(_ context.Context, cfg executor.Config) []executor.Result {
+		capturedCfg = cfg
+		return []executor.Result{
+			{Target: executor.Target{Branch: "feature/foo", Task: "foo", Path: "/wt/foo"}, ExitCode: 0, Stdout: []byte("ok\n")},
+		}
+	}
+
+	cmd, buf := newExecCmd(r, fakeExec)
+	cmd.SetArgs([]string{"--all", "--no-color", "echo ok"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if capturedCfg.Command != "echo ok" {
+		t.Errorf("command = %q, want %q", capturedCfg.Command, "echo ok")
+	}
+	if len(capturedCfg.Targets) == 0 {
+		t.Error("expected at least one target")
+	}
+	if !strings.Contains(buf.String(), "foo") {
+		t.Errorf("output missing task name: %q", buf.String())
+	}
+}
+
+func TestExecCmdJSONOutput(t *testing.T) {
+	porcelain := strings.Join([]string{
+		"worktree /repo",
+		"HEAD abc",
+		"branch refs/heads/main",
+		"",
+		"worktree /wt/foo",
+		"HEAD def",
+		"branch refs/heads/feature/foo",
+		"",
+	}, "\n")
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return porcelain, nil },
+		runInDir: noopRunInDir,
+	}
+	fakeExec := func(_ context.Context, _ executor.Config) []executor.Result {
+		return []executor.Result{
+			{Target: executor.Target{Branch: "feature/foo", Task: "foo", Path: "/wt/foo"}, ExitCode: 0},
+		}
+	}
+
+	cmd, buf := newExecCmd(r, fakeExec)
+	cmd.SetArgs([]string{"--all", "--json", "echo hi"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var env output.Envelope
+	if err := json.Unmarshal(buf.Bytes(), &env); err != nil {
+		t.Fatalf("invalid JSON: %v\noutput: %s", err, buf.String())
+	}
+	if env.Command != "exec" {
+		t.Errorf("envelope command = %q, want %q", env.Command, "exec")
+	}
+	dataMap, ok := env.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("data type = %T, want map[string]any", env.Data)
+	}
+	resultsArr, ok := dataMap["results"].([]any)
+	if !ok {
+		t.Fatalf("results type = %T, want []any", dataMap["results"])
+	}
+	if len(resultsArr) != 1 {
+		t.Errorf("results length = %d, want 1", len(resultsArr))
+	}
+}
+
+func TestExecCmdNoMatchingWorktrees(t *testing.T) {
+	// Only main worktree — no non-main worktrees to match.
+	porcelain := strings.Join([]string{
+		"worktree /repo",
+		"HEAD abc",
+		"branch refs/heads/main",
+		"",
+	}, "\n")
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return porcelain, nil },
+		runInDir: noopRunInDir,
+	}
+	called := false
+	fakeExec := func(_ context.Context, _ executor.Config) []executor.Result {
+		called = true
+		return nil
+	}
+
+	cmd, buf := newExecCmd(r, fakeExec)
+	cmd.SetArgs([]string{"--all", "echo hi"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if called {
+		t.Error("executor should not be called when no worktrees match")
+	}
+	if !strings.Contains(buf.String(), "No worktrees match") {
+		t.Errorf("expected 'No worktrees match' in output, got: %q", buf.String())
 	}
 }

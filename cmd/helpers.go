@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"context"
 	"io"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/debug"
+	"github.com/lugassawan/rimba/internal/gh"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/output"
@@ -17,8 +19,22 @@ import (
 // newRunner creates a git.Runner for command execution.
 // Defined as a variable to allow test overrides (same pattern as newUpdater).
 // When RIMBA_DEBUG is set, wraps the runner with timing instrumentation.
-var newRunner = func() git.Runner {
-	return debug.WrapRunner(&git.ExecRunner{})
+// The timeout is sourced from config in ctx; falls back to DefaultCommandTimeout.
+var newRunner = func(ctx context.Context) git.Runner {
+	timeout := config.DefaultCommandTimeout
+	if cfg := config.FromContext(ctx); cfg != nil {
+		timeout = cfg.EffectiveCommandTimeout()
+	}
+	return debug.WrapRunner(&git.ExecRunner{Timeout: timeout})
+}
+
+// newGHRunner creates a gh.Runner with a timeout sourced from config in ctx.
+var newGHRunner = func(ctx context.Context) gh.Runner {
+	timeout := config.DefaultCommandTimeout
+	if cfg := config.FromContext(ctx); cfg != nil {
+		timeout = cfg.EffectiveCommandTimeout()
+	}
+	return gh.Default(timeout)
 }
 
 // hintPainter returns a termcolor.Painter derived from the cobra command flags.
@@ -44,8 +60,8 @@ func spinnerOpts(cmd *cobra.Command) spinner.Options {
 }
 
 // resolveMainBranch tries to get the main branch from config, falling back to DefaultBranch.
-func resolveMainBranch(r git.Runner) (string, error) {
-	repoRoot, err := git.MainRepoRoot(r)
+func resolveMainBranch(ctx context.Context, r git.Runner) (string, error) {
+	repoRoot, err := git.MainRepoRoot(ctx, r)
 	if err != nil {
 		return "", err
 	}
@@ -55,21 +71,21 @@ func resolveMainBranch(r git.Runner) (string, error) {
 		configDefault = cfg.DefaultSource
 	}
 
-	return operations.ResolveMainBranch(r, configDefault)
+	return operations.ResolveMainBranch(ctx, r, configDefault)
 }
 
 // listWorktreeInfos converts git worktree entries to resolver-compatible WorktreeInfo slice.
-func listWorktreeInfos(r git.Runner) ([]resolver.WorktreeInfo, error) {
-	return operations.ListWorktreeInfos(r)
+func listWorktreeInfos(ctx context.Context, r git.Runner) ([]resolver.WorktreeInfo, error) {
+	return operations.ListWorktreeInfos(ctx, r)
 }
 
 // findWorktree looks up a worktree by user input (task or service/task).
 // It resolves the input to detect monorepo service names.
-func findWorktree(r git.Runner, input string) (resolver.WorktreeInfo, error) {
-	repoRoot, err := git.MainRepoRoot(r)
+func findWorktree(ctx context.Context, r git.Runner, input string) (resolver.WorktreeInfo, error) {
+	repoRoot, err := git.MainRepoRoot(ctx, r)
 	if err != nil {
-		return operations.FindWorktree(r, "", input)
+		return operations.FindWorktree(ctx, r, "", input)
 	}
 	service, task := operations.ResolveTaskInput(input, repoRoot)
-	return operations.FindWorktree(r, service, task)
+	return operations.FindWorktree(ctx, r, service, task)
 }

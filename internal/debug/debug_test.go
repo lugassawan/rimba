@@ -9,29 +9,17 @@ import (
 )
 
 type stubRunner struct {
-	runCalled         bool
-	runInDirCalled    bool
-	runContextCalled  bool
-	runInDirCtxCalled bool
+	runCalled      bool
+	runInDirCalled bool
 }
 
-func (s *stubRunner) Run(args ...string) (string, error) {
+func (s *stubRunner) Run(_ context.Context, args ...string) (string, error) {
 	s.runCalled = true
 	return "ok", nil
 }
 
-func (s *stubRunner) RunInDir(dir string, args ...string) (string, error) {
+func (s *stubRunner) RunInDir(_ context.Context, dir string, args ...string) (string, error) {
 	s.runInDirCalled = true
-	return "ok", nil
-}
-
-func (s *stubRunner) RunContext(_ context.Context, args ...string) (string, error) {
-	s.runContextCalled = true
-	return "ok", nil
-}
-
-func (s *stubRunner) RunInDirContext(_ context.Context, dir string, args ...string) (string, error) {
-	s.runInDirCtxCalled = true
 	return "ok", nil
 }
 
@@ -55,42 +43,6 @@ func TestWrapRunnerDisabled(t *testing.T) {
 
 	if wrapped != stub {
 		t.Error("expected original runner returned when RIMBA_DEBUG is unset")
-	}
-}
-
-func TestTimedRunnerRun(t *testing.T) {
-	t.Setenv("RIMBA_DEBUG", "1")
-
-	stub := &stubRunner{}
-	wrapped := WrapRunner(stub)
-
-	out, err := wrapped.Run("status")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if out != "ok" {
-		t.Errorf("expected ok, got %s", out)
-	}
-	if !stub.runCalled {
-		t.Error("inner runner Run was not called")
-	}
-}
-
-func TestTimedRunnerRunInDir(t *testing.T) {
-	t.Setenv("RIMBA_DEBUG", "1")
-
-	stub := &stubRunner{}
-	wrapped := WrapRunner(stub)
-
-	out, err := wrapped.RunInDir("/tmp/test", "status")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if out != "ok" {
-		t.Errorf("expected ok, got %s", out)
-	}
-	if !stub.runInDirCalled {
-		t.Error("inner runner RunInDir was not called")
 	}
 }
 
@@ -136,38 +88,38 @@ func TestStartTimerDisabled(t *testing.T) {
 	}
 }
 
-func TestTimedRunnerRunContext(t *testing.T) {
+func TestTimedRunnerRun(t *testing.T) {
 	t.Setenv("RIMBA_DEBUG", "1")
 
 	stub := &stubRunner{}
 	wrapped := WrapRunner(stub)
 
-	out, err := wrapped.RunContext(context.Background(), "status")
+	out, err := wrapped.Run(context.Background(), "status")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if out != "ok" {
 		t.Errorf("expected ok, got %s", out)
 	}
-	if !stub.runContextCalled {
-		t.Error("inner runner RunContext was not called")
+	if !stub.runCalled {
+		t.Error("inner runner Run was not called")
 	}
 }
 
-func TestTimedRunnerRunInDirContext(t *testing.T) {
+func TestTimedRunnerRunInDir(t *testing.T) {
 	t.Setenv("RIMBA_DEBUG", "1")
 
 	stub := &stubRunner{}
 	wrapped := WrapRunner(stub)
 
-	out, err := wrapped.RunInDirContext(context.Background(), "/tmp/test", "status")
+	out, err := wrapped.RunInDir(context.Background(), "/tmp/test", "status")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if out != "ok" {
 		t.Errorf("expected ok, got %s", out)
 	}
-	if !stub.runInDirCtxCalled {
-		t.Error("inner runner RunInDirContext was not called")
+	if !stub.runInDirCalled {
+		t.Error("inner runner RunInDir was not called")
 	}
 }

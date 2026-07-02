@@ -39,9 +39,9 @@ var mergeCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.FromContext(cmd.Context())
 
-		r := newRunner()
+		r := newRunner(cmd.Context())
 
-		repoRoot, err := git.MainRepoRoot(r)
+		repoRoot, err := git.MainRepoRoot(cmd.Context(), r)
 		if err != nil {
 			return err
 		}
@@ -105,6 +105,13 @@ var mergeCmd = &cobra.Command{
 			fmt.Fprintln(cmd.OutOrStdout(), result.RemoveError)
 		} else if result.RemoveError != nil {
 			fmt.Fprintf(cmd.OutOrStdout(), "Merged successfully but failed to remove worktree: %v\nTo remove manually: rimba remove %s\n", result.RemoveError, sourceTask)
+		}
+
+		if result.RemoteDeleted {
+			fmt.Fprintf(cmd.OutOrStdout(), "Deleted remote branch: %s/%s\n", git.DefaultRemote, result.SourceBranch)
+		} else if result.RemoteError != nil {
+			fmt.Fprintf(cmd.OutOrStdout(), "Failed to delete remote branch %s/%s: %v\nTo delete remote: git push %s --delete %s\n",
+				git.DefaultRemote, result.SourceBranch, result.RemoteError, git.DefaultRemote, result.SourceBranch)
 		}
 
 		return nil

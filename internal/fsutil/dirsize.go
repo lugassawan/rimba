@@ -2,14 +2,40 @@
 package fsutil
 
 import (
+	"context"
 	"io/fs"
 	"path/filepath"
 )
 
+type dirSizeResult struct {
+	size int64
+	err  error
+}
+
 // DirSize returns the total size of regular files under path.
-// Symlinks are not followed. On partial failure (permission denied,
-// races) it returns the best-effort total and the first error seen.
-func DirSize(path string) (int64, error) {
+// Symlinks are not followed; partial failures return a best-effort total.
+//
+// Returns (0, ctx.Err()) immediately on cancellation. The WalkDir goroutine
+// continues until the OS returns — it cannot be interrupted mid-syscall.
+func DirSize(ctx context.Context, path string) (int64, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	ch := make(chan dirSizeResult, 1)
+	go func() {
+		size, err := walkDirSize(path)
+		ch <- dirSizeResult{size: size, err: err}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	case r := <-ch:
+		return r.size, r.err
+	}
+}
+
+func walkDirSize(path string) (int64, error) {
 	var total int64
 	var firstErr error
 

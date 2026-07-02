@@ -29,7 +29,7 @@ in the last 7 days. With --detail, rows are sorted largest-first.`,
   rimba status --stale-days 7    # consider worktrees stale after 7 days`,
 	Annotations: map[string]string{"skipConfig": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		r := newRunner()
+		r := newRunner(cmd.Context())
 		staleDays, _ := cmd.Flags().GetInt(flagStaleDays)
 		detail, _ := cmd.Flags().GetBool(flagDetail)
 

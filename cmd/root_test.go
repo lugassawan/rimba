@@ -218,6 +218,18 @@ func TestExecute(t *testing.T) {
 	t.Cleanup(func() {
 		rootCmd.SetOut(nil)
 		rootCmd.SetErr(nil)
+		// Execute() sets rootCmd.ctx to a signal-notified context that is
+		// cancelled when Execute returns (via defer stop()). Reset it so
+		// subsequent tests that call cmd.Context() get a live context.
+		rootCmd.SetContext(context.Background())
+		// Execute() makes cobra graft a default "help" command onto the global
+		// rootCmd; remove it so later tests that iterate rootCmd's children
+		// (e.g. TestExamplePresent) aren't polluted by execution order.
+		for _, c := range rootCmd.Commands() {
+			if c.Name() == "help" {
+				rootCmd.RemoveCommand(c)
+			}
+		}
 	})
 
 	if err := Execute(); err != nil {
@@ -284,8 +296,8 @@ func TestRootHelpFunctionRoot(t *testing.T) {
 		_, _ = w.Write([]byte(`{
 			"tag_name":"v99.0.0",
 			"assets":[
-				{"name":"rimba_99.0.0_linux_amd64.tar.gz","browser_download_url":"https://example.com/download"},
-				{"name":"checksums.txt","browser_download_url":"https://example.com/checksums.txt"}
+				{"name":"rimba_99.0.0_linux_amd64.tar.gz","browser_download_url":"https://github.com/lugassawan/rimba/releases/download/v99.0.0/rimba_99.0.0_linux_amd64.tar.gz"},
+				{"name":"checksums.txt","browser_download_url":"https://github.com/lugassawan/rimba/releases/download/v99.0.0/checksums.txt"}
 			]
 		}`))
 	}))

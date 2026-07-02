@@ -10,7 +10,10 @@ import (
 	"github.com/lugassawan/rimba/internal/config"
 )
 
-const mergeWorktreeOut = "worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /wt/feature-login\nHEAD def456\nbranch refs/heads/feature/login\n\nworktree /wt/feature-dashboard\nHEAD ghi789\nbranch refs/heads/feature/dashboard\n"
+const (
+	mergeWorktreeOut = "worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /wt/feature-login\nHEAD def456\nbranch refs/heads/feature/login\n\nworktree /wt/feature-dashboard\nHEAD ghi789\nbranch refs/heads/feature/dashboard\n"
+	gitCmdPush       = "push" // first arg of "git push <remote> ..." — distinct from gitSubcmdStashPush which is args[1] of "git stash push"
+)
 
 func mergeTestRunner(mergeErr error) *mockRunner {
 	return &mockRunner{
@@ -477,5 +480,78 @@ func TestMergeWithNoFF(t *testing.T) {
 	// Verify --no-ff was passed to merge
 	if !slices.Contains(mergeArgs, "--no-ff") {
 		t.Errorf("merge args = %v, want --no-ff to be present", mergeArgs)
+	}
+}
+
+func TestMergeRemoteDeletedOutput(t *testing.T) {
+	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: defaultRelativeWtDir}
+	// mergeTestRunner returns ("", nil) for unmatched run calls → origin present, push succeeds.
+	r := mergeTestRunner(nil)
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().String(flagInto, "", "")
+	cmd.Flags().Bool(flagNoFF, false, "")
+	cmd.Flags().Bool(flagKeep, false, "")
+	cmd.Flags().Bool(flagDelete, false, "")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	if err := mergeCmd.RunE(cmd, []string{"login"}); err != nil {
+		t.Fatalf(fatalMergeRunE, err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Deleted remote branch: origin/feature/login") {
+		t.Errorf("output = %q, want 'Deleted remote branch: origin/feature/login'", out)
+	}
+}
+
+func TestMergeRemoteDeleteFailedOutput(t *testing.T) {
+	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: defaultRelativeWtDir}
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoPath, nil
+			}
+			if len(args) >= 1 && args[0] == "remote" {
+				return "https://github.com/lugassawan/rimba.git", nil
+			}
+			if len(args) >= 1 && args[0] == gitCmdPush {
+				return "", errors.New("connection refused")
+			}
+			return mergeWorktreeOut, nil
+		},
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdStatus {
+				return "", nil
+			}
+			if len(args) >= 1 && args[0] == flagSyncMerge {
+				return "", nil
+			}
+			return "", nil
+		},
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().String(flagInto, "", "")
+	cmd.Flags().Bool(flagNoFF, false, "")
+	cmd.Flags().Bool(flagKeep, false, "")
+	cmd.Flags().Bool(flagDelete, false, "")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	if err := mergeCmd.RunE(cmd, []string{"login"}); err != nil {
+		t.Fatalf(fatalMergeRunE, err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Failed to delete remote branch") {
+		t.Errorf("output = %q, want 'Failed to delete remote branch'", out)
+	}
+	if !strings.Contains(out, "connection refused") {
+		t.Errorf("output = %q, want remote error reason 'connection refused'", out)
+	}
+	if !strings.Contains(out, "git push origin --delete") {
+		t.Errorf("output = %q, want manual hint with 'git push origin --delete'", out)
 	}
 }

@@ -52,6 +52,11 @@ func TestFormatStatus(t *testing.T) {
 			status: resolver.WorktreeStatus{Dirty: true, Ahead: 2, Behind: 1},
 			want:   "[dirty] ↑2 ↓1",
 		},
+		{
+			name:   "unknown",
+			status: resolver.WorktreeStatus{Unknown: true},
+			want:   "unknown",
+		},
 	}
 
 	for _, tt := range tests {

@@ -28,9 +28,9 @@ var archiveCmd = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		task := args[0]
-		r := newRunner()
+		r := newRunner(cmd.Context())
 
-		wt, err := findWorktree(r, task)
+		wt, err := findWorktree(cmd.Context(), r, task)
 		if err != nil {
 			return err
 		}
@@ -47,7 +47,7 @@ var archiveCmd = &cobra.Command{
 		defer s.Stop()
 
 		s.Start("Archiving worktree...")
-		result, err := operations.ArchiveWorktree(r, operations.ArchiveParams{
+		result, err := operations.ArchiveWorktree(cmd.Context(), r, operations.ArchiveParams{
 			Path:   wt.Path,
 			Branch: wt.Branch,
 			Force:  force,

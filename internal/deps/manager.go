@@ -90,7 +90,7 @@ func (m *Manager) install(ctx context.Context, worktreePath, sourceWT string, mo
 
 	entries := existingEntries
 	if entries == nil {
-		entries, err = git.ListWorktrees(m.Runner)
+		entries, err = git.ListWorktrees(ctx, m.Runner)
 		if err != nil {
 			for _, mod := range modules {
 				results = append(results, InstallResult{Module: mod, Error: err})
@@ -105,7 +105,8 @@ func (m *Manager) install(ctx context.Context, worktreePath, sourceWT string, mo
 	var done atomic.Int32
 	total := len(hashed)
 
-	results = parallel.Collect(total, concurrency, func(i int) InstallResult {
+	// No per-item timeout here — dependency installation is long-running by design.
+	results = parallel.Collect(ctx, total, concurrency, func(ctx context.Context, i int) InstallResult {
 		res := m.installModule(ctx, worktreePath, hashed[i], existingPaths)
 		completed := done.Add(1)
 		progress.Notifyf(onProgress, "%d/%d complete", completed, total)
@@ -179,7 +180,7 @@ func tryCloneFromExisting(ctx context.Context, worktreePath string, mh ModuleWit
 
 // cloneAndPost clones the module from srcWT to dstWT and runs the PostClone hook.
 func cloneAndPost(ctx context.Context, dstWT, srcWT string, mod Module) InstallResult {
-	if err := CloneModule(srcWT, dstWT, mod); err != nil {
+	if err := CloneModule(ctx, srcWT, dstWT, mod); err != nil {
 		if !mod.CloneOnly {
 			installErr := runInstall(ctx, dstWT, mod)
 			return InstallResult{Module: mod, Error: installErr}
