@@ -13,7 +13,10 @@ import (
 )
 
 const (
-	gitignoreLockDirName   = ".gitignore.lock"
+	// gitignoreLockDirName is actually a directory (an os.Mkdir-based lock),
+	// not a TOML file. Named to match *.local.toml so the existing
+	// .rimba/*.local.toml gitignore glob already hides it.
+	gitignoreLockDirName   = "gitignore-lock.local.toml"
 	gitignoreLockOwnerFile = "owner"
 )
 
@@ -107,9 +110,9 @@ func ensureGitignoreLocked(repoRoot string, entry string) (added bool, retErr er
 // hasGitignoreEntry reports whether entry is present as a trimmed line in the
 // .gitignore file at repoRoot. Returns false (not error) when the file is absent.
 //
-// Not lock-guarded: pairing this with a later Ensure/Remove call re-opens the
-// TOCTOU window those functions close. Only call it as a standalone read, and
-// take the result as advisory the instant a concurrent writer might run.
+// Not lock-guarded: calling this and then a separate Ensure/Remove call
+// re-opens the TOCTOU race those functions close. Use it as a standalone
+// read only.
 func hasGitignoreEntry(repoRoot, entry string) (bool, error) {
 	path := filepath.Join(repoRoot, ".gitignore")
 	data, err := os.ReadFile(filepath.Clean(path))
@@ -179,9 +182,12 @@ func withGitignoreLock(repoRoot string, fn func() (bool, error)) (retAdded bool,
 // path of the lock directory beneath it. repoRoot itself must already exist;
 // a missing repoRoot surfaces as an error here rather than being silently
 // created.
+//
+// Note: an older build still locking at the pre-relocation path
+// (<repoRoot>/.gitignore.lock) won't be excluded by this lock.
 func ensureGitignoreLockDir(repoRoot string) (string, error) {
 	lockDir := filepath.Join(repoRoot, config.DirName)
-	if err := os.Mkdir(lockDir, 0700); err != nil && !os.IsExist(err) {
+	if err := os.Mkdir(lockDir, 0750); err != nil && !os.IsExist(err) {
 		return "", err
 	}
 	return filepath.Join(lockDir, gitignoreLockDirName), nil
@@ -191,9 +197,9 @@ func acquireGitignoreLock(lockPath string) (func() error, error) {
 	deadline := time.Now().Add(time.Duration(gitignoreLockTimeout.Load()))
 	for {
 		if err := os.Mkdir(lockPath, 0700); err == nil {
-			writeGitignoreLockOwner(lockPath)
+			token := writeGitignoreLockOwner(lockPath)
 			return func() error {
-				return os.RemoveAll(lockPath)
+				return releaseGitignoreLockIfOwned(lockPath, token)
 			}, nil
 		} else if !os.IsExist(err) {
 			return nil, err
@@ -214,44 +220,80 @@ func acquireGitignoreLock(lockPath string) (func() error, error) {
 // its owning process is provably dead (Unix liveness check) or it has aged
 // past gitignoreStaleLockAge. The age fallback is what recovers orphaned
 // locks on Windows and covers PID reuse everywhere. A failed reclaim (e.g.
-// another process already cleaned it up) is reported as "not reclaimed" so
-// the caller just spins and retries — it is never treated as an error.
+// someone else already reclaimed it) is reported as "not reclaimed" so the
+// caller just spins and retries — never treated as an error.
 func reclaimStaleGitignoreLock(lockPath string) bool {
 	info, err := os.Stat(lockPath)
 	if err != nil {
 		return false
 	}
 
+	pid, token, hasOwner := readGitignoreLockOwner(lockPath)
 	stale := time.Since(info.ModTime()) > time.Duration(gitignoreStaleLockAge.Load())
-	if !stale {
-		if pid, ok := readGitignoreLockOwner(lockPath); ok && !gitignoreLockOwnerAlive(pid) {
-			stale = true
-		}
+	if !stale && hasOwner && !gitignoreLockOwnerAlive(pid) {
+		stale = true
 	}
 	if !stale {
 		return false
 	}
 
+	if !hasOwner {
+		// No metadata to check against, likely a crash before it could be
+		// written. Just remove it.
+		return os.RemoveAll(lockPath) == nil
+	}
+	// Re-check the owner right before deleting: if it changed since we
+	// read it above, someone else already released and re-acquired the
+	// lock, so back off instead of deleting their active lock.
+	if !gitignoreLockTokenMatches(lockPath, token) {
+		return false
+	}
 	return os.RemoveAll(lockPath) == nil
 }
 
-// writeGitignoreLockOwner records the acquiring process's PID inside the
-// lock directory so a later holder can attempt a liveness-based reclaim.
-// Best-effort: a failed write just leaves reclaim to the age fallback.
-func writeGitignoreLockOwner(lockPath string) {
-	_ = os.WriteFile(filepath.Join(lockPath, gitignoreLockOwnerFile), []byte(strconv.Itoa(os.Getpid())), 0600)
+// writeGitignoreLockOwner records this process's PID and a unique token in
+// the lock directory, and returns that token so it can be checked later
+// before deleting the directory. Best-effort: a failed write just leaves
+// this one acquisition unfenced.
+func writeGitignoreLockOwner(lockPath string) string {
+	token := strconv.Itoa(os.Getpid()) + ":" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	_ = os.WriteFile(filepath.Join(lockPath, gitignoreLockOwnerFile), []byte(token), 0600)
+	return token
 }
 
-func readGitignoreLockOwner(lockPath string) (int, bool) {
+// readGitignoreLockOwner parses the owner file written by
+// writeGitignoreLockOwner, returning the recorded PID and the full token.
+func readGitignoreLockOwner(lockPath string) (pid int, token string, ok bool) {
 	data, err := os.ReadFile(filepath.Join(lockPath, gitignoreLockOwnerFile))
 	if err != nil {
-		return 0, false
+		return 0, "", false
 	}
-	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	token = strings.TrimSpace(string(data))
+	pidPart, _, found := strings.Cut(token, ":")
+	if !found {
+		return 0, "", false
+	}
+	pid, err = strconv.Atoi(pidPart)
 	if err != nil {
-		return 0, false
+		return 0, "", false
 	}
-	return pid, true
+	return pid, token, true
+}
+
+func gitignoreLockTokenMatches(lockPath, token string) bool {
+	_, current, ok := readGitignoreLockOwner(lockPath)
+	return ok && current == token
+}
+
+// releaseGitignoreLockIfOwned removes lockPath only if its owner file still
+// holds token — i.e. nobody has reclaimed the lock since this acquisition
+// wrote it. A mismatch means a different process now owns this path, so
+// this is a no-op rather than an error.
+func releaseGitignoreLockIfOwned(lockPath, token string) error {
+	if !gitignoreLockTokenMatches(lockPath, token) {
+		return nil
+	}
+	return os.RemoveAll(lockPath)
 }
 
 func removeGitignoreEntryVariantsLocked(repoRoot, dir, file string) {

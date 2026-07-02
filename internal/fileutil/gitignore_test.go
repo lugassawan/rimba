@@ -227,9 +227,8 @@ func TestEnsureGitignoreLockRespectsFreshLock(t *testing.T) {
 	if err := os.Mkdir(lockPath, 0700); err != nil {
 		t.Fatal(err)
 	}
-	// Owner is this test process itself: definitively alive, so the
-	// liveness branch must not reclaim it either.
-	if err := os.WriteFile(filepath.Join(lockPath, gitignoreLockOwnerFile), []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
+	// Owner is this test process itself, so it's alive and must not be reclaimed.
+	if err := os.WriteFile(filepath.Join(lockPath, gitignoreLockOwnerFile), []byte(strconv.Itoa(os.Getpid())+":fresh"), 0600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -265,8 +264,7 @@ func TestEnsureGitignoreReclaimsStaleLock(t *testing.T) {
 	if err := os.Mkdir(lockPath, 0700); err != nil {
 		t.Fatal(err)
 	}
-	// No owner metadata: simulates a crash before it could be written.
-	// Reclaim must fall back to age alone.
+	// No owner metadata, simulating a crash before it could be written.
 	old := time.Now().Add(-time.Hour)
 	if err := os.Chtimes(lockPath, old, old); err != nil {
 		t.Fatal(err)
@@ -305,20 +303,22 @@ func TestEnsureGitignoreReclaimsDeadPIDLock(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// PID reuse between the process exiting and the liveness check is a known,
+	// low-probability flake source for this pattern; accepted here since it's
+	// widely used for this kind of test.
 	cmd := exec.Command("true")
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("spawn short-lived process: %v", err)
 	}
 	deadPID := cmd.Process.Pid
-	if err := os.WriteFile(filepath.Join(lockPath, gitignoreLockOwnerFile), []byte(strconv.Itoa(deadPID)), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(lockPath, gitignoreLockOwnerFile), []byte(strconv.Itoa(deadPID)+":dead"), 0600); err != nil {
 		t.Fatal(err)
 	}
 
 	previousTimeout := gitignoreLockTimeout.Load()
 	previousStaleAge := gitignoreStaleLockAge.Load()
 	gitignoreLockTimeout.Store(int64(2 * time.Second))
-	// Deliberately generous so a reclaim here can only be explained by the
-	// dead-PID branch, not the age fallback.
+	// Generous on purpose, so a reclaim here proves the dead-PID branch fired.
 	gitignoreStaleLockAge.Store(int64(time.Hour))
 	t.Cleanup(func() {
 		gitignoreLockTimeout.Store(previousTimeout)
@@ -334,6 +334,56 @@ func TestEnsureGitignoreReclaimsDeadPIDLock(t *testing.T) {
 	}
 }
 
+// TestStaleOwnerUnlockDoesNotDeleteReclaimedLock proves a slow holder's
+// unlock doesn't delete a lock that's since been reclaimed and re-acquired
+// by someone else. Without the owner-token check this deletes the new
+// holder's active lock, letting both believe they hold it.
+func TestStaleOwnerUnlockDoesNotDeleteReclaimedLock(t *testing.T) {
+	dir := t.TempDir()
+	lockDir := filepath.Join(dir, config.DirName)
+	if err := os.MkdirAll(lockDir, 0750); err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(lockDir, gitignoreLockDirName)
+
+	previousTimeout := gitignoreLockTimeout.Load()
+	previousStaleAge := gitignoreStaleLockAge.Load()
+	gitignoreLockTimeout.Store(int64(2 * time.Second))
+	gitignoreStaleLockAge.Store(int64(10 * time.Millisecond))
+	t.Cleanup(func() {
+		gitignoreLockTimeout.Store(previousTimeout)
+		gitignoreStaleLockAge.Store(previousStaleAge)
+	})
+
+	// A acquires the lock and holds it long enough to go stale.
+	unlockA, err := acquireGitignoreLock(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	// B reclaims the now-stale lock and re-acquires it.
+	unlockB, err := acquireGitignoreLock(lockPath)
+	if err != nil {
+		t.Fatalf("expected B to reclaim the stale lock, got: %v", err)
+	}
+
+	// A finally releases. This must not remove B's lock.
+	if err := unlockA(); err != nil {
+		t.Fatalf("unexpected error from A's unlock: %v", err)
+	}
+	if _, err := os.Stat(lockPath); err != nil {
+		t.Fatalf("expected B's lock to survive A's unlock, stat error: %v", err)
+	}
+
+	if err := unlockB(); err != nil {
+		t.Fatalf("unexpected error from B's unlock: %v", err)
+	}
+	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
+		t.Fatalf("expected lock to be gone after B's unlock, stat error: %v", err)
+	}
+}
+
 func TestWithGitignoreLockUnlockError(t *testing.T) {
 	dir := t.TempDir()
 	lockPath := filepath.Join(dir, config.DirName, gitignoreLockDirName)
@@ -342,8 +392,7 @@ func TestWithGitignoreLockUnlockError(t *testing.T) {
 		_ = os.RemoveAll(lockPath)
 	})
 
-	// Strip write permission from the lock dir itself so os.RemoveAll can't
-	// unlink the owner metadata file it contains, forcing unlock() to fail.
+	// Make the lock dir read-only so RemoveAll can't unlink the owner file inside it.
 	added, err := withGitignoreLock(dir, func() (bool, error) {
 		if cerr := os.Chmod(lockPath, 0500); cerr != nil {
 			return false, cerr
@@ -617,6 +666,11 @@ func TestEnsureLocalGlobIgnoredNoGitignore(t *testing.T) {
 	glob := config.DirName + "/" + config.LocalGlob
 	if !strings.Contains(content, glob) {
 		t.Errorf("expected glob %q in new .gitignore, got:\n%s", glob, content)
+	}
+	// The lock dir name is designed to match config.LocalGlob so the glob
+	// above already hides it, without a dedicated gitignore entry.
+	if matched, err := filepath.Match(config.LocalGlob, gitignoreLockDirName); err != nil || !matched {
+		t.Errorf("expected lock dir name %q to match glob %q (err=%v)", gitignoreLockDirName, config.LocalGlob, err)
 	}
 }
 
