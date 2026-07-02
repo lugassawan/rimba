@@ -93,6 +93,10 @@ func mcpCleanPrune(ctx context.Context, r git.Runner, dryRun bool) (*mcp.CallToo
 }
 
 func mcpCleanMerged(ctx context.Context, r git.Runner, hctx *HandlerContext, dryRun bool, force bool) (*mcp.CallToolResult, error) {
+	if _, err := hctx.requireConfig(); err != nil {
+		return errorResult(err), nil
+	}
+
 	mainBranch, err := operations.ResolveMainBranch(ctx, r, configDefault(hctx))
 	if err != nil {
 		return errorResult(err), nil
@@ -144,6 +148,10 @@ func mcpCleanMerged(ctx context.Context, r git.Runner, hctx *HandlerContext, dry
 }
 
 func mcpCleanStale(ctx context.Context, r git.Runner, hctx *HandlerContext, dryRun bool, staleDays int, force bool) (*mcp.CallToolResult, error) {
+	if _, err := hctx.requireConfig(); err != nil {
+		return errorResult(err), nil
+	}
+
 	mainBranch, err := operations.ResolveMainBranch(ctx, r, configDefault(hctx))
 	if err != nil {
 		return errorResult(err), nil
