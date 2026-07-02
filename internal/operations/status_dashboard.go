@@ -14,6 +14,14 @@ import (
 
 const recentWindow = 7 * 24 * time.Hour
 
+// withItemTimeout and dirSizeFn are indirections over git.WithItemTimeout and
+// fsutil.DirSize so tests can substitute a shrunk timeout and a slow walk.
+// Mutating these in a test is not safe under t.Parallel().
+var (
+	withItemTimeout = git.WithItemTimeout
+	dirSizeFn       = fsutil.DirSize
+)
+
 // StatusEntry holds per-worktree data collected during a status dashboard run.
 type StatusEntry struct {
 	Entry      git.WorktreeEntry
@@ -115,27 +123,42 @@ func SummarizeStatus(entries []StatusEntry, staleThreshold time.Time) StatusSumm
 
 // collectStatusEntries gathers dirty/ahead/behind state and last commit time
 // per candidate in parallel. Under detail it also computes size and 7-day
-// velocity; per-item errors leave the pointer nil (non-fatal).
+// velocity. Each per-item operation gets its own withItemTimeout budget, so a
+// slow one (e.g. a large DirSize walk) cannot starve the others; per-item
+// errors leave the pointer nil (non-fatal). This trades a lower worst-case
+// per-candidate latency (one shared budget) for correctness (independent
+// budgets): a candidate where every op stalls can now take up to 4x
+// itemQueryTimeout instead of 1x.
 func collectStatusEntries(ctx context.Context, gitR git.Runner, candidates []git.WorktreeEntry, detail bool) []StatusEntry {
 	return parallel.Collect(ctx, len(candidates), 8, func(ctx context.Context, i int) StatusEntry {
-		itemCtx, cancel := git.WithItemTimeout(ctx)
-		defer cancel()
 		e := candidates[i]
-		st := CollectWorktreeStatus(itemCtx, gitR, e.Path)
+
+		statusCtx, cancelStatus := withItemTimeout(ctx)
+		st := CollectWorktreeStatus(statusCtx, gitR, e.Path)
+		cancelStatus()
+
+		timeCtx, cancelTime := withItemTimeout(ctx)
 		var ct time.Time
 		var hasTime bool
-		if t, err := git.LastCommitTime(itemCtx, gitR, e.Branch); err == nil {
+		if t, err := git.LastCommitTime(timeCtx, gitR, e.Branch); err == nil {
 			ct = t
 			hasTime = true
 		}
+		cancelTime()
+
 		se := StatusEntry{Entry: e, Status: st, CommitTime: ct, HasTime: hasTime}
 		if detail {
-			if n, err := fsutil.DirSize(itemCtx, e.Path); err == nil {
+			sizeCtx, cancelSize := withItemTimeout(ctx)
+			if n, err := dirSizeFn(sizeCtx, e.Path); err == nil {
 				se.SizeBytes = &n
 			}
-			if c, err := git.CommitCountSince(itemCtx, gitR, e.Branch, recentWindow); err == nil {
+			cancelSize()
+
+			countCtx, cancelCount := withItemTimeout(ctx)
+			if c, err := git.CommitCountSince(countCtx, gitR, e.Branch, recentWindow); err == nil {
 				se.Recent7D = &c
 			}
+			cancelCount()
 		}
 		return se
 	})
