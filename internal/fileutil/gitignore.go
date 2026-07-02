@@ -193,7 +193,8 @@ func withGitignoreLock(repoRoot string, fn func() (bool, error)) (retAdded bool,
 // created.
 //
 // Note: an older build still locking at the pre-relocation path
-// (<repoRoot>/.gitignore.lock) won't be excluded by this lock.
+// (<repoRoot>/.gitignore.lock) won't serialize against this lock — the two
+// builds would run their .gitignore updates concurrently, unguarded.
 func ensureGitignoreLockDir(repoRoot string) (string, error) {
 	lockDir := filepath.Join(repoRoot, config.DirName)
 	if err := os.Mkdir(lockDir, 0750); err != nil && !os.IsExist(err) {
