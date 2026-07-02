@@ -15,6 +15,13 @@ type RenameResult struct {
 	NewBranch string
 	OldPath   string
 	NewPath   string
+	// Push status (only meaningful when Push=true)
+	Published      bool  // true if the renamed branch was pushed and set as upstream
+	PublishError   error // non-nil if the push failed
+	RemoteDeleted  bool  // true if the old remote branch was deleted
+	RemoteError    error // non-nil if deleting the old remote branch failed
+	RemoteSkipped  bool  // true when there was no upstream to delete (nothing to do)
+	NoOriginRemote bool  // true when there is no origin remote configured
 }
 
 // RenameParams holds the parameters for a worktree rename operation.
@@ -25,6 +32,7 @@ type RenameParams struct {
 	NewPrefix string
 	WtDir     string
 	Force     bool
+	Push      bool
 }
 
 // RenameWorktree renames a worktree's directory and branch.
@@ -56,6 +64,14 @@ func RenameWorktree(ctx context.Context, r git.Runner, p RenameParams) (RenameRe
 
 	newPath := resolver.WorktreePath(p.WtDir, newBranch)
 
+	// Must capture before the move: `git branch -m` preserves tracking config, so
+	// checking after would still report the stale origin/<old-branch> upstream.
+	var hadOriginUpstream bool
+	if p.Push {
+		upstreamRemote, hasUpstream := git.UpstreamRemote(ctx, r, p.WT.Path)
+		hadOriginUpstream = hasUpstream && upstreamRemote == git.DefaultRemote
+	}
+
 	if err := git.MoveWorktree(r, p.WT.Path, newPath, p.Force); err != nil {
 		return RenameResult{}, errhint.WithFix(
 			fmt.Errorf("failed to move worktree: %w", err),
@@ -79,10 +95,44 @@ func RenameWorktree(ctx context.Context, r git.Runner, p RenameParams) (RenameRe
 		)
 	}
 
-	return RenameResult{
+	result := RenameResult{
 		OldBranch: p.WT.Branch,
 		NewBranch: newBranch,
 		OldPath:   p.WT.Path,
 		NewPath:   newPath,
-	}, nil
+	}
+
+	if p.Push {
+		publishRenamed(ctx, r, newBranch, newPath, p.WT.Branch, hadOriginUpstream, &result)
+	}
+
+	return result, nil
+}
+
+// publishRenamed never aborts the rename; outcomes are recorded on result for the
+// caller to report. The old remote branch is deleted only after a successful publish
+// of the new one — deleting first, or after a failed publish, could leave the remote
+// with neither branch.
+func publishRenamed(ctx context.Context, r git.Runner, newBranch, newPath, oldBranch string, hadOriginUpstream bool, result *RenameResult) {
+	if !git.RemoteExists(ctx, r, git.DefaultRemote) {
+		result.NoOriginRemote = true
+		return
+	}
+
+	if err := git.PushSetUpstream(ctx, r, newPath, git.DefaultRemote, newBranch); err != nil {
+		result.PublishError = err
+		return
+	}
+	result.Published = true
+
+	if !hadOriginUpstream {
+		result.RemoteSkipped = true
+		return
+	}
+
+	if err := git.DeleteRemoteBranch(ctx, r, git.DefaultRemote, oldBranch); err != nil {
+		result.RemoteError = err
+		return
+	}
+	result.RemoteDeleted = true
 }

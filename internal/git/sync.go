@@ -1,6 +1,9 @@
 package git
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 // FetchArgs configures Fetch. The zero value performs a plain `git fetch <remote>`.
 type FetchArgs struct {
@@ -50,6 +53,17 @@ func HasUpstream(ctx context.Context, r Runner, dir string) bool {
 	return err == nil
 }
 
+// UpstreamRemote returns the remote name of the current branch's upstream tracking
+// branch in dir, and whether an upstream exists at all.
+func UpstreamRemote(ctx context.Context, r Runner, dir string) (string, bool) {
+	out, err := r.RunInDir(ctx, dir, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+	if err != nil {
+		return "", false
+	}
+	remote, _, _ := strings.Cut(strings.TrimSpace(out), "/")
+	return remote, true
+}
+
 // Push runs `git push` inside the given directory.
 func Push(ctx context.Context, r Runner, dir string) error {
 	_, err := r.RunInDir(ctx, dir, "push")
@@ -59,5 +73,11 @@ func Push(ctx context.Context, r Runner, dir string) error {
 // PushForceWithLease runs `git push --force-with-lease` inside the given directory.
 func PushForceWithLease(ctx context.Context, r Runner, dir string) error {
 	_, err := r.RunInDir(ctx, dir, "push", "--force-with-lease")
+	return err
+}
+
+// PushSetUpstream publishes branch to remote and sets it as the upstream.
+func PushSetUpstream(ctx context.Context, r Runner, dir, remote, branch string) error {
+	_, err := r.RunInDir(ctx, dir, "push", "-u", remote, branch)
 	return err
 }

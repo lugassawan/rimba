@@ -1,6 +1,7 @@
 package e2e_test
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -11,14 +12,16 @@ import (
 )
 
 const (
-	taskRename     = "rename-old"
-	taskRenameNew  = "rename-new"
-	taskRenameLock = "rename-lock"
-	taskLockNew    = "lock-new"
-	taskGhostRn    = "ghost-rename"
-	taskGhostNew   = "ghost-new"
-	taskBrExist    = "br-exist-old"
-	taskBrExistNew = "br-exist-new"
+	taskRename      = "rename-old"
+	taskRenameNew   = "rename-new"
+	taskRenameLock  = "rename-lock"
+	taskLockNew     = "lock-new"
+	taskGhostRn     = "ghost-rename"
+	taskGhostNew    = "ghost-new"
+	taskBrExist     = "br-exist-old"
+	taskBrExistNew  = "br-exist-new"
+	taskRenamePush  = "rn-push-src"
+	taskRenamePush2 = "rn-push-dst"
 )
 
 func TestRenameRenamesWorktree(t *testing.T) {
@@ -289,4 +292,84 @@ func TestRenameSkipHooksSkipsPostRenameHook(t *testing.T) {
 		flagSkipDepsE2E, flagSkipHooksE2E)
 
 	assertFileNotExists(t, marker)
+}
+
+// renameSetupWithRemote mirrors syncSetupWithRemote's bare-repo fixture pattern,
+// minus the "commit on main" step, which --push doesn't need.
+// Returns (repo path, bare remote path).
+func renameSetupWithRemote(t *testing.T, task string) (string, string) {
+	t.Helper()
+
+	dir := t.TempDir()
+
+	bareDir := filepath.Join(dir, "origin.git")
+	if err := os.MkdirAll(bareDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitBare(t, bareDir, "init", "--bare", "-b", "main")
+
+	repo := filepath.Join(dir, "repo")
+	cmd := exec.Command("git", "clone", bareDir, repo)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("clone: %s: %v", out, err)
+	}
+	testutil.GitCmd(t, repo, "config", "user.email", "test@test.com")
+	testutil.GitCmd(t, repo, "config", "user.name", "Test")
+
+	testutil.CreateFile(t, repo, "README.md", "# Test\n")
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "initial commit")
+	testutil.GitCmd(t, repo, "push", "-u", "origin", "main")
+
+	rimbaSuccess(t, repo, "init")
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "rimba init")
+	testutil.GitCmd(t, repo, "push")
+
+	rimbaSuccess(t, repo, "add", task)
+
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch := resolver.BranchName(defaultPrefix, task)
+	wtPath := resolver.WorktreePath(wtDir, branch)
+
+	// Give --push an existing remote branch to publish over and delete.
+	testutil.GitCmd(t, wtPath, "push", "-u", "origin", branch)
+
+	return repo, bareDir
+}
+
+// remoteBranchNames returns the set of branch names present in the bare repo.
+func remoteBranchNames(t *testing.T, bareDir string) map[string]bool {
+	t.Helper()
+	out := gitBare(t, bareDir, "for-each-ref", "--format=%(refname:short)", "refs/heads/")
+	names := make(map[string]bool)
+	for line := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
+		if line != "" {
+			names[line] = true
+		}
+	}
+	return names
+}
+
+func TestRenamePush(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo, bareDir := renameSetupWithRemote(t, taskRenamePush)
+	oldBranch := resolver.BranchName(defaultPrefix, taskRenamePush)
+	newBranch := resolver.BranchName(defaultPrefix, taskRenamePush2)
+
+	r := rimbaSuccess(t, repo, "rename", taskRenamePush, taskRenamePush2, "--push")
+	assertContains(t, r.Stdout, "Published branch: origin/"+newBranch)
+	assertContains(t, r.Stdout, "Deleted remote branch: origin/"+oldBranch)
+
+	remoteBranches := remoteBranchNames(t, bareDir)
+	if !remoteBranches[newBranch] {
+		t.Errorf("expected origin to have branch %q, got: %v", newBranch, remoteBranches)
+	}
+	if remoteBranches[oldBranch] {
+		t.Errorf("expected origin to no longer have branch %q", oldBranch)
+	}
 }
