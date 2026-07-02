@@ -137,8 +137,10 @@ func (b *safeBuffer) Bytes() []byte {
 }
 
 // classifyResult relabels a ctx-aborted target as Cancelled instead of a genuine failure.
+// Scoped to this Runner call being interrupted (err wraps ctx.Err(), or a negative exit
+// code from a signal-killed process) so a sibling's cancel() never swallows a genuine failure.
 func classifyResult(ctx context.Context, target Target, stdout, stderr []byte, exitCode int, err error) Result {
-	if ctx.Err() != nil && (exitCode != 0 || err != nil) {
+	if ctxErr := ctx.Err(); ctxErr != nil && (errors.Is(err, ctxErr) || exitCode < 0) {
 		return Result{Target: target, Cancelled: true}
 	}
 	return Result{

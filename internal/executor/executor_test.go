@@ -218,6 +218,41 @@ func TestRunSuccessAfterCancelStaysSuccess(t *testing.T) {
 	}
 }
 
+func TestRunConcurrentGenuineFailuresBothPreserved(t *testing.T) {
+	// Two targets fail independently and never touch ctx themselves. bStarted
+	// forces /a to fail only after /b's Runner has actually started (so /b is
+	// mid-flight, not pre-empted by the pre-run cancellation checks), then /b
+	// waits for /a's cancel() to fire before returning its own genuine failure —
+	// the exact race that must not swallow a real ExitCode/Err into Cancelled.
+	bStarted := make(chan struct{})
+	results := Run(context.Background(), Config{
+		Targets: []Target{
+			{Path: "/a", Task: "a"},
+			{Path: "/b", Task: "b"},
+		},
+		Command:  "cmd",
+		FailFast: true,
+		Runner: func(ctx context.Context, dir, _ string) ([]byte, []byte, int, error) {
+			if dir == "/a" {
+				<-bStarted
+				return nil, nil, 1, nil // fails → cancels context
+			}
+			close(bStarted)
+			<-ctx.Done()
+			return nil, nil, 1, nil // genuinely fails on its own, never interrupted
+		},
+	})
+
+	for i, r := range results {
+		if r.Cancelled {
+			t.Errorf("result[%d]: expected genuine failure, got Cancelled=true", i)
+		}
+		if r.ExitCode != 1 {
+			t.Errorf("result[%d]: expected ExitCode=1, got %d", i, r.ExitCode)
+		}
+	}
+}
+
 func TestRunConcurrencyLimit(t *testing.T) {
 	var maxConcurrent atomic.Int32
 	var current atomic.Int32
