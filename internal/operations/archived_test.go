@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"context"
 	"testing"
 )
 
@@ -29,7 +30,7 @@ func TestFindArchivedBranch(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	branch, err := FindArchivedBranch(mr, "", "archived-task")
+	branch, err := FindArchivedBranch(context.Background(), mr, "", "archived-task")
 	if err != nil {
 		t.Fatalf("FindArchivedBranch: %v", err)
 	}
@@ -53,7 +54,7 @@ func TestFindArchivedBranchNotFound(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	_, err := FindArchivedBranch(mr, "", "nonexistent")
+	_, err := FindArchivedBranch(context.Background(), mr, "", "nonexistent")
 	if err == nil {
 		t.Fatal("expected error for nonexistent archived branch")
 	}
@@ -73,7 +74,7 @@ func TestFindArchivedBranchExactMatch(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	branch, err := FindArchivedBranch(mr, "", "my-custom-branch")
+	branch, err := FindArchivedBranch(context.Background(), mr, "", "my-custom-branch")
 	if err != nil {
 		t.Fatalf("FindArchivedBranch: %v", err)
 	}
@@ -96,7 +97,7 @@ func TestFindArchivedBranchByTaskExtraction(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	branch, err := FindArchivedBranch(mr, "", "some-task")
+	branch, err := FindArchivedBranch(context.Background(), mr, "", "some-task")
 	if err != nil {
 		t.Fatalf("FindArchivedBranch: %v", err)
 	}
@@ -123,7 +124,7 @@ func TestFindArchivedBranchExactMatchSkipsActive(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	branch, err := FindArchivedBranch(mr, "", "my-task")
+	branch, err := FindArchivedBranch(context.Background(), mr, "", "my-task")
 	if err != nil {
 		t.Fatalf("FindArchivedBranch: %v", err)
 	}
@@ -150,7 +151,7 @@ func TestFindArchivedBranchPrefixMatchSkipsActive(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	branch, err := FindArchivedBranch(mr, "", "task-x")
+	branch, err := FindArchivedBranch(context.Background(), mr, "", "task-x")
 	if err != nil {
 		t.Fatalf("FindArchivedBranch: %v", err)
 	}
@@ -177,7 +178,7 @@ func TestFindArchivedBranchSkipsActiveInFallback(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	_, err := FindArchivedBranch(mr, "", "some-task")
+	_, err := FindArchivedBranch(context.Background(), mr, "", "some-task")
 	if err == nil {
 		t.Fatal("expected error when only matching branch is active")
 	}
@@ -194,7 +195,7 @@ func TestFindArchivedBranchError(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	_, err := FindArchivedBranch(mr, "", "any")
+	_, err := FindArchivedBranch(context.Background(), mr, "", "any")
 	if err == nil {
 		t.Fatal("expected error from LocalBranches failure")
 	}
@@ -214,7 +215,7 @@ func TestFindArchivedBranchWorktreeError(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	_, err := FindArchivedBranch(mr, "", "task")
+	_, err := FindArchivedBranch(context.Background(), mr, "", "task")
 	if err == nil {
 		t.Fatal("expected error from ListWorktrees failure")
 	}
@@ -235,7 +236,7 @@ func TestListArchivedBranches(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	archived, err := ListArchivedBranches(mr, branchMain)
+	archived, err := ListArchivedBranches(context.Background(), mr, branchMain)
 	if err != nil {
 		t.Fatalf("ListArchivedBranches: %v", err)
 	}
@@ -258,7 +259,7 @@ func TestListArchivedBranchesError(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	_, err := ListArchivedBranches(mr, branchMain)
+	_, err := ListArchivedBranches(context.Background(), mr, branchMain)
 	if err == nil {
 		t.Fatal("expected error from LocalBranches failure")
 	}
@@ -278,7 +279,7 @@ func TestListArchivedBranchesWorktreeError(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	_, err := ListArchivedBranches(mr, branchMain)
+	_, err := ListArchivedBranches(context.Background(), mr, branchMain)
 	if err == nil {
 		t.Fatal("expected error from ListWorktrees failure")
 	}
@@ -298,7 +299,7 @@ func TestFindArchivedBranchMonorepoByPrefix(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	branch, err := FindArchivedBranch(mr, "auth-api", "login")
+	branch, err := FindArchivedBranch(context.Background(), mr, "auth-api", "login")
 	if err != nil {
 		t.Fatalf("FindArchivedBranch: %v", err)
 	}
@@ -321,7 +322,7 @@ func TestFindArchivedBranchMonorepoByTaskExtraction(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	branch, err := FindArchivedBranch(mr, "auth-api", "login")
+	branch, err := FindArchivedBranch(context.Background(), mr, "auth-api", "login")
 	if err != nil {
 		t.Fatalf("FindArchivedBranch: %v", err)
 	}
@@ -344,7 +345,7 @@ func TestFindArchivedBranchMonorepoWrongServiceNoMatch(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	_, err := FindArchivedBranch(mr, "auth-api", "login")
+	_, err := FindArchivedBranch(context.Background(), mr, "auth-api", "login")
 	if err == nil {
 		t.Fatal("expected error when service does not match")
 	}
@@ -365,7 +366,7 @@ func TestFindArchivedBranchNonMonorepoRegression(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	branch, err := FindArchivedBranch(mr, "", "archived-task")
+	branch, err := FindArchivedBranch(context.Background(), mr, "", "archived-task")
 	if err != nil {
 		t.Fatalf("FindArchivedBranch: %v", err)
 	}

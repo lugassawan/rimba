@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -172,7 +173,7 @@ func TestFilterDirty(t *testing.T) {
 			return "", nil // clean
 		},
 	}
-	result := filterDirty(r, worktrees)
+	result := filterDirty(context.Background(), r, worktrees)
 	if len(result) != 1 {
 		t.Fatalf("expected 1 dirty, got %d", len(result))
 	}
@@ -190,7 +191,7 @@ func TestFilterDirtyAll(t *testing.T) {
 			return dirtyOutput, nil
 		},
 	}
-	result := filterDirty(r, worktrees)
+	result := filterDirty(context.Background(), r, worktrees)
 	if len(result) != 1 {
 		t.Fatalf("expected 1, got %d", len(result))
 	}
@@ -205,7 +206,7 @@ func TestFilterDirtyNone(t *testing.T) {
 			return "", nil
 		},
 	}
-	result := filterDirty(r, worktrees)
+	result := filterDirty(context.Background(), r, worktrees)
 	if len(result) != 0 {
 		t.Fatalf("expected 0, got %d", len(result))
 	}
@@ -224,7 +225,7 @@ func TestFilterDirtyError(t *testing.T) {
 	pr, pw, _ := os.Pipe()
 	os.Stderr = pw
 
-	result := filterDirty(r, worktrees)
+	result := filterDirty(context.Background(), r, worktrees)
 
 	pw.Close()
 	os.Stderr = origStderr
@@ -249,7 +250,7 @@ func TestFilterDirtyErrorIncludedAndWarned(t *testing.T) {
 	pr, pw, _ := os.Pipe()
 	os.Stderr = pw
 
-	result := filterDirty(r, worktrees)
+	result := filterDirty(context.Background(), r, worktrees)
 
 	pw.Close()
 	os.Stderr = origStderr

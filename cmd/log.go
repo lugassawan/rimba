@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"sort"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
@@ -25,6 +27,7 @@ type logEntry struct {
 	task       string
 	service    string
 	typeName   string
+	path       string
 	commitTime time.Time
 	subject    string
 	valid      bool
@@ -38,14 +41,15 @@ var logCmd = &cobra.Command{
   rimba log --since 7d --limit 10`,
 	Annotations: map[string]string{"skipConfig": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		r := newRunner()
+		ctx := cmd.Context()
+		r := newRunner(cmd.Context())
 
-		mainBranch, err := resolveMainBranch(r)
+		mainBranch, err := resolveMainBranch(ctx, r)
 		if err != nil {
 			return err
 		}
 
-		entries, err := git.ListWorktrees(r)
+		entries, err := git.ListWorktrees(ctx, r)
 		if err != nil {
 			return err
 		}
@@ -53,6 +57,9 @@ var logCmd = &cobra.Command{
 		candidates := git.FilterEntries(entries, mainBranch)
 
 		if len(candidates) == 0 {
+			if isJSON(cmd) {
+				return writeLogJSONEmpty(cmd)
+			}
 			fmt.Fprintln(cmd.OutOrStdout(), "No worktrees found.")
 			return nil
 		}
@@ -61,7 +68,7 @@ var logCmd = &cobra.Command{
 		defer s.Stop()
 		s.Start("Collecting commit info...")
 
-		valid := collectLogEntries(r, candidates, s)
+		valid := collectLogEntries(ctx, r, candidates, s)
 		s.Stop()
 
 		// Apply --since filter
@@ -88,8 +95,15 @@ var logCmd = &cobra.Command{
 		}
 
 		if len(valid) == 0 {
+			if isJSON(cmd) {
+				return writeLogJSONEmpty(cmd)
+			}
 			fmt.Fprintln(cmd.OutOrStdout(), "No recent commits found.")
 			return nil
+		}
+
+		if isJSON(cmd) {
+			return writeLogJSON(cmd, valid)
 		}
 
 		noColor, _ := cmd.Flags().GetBool(flagNoColor)
@@ -108,23 +122,26 @@ func init() {
 
 // collectLogEntries gathers commit info for each candidate in parallel,
 // returning only valid entries sorted by commit time descending.
-func collectLogEntries(r git.Runner, candidates []git.WorktreeEntry, s *spinner.Spinner) []logEntry {
+func collectLogEntries(ctx context.Context, r git.Runner, candidates []git.WorktreeEntry, s *spinner.Spinner) []logEntry {
 	prefixes := resolver.AllPrefixes()
 	s.Update("Collecting commit info...")
-	results := parallel.Collect(len(candidates), 8, func(i int) logEntry {
+	results := parallel.Collect(ctx, len(candidates), 8, func(ctx context.Context, i int) logEntry {
+		itemCtx, cancel := git.WithItemTimeout(ctx)
+		defer cancel()
 		e := candidates[i]
 		svc, task, matchedPrefix := resolver.ServiceFromBranch(e.Branch, prefixes)
 		typeName := strings.TrimSuffix(matchedPrefix, "/")
 
-		ct, subject, err := git.LastCommitInfo(r, e.Branch)
+		ct, subject, err := git.LastCommitInfo(itemCtx, r, e.Branch)
 		if err != nil {
-			return logEntry{branch: e.Branch, task: task, service: svc, typeName: typeName}
+			return logEntry{branch: e.Branch, task: task, service: svc, typeName: typeName, path: e.Path}
 		}
 		return logEntry{
 			branch:     e.Branch,
 			task:       task,
 			service:    svc,
 			typeName:   typeName,
+			path:       e.Path,
 			commitTime: ct,
 			subject:    subject,
 			valid:      true,
@@ -189,4 +206,24 @@ func renderLogTable(out io.Writer, p *termcolor.Painter, entries []logEntry) {
 	}
 
 	tbl.Render(out)
+}
+
+func writeLogJSONEmpty(cmd *cobra.Command) error {
+	return output.WriteJSON(cmd.OutOrStdout(), version, "log", make([]output.LogItem, 0))
+}
+
+func writeLogJSON(cmd *cobra.Command, entries []logEntry) error {
+	items := make([]output.LogItem, 0, len(entries))
+	for _, e := range entries {
+		items = append(items, output.LogItem{
+			Task:       e.task,
+			Service:    e.service,
+			Type:       e.typeName,
+			Branch:     e.branch,
+			Path:       e.path,
+			LastCommit: e.commitTime.UTC().Format(time.RFC3339),
+			Subject:    e.subject,
+		})
+	}
+	return output.WriteJSON(cmd.OutOrStdout(), version, "log", items)
 }

@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -12,7 +13,7 @@ func TestArchiveWorktreeSuccess(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	result, err := ArchiveWorktree(r, ArchiveParams{
+	result, err := ArchiveWorktree(context.Background(), r, ArchiveParams{
 		Path:   pathWtFeatureLogin,
 		Branch: branchFeature,
 	})
@@ -43,7 +44,7 @@ func TestArchiveWorktreeDryRun(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	result, err := ArchiveWorktree(r, ArchiveParams{
+	result, err := ArchiveWorktree(context.Background(), r, ArchiveParams{
 		Path:   pathWtFeatureLogin,
 		Branch: branchFeature,
 		DryRun: true,
@@ -71,7 +72,7 @@ func TestArchiveWorktreeError(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	_, err := ArchiveWorktree(r, ArchiveParams{
+	_, err := ArchiveWorktree(context.Background(), r, ArchiveParams{
 		Path:   pathWtFeatureLogin,
 		Branch: branchFeature,
 	})

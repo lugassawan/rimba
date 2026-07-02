@@ -1,7 +1,49 @@
 package agentfile
 
+import "strings"
+
 // Content functions return the template text for each agent instruction file.
 // Each function embeds the content directly — no external files.
+
+// mcpToolEntry pairs an mcp__rimba__* MCP tool with its rimba CLI equivalent.
+type mcpToolEntry struct {
+	mcp string
+	cli string
+}
+
+// mcpToolEntries is the single source of truth for the MCP tool <-> CLI command
+// mapping, consumed by mcpToolsSection and asserted against directly in tests.
+var mcpToolEntries = []mcpToolEntry{
+	{"mcp__rimba__add", "rimba add <task>"},
+	{"mcp__rimba__list", "rimba list"},
+	{"mcp__rimba__status", "rimba status"},
+	{"mcp__rimba__sync", "rimba sync [task]"},
+	{"mcp__rimba__merge", "rimba merge <task>"},
+	{"mcp__rimba__remove", "rimba remove <task>"},
+	{"mcp__rimba__clean", "rimba clean --merged"},
+	{"mcp__rimba__exec", "rimba exec <cmd>"},
+	{"mcp__rimba__conflict-check", "rimba conflict-check"},
+}
+
+// mcpToolsSection returns a markdown block documenting the mcp__rimba__* MCP tools
+// alongside their rimba CLI equivalents, plus when-to-use guidance. heading sets the
+// nesting level ("##" or "###") so callers can match their surrounding structure.
+func mcpToolsSection(heading string) string {
+	var b strings.Builder
+	b.WriteString(heading + ` MCP Tools
+
+When running inside an MCP-connected agent, prefer the native ` + "`" + `mcp__rimba__*` + "`" + ` tools over
+shelling out to the ` + "`" + `rimba` + "`" + ` CLI — they skip a subprocess round-trip. Fall back to the CLI
+when no MCP connection is available.
+
+| MCP tool | CLI equivalent |
+|----------|----------------|
+`)
+	for _, e := range mcpToolEntries {
+		b.WriteString("| `" + e.mcp + "` | `" + e.cli + "` |\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
 
 // agentsBlock returns the rimba block for AGENTS.md (shared file, block-based).
 func agentsBlock() string {
@@ -83,6 +125,8 @@ Error: ` + "`" + `{"version": "...", "command": "...", "error": "...", "code": "
 - Never modify ` + "`" + `.rimba/settings.toml` + "`" + ` programmatically without asking the user
 - Use ` + "`" + `RIMBA_DEBUG=1 rimba <cmd>` + "`" + ` to log git command timing to stderr when troubleshooting
 
+` + mcpToolsSection("##") + `
+
 <!-- END RIMBA -->`
 }
 
@@ -118,13 +162,15 @@ post_create = []
 - Run ` + "`" + `make test` + "`" + ` before committing
 - Run ` + "`" + `make lint` + "`" + ` to check for issues
 
+` + mcpToolsSection("###") + `
+
 <!-- END RIMBA -->`
 }
 
 // cursorContent returns the full content for .cursor/rules/rimba.mdc (whole-file, rimba-owned).
 func cursorContent() string {
 	return `---
-description: rimba git worktree manager commands and workflows
+description: Use for git worktree management — create, list, sync, merge, remove, or clean up worktrees; also relevant before starting new feature/bugfix work that should be isolated in its own branch and directory
 globs:
   - "*.go"
   - ".rimba/settings.toml"
@@ -166,6 +212,8 @@ Envelope: ` + "`" + `{"version", "command", "data"}` + "`" + ` or ` + "`" + `{"v
 - Prefer ` + "`" + `archive` + "`" + ` over ` + "`" + `remove` + "`" + ` to keep branches for reference.
 - Use ` + "`" + `--force` + "`" + ` only when you understand the implications.
 - Never modify ` + "`" + `.rimba/settings.toml` + "`" + ` without asking the user.
+
+` + mcpToolsSection("##") + `
 `
 }
 
@@ -195,6 +243,8 @@ If not found, **ask the user** before installing. Never install automatically.
 | Cross-cutting | ` + "`" + `rimba exec <cmd>` + "`" + `, ` + "`" + `rimba conflict-check` + "`" + ` |
 | AI integration | ` + "`" + `rimba mcp` + "`" + ` (MCP server for AI coding agents) |
 
+` + mcpToolsSection("##") + `
+
 <!-- END RIMBA -->`
 }
 
@@ -219,6 +269,8 @@ If not found, **ask the user** before installing. Never install automatically.
 5. ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
 6. ` + "`" + `rimba sync [task]` + "`" + ` — rebase onto main
 7. ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
+
+` + mcpToolsSection("##") + `
 `
 }
 
@@ -243,6 +295,8 @@ If not found, **ask the user** before installing. Never install automatically.
 5. ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
 6. ` + "`" + `rimba sync [task]` + "`" + ` — rebase onto main
 7. ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
+
+` + mcpToolsSection("##") + `
 `
 }
 
@@ -250,7 +304,7 @@ If not found, **ask the user** before installing. Never install automatically.
 func globalClaudeSkillContent() string {
 	return `---
 name: rimba
-description: Use when user wants to manage git worktrees — creating, listing, syncing, merging, or cleaning up parallel working directories
+description: Use when the user wants to create, list, sync, merge, remove, or clean up git worktrees, or before starting new feature/bugfix work that should be isolated in its own branch and directory — covers parallel development across multiple tasks without branch-switching
 ---
 
 # rimba — Git Worktree Manager
@@ -279,6 +333,8 @@ Check for ` + "`" + `.rimba/settings.toml` + "`" + ` in the current repo to conf
 | Finish a feature | ` + "`" + `rimba merge <task>` + "`" + ` |
 | Clean up merged work | ` + "`" + `rimba clean --merged` + "`" + ` |
 | Use MCP server | ` + "`" + `rimba mcp` + "`" + ` |
+
+` + mcpToolsSection("##") + `
 `
 }
 
@@ -302,6 +358,8 @@ Check for ` + "`" + `.rimba/settings.toml` + "`" + ` in the current repo to conf
 5. ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
 6. ` + "`" + `rimba sync [task]` + "`" + ` — rebase onto main
 7. ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
+
+` + mcpToolsSection("##") + `
 `
 }
 
@@ -322,6 +380,8 @@ rimba manages parallel git worktrees. Check for ` + "`" + `.rimba/settings.toml`
 - ` + "`" + `rimba merge <task>` + "`" + ` — merge into main and auto-clean up
 - ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
 - ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
+
+` + mcpToolsSection("###") + `
 
 <!-- END RIMBA -->`
 }
@@ -349,6 +409,8 @@ If not found, **ask the user** before installing. Never install automatically.
 | Clean up | ` + "`" + `rimba clean --merged` + "`" + `, ` + "`" + `rimba archive <task>` + "`" + ` |
 | AI integration | ` + "`" + `rimba mcp` + "`" + ` (MCP server for AI coding agents) |
 
+` + mcpToolsSection("##") + `
+
 <!-- END RIMBA -->`
 }
 
@@ -375,6 +437,8 @@ If not found, **ask the user** before installing. Never install automatically.
 | Clean up | ` + "`" + `rimba clean --merged` + "`" + `, ` + "`" + `rimba archive <task>` + "`" + ` |
 | AI integration | ` + "`" + `rimba mcp` + "`" + ` (MCP server for AI coding agents) |
 
+` + mcpToolsSection("##") + `
+
 <!-- END RIMBA -->`
 }
 
@@ -394,6 +458,8 @@ rimba manages parallel git worktrees. Check for ` + "`" + `.rimba/settings.toml`
 - ` + "`" + `rimba merge <task>` + "`" + ` — merge into main and auto-clean up
 - ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
 - ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
+
+` + mcpToolsSection("###") + `
 
 <!-- END RIMBA -->`
 }
@@ -417,6 +483,8 @@ If not found, ask the user before installing. Never install automatically.
 5. ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
 6. ` + "`" + `rimba sync [task]` + "`" + ` — rebase onto main
 7. ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
+
+` + mcpToolsSection("##") + `
 `
 }
 
@@ -424,7 +492,7 @@ If not found, ask the user before installing. Never install automatically.
 func claudeSkillContent() string {
 	return `---
 name: rimba
-description: Use when user wants to manage git worktrees — creating, listing, syncing, merging, or cleaning up parallel working directories
+description: Use when the user wants to create, list, sync, merge, remove, or clean up git worktrees, or before starting new feature/bugfix work that should be isolated in its own branch and directory — covers parallel development across multiple tasks without branch-switching
 ---
 
 # rimba — Git Worktree Manager
@@ -489,5 +557,7 @@ Commands supporting ` + "`" + `--json` + "`" + `: ` + "`" + `list` + "`" + `, ` 
 - Use ` + "`" + `--force` + "`" + ` only when you understand the implications
 - Never modify ` + "`" + `.rimba/settings.toml` + "`" + ` without asking the user
 - Always check ` + "`" + `rimba status` + "`" + ` before bulk operations
+
+` + mcpToolsSection("##") + `
 `
 }

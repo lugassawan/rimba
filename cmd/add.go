@@ -11,6 +11,7 @@ import (
 	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/gh"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/gitref"
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/resolver"
@@ -27,8 +28,6 @@ const (
 
 var prArgRe = regexp.MustCompile(`^pr:(\d+)$`)
 var branchArgRe = regexp.MustCompile(`^branch:(.+)$`)
-
-var newGHRunner = gh.Default
 
 var addCmd = &cobra.Command{
 	Use:   "add <task|pr:<num>|branch:<branch>> or add <service>/<task>",
@@ -54,9 +53,9 @@ main repo and is not the default branch. --source is not valid in branch: mode.`
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.FromContext(cmd.Context())
 
-		r := newRunner()
+		r := newRunner(cmd.Context())
 
-		repoRoot, err := git.MainRepoRoot(r)
+		repoRoot, err := git.MainRepoRoot(cmd.Context(), r)
 		if err != nil {
 			return err
 		}
@@ -70,9 +69,13 @@ main repo and is not the default branch. --source is not valid in branch: mode.`
 
 		if m := prArgRe.FindStringSubmatch(args[0]); m != nil {
 			prNum, _ := strconv.Atoi(m[1])
-			return runAddPR(cmd, r, newGHRunner(), prNum, postOpts, s)
+			if err := ensureTrust(cmd, repoRoot, cfg); err != nil {
+				return err
+			}
+			return runAddPR(cmd, r, newGHRunner(cmd.Context()), prNum, postOpts, s)
 		}
 
+		// branch: mode promotes an existing branch without running hooks — no trust gate.
 		if m := branchArgRe.FindStringSubmatch(args[0]); m != nil {
 			if cmd.Flags().Changed(flagSource) {
 				return errhint.WithFix(
@@ -90,6 +93,9 @@ main repo and is not the default branch. --source is not valid in branch: mode.`
 			)
 		}
 
+		if err := ensureTrust(cmd, repoRoot, cfg); err != nil {
+			return err
+		}
 		return runAddTask(cmd, r, args[0], cfg, repoRoot, postOpts, s)
 	},
 }
@@ -126,6 +132,8 @@ func runAddTask(cmd *cobra.Command, r git.Runner, arg string, cfg *config.Config
 	source, _ := cmd.Flags().GetString(flagSource)
 	if source == "" {
 		source = cfg.DefaultSource
+	} else if err := gitref.Validate(source); err != nil {
+		return fmt.Errorf("--source: %w", err)
 	}
 
 	hint.New(cmd, hintPainter(cmd)).

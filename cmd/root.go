@@ -22,6 +22,7 @@ const (
 	flagForce        = "force"
 	flagJSON         = "json"
 	flagNoColor      = "no-color"
+	flagPush         = "push"
 	flagSkipDeps     = "skip-deps"
 	flagSkipHooks    = "skip-hooks"
 	flagStaleDays    = "stale-days"
@@ -67,8 +68,8 @@ Persistent flags (available on every command):
 			}
 		}
 
-		r := newRunner()
-		repoRoot, err := git.MainRepoRoot(r)
+		r := newRunner(cmd.Context())
+		repoRoot, err := git.MainRepoRoot(cmd.Context(), r)
 		if err != nil {
 			return err
 		}
@@ -82,7 +83,7 @@ Persistent flags (available on every command):
 		repoName := filepath.Base(repoRoot)
 		var defaultBranch string
 		if cfg.DefaultSource == "" {
-			defaultBranch, err = git.DefaultBranch(r)
+			defaultBranch, err = git.DefaultBranch(cmd.Context(), r)
 			if err != nil {
 				return err
 			}
@@ -104,12 +105,19 @@ func init() {
 	rootCmd.PersistentFlags().Bool(flagJSON, false, "output in JSON format")
 	rootCmd.PersistentFlags().Bool(flagNoColor, false, "disable colored output")
 	rootCmd.PersistentFlags().Bool(flagDebug, false, "log git commands and timings to stderr")
+	rootCmd.PersistentFlags().Bool(flagYes, false, hintYes)
 
 	originalHelp := rootCmd.HelpFunc()
 	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		var hint <-chan *updater.CheckResult
 		if cmd == rootCmd {
-			hint = checkUpdateHint(version, 2*time.Second)
+			ctx := cmd.Context()
+			if ctx == nil {
+				// cmd.Context() is nil when HelpFunc is called outside of
+				// ExecuteContext (e.g., directly in tests).
+				ctx = context.Background()
+			}
+			hint = checkUpdateHint(ctx, version, 2*time.Second)
 			printBanner(cmd)
 		}
 		originalHelp(cmd, args)
@@ -134,6 +142,8 @@ func CommandName() string {
 
 func Execute() error {
 	updater.SweepOldBinary()
+	rootCmd.Version = versionString()
+	rootCmd.SetVersionTemplate("{{.Version}}")
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	return rootCmd.ExecuteContext(ctx)

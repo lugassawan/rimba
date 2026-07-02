@@ -19,6 +19,7 @@
 
 - [Features](#features)
 - [Installation](#installation)
+  - [Verifying releases](#verifying-releases)
 - [Quick Start](#quick-start)
 - [Commands](#commands)
 - [Configuration](#configuration)
@@ -61,6 +62,13 @@
 curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/install.sh | bash
 ```
 
+By default the binary is installed to `$HOME/.local/bin`. Set `INSTALL_DIR` to
+install elsewhere:
+
+```sh
+curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/install.sh | INSTALL_DIR=/usr/local/bin bash
+```
+
 ### Go install
 
 ```sh
@@ -75,6 +83,21 @@ cd rimba
 make build
 # Binary is at ./bin/rimba
 ```
+
+### Verifying releases
+
+Each release publishes a `checksums.txt` signed with [cosign](https://github.com/sigstore/cosign) keyless signing (Sigstore OIDC via GitHub Actions). To verify a downloaded checksum file:
+
+```sh
+cosign verify-blob \
+  --certificate checksums.txt.pem \
+  --signature checksums.txt.sig \
+  --certificate-identity-regexp 'https://github.com/lugassawan/rimba/.github/workflows/release.yml@refs/tags/v.*' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  checksums.txt
+```
+
+Each release archive also ships a companion `*.sbom.json` (SPDX format) on the GitHub Release page.
 
 ## Quick Start
 
@@ -140,16 +163,44 @@ agent = 'claude'
 
 > See [docs/configuration.md](docs/configuration.md) for the full field reference, dependency management, and environment variables.
 
-Running `rimba init --agents` or `rimba init -g` additionally creates or patches MCP server config files in client tools (`.mcp.json`, `.cursor/mcp.json`, `~/.claude/settings.json`, and others). See [docs/configuration.md#mcp-server-registration](docs/configuration.md#mcp-server-registration) for the full list of patched files and entry format.
+Running `rimba init --agents` or `rimba init -g` additionally creates or patches MCP server config files in client tools (`.mcp.json`, `.cursor/mcp.json`, `~/.claude.json`, and others). See [docs/configuration.md#mcp-server-registration](docs/configuration.md#mcp-server-registration) for the full list of patched files and entry format.
 
 ## Trust model
 
-**`.rimba/settings.toml` is trusted-author input.** The following fields execute shell commands verbatim via `sh -c`:
+**`.rimba/settings.toml` is committed and team-shared.** The following fields execute shell commands verbatim via `sh -c`:
 
-- `post_create` — runs after a worktree is created (e.g. `rimba add`)
+- `post_create` — runs after a worktree is created (e.g. `rimba add`, `rimba duplicate`, `rimba restore`)
+- `post_rename` — runs after a worktree is renamed (`rimba rename`)
 - `deps.modules[].install` — runs when installing dependencies into a worktree
 
-**Cloning an untrusted repository and running `rimba add` executes that repo's `post_create` and `install` shell scripts.** Always review `.rimba/settings.toml` before running rimba in a repository you do not control.
+### Consent gate
+
+rimba will **not** execute committed shell commands until you have explicitly approved them. On the first run in a new clone (or whenever the command set changes), rimba prints the commands and prompts for consent:
+
+```
+This repo's .rimba/settings.toml will run shell commands that have not been approved:
+  pnpm install
+  ./scripts/setup.sh
+
+Run these commands? [y/N]
+```
+
+Approval is stored locally in `.rimba/trust.local.toml` (covered by the `.rimba/*.local.toml` gitignore glob — each user consents independently). The approval is keyed by a hash of the command set; changing any command re-arms the gate.
+
+**Pre-approve without prompting** (e.g. for `rimba trust` after reviewing settings, or in CI):
+
+```sh
+rimba trust           # review and approve interactively
+rimba trust --yes     # approve without prompt (non-interactive)
+rimba trust --show    # inspect commands and current approval status
+```
+
+**CI / non-interactive environments:** pass `--yes` or set `RIMBA_TRUST_YES=1`:
+
+```sh
+RIMBA_TRUST_YES=1 rimba add my-task
+rimba add my-task --yes
+```
 
 As a defense-in-depth measure, the `copy_files` entries and `deps.modules[].lockfile` paths are validated to stay within the worktree directory — paths that escape via `..` are rejected with an error. Note that `worktree_dir` is intentionally not subject to this constraint, because its default value (`../<repo>-worktrees`) is itself a `../`-relative path.
 
@@ -162,6 +213,12 @@ As a defense-in-depth measure, the `copy_files` entries and `deps.modules[].lock
 | `--debug` | Log git commands and timings to stderr (also respects `RIMBA_DEBUG=1`) |
 
 ## Troubleshooting
+
+Hit an error? rimba prints an actionable `To fix:` hint with most failures. Common errors — trust-gate
+prompts, `exec` scope, dirty-worktree sync blocks, init/config issues — are documented with cause and
+fix in the troubleshooting guide.
+
+> See [docs/troubleshooting.md](docs/troubleshooting.md) for the full troubleshooting reference.
 
 Pass `--debug` to any command (or set `RIMBA_DEBUG=1`) to log git commands and their timings to stderr:
 

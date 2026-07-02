@@ -40,14 +40,15 @@ var duplicateCmd = &cobra.Command{
 		task := args[0]
 		cfg := config.FromContext(cmd.Context())
 
-		r := newRunner()
+		r := newRunner(cmd.Context())
+		ctx := cmd.Context()
 
-		repoRoot, err := git.MainRepoRoot(r)
+		repoRoot, err := git.MainRepoRoot(ctx, r)
 		if err != nil {
 			return err
 		}
 
-		wt, err := findWorktree(r, task)
+		wt, err := findWorktree(ctx, r, task)
 		if err != nil {
 			return err
 		}
@@ -75,7 +76,7 @@ var duplicateCmd = &cobra.Command{
 			for i := 1; i <= maxDuplicateSuffix; i++ {
 				candidate := fmt.Sprintf("%s-%d", task, i)
 				candidateBranch := resolver.FullBranchName(svc, matchedPrefix, candidate)
-				if !git.BranchExists(r, candidateBranch) {
+				if !git.BranchExists(ctx, r, candidateBranch) {
 					newTask = candidate
 					break
 				}
@@ -90,7 +91,7 @@ var duplicateCmd = &cobra.Command{
 		wtPath := resolver.WorktreePath(wtDir, newBranch)
 
 		// Validate
-		if git.BranchExists(r, newBranch) {
+		if git.BranchExists(ctx, r, newBranch) {
 			return fmt.Errorf("branch %q already exists", newBranch)
 		}
 		if _, err := os.Stat(wtPath); err == nil {
@@ -123,12 +124,16 @@ var duplicateCmd = &cobra.Command{
 			return nil
 		}
 
+		if err := ensureTrust(cmd, repoRoot, cfg); err != nil {
+			return err
+		}
+
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
 
 		// Create worktree from source branch
 		s.Start("Creating worktree...")
-		if err := git.AddWorktree(r, wtPath, newBranch, wt.Branch); err != nil {
+		if err := git.AddWorktree(ctx, r, wtPath, newBranch, wt.Branch); err != nil {
 			return err
 		}
 

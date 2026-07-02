@@ -2,9 +2,16 @@ package fileutil
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/lugassawan/rimba/internal/config"
 )
 
 const (
@@ -114,6 +121,320 @@ func TestEnsureGitignoreIdempotent(t *testing.T) {
 	}
 }
 
+func TestEnsureGitignoreConcurrent(t *testing.T) {
+	dir := t.TempDir()
+
+	const workers = 8
+	previousTimeout := gitignoreLockTimeout.Load()
+	gitignoreLockTimeout.Store(int64(10 * time.Second))
+	t.Cleanup(func() {
+		gitignoreLockTimeout.Store(previousTimeout)
+	})
+
+	start := make(chan struct{})
+	addedResults := make(chan bool, workers)
+	errs := make(chan error, workers)
+
+	var wg sync.WaitGroup
+	for range workers {
+		wg.Go(func() {
+			<-start
+			added, err := EnsureGitignore(dir, testEntry)
+			if err != nil {
+				errs <- err
+				return
+			}
+			addedResults <- added
+		})
+	}
+
+	close(start)
+	wg.Wait()
+	close(errs)
+	close(addedResults)
+
+	for err := range errs {
+		if err != nil {
+			t.Fatalf(errUnexpected, err)
+		}
+	}
+
+	addedCount := 0
+	for added := range addedResults {
+		if added {
+			addedCount++
+		}
+	}
+	if addedCount != 1 {
+		t.Fatalf("expected exactly one caller to add the entry, got %d", addedCount)
+	}
+
+	got := readFile(t, filepath.Join(dir, gitignoreFile))
+	if strings.Count(got, testEntry) != 1 {
+		t.Errorf("expected exactly one occurrence, got %q", got)
+	}
+}
+
+func TestEnsureGitignoreLockParentMissing(t *testing.T) {
+	repoRoot := filepath.Join(t.TempDir(), "missing")
+
+	added, err := EnsureGitignore(repoRoot, testEntry)
+	if err == nil {
+		t.Fatal("expected error when lock parent is missing")
+	}
+	if added {
+		t.Fatal("expected added=false when lock cannot be acquired")
+	}
+}
+
+func TestEnsureGitignoreLockTimeout(t *testing.T) {
+	dir := t.TempDir()
+	lockDir := filepath.Join(dir, config.DirName)
+	if err := os.MkdirAll(lockDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(lockDir, gitignoreLockDirName)
+	if err := os.Mkdir(lockPath, 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	previousTimeout := gitignoreLockTimeout.Load()
+	gitignoreLockTimeout.Store(int64(20 * time.Millisecond))
+	t.Cleanup(func() {
+		gitignoreLockTimeout.Store(previousTimeout)
+		_ = os.RemoveAll(lockPath)
+	})
+
+	added, err := EnsureGitignore(dir, testEntry)
+	if err == nil {
+		t.Fatal("expected error when .gitignore lock is held")
+	}
+	if !strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("expected timeout error, got %v", err)
+	}
+	if added {
+		t.Fatal("expected added=false when lock cannot be acquired")
+	}
+}
+
+func TestEnsureGitignoreLockRespectsFreshLock(t *testing.T) {
+	dir := t.TempDir()
+	lockDir := filepath.Join(dir, config.DirName)
+	if err := os.MkdirAll(lockDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(lockDir, gitignoreLockDirName)
+	if err := os.Mkdir(lockPath, 0700); err != nil {
+		t.Fatal(err)
+	}
+	// Owner is this test process itself, so it's alive and must not be reclaimed.
+	if err := os.WriteFile(filepath.Join(lockPath, gitignoreLockOwnerFile), []byte(strconv.Itoa(os.Getpid())+":fresh"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	previousTimeout := gitignoreLockTimeout.Load()
+	previousStaleAge := gitignoreStaleLockAge.Load()
+	gitignoreLockTimeout.Store(int64(30 * time.Millisecond))
+	gitignoreStaleLockAge.Store(int64(time.Hour))
+	t.Cleanup(func() {
+		gitignoreLockTimeout.Store(previousTimeout)
+		gitignoreStaleLockAge.Store(previousStaleAge)
+		_ = os.RemoveAll(lockPath)
+	})
+
+	added, err := EnsureGitignore(dir, testEntry)
+	if err == nil {
+		t.Fatal("expected error when a live, recent lock is held")
+	}
+	if !strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("expected timeout error, got %v", err)
+	}
+	if added {
+		t.Fatal("expected added=false when the fresh lock is respected, not reclaimed")
+	}
+}
+
+func TestEnsureGitignoreReclaimsStaleLock(t *testing.T) {
+	dir := t.TempDir()
+	lockDir := filepath.Join(dir, config.DirName)
+	if err := os.MkdirAll(lockDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(lockDir, gitignoreLockDirName)
+	if err := os.Mkdir(lockPath, 0700); err != nil {
+		t.Fatal(err)
+	}
+	// No owner metadata, simulating a crash before it could be written.
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(lockPath, old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	previousTimeout := gitignoreLockTimeout.Load()
+	previousStaleAge := gitignoreStaleLockAge.Load()
+	gitignoreLockTimeout.Store(int64(2 * time.Second))
+	gitignoreStaleLockAge.Store(int64(50 * time.Millisecond))
+	t.Cleanup(func() {
+		gitignoreLockTimeout.Store(previousTimeout)
+		gitignoreStaleLockAge.Store(previousStaleAge)
+	})
+
+	added, err := EnsureGitignore(dir, testEntry)
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+	if !added {
+		t.Fatal("expected the stale lock to be reclaimed and the entry added")
+	}
+}
+
+func TestEnsureGitignoreReclaimsDeadPIDLock(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("PID liveness reclaim is Unix-only; Windows relies on the age fallback")
+	}
+
+	dir := t.TempDir()
+	lockDir := filepath.Join(dir, config.DirName)
+	if err := os.MkdirAll(lockDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(lockDir, gitignoreLockDirName)
+	if err := os.Mkdir(lockPath, 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	// PID reuse between the process exiting and the liveness check is a known,
+	// low-probability flake source for this pattern; accepted here since it's
+	// widely used for this kind of test.
+	cmd := exec.Command("true")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("spawn short-lived process: %v", err)
+	}
+	deadPID := cmd.Process.Pid
+	if err := os.WriteFile(filepath.Join(lockPath, gitignoreLockOwnerFile), []byte(strconv.Itoa(deadPID)+":dead"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	previousTimeout := gitignoreLockTimeout.Load()
+	previousStaleAge := gitignoreStaleLockAge.Load()
+	gitignoreLockTimeout.Store(int64(2 * time.Second))
+	// Generous on purpose, so a reclaim here proves the dead-PID branch fired.
+	gitignoreStaleLockAge.Store(int64(time.Hour))
+	t.Cleanup(func() {
+		gitignoreLockTimeout.Store(previousTimeout)
+		gitignoreStaleLockAge.Store(previousStaleAge)
+	})
+
+	added, err := EnsureGitignore(dir, testEntry)
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+	if !added {
+		t.Fatal("expected the dead-PID lock to be reclaimed and the entry added")
+	}
+}
+
+// TestStaleOwnerUnlockDoesNotDeleteReclaimedLock proves a slow holder's unlock doesn't delete a lock reclaimed by someone else.
+// Without the owner-token check this would delete the new holder's active lock, letting both believe they hold it.
+func TestStaleOwnerUnlockDoesNotDeleteReclaimedLock(t *testing.T) {
+	dir := t.TempDir()
+	lockDir := filepath.Join(dir, config.DirName)
+	if err := os.MkdirAll(lockDir, 0750); err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(lockDir, gitignoreLockDirName)
+
+	previousTimeout := gitignoreLockTimeout.Load()
+	previousStaleAge := gitignoreStaleLockAge.Load()
+	gitignoreLockTimeout.Store(int64(2 * time.Second))
+	gitignoreStaleLockAge.Store(int64(10 * time.Millisecond))
+	t.Cleanup(func() {
+		gitignoreLockTimeout.Store(previousTimeout)
+		gitignoreStaleLockAge.Store(previousStaleAge)
+	})
+
+	// A acquires the lock and holds it long enough to go stale.
+	unlockA, err := acquireGitignoreLock(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	// B reclaims the now-stale lock and re-acquires it.
+	unlockB, err := acquireGitignoreLock(lockPath)
+	if err != nil {
+		t.Fatalf("expected B to reclaim the stale lock, got: %v", err)
+	}
+
+	// A finally releases. This must not remove B's lock.
+	if err := unlockA(); err != nil {
+		t.Fatalf("unexpected error from A's unlock: %v", err)
+	}
+	if _, err := os.Stat(lockPath); err != nil {
+		t.Fatalf("expected B's lock to survive A's unlock, stat error: %v", err)
+	}
+
+	if err := unlockB(); err != nil {
+		t.Fatalf("unexpected error from B's unlock: %v", err)
+	}
+	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
+		t.Fatalf("expected lock to be gone after B's unlock, stat error: %v", err)
+	}
+}
+
+// TestReleaseGitignoreLockIfOwnedRemovesWhenOwnerFileMissing proves a lock still releases if writeGitignoreLockOwner failed to persist the owner file.
+// Without this, a missing owner file looks like "someone else's lock" and the release becomes a no-op, leaking it until the stale-age fallback.
+func TestReleaseGitignoreLockIfOwnedRemovesWhenOwnerFileMissing(t *testing.T) {
+	dir := t.TempDir()
+	lockDir := filepath.Join(dir, config.DirName)
+	if err := os.MkdirAll(lockDir, 0750); err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(lockDir, gitignoreLockDirName)
+	if err := os.Mkdir(lockPath, 0700); err != nil {
+		t.Fatal(err)
+	}
+	// No owner file written here, simulating a failed writeGitignoreLockOwner.
+
+	if err := releaseGitignoreLockIfOwned(lockPath, "some-token"); err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
+		t.Fatalf("expected lock to be removed even without an owner file, stat error: %v", err)
+	}
+}
+
+func TestWithGitignoreLockUnlockError(t *testing.T) {
+	dir := t.TempDir()
+	lockPath := filepath.Join(dir, config.DirName, gitignoreLockDirName)
+	t.Cleanup(func() {
+		_ = os.Chmod(lockPath, 0700)
+		_ = os.RemoveAll(lockPath)
+	})
+
+	// Make the lock dir read-only so RemoveAll can't unlink the owner file inside it.
+	added, err := withGitignoreLock(dir, func() (bool, error) {
+		if cerr := os.Chmod(lockPath, 0500); cerr != nil {
+			return false, cerr
+		}
+		return true, nil
+	})
+
+	probe := filepath.Join(lockPath, ".write-probe")
+	if werr := os.WriteFile(probe, []byte("x"), 0644); werr == nil {
+		_ = os.Remove(probe)
+		_ = os.Chmod(lockPath, 0700)
+		t.Skip("directory permissions do not block writes on this platform")
+	}
+
+	if err == nil {
+		t.Fatal("expected error when lock directory cannot be removed")
+	}
+	if !added {
+		t.Fatal("expected added result from callback to be preserved")
+	}
+}
+
 func TestEnsureGitignoreReadError(t *testing.T) {
 	dir := t.TempDir()
 	// Create .gitignore as a directory so ReadFile returns non-IsNotExist error
@@ -135,6 +456,11 @@ func TestEnsureGitignoreOpenError(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(dir, 0755) })
+	probePath := filepath.Join(dir, ".write-probe")
+	if err := os.WriteFile(probePath, []byte("probe"), 0644); err == nil {
+		_ = os.Remove(probePath)
+		t.Skip("directory permissions do not block writes on this platform")
+	}
 
 	_, err := EnsureGitignore(dir, testEntry)
 	if err == nil {
@@ -215,6 +541,193 @@ func TestRemoveGitignoreEntryWriteError(t *testing.T) {
 	_, err := RemoveGitignoreEntry(dir, testEntry)
 	if err == nil {
 		t.Fatal("expected error when .gitignore is read-only")
+	}
+}
+
+func TestHasGitignoreEntryNoFile(t *testing.T) {
+	dir := t.TempDir()
+
+	present, err := hasGitignoreEntry(dir, testEntry)
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+	if present {
+		t.Fatal("expected present=false when .gitignore does not exist")
+	}
+}
+
+func TestHasGitignoreEntryPresent(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, gitignoreFile), otherEntryLine+testEntry+"\n")
+
+	present, err := hasGitignoreEntry(dir, testEntry)
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+	if !present {
+		t.Fatal("expected present=true when entry is in .gitignore")
+	}
+}
+
+func TestHasGitignoreEntryNotPresent(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, gitignoreFile), otherEntryLine)
+
+	present, err := hasGitignoreEntry(dir, testEntry)
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+	if present {
+		t.Fatal("expected present=false when entry is not in .gitignore")
+	}
+}
+
+func TestHasGitignoreEntryReadError(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, gitignoreFile), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	present, err := hasGitignoreEntry(dir, testEntry)
+	if err == nil {
+		t.Fatal("expected error when .gitignore is a directory")
+	}
+	if present {
+		t.Fatal("expected present=false on read error")
+	}
+}
+
+func TestEnsureLocalGlobIgnoredPersonalMode(t *testing.T) {
+	dir := t.TempDir()
+	original := ".rimba/\n"
+	writeFile(t, filepath.Join(dir, gitignoreFile), original)
+
+	added, err := EnsureLocalGlobIgnored(dir)
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+	if added {
+		t.Error("expected added=false in personal mode (.rimba/ already ignored)")
+	}
+	if got := readFile(t, filepath.Join(dir, gitignoreFile)); got != original {
+		t.Errorf(".gitignore should be unchanged in personal mode, got:\n%s", got)
+	}
+}
+
+func TestEnsureLocalGlobIgnoredMigration(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, gitignoreFile),
+		"node_modules\n.rimba/settings.local.toml\n.rimba/trust.local.toml\n")
+
+	added, err := EnsureLocalGlobIgnored(dir)
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+	if !added {
+		t.Error("expected added=true when glob was not yet present")
+	}
+
+	content := readFile(t, filepath.Join(dir, gitignoreFile))
+	glob := config.DirName + "/" + config.LocalGlob
+	if !strings.Contains(content, glob) {
+		t.Errorf(".gitignore should contain %q, got:\n%s", glob, content)
+	}
+	if strings.Contains(content, ".rimba/settings.local.toml") {
+		t.Errorf(".gitignore should not contain per-file settings entry, got:\n%s", content)
+	}
+	if strings.Contains(content, ".rimba/trust.local.toml") {
+		t.Errorf(".gitignore should not contain per-file trust entry, got:\n%s", content)
+	}
+	if !strings.Contains(content, "node_modules") {
+		t.Errorf(".gitignore should preserve other entries, got:\n%s", content)
+	}
+}
+
+func TestEnsureLocalGlobIgnoredMigratesLegacyBackslashEntries(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, gitignoreFile),
+		"node_modules\n.rimba\\settings.local.toml\n.rimba\\trust.local.toml\n")
+
+	added, err := EnsureLocalGlobIgnored(dir)
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+	if !added {
+		t.Error("expected added=true when glob was not yet present")
+	}
+
+	content := readFile(t, filepath.Join(dir, gitignoreFile))
+	glob := config.DirName + "/" + config.LocalGlob
+	if !strings.Contains(content, glob) {
+		t.Errorf(".gitignore should contain %q, got:\n%s", glob, content)
+	}
+	if strings.Contains(content, ".rimba\\settings.local.toml") {
+		t.Errorf(".gitignore should not contain legacy settings entry, got:\n%s", content)
+	}
+	if strings.Contains(content, ".rimba\\trust.local.toml") {
+		t.Errorf(".gitignore should not contain legacy trust entry, got:\n%s", content)
+	}
+	if !strings.Contains(content, "node_modules") {
+		t.Errorf(".gitignore should preserve other entries, got:\n%s", content)
+	}
+}
+
+func TestEnsureLocalGlobIgnoredNoGitignore(t *testing.T) {
+	dir := t.TempDir()
+
+	added, err := EnsureLocalGlobIgnored(dir)
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+	if !added {
+		t.Error("expected added=true for fresh repo with no .gitignore")
+	}
+	content := readFile(t, filepath.Join(dir, gitignoreFile))
+	glob := config.DirName + "/" + config.LocalGlob
+	if !strings.Contains(content, glob) {
+		t.Errorf("expected glob %q in new .gitignore, got:\n%s", glob, content)
+	}
+	// The lock dir name is designed to match config.LocalGlob so the glob
+	// above already hides it, without a dedicated gitignore entry.
+	if matched, err := filepath.Match(config.LocalGlob, gitignoreLockDirName); err != nil || !matched {
+		t.Errorf("expected lock dir name %q to match glob %q (err=%v)", gitignoreLockDirName, config.LocalGlob, err)
+	}
+}
+
+// TestGitignoreLockDirHiddenByRealGit proves git's own glob matcher (not
+// just filepath.Match) treats the lock dir as ignored, using a real repo.
+func TestGitignoreLockDirHiddenByRealGit(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	dir := t.TempDir()
+	runGit := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	runGit("init", "-q")
+	runGit("config", "user.email", "test@test.com")
+	runGit("config", "user.name", "test")
+
+	writeFile(t, filepath.Join(dir, gitignoreFile), config.DirName+"/"+config.LocalGlob+"\n")
+	runGit("add", gitignoreFile)
+	runGit("commit", "-q", "-m", "init")
+
+	lockPath := filepath.Join(dir, config.DirName, gitignoreLockDirName)
+	if err := os.MkdirAll(lockPath, 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := exec.Command("git", "-C", dir, "status", "--porcelain").Output()
+	if err != nil {
+		t.Fatalf("git status: %v", err)
+	}
+	if len(out) != 0 {
+		t.Errorf("expected lock dir to be hidden by the local glob, git status shows:\n%s", out)
 	}
 }
 

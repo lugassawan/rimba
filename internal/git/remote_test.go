@@ -65,7 +65,7 @@ func TestRemoteExistsTrue(t *testing.T) {
 			return "https://github.com/owner/repo.git", nil
 		},
 	}
-	if !RemoteExists(r, "origin") {
+	if !RemoteExists(context.Background(), r, "origin") {
 		t.Error("expected remote to exist")
 	}
 }
@@ -76,7 +76,7 @@ func TestRemoteExistsFalse(t *testing.T) {
 			return "", errors.New("no such remote 'gh-fork-bob'")
 		},
 	}
-	if RemoteExists(r, "gh-fork-bob") {
+	if RemoteExists(context.Background(), r, "gh-fork-bob") {
 		t.Error("expected remote to not exist")
 	}
 }
@@ -89,7 +89,7 @@ func TestAddRemote(t *testing.T) {
 			return "", nil
 		},
 	}
-	if err := AddRemote(r, "gh-fork-alice", "https://github.com/alice/repo.git"); err != nil {
+	if err := AddRemote(context.Background(), r, "gh-fork-alice", "https://github.com/alice/repo.git"); err != nil {
 		t.Fatalf("AddRemote: %v", err)
 	}
 	want := []string{"remote", "add", "gh-fork-alice", "https://github.com/alice/repo.git"}
@@ -109,7 +109,7 @@ func TestAddRemoteError(t *testing.T) {
 			return "", errors.New("remote already exists")
 		},
 	}
-	if err := AddRemote(r, "origin", "https://github.com/x/y.git"); err == nil {
+	if err := AddRemote(context.Background(), r, "origin", "https://github.com/x/y.git"); err == nil {
 		t.Fatal("expected error from AddRemote")
 	}
 }
@@ -236,7 +236,7 @@ func TestListRemotesTwoRemotes(t *testing.T) {
 			return "origin\nupstream\n", nil
 		},
 	}
-	remotes, err := ListRemotes(r)
+	remotes, err := ListRemotes(context.Background(), r)
 	if err != nil {
 		t.Fatalf("ListRemotes: %v", err)
 	}
@@ -257,7 +257,7 @@ func TestListRemotesEmpty(t *testing.T) {
 			return "", nil
 		},
 	}
-	remotes, err := ListRemotes(r)
+	remotes, err := ListRemotes(context.Background(), r)
 	if err != nil {
 		t.Fatalf("ListRemotes: %v", err)
 	}
@@ -275,7 +275,7 @@ func TestListRemotesRunnerError(t *testing.T) {
 			return "", errors.New("not a git repository")
 		},
 	}
-	_, err := ListRemotes(r)
+	_, err := ListRemotes(context.Background(), r)
 	if err == nil {
 		t.Fatal("expected error from ListRemotes")
 	}

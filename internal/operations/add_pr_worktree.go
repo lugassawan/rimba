@@ -61,7 +61,7 @@ func AddPRWorktree(
 func resolveSource(ctx context.Context, gitR git.Runner, meta gh.PRMeta, onProgress progress.Func) (string, error) {
 	if !meta.IsCrossRepository {
 		progress.Notify(onProgress, "Fetching origin...")
-		if err := git.Fetch(ctx, gitR, "origin"); err != nil {
+		if err := git.Fetch(ctx, gitR, "origin", git.FetchArgs{}); err != nil {
 			return "", errhint.WithFix(err, "check network connectivity")
 		}
 		return "origin/" + meta.HeadRefName, nil
@@ -70,15 +70,15 @@ func resolveSource(ctx context.Context, gitR git.Runner, meta gh.PRMeta, onProgr
 	remoteName := "gh-fork-" + meta.HeadRepoOwner
 	remoteURL := "https://github.com/" + meta.HeadRepoOwner + "/" + meta.HeadRepoName + ".git"
 
-	if !git.RemoteExists(gitR, remoteName) {
+	if !git.RemoteExists(ctx, gitR, remoteName) {
 		progress.Notify(onProgress, fmt.Sprintf("Adding fork remote %s...", remoteName))
-		if err := git.AddRemote(gitR, remoteName, remoteURL); err != nil {
+		if err := git.AddRemote(ctx, gitR, remoteName, remoteURL); err != nil {
 			return "", errhint.WithFix(err, "check network and fork visibility")
 		}
 	}
 
 	progress.Notify(onProgress, fmt.Sprintf("Fetching %s...", remoteName))
-	if err := git.Fetch(ctx, gitR, remoteName); err != nil {
+	if err := git.Fetch(ctx, gitR, remoteName, git.FetchArgs{}); err != nil {
 		return "", errhint.WithFix(err, "check network and fork visibility")
 	}
 

@@ -33,9 +33,9 @@ to see available archived branches.`,
 		return completeArchivedTasks(cmd, toComplete), cobra.ShellCompDirectiveNoFileComp
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		r := newRunner()
+		r := newRunner(cmd.Context())
 
-		repoRoot, err := git.MainRepoRoot(r)
+		repoRoot, err := git.MainRepoRoot(cmd.Context(), r)
 		if err != nil {
 			return err
 		}
@@ -43,8 +43,12 @@ to see available archived branches.`,
 		service, task := operations.ResolveTaskInput(args[0], repoRoot)
 		cfg := config.FromContext(cmd.Context())
 
-		branch, err := operations.FindArchivedBranch(r, service, task)
+		branch, err := operations.FindArchivedBranch(cmd.Context(), r, service, task)
 		if err != nil {
+			return err
+		}
+
+		if err := ensureTrust(cmd, repoRoot, cfg); err != nil {
 			return err
 		}
 
@@ -61,7 +65,7 @@ to see available archived branches.`,
 
 		// Create worktree from existing branch
 		s.Start("Restoring worktree...")
-		if err := git.AddWorktreeFromBranch(r, wtPath, branch); err != nil {
+		if err := git.AddWorktreeFromBranch(cmd.Context(), r, wtPath, branch); err != nil {
 			return err
 		}
 

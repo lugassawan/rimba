@@ -83,3 +83,14 @@ type ExecResult struct {
 	Error     string `json:"error,omitempty"`
 	Cancelled bool   `json:"cancelled,omitempty"`
 }
+
+// LogItem represents a worktree's most-recent commit in JSON output.
+type LogItem struct {
+	Task       string `json:"task"`
+	Service    string `json:"service,omitempty"`
+	Type       string `json:"type"`
+	Branch     string `json:"branch"`
+	Path       string `json:"path"`
+	LastCommit string `json:"last_commit"`
+	Subject    string `json:"subject"`
+}

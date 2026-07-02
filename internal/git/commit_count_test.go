@@ -1,6 +1,7 @@
 package git_test
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,7 +28,7 @@ func TestCommitCountSinceCountsRecent(t *testing.T) {
 		testutil.GitCmd(t, repo, "commit", "-m", "recent")
 	}
 
-	got, err := git.CommitCountSince(r, "main", 24*time.Hour)
+	got, err := git.CommitCountSince(context.Background(), r, "main", 24*time.Hour)
 	if err != nil {
 		t.Fatalf("CommitCountSince: %v", err)
 	}
@@ -50,7 +51,7 @@ func TestCommitCountSinceExcludesOldCommits(t *testing.T) {
 	oldDate := time.Now().Add(-30 * 24 * time.Hour).Format(time.RFC3339)
 	gitCmdWithCommitterDate(t, repo, oldDate, "commit", "--amend", "--no-edit")
 
-	got, err := git.CommitCountSince(r, "main", 7*24*time.Hour)
+	got, err := git.CommitCountSince(context.Background(), r, "main", 7*24*time.Hour)
 	if err != nil {
 		t.Fatalf("CommitCountSince: %v", err)
 	}
@@ -67,7 +68,7 @@ func TestCommitCountSinceUnknownBranch(t *testing.T) {
 	repo := testutil.NewTestRepo(t)
 	r := &git.ExecRunner{Dir: repo}
 
-	_, err := git.CommitCountSince(r, "no-such-branch", 7*24*time.Hour)
+	_, err := git.CommitCountSince(context.Background(), r, "no-such-branch", 7*24*time.Hour)
 	if err == nil {
 		t.Fatal("CommitCountSince on unknown branch returned nil error, want non-nil")
 	}

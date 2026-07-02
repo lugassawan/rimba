@@ -86,19 +86,11 @@ type mockRunner struct {
 	runInDir func(dir string, args ...string) (string, error)
 }
 
-func (m *mockRunner) Run(args ...string) (string, error) {
+func (m *mockRunner) Run(_ context.Context, args ...string) (string, error) {
 	return m.run(args...)
 }
 
-func (m *mockRunner) RunInDir(dir string, args ...string) (string, error) {
-	return m.runInDir(dir, args...)
-}
-
-func (m *mockRunner) RunContext(_ context.Context, args ...string) (string, error) {
-	return m.run(args...)
-}
-
-func (m *mockRunner) RunInDirContext(_ context.Context, dir string, args ...string) (string, error) {
+func (m *mockRunner) RunInDir(_ context.Context, dir string, args ...string) (string, error) {
 	return m.runInDir(dir, args...)
 }
 
@@ -116,13 +108,14 @@ func newTestCmd() (*cobra.Command, *bytes.Buffer) {
 	cmd.Flags().Bool(flagJSON, false, "")
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
+	cmd.SetContext(context.Background())
 	return cmd, buf
 }
 
 // overrideNewRunner temporarily replaces the newRunner function for testing.
 func overrideNewRunner(r git.Runner) func() {
 	orig := newRunner
-	newRunner = func() git.Runner { return r }
+	newRunner = func(_ context.Context) git.Runner { return r }
 	return func() { newRunner = orig }
 }
 
@@ -138,6 +131,6 @@ func (m *mockGhRunner) Run(ctx context.Context, args ...string) ([]byte, error) 
 // overrideGHRunner temporarily replaces the newGHRunner function for testing.
 func overrideGHRunner(r gh.Runner) func() {
 	orig := newGHRunner
-	newGHRunner = func() gh.Runner { return r }
+	newGHRunner = func(_ context.Context) gh.Runner { return r }
 	return func() { newGHRunner = orig }
 }

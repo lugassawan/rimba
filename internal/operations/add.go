@@ -63,7 +63,7 @@ func AddWorktree(ctx context.Context, r git.Runner, params AddParams, onProgress
 	}
 
 	// Validate
-	if git.BranchExists(r, branch) {
+	if git.BranchExists(ctx, r, branch) {
 		return result, errhint.WithFix(
 			fmt.Errorf("branch %q already exists", branch),
 			"run 'rimba list' to see existing tasks, or use a different task name",
@@ -78,7 +78,7 @@ func AddWorktree(ctx context.Context, r git.Runner, params AddParams, onProgress
 
 	// Create worktree
 	progress.Notify(onProgress, "Creating worktree...")
-	if err := git.AddWorktree(r, wtPath, branch, params.Source); err != nil {
+	if err := git.AddWorktree(ctx, r, wtPath, branch, params.Source); err != nil {
 		return result, err
 	}
 

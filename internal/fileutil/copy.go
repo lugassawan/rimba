@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const copyErrFmt = "copy %s: %w"
@@ -13,6 +14,10 @@ const copyErrFmt = "copy %s: %w"
 // Missing source entries are silently skipped. Returns the list of entries actually copied
 // and the list of nested symlink paths (relative to src) that were skipped without being copied.
 func CopyEntries(src, dst string, entries []string) (copied []string, skippedSymlinks []string, err error) {
+	dstRoot, err := resolveDstRoot(dst)
+	if err != nil {
+		return nil, nil, err
+	}
 	copied = make([]string, 0, len(entries))
 	for _, name := range entries {
 		srcPath, err := ContainedJoin(src, name)
@@ -24,7 +29,7 @@ func CopyEntries(src, dst string, entries []string) (copied []string, skippedSym
 			return copied, skippedSymlinks, fmt.Errorf(copyErrFmt, name, err)
 		}
 
-		ok, syms, copyErr := copyEntry(srcPath, dstPath, name)
+		ok, syms, copyErr := copyEntry(srcPath, dstPath, name, dstRoot)
 		if copyErr != nil {
 			return copied, skippedSymlinks, copyErr
 		}
@@ -58,7 +63,7 @@ func SkippedEntries(requested, copied []string) []string {
 }
 
 // copyEntry copies a single file or directory. Returns false if the source does not exist.
-func copyEntry(srcPath, dstPath, name string) (bool, []string, error) {
+func copyEntry(srcPath, dstPath, name, dstRoot string) (bool, []string, error) {
 	info, err := os.Stat(srcPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -68,25 +73,31 @@ func copyEntry(srcPath, dstPath, name string) (bool, []string, error) {
 	}
 
 	if info.IsDir() {
-		syms, err := copyDir(srcPath, dstPath)
+		syms, err := copyDir(srcPath, dstPath, dstRoot)
 		if err != nil {
 			return false, nil, fmt.Errorf(copyErrFmt, name, err)
 		}
 		return true, syms, nil
 	}
 
+	if err := assertContained(dstRoot, dstPath); err != nil {
+		return false, nil, fmt.Errorf(copyErrFmt, name, err)
+	}
 	if err := os.MkdirAll(filepath.Dir(dstPath), 0750); err != nil {
 		return false, nil, fmt.Errorf(copyErrFmt, name, err)
 	}
-	if err := copyFile(srcPath, dstPath); err != nil {
+	if err := copyFile(srcPath, dstPath, dstRoot); err != nil {
 		return false, nil, fmt.Errorf(copyErrFmt, name, err)
 	}
 	return true, nil, nil
 }
 
-func copyDir(src, dst string) ([]string, error) {
+func copyDir(src, dst, dstRoot string) ([]string, error) {
 	srcInfo, err := os.Stat(src)
 	if err != nil {
+		return nil, err
+	}
+	if err := assertContained(dstRoot, dst); err != nil {
 		return nil, err
 	}
 	if err := os.MkdirAll(dst, srcInfo.Mode().Perm()); err != nil {
@@ -98,7 +109,7 @@ func copyDir(src, dst string) ([]string, error) {
 	}
 	var skippedSymlinks []string
 	for _, entry := range entries {
-		syms, err := copyDirEntry(src, dst, entry)
+		syms, err := copyDirEntry(src, dst, dstRoot, entry)
 		if err != nil {
 			return nil, err
 		}
@@ -107,19 +118,22 @@ func copyDir(src, dst string) ([]string, error) {
 	return skippedSymlinks, nil
 }
 
-func copyDirEntry(src, dst string, entry os.DirEntry) ([]string, error) {
+func copyDirEntry(src, dst, dstRoot string, entry os.DirEntry) ([]string, error) {
 	if entry.Type()&os.ModeSymlink != 0 {
 		return []string{filepath.Join(src, entry.Name())}, nil
 	}
 	srcPath := filepath.Join(src, entry.Name())
 	dstPath := filepath.Join(dst, entry.Name())
 	if entry.IsDir() {
-		return copyDir(srcPath, dstPath)
+		return copyDir(srcPath, dstPath, dstRoot)
 	}
-	return nil, copyFile(srcPath, dstPath)
+	return nil, copyFile(srcPath, dstPath, dstRoot)
 }
 
-func copyFile(src, dst string) (retErr error) {
+func copyFile(src, dst, dstRoot string) (retErr error) {
+	if err := assertContained(dstRoot, dst); err != nil {
+		return err
+	}
 	in, err := os.Open(filepath.Clean(src))
 	if err != nil {
 		return err
@@ -131,7 +145,7 @@ func copyFile(src, dst string) (retErr error) {
 		return err
 	}
 
-	out, err := os.OpenFile(filepath.Clean(dst), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode()) //nolint:gosec // dst validated by ContainedJoin before copyEntry is called
+	out, err := os.OpenFile(filepath.Clean(dst), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode()) //nolint:gosec // dst validated by assertContained (symlink-resolved) before write
 	if err != nil {
 		return err
 	}
@@ -143,4 +157,52 @@ func copyFile(src, dst string) (retErr error) {
 
 	_, err = io.Copy(out, in)
 	return err
+}
+
+// resolveDstRoot resolves the symlink-canonical form of dst. If dst does not exist yet
+// (git worktree add has not run), "" is returned so assertContained becomes a no-op —
+// no symlinks can exist inside a non-existent directory. Non-ENOENT errors are surfaced.
+func resolveDstRoot(dst string) (string, error) {
+	resolved, err := filepath.EvalSymlinks(dst)
+	if err == nil {
+		return resolved, nil
+	}
+	if !os.IsNotExist(err) {
+		return "", fmt.Errorf("resolve dst %q: %w", dst, err)
+	}
+	return "", nil
+}
+
+// resolveExistingAncestor returns EvalSymlinks of the deepest existing ancestor of p.
+// Walks up one component at a time while EvalSymlinks reports path-not-exist. The walk
+// always terminates: filepath.Dir bottoms out at "/" which exists and resolves.
+func resolveExistingAncestor(p string) (string, error) {
+	for {
+		resolved, err := filepath.EvalSymlinks(p)
+		if err == nil {
+			return resolved, nil
+		}
+		if !os.IsNotExist(err) {
+			return "", err
+		}
+		p = filepath.Dir(p)
+	}
+}
+
+// assertContained verifies that the deepest existing ancestor of path resolves inside root
+// (root must already be symlink-resolved). A symlinked directory component that redirects
+// a write outside the destination tree is rejected with ErrPathEscapes.
+// A blank root (dst did not exist at CopyEntries call time) is a no-op.
+func assertContained(root, path string) error {
+	if root == "" {
+		return nil
+	}
+	resolved, err := resolveExistingAncestor(path)
+	if err != nil {
+		return err
+	}
+	if resolved != root && !strings.HasPrefix(resolved, root+string(filepath.Separator)) {
+		return fmt.Errorf("path %q resolves outside %q via symlink: %w", path, root, ErrPathEscapes)
+	}
+	return nil
 }

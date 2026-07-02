@@ -26,10 +26,10 @@ func TestInitCreatesConfigAndDir(t *testing.T) {
 	wtDir := filepath.Join(repo, config.DefaultWorktreeDir(filepath.Base(repo)))
 	assertFileExists(t, wtDir)
 
-	// .gitignore is created with .rimba/settings.local.toml
+	// .gitignore is created with .rimba/*.local.toml
 	assertFileExists(t, filepath.Join(repo, gitignoreFile))
-	localEntry := filepath.Join(configDir, localFile)
-	assertGitignoreContains(t, repo, localEntry)
+	globEntry := configDir + "/" + localGlob
+	assertGitignoreContains(t, repo, globEntry)
 }
 
 func TestInitConfigDefaults(t *testing.T) {
@@ -91,10 +91,10 @@ func TestInitAddsToGitignore(t *testing.T) {
 		t.Fatalf("failed to write %s: %v", gitignoreFile, err)
 	}
 
-	localEntry := filepath.Join(configDir, localFile)
+	globEntry := configDir + "/" + localGlob
 	r := rimbaSuccess(t, repo, "init")
-	assertContains(t, r.Stdout, localEntry+" added to .gitignore")
-	assertGitignoreContains(t, repo, localEntry)
+	assertContains(t, r.Stdout, globEntry+" added to .gitignore")
+	assertGitignoreContains(t, repo, globEntry)
 
 	// Original content is preserved
 	data, err := os.ReadFile(filepath.Join(repo, gitignoreFile))
@@ -112,9 +112,9 @@ func TestInitGitignoreIdempotent(t *testing.T) {
 	}
 
 	repo := setupRepo(t)
-	localEntry := filepath.Join(configDir, localFile)
-	// Pre-create .gitignore already containing the entry
-	if err := os.WriteFile(filepath.Join(repo, gitignoreFile), []byte(localEntry+"\n"), 0644); err != nil {
+	globEntry := configDir + "/" + localGlob
+	// Pre-create .gitignore already containing the glob entry
+	if err := os.WriteFile(filepath.Join(repo, gitignoreFile), []byte(globEntry+"\n"), 0644); err != nil {
 		t.Fatalf("failed to write %s: %v", gitignoreFile, err)
 	}
 
@@ -126,8 +126,8 @@ func TestInitGitignoreIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read %s: %v", gitignoreFile, err)
 	}
-	if strings.Count(string(data), localEntry) != 1 {
-		t.Errorf("expected exactly one %s entry, got:\n%s", localEntry, string(data))
+	if strings.Count(string(data), globEntry) != 1 {
+		t.Errorf("expected exactly one %s entry, got:\n%s", globEntry, string(data))
 	}
 }
 
@@ -177,8 +177,8 @@ func TestInitMigratesLegacyConfig(t *testing.T) {
 	if strings.Contains(content, configFile) {
 		t.Error(".gitignore should not contain legacy entry after migration")
 	}
-	localEntry := filepath.Join(configDir, localFile)
-	assertGitignoreContains(t, repo, localEntry)
+	globEntry := configDir + "/" + localGlob
+	assertGitignoreContains(t, repo, globEntry)
 }
 
 func TestInitFailsOutsideGitRepo(t *testing.T) {
@@ -324,11 +324,13 @@ func TestInitPersonalFreshInit(t *testing.T) {
 	assertFileExists(t, filepath.Join(repo, configDir, teamFile))
 	assertFileNotExists(t, filepath.Join(repo, configDir, localFile))
 
-	// .gitignore has .rimba/ not .rimba/settings.local.toml
+	// .gitignore has .rimba/ not per-file or glob entries
 	dirEntry := configDir + "/"
 	assertGitignoreContains(t, repo, dirEntry)
 	localEntry := filepath.Join(configDir, localFile)
 	assertGitignoreNotContains(t, repo, localEntry)
+	globEntry := configDir + "/" + localGlob
+	assertGitignoreNotContains(t, repo, globEntry)
 }
 
 func TestInitPersonalMigration(t *testing.T) {
@@ -367,7 +369,7 @@ func TestInitPersonalMigration(t *testing.T) {
 		t.Errorf("DefaultSource = %q, want %q", cfg.DefaultSource, branchMain)
 	}
 
-	// Verify .gitignore updated with .rimba/ not legacy entry
+	// Verify .gitignore updated with .rimba/ not legacy or per-file entries
 	data, err := os.ReadFile(filepath.Join(repo, gitignoreFile))
 	if err != nil {
 		t.Fatal(err)
@@ -380,6 +382,8 @@ func TestInitPersonalMigration(t *testing.T) {
 	assertGitignoreContains(t, repo, dirEntry)
 	localEntry := filepath.Join(configDir, localFile)
 	assertGitignoreNotContains(t, repo, localEntry)
+	globEntry := configDir + "/" + localGlob
+	assertGitignoreNotContains(t, repo, globEntry)
 }
 
 // assertGitignoreContains verifies that .gitignore in the repo contains the given entry.
@@ -422,13 +426,9 @@ func TestInitGlobalWithMCPConfigs(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	// Pre-seed .claude/settings.json and .cursor/mcp.json
-	claudeDir := filepath.Join(home, ".claude")
-	if err := os.MkdirAll(claudeDir, 0750); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(claudeDir, "settings.json"), []byte(`{"theme":"dark"}`+"\n"), 0600); err != nil {
-		t.Fatalf("write settings.json: %v", err)
+	// Pre-seed ~/.claude.json so MCP registration doesn't skip it
+	if err := os.WriteFile(filepath.Join(home, ".claude.json"), []byte(`{"theme":"dark"}`+"\n"), 0600); err != nil {
+		t.Fatalf("write .claude.json: %v", err)
 	}
 
 	dir := t.TempDir()
@@ -437,21 +437,21 @@ func TestInitGlobalWithMCPConfigs(t *testing.T) {
 	assertContains(t, r.Stdout, "MCP server:")
 	assertContains(t, r.Stdout, "registered")
 
-	// Verify settings.json was patched and existing key preserved
-	data, err := os.ReadFile(filepath.Join(claudeDir, "settings.json"))
+	// Verify ~/.claude.json was patched and existing key preserved
+	data, err := os.ReadFile(filepath.Join(home, ".claude.json"))
 	if err != nil {
-		t.Fatalf("read settings.json: %v", err)
+		t.Fatalf("read .claude.json: %v", err)
 	}
 	var cfg map[string]any
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		t.Fatalf("parse settings.json: %v", err)
+		t.Fatalf("parse .claude.json: %v", err)
 	}
 	if cfg["theme"] != "dark" {
 		t.Error("existing 'theme' key was not preserved")
 	}
 	servers, ok := cfg["mcpServers"].(map[string]any)
 	if !ok {
-		t.Fatal("mcpServers missing in settings.json after init -g")
+		t.Fatal("mcpServers missing in .claude.json after init -g")
 	}
 	entry, ok := servers["rimba"].(map[string]any)
 	if !ok {
@@ -470,12 +470,8 @@ func TestInitGlobalUninstallWithMCP(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	claudeDir := filepath.Join(home, ".claude")
-	if err := os.MkdirAll(claudeDir, 0750); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(claudeDir, "settings.json"), []byte("{}\n"), 0600); err != nil {
-		t.Fatalf("write settings.json: %v", err)
+	if err := os.WriteFile(filepath.Join(home, ".claude.json"), []byte("{}\n"), 0600); err != nil {
+		t.Fatalf("write .claude.json: %v", err)
 	}
 
 	dir := t.TempDir()
@@ -484,13 +480,13 @@ func TestInitGlobalUninstallWithMCP(t *testing.T) {
 
 	assertContains(t, r.Stdout, "unregistered")
 
-	data, err := os.ReadFile(filepath.Join(claudeDir, "settings.json"))
+	data, err := os.ReadFile(filepath.Join(home, ".claude.json"))
 	if err != nil {
-		t.Fatalf("read settings.json: %v", err)
+		t.Fatalf("read .claude.json: %v", err)
 	}
 	var cfg map[string]any
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		t.Fatalf("parse settings.json: %v", err)
+		t.Fatalf("parse .claude.json: %v", err)
 	}
 	if servers, ok := cfg["mcpServers"].(map[string]any); ok {
 		if _, found := servers["rimba"]; found {

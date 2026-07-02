@@ -14,42 +14,35 @@ import (
 // Tests can override this to inject a mock server.
 var newUpdater func(string) *updater.Updater = updater.New
 
-// checkUpdateHint runs a background version check with a timeout.
+// checkUpdateHint runs a background version check bounded by timeout.
 // Returns nil if the version is dev, the check fails, times out, or is up to date.
-func checkUpdateHint(version string, timeout time.Duration) <-chan *updater.CheckResult {
-	ch := make(chan *updater.CheckResult, 1)
+// The check is cancelled when ctx is done or timeout elapses — whichever comes first.
+func checkUpdateHint(ctx context.Context, version string, timeout time.Duration) <-chan *updater.CheckResult {
+	out := make(chan *updater.CheckResult, 1)
 
 	if updater.IsDevVersion(version) {
-		close(ch)
-		return ch
+		close(out)
+		return out
 	}
+
+	// Bound the check by timeout so the HTTP request is actually cancelled, not
+	// just abandoned. u.Check honours tctx, so the goroutine always terminates
+	// within timeout — no leak, and the result can never be lost to a racing
+	// cancellation (there is no select between "result" and "ctx done").
+	tctx, cancel := context.WithTimeout(ctx, timeout)
 
 	// Read newUpdater before spawning the goroutine: goroutine launch
 	// establishes a happens-before edge, preventing a data race with
 	// test overrides that restore the variable via t.Cleanup.
 	u := newUpdater(version)
 	go func() {
-		result, err := u.Check(context.Background())
+		defer cancel()
+		result, err := u.Check(tctx)
 		if err != nil || result.UpToDate {
-			close(ch)
+			close(out)
 			return
 		}
-		ch <- result
-	}()
-
-	// Return a channel that resolves with the result or nil after timeout
-	out := make(chan *updater.CheckResult, 1)
-	go func() {
-		select {
-		case r, ok := <-ch:
-			if ok {
-				out <- r
-			} else {
-				close(out)
-			}
-		case <-time.After(timeout):
-			close(out)
-		}
+		out <- result // buffered (cap 1) — never blocks
 	}()
 
 	return out

@@ -20,9 +20,9 @@ Any MCP-compatible client can connect to this server to discover and invoke
 rimba commands with structured parameters and typed responses.`,
 	Annotations: map[string]string{"skipConfig": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		r := newRunner()
+		r := newRunner(cmd.Context())
 
-		repoRoot, err := git.MainRepoRoot(r)
+		repoRoot, err := git.MainRepoRoot(cmd.Context(), r)
 		if err != nil {
 			return err
 		}
@@ -33,13 +33,14 @@ rimba commands with structured parameters and typed responses.`,
 			repoName := filepath.Base(repoRoot)
 			var defaultBranch string
 			if cfg.DefaultSource == "" {
-				defaultBranch, _ = git.DefaultBranch(r)
+				defaultBranch, _ = git.DefaultBranch(cmd.Context(), r)
 			}
 			cfg.FillDefaults(repoName, defaultBranch)
 		}
 
 		hctx := &mcppkg.HandlerContext{
 			Runner:   r,
+			GH:       newGHRunner(cmd.Context()),
 			Config:   cfg,
 			RepoRoot: repoRoot,
 			Version:  version,

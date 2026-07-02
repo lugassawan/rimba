@@ -1,6 +1,7 @@
 package git_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -17,7 +18,7 @@ func TestStashPushAndRef(t *testing.T) {
 	r := &git.ExecRunner{Dir: repo}
 	testutil.CreateFile(t, repo, "dirty.txt", "dirty content")
 
-	sha, err := git.StashPushAndRef(r, repo, "test stash")
+	sha, err := git.StashPushAndRef(context.Background(), r, repo, "test stash")
 	if err != nil {
 		t.Fatalf("StashPushAndRef: %v", err)
 	}
@@ -38,12 +39,12 @@ func TestStashApply(t *testing.T) {
 	r := &git.ExecRunner{Dir: repo}
 	testutil.CreateFile(t, repo, "stash-apply.txt", "content")
 
-	sha, err := git.StashPushAndRef(r, repo, "apply test")
+	sha, err := git.StashPushAndRef(context.Background(), r, repo, "apply test")
 	if err != nil {
 		t.Fatalf("StashPushAndRef: %v", err)
 	}
 
-	dirty, err := git.IsDirty(r, repo)
+	dirty, err := git.IsDirty(context.Background(), r, repo)
 	if err != nil {
 		t.Fatalf("IsDirty: %v", err)
 	}
@@ -55,7 +56,7 @@ func TestStashApply(t *testing.T) {
 		t.Fatalf("StashApply: %v", err)
 	}
 
-	dirty, err = git.IsDirty(r, repo)
+	dirty, err = git.IsDirty(context.Background(), r, repo)
 	if err != nil {
 		t.Fatalf("IsDirty after apply: %v", err)
 	}
@@ -73,7 +74,7 @@ func TestStashDrop(t *testing.T) {
 	r := &git.ExecRunner{Dir: repo}
 	testutil.CreateFile(t, repo, "stash-drop.txt", "content")
 
-	sha, err := git.StashPushAndRef(r, repo, "drop test")
+	sha, err := git.StashPushAndRef(context.Background(), r, repo, "drop test")
 	if err != nil {
 		t.Fatalf("StashPushAndRef: %v", err)
 	}

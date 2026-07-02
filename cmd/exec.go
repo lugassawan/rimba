@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -32,6 +33,9 @@ const (
 	hintConcurrency = "Limit the number of parallel executions"
 )
 
+// execRunner is the injectable executor function type, matching executor.Run.
+type execRunner func(context.Context, executor.Config) []executor.Result
+
 var execCmd = &cobra.Command{
 	Use:   "exec <command>",
 	Short: "Run a shell command across worktrees",
@@ -40,48 +44,78 @@ var execCmd = &cobra.Command{
   rimba exec --type bugfix "npm test"`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		opts := execReadFlags(cmd)
-		if err := execValidateFlags(opts); err != nil {
-			return err
-		}
-
-		execShowHints(cmd)
-
-		r := newRunner()
-		s := spinner.New(spinnerOpts(cmd))
-		defer s.Stop()
-		s.Start("Collecting worktrees...")
-
-		prefixes := resolver.AllPrefixes()
-		filtered, err := execSelectWorktrees(cmd, r, s, opts, prefixes)
-		if err != nil {
-			return err
-		}
-
-		if len(filtered) == 0 {
-			s.Stop()
-			fmt.Fprintln(cmd.OutOrStdout(), "No worktrees match the given filters.")
-			return nil
-		}
-
-		targets := execBuildTargets(filtered, prefixes)
-		s.Update(fmt.Sprintf("Running in %d worktree(s)...", len(targets)))
-
-		results := executor.Run(cmd.Context(), executor.Config{
-			Targets:     targets,
-			Command:     args[0],
-			Concurrency: opts.concurrency,
-			FailFast:    opts.failFast,
-			Runner:      executor.ShellRunner(),
-		})
-
-		s.Stop()
-
-		if isJSON(cmd) {
-			return execRenderJSON(cmd, args[0], results)
-		}
-		return execRenderText(cmd, results, prefixes)
+		return runExec(cmd, args, newRunner(cmd.Context()), executor.Run)
 	},
+}
+
+// runExec is the shared implementation for the exec command, accepting
+// injected runner and executor so both production and tests use the same path.
+func runExec(cmd *cobra.Command, args []string, r git.Runner, execFn execRunner) error {
+	opts := execReadFlags(cmd)
+	if err := execValidateFlags(opts); err != nil {
+		return err
+	}
+
+	execShowHints(cmd)
+
+	s := spinner.New(spinnerOpts(cmd))
+	defer s.Stop()
+	s.Start("Collecting worktrees...")
+
+	prefixes := resolver.AllPrefixes()
+	filtered, err := execSelectWorktrees(cmd, r, s, opts, prefixes)
+	if err != nil {
+		return err
+	}
+
+	if len(filtered) == 0 {
+		s.Stop()
+		fmt.Fprintln(cmd.OutOrStdout(), "No worktrees match the given filters.")
+		return nil
+	}
+
+	targets := execBuildTargets(filtered, prefixes)
+	s.Update(fmt.Sprintf("Running in %d worktree(s)...", len(targets)))
+
+	results := execFn(cmd.Context(), executor.Config{
+		Targets:     targets,
+		Command:     args[0],
+		Concurrency: opts.concurrency,
+		FailFast:    opts.failFast,
+		Runner:      executor.ShellRunner(),
+	})
+
+	s.Stop()
+
+	if isJSON(cmd) {
+		return execRenderJSON(cmd, args[0], results)
+	}
+	return execRenderText(cmd, results, prefixes)
+}
+
+// addExecFlags registers exec-specific flags on c, shared by execCmd and buildExecCmd.
+func addExecFlags(c *cobra.Command) {
+	c.Flags().Bool(flagAll, false, "run in all eligible worktrees")
+	c.Flags().String(flagType, "", "filter by prefix type (e.g. feature, bugfix)")
+	c.Flags().Bool(flagDirty, false, "run only in dirty worktrees")
+	c.Flags().Bool(flagFailFast, false, "stop after the first failure")
+	c.Flags().Int(flagConcurrency, 0, "max parallel executions (0 = unlimited)")
+}
+
+// buildExecCmd constructs a testable exec command with injected deps.
+// Used by exec_test.go to exercise the full flag-parse → filter → executor pipeline.
+func buildExecCmd(r git.Runner, execFn execRunner) *cobra.Command {
+	c := &cobra.Command{
+		Use:  "exec <command>",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runExec(cmd, args, r, execFn)
+		},
+	}
+	addExecFlags(c)
+	c.Flags().Bool(flagJSON, false, "")
+	c.Flags().Bool(flagNoColor, false, "")
+	return c
 }
 
 // execOpts holds parsed exec flags.
@@ -146,8 +180,9 @@ func execShowHints(cmd *cobra.Command) {
 }
 
 func execSelectWorktrees(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, opts execOpts, prefixes []string) ([]resolver.WorktreeInfo, error) {
-	cfg := config.FromContext(cmd.Context())
-	worktrees, err := listWorktreeInfos(r)
+	ctx := cmd.Context()
+	cfg := config.FromContext(ctx)
+	worktrees, err := listWorktreeInfos(ctx, r)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +196,7 @@ func execSelectWorktrees(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, o
 	}
 
 	if opts.dirty {
-		filtered = filterDirtyWorktrees(cmd, r, s, filtered)
+		filtered = filterDirtyWorktrees(ctx, cmd, r, s, filtered)
 	}
 	return filtered, nil
 }
@@ -219,27 +254,23 @@ func execRenderText(cmd *cobra.Command, results []executor.Result, prefixes []st
 }
 
 func init() {
-	execCmd.Flags().Bool(flagAll, false, "run in all eligible worktrees")
-	execCmd.Flags().String(flagType, "", "filter by prefix type (e.g. feature, bugfix)")
-	execCmd.Flags().Bool(flagDirty, false, "run only in dirty worktrees")
-	execCmd.Flags().Bool(flagFailFast, false, "stop after the first failure")
-	execCmd.Flags().Int(flagConcurrency, 0, "max parallel executions (0 = unlimited)")
-
+	addExecFlags(execCmd)
 	_ = execCmd.RegisterFlagCompletionFunc(flagType, typeFilterCompletion())
-
 	rootCmd.AddCommand(execCmd)
 }
 
 // filterDirtyWorktrees filters worktrees to only those with uncommitted changes.
 // If IsDirty returns an error for a worktree, it is treated as dirty (included)
 // and a warning is emitted to cmd.ErrOrStderr() so the error is visible.
-func filterDirtyWorktrees(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, worktrees []resolver.WorktreeInfo) []resolver.WorktreeInfo {
+func filterDirtyWorktrees(ctx context.Context, cmd *cobra.Command, r git.Runner, s *spinner.Spinner, worktrees []resolver.WorktreeInfo) []resolver.WorktreeInfo {
 	n := len(worktrees)
 	var done atomic.Int32
 
-	results := parallel.Collect[dirtyResult](n, 8, func(i int) dirtyResult {
+	results := parallel.Collect[dirtyResult](ctx, n, 8, func(ctx context.Context, i int) dirtyResult {
+		itemCtx, cancel := git.WithItemTimeout(ctx)
+		defer cancel()
 		path := worktrees[i].Path
-		dirty, err := git.IsDirty(r, path)
+		dirty, err := git.IsDirty(itemCtx, r, path)
 		count := done.Add(1)
 		s.Update(fmt.Sprintf("Checking dirty status... (%d/%d)", count, n))
 		if err != nil {

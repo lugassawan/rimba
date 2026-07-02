@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/lugassawan/rimba/internal/git"
@@ -22,7 +23,7 @@ type ArchiveResult struct {
 }
 
 // ArchiveWorktree removes the worktree directory while preserving the local branch.
-func ArchiveWorktree(r git.Runner, params ArchiveParams) (ArchiveResult, error) {
+func ArchiveWorktree(ctx context.Context, r git.Runner, params ArchiveParams) (ArchiveResult, error) {
 	plan := &Plan{DryRun: params.DryRun}
 	result := ArchiveResult{
 		Path:   params.Path,
@@ -32,7 +33,7 @@ func ArchiveWorktree(r git.Runner, params ArchiveParams) (ArchiveResult, error) 
 
 	desc := fmt.Sprintf("remove worktree: %s (branch %s preserved)", params.Path, params.Branch)
 	if err := plan.Do(desc, func() error {
-		return git.RemoveWorktree(r, params.Path, params.Force)
+		return git.RemoveWorktree(ctx, r, params.Path, params.Force)
 	}); err != nil {
 		return result, err
 	}

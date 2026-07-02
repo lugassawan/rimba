@@ -218,6 +218,60 @@ func TestMergeTargetNotFound(t *testing.T) {
 	assertContains(t, r.Stderr, "not found")
 }
 
+func TestMergeDeletesRemoteBranch(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo, _ := setupRepoWithBareOrigin(t)
+	wtPath := mergeSetup(t, repo, taskMergeRemote, flagSkipHooksE2E)
+
+	branch := resolver.BranchName(defaultPrefix, taskMergeRemote)
+
+	// Push the feature branch to origin before merging.
+	testutil.GitCmd(t, wtPath, "push", "-u", "origin", branch)
+
+	// Verify branch exists on remote before merge.
+	out := testutil.GitCmd(t, repo, "branch", "-r")
+	if !strings.Contains(out, "origin/"+branch) {
+		t.Fatalf("expected origin/%s to exist before merge, got: %s", branch, out)
+	}
+
+	r := rimbaSuccess(t, repo, "merge", taskMergeRemote)
+	assertContains(t, r.Stdout, "Merged")
+	assertContains(t, r.Stdout, "Deleted remote branch: origin/"+branch)
+
+	// Fetch to update remote-tracking refs, then verify origin/<branch> is gone.
+	testutil.GitCmd(t, repo, "fetch", "--prune", "origin")
+	out = testutil.GitCmd(t, repo, "branch", "-r")
+	if strings.Contains(out, "origin/"+branch) {
+		t.Errorf("expected origin/%s to be gone after merge, got: %s", branch, out)
+	}
+}
+
+func TestMergeKeepDoesNotDeleteRemoteBranch(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo, _ := setupRepoWithBareOrigin(t)
+	wtPath := mergeSetup(t, repo, taskMergeRemoteKeep, flagSkipHooksE2E)
+
+	branch := resolver.BranchName(defaultPrefix, taskMergeRemoteKeep)
+
+	testutil.GitCmd(t, wtPath, "push", "-u", "origin", branch)
+
+	r := rimbaSuccess(t, repo, "merge", taskMergeRemoteKeep, "--keep")
+	assertContains(t, r.Stdout, "Merged")
+	assertNotContains(t, r.Stdout, "Deleted remote branch")
+
+	// Remote branch must still exist.
+	out := testutil.GitCmd(t, repo, "branch", "-r")
+	if !strings.Contains(out, "origin/"+branch) {
+		t.Errorf("expected origin/%s to still exist after --keep merge, got: %s", branch, out)
+	}
+}
+
 func TestMergeDryRun(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)

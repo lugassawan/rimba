@@ -45,7 +45,7 @@ func TestInitPersonalFreshInit(t *testing.T) {
 		t.Error("settings.local.toml should not be created in personal mode")
 	}
 
-	// Verify .gitignore has .rimba/ not .rimba/settings.local.toml
+	// Verify .gitignore has .rimba/ not per-file or glob entries
 	data, err := os.ReadFile(filepath.Join(repoDir, ".gitignore"))
 	if err != nil {
 		t.Fatal(err)
@@ -58,6 +58,10 @@ func TestInitPersonalFreshInit(t *testing.T) {
 	localEntry := filepath.Join(config.DirName, config.LocalFile)
 	if strings.Contains(content, localEntry) {
 		t.Errorf(".gitignore should not contain %q in personal mode, got:\n%s", localEntry, content)
+	}
+	globEntry := config.DirName + "/" + config.LocalGlob
+	if strings.Contains(content, globEntry) {
+		t.Errorf(".gitignore should not contain glob %q in personal mode, got:\n%s", globEntry, content)
 	}
 }
 

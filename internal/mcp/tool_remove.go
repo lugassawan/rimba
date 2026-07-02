@@ -2,7 +2,9 @@ package mcp
 
 import (
 	"context"
+	"errors"
 
+	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -29,7 +31,12 @@ func handleRemove(hctx *HandlerContext) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		task := req.GetString("task", "")
 		if task == "" {
-			return mcp.NewToolResultError("task is required"), nil
+			return errorResult(errhint.WithFix(errors.New("task is required"),
+				`provide the task argument, e.g. remove { task: "my-task" }`)), nil
+		}
+
+		if _, err := hctx.requireConfig(); err != nil {
+			return errorResult(err), nil
 		}
 
 		service, task := operations.ResolveTaskInput(task, hctx.RepoRoot)
@@ -39,14 +46,14 @@ func handleRemove(hctx *HandlerContext) server.ToolHandlerFunc {
 
 		r := hctx.Runner
 
-		wt, findErr := operations.FindWorktree(r, service, task)
+		wt, findErr := operations.FindWorktree(ctx, r, service, task)
 		if findErr != nil {
-			return mcp.NewToolResultError(findErr.Error()), nil
+			return errorResult(findErr), nil
 		}
 
-		result, err := operations.RemoveWorktree(r, wt, task, keepBranch, force, nil)
+		result, err := operations.RemoveWorktree(ctx, r, wt, task, keepBranch, force, nil)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err), nil
 		}
 
 		return marshalResult(removeResult{

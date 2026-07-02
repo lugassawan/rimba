@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -15,9 +16,10 @@ import (
 // git's --since stops at the first commit older than the cutoff, so an
 // older ancestor hides anything beyond it. That matches what we want
 // here: recent activity on the tip, not total commits in history.
-func CommitCountSince(r Runner, branch string, since time.Duration) (int, error) {
+func CommitCountSince(ctx context.Context, r Runner, branch string, since time.Duration) (int, error) {
 	cutoff := time.Now().Add(-since).Unix()
 	out, err := r.Run(
+		ctx,
 		"rev-list", "--count",
 		fmt.Sprintf("--since=%d", cutoff),
 		branch,

@@ -3,7 +3,9 @@ package mcp
 import (
 	"context"
 	"errors"
+	"fmt"
 
+	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/parallel"
@@ -52,11 +54,12 @@ func handleSync(hctx *HandlerContext) server.ToolHandlerFunc {
 
 		cfg, cfgErr := hctx.requireConfig()
 		if cfgErr != nil {
-			return mcp.NewToolResultError(cfgErr.Error()), nil
+			return errorResult(cfgErr), nil
 		}
 
 		if !all && task == "" {
-			return mcp.NewToolResultError("provide a task name or set all=true to sync all worktrees"), nil
+			return errorResult(errhint.WithFix(errors.New("provide a task name or set all=true to sync all worktrees"),
+				"pass a task name, or set all=true to sync every worktree")), nil
 		}
 
 		var service string
@@ -67,14 +70,14 @@ func handleSync(hctx *HandlerContext) server.ToolHandlerFunc {
 		r := hctx.Runner
 
 		// Fetch (non-fatal; cancellation propagated as a tool error)
-		fetchWarning, fetchErr := mcpFetchNonFatal(ctx, r)
+		fetchWarning, fetchErr := mcpFetchNonFatal(ctx, r, git.FetchArgs{})
 		if fetchErr != nil {
-			return mcp.NewToolResultError(fetchErr.Error()), nil
+			return errorResult(fetchErr), nil
 		}
 
-		worktrees, err := operations.ListWorktreeInfos(r)
+		worktrees, err := operations.ListWorktreeInfos(ctx, r)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err), nil
 		}
 
 		prefixes := resolver.AllPrefixes()
@@ -95,7 +98,10 @@ func handleSync(hctx *HandlerContext) server.ToolHandlerFunc {
 func syncSingle(ctx context.Context, r git.Runner, service, task string, worktrees []resolver.WorktreeInfo, prefixes []string, opts syncOpts) (*mcp.CallToolResult, error) {
 	wt, found := resolver.FindBranchForTask(service, task, worktrees, prefixes)
 	if !found {
-		return mcp.NewToolResultError("worktree not found for task \"" + task + "\""), nil
+		return errorResult(errhint.WithFix(
+			fmt.Errorf("worktree not found for task %q", task),
+			"run the list tool to see available tasks",
+		)), nil
 	}
 
 	sr := operations.SyncWorktree(ctx, r, opts.mainBranch, wt, opts.useMerge, opts.push)
@@ -109,7 +115,8 @@ func syncMultiple(ctx context.Context, r git.Runner, worktrees []resolver.Worktr
 	allTasks := operations.CollectTasks(worktrees, prefixes)
 	eligible := operations.FilterEligible(worktrees, prefixes, opts.mainBranch, allTasks, includeInherited)
 
-	results := parallel.Collect(len(eligible), 4, func(i int) syncWorktreeResult {
+	// No per-item timeout here — sync operations (fetch/rebase) are long-running by design.
+	results := parallel.Collect(ctx, len(eligible), 4, func(ctx context.Context, i int) syncWorktreeResult {
 		return convertSyncResult(operations.SyncWorktree(ctx, r, opts.mainBranch, eligible[i], opts.useMerge, opts.push))
 	})
 
@@ -119,8 +126,8 @@ func syncMultiple(ctx context.Context, r git.Runner, worktrees []resolver.Worktr
 // mcpFetchNonFatal fetches from git.DefaultRemote ("origin") and returns a
 // warning string on connectivity failure. Cancellation is returned as a hard
 // error so callers can propagate it.
-func mcpFetchNonFatal(ctx context.Context, r git.Runner) (warning string, err error) {
-	if fetchErr := git.Fetch(ctx, r, git.DefaultRemote); fetchErr != nil {
+func mcpFetchNonFatal(ctx context.Context, r git.Runner, args git.FetchArgs) (warning string, err error) {
+	if fetchErr := git.Fetch(ctx, r, git.DefaultRemote, args); fetchErr != nil {
 		if errors.Is(fetchErr, context.Canceled) || errors.Is(fetchErr, context.DeadlineExceeded) {
 			return "", fetchErr
 		}

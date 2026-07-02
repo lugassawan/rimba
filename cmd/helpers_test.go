@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -55,7 +56,7 @@ func TestResolveMainBranchFromConfig(t *testing.T) {
 	}
 
 	r := repoRootRunner(dir, nil)
-	branch, err := resolveMainBranch(r)
+	branch, err := resolveMainBranch(context.Background(), r)
 	if err != nil {
 		t.Fatalf("resolveMainBranch: %v", err)
 	}
@@ -76,7 +77,7 @@ func TestResolveMainBranchFromDirConfig(t *testing.T) {
 	}
 
 	r := repoRootRunner(dir, nil)
-	branch, err := resolveMainBranch(r)
+	branch, err := resolveMainBranch(context.Background(), r)
 	if err != nil {
 		t.Fatalf("resolveMainBranch: %v", err)
 	}
@@ -95,7 +96,7 @@ func TestResolveMainBranchFallback(t *testing.T) {
 		return "", errors.New("unexpected")
 	})
 
-	branch, err := resolveMainBranch(r)
+	branch, err := resolveMainBranch(context.Background(), r)
 	if err != nil {
 		t.Fatalf("resolveMainBranch: %v", err)
 	}
@@ -109,7 +110,7 @@ func TestResolveMainBranchError(t *testing.T) {
 		run:      func(_ ...string) (string, error) { return "", errors.New("not a git repo") },
 		runInDir: noopRunInDir,
 	}
-	if _, err := resolveMainBranch(r); err == nil {
+	if _, err := resolveMainBranch(context.Background(), r); err == nil {
 		t.Fatal(errExpected)
 	}
 }
@@ -131,7 +132,7 @@ func TestListWorktreeInfos(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	infos, err := listWorktreeInfos(r)
+	infos, err := listWorktreeInfos(context.Background(), r)
 	if err != nil {
 		t.Fatalf("listWorktreeInfos: %v", err)
 	}
@@ -151,7 +152,7 @@ func TestListWorktreeInfosError(t *testing.T) {
 		run:      func(_ ...string) (string, error) { return "", errGitFailed },
 		runInDir: noopRunInDir,
 	}
-	if _, err := listWorktreeInfos(r); err == nil {
+	if _, err := listWorktreeInfos(context.Background(), r); err == nil {
 		t.Fatal(errExpected)
 	}
 }
@@ -174,7 +175,7 @@ func TestFindWorktree(t *testing.T) {
 	}
 
 	t.Run("found", func(t *testing.T) {
-		wt, err := findWorktree(r, "login")
+		wt, err := findWorktree(context.Background(), r, "login")
 		if err != nil {
 			t.Fatalf("findWorktree: %v", err)
 		}
@@ -184,7 +185,7 @@ func TestFindWorktree(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		if _, err := findWorktree(r, "nonexistent"); err == nil {
+		if _, err := findWorktree(context.Background(), r, "nonexistent"); err == nil {
 			t.Fatal("expected error for missing worktree")
 		}
 	})
@@ -195,7 +196,7 @@ func TestFindWorktreeError(t *testing.T) {
 		run:      func(_ ...string) (string, error) { return "", errGitFailed },
 		runInDir: noopRunInDir,
 	}
-	if _, err := findWorktree(r, "login"); err == nil {
+	if _, err := findWorktree(context.Background(), r, "login"); err == nil {
 		t.Fatal(errExpected)
 	}
 }

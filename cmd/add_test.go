@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/testutil"
 	"github.com/spf13/cobra"
 )
@@ -53,6 +54,57 @@ func makeWorktreeGitRunner(repoDir string) *mockRunner {
 			return "", nil
 		},
 		runInDir: noopRunInDir,
+	}
+}
+
+func TestPrintWorktreeResultAllFields(t *testing.T) {
+	cmd, buf := newTestCmd()
+
+	printWorktreeResult(cmd, "Created worktree", operations.AddResult{
+		Branch:          "feature/presentation",
+		Path:            "/repo/.rimba/worktrees/presentation",
+		Copied:          []string{".env", ".tool-versions"},
+		Skipped:         []string{".missing"},
+		SkippedSymlinks: []string{".config/link"},
+	})
+
+	got := buf.String()
+	for _, want := range []string{
+		"Created worktree\n",
+		"  Branch: feature/presentation\n",
+		"  Path:   /repo/.rimba/worktrees/presentation\n",
+		"  Copied: [.env .tool-versions]\n",
+		"  Skipped (not found): [.missing]\n",
+		"  Skipped (symlinks): [.config/link]\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("output missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestPrintWorktreeResultMinimal(t *testing.T) {
+	cmd, buf := newTestCmd()
+
+	printWorktreeResult(cmd, "Created worktree", operations.AddResult{
+		Branch: "feature/presentation",
+		Path:   "/repo/.rimba/worktrees/presentation",
+	})
+
+	got := buf.String()
+	for _, want := range []string{
+		"Created worktree\n",
+		"  Branch: feature/presentation\n",
+		"  Path:   /repo/.rimba/worktrees/presentation\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("output missing %q:\n%s", want, got)
+		}
+	}
+	for _, notWant := range []string{"Copied:", "Skipped", "symlinks"} {
+		if strings.Contains(got, notWant) {
+			t.Fatalf("output should not contain %q:\n%s", notWant, got)
+		}
 	}
 }
 
@@ -202,6 +254,7 @@ func TestAddWithSource(t *testing.T) {
 }
 
 func TestAddPRCmd(t *testing.T) {
+	t.Setenv("RIMBA_TRUST_YES", "1")
 	repoDir := t.TempDir()
 	wtDir := filepath.Join(repoDir, ".worktrees")
 	_ = os.MkdirAll(wtDir, 0755)
@@ -714,6 +767,33 @@ func conflictBranchRunInDirFn(stashDropped *bool) func(dir string, args ...strin
 		}
 		out, err, _ := conflictRunInDirStash(stashDropped, args)
 		return out, err
+	}
+}
+
+func TestAddTaskRejectsUnsafeSource(t *testing.T) {
+	cfg := &config.Config{WorktreeDir: "worktrees", DefaultSource: "main"}
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return "", nil },
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, _ := newTestCmd()
+	addPrefixFlags(cmd)
+	_ = cmd.Flags().String(flagSource, "", "")
+	_ = cmd.Flags().String(flagTask, "", "")
+	_ = cmd.Flags().Bool(flagSkipDeps, false, "")
+	_ = cmd.Flags().Bool(flagSkipHooks, false, "")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+	_ = cmd.Flags().Set(flagSource, "-foo")
+
+	err := addCmd.RunE(cmd, []string{"my-task"})
+	if err == nil {
+		t.Fatal("expected error for --source=-foo, got nil")
+	}
+	if !strings.Contains(err.Error(), "leading dash") {
+		t.Errorf("error %q should mention 'leading dash'", err)
 	}
 }
 

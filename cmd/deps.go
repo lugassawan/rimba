@@ -34,8 +34,8 @@ var depsStatusCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.FromContext(cmd.Context())
 
-		r := newRunner()
-		worktrees, err := listWorktreeInfos(r)
+		r := newRunner(cmd.Context())
+		worktrees, err := listWorktreeInfos(cmd.Context(), r)
 		if err != nil {
 			return err
 		}
@@ -139,14 +139,14 @@ var depsInstallCmd = &cobra.Command{
 		task := args[0]
 		cfg := config.FromContext(cmd.Context())
 
-		r := newRunner()
+		r := newRunner(cmd.Context())
 
-		repoRoot, err := git.MainRepoRoot(r)
+		repoRoot, err := git.MainRepoRoot(cmd.Context(), r)
 		if err != nil {
 			return err
 		}
 
-		worktrees, err := listWorktreeInfos(r)
+		worktrees, err := listWorktreeInfos(cmd.Context(), r)
 		if err != nil {
 			return err
 		}
@@ -187,6 +187,10 @@ var depsInstallCmd = &cobra.Command{
 		if len(modules) == 0 {
 			fmt.Fprintf(cmd.OutOrStdout(), "No modules detected for %q\n", task)
 			return nil
+		}
+
+		if err := ensureTrust(cmd, repoRoot, cfg); err != nil {
+			return err
 		}
 
 		s := spinner.New(spinnerOpts(cmd))

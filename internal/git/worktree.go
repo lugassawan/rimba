@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -26,42 +27,43 @@ type WorktreeEntry struct {
 }
 
 // AddWorktree creates a new worktree at the given path with a new branch from source.
-func AddWorktree(r Runner, path, branch, source string) error {
-	_, err := r.Run(cmdWorktree, "add", "-b", branch, "--", path, source)
+func AddWorktree(ctx context.Context, r Runner, path, branch, source string) error {
+	_, err := r.Run(ctx, cmdWorktree, "add", "-b", branch, "--", path, source)
 	return err
 }
 
 // AddWorktreeFromBranch creates a worktree from an existing branch (no -b flag).
-func AddWorktreeFromBranch(r Runner, path, branch string) error {
-	_, err := r.Run(cmdWorktree, "add", "--", path, branch)
+func AddWorktreeFromBranch(ctx context.Context, r Runner, path, branch string) error {
+	_, err := r.Run(ctx, cmdWorktree, "add", "--", path, branch)
 	return err
 }
 
 // RemoveWorktree removes the worktree at the given path.
-func RemoveWorktree(r Runner, path string, force bool) error {
+func RemoveWorktree(ctx context.Context, r Runner, path string, force bool) error {
 	args := []string{cmdWorktree, "remove", path}
 	if force {
 		args = append(args, flagForce)
 	}
-	_, err := r.Run(args...)
+	_, err := r.Run(ctx, args...)
 	return err
 }
 
 // MoveWorktree moves the worktree from oldPath to newPath.
 // When force is true, --force is passed twice so that even locked worktrees can be moved.
+// Intentionally non-cancellable: rollback moves must complete to avoid stranded worktrees.
 func MoveWorktree(r Runner, oldPath, newPath string, force bool) error {
 	args := []string{cmdWorktree, "move"}
 	if force {
 		args = append(args, flagForce, flagForce)
 	}
 	args = append(args, "--", oldPath, newPath)
-	_, err := r.Run(args...)
+	_, err := r.Run(context.Background(), args...)
 	return err
 }
 
 // ListWorktrees returns all worktrees by parsing `git worktree list --porcelain`.
-func ListWorktrees(r Runner) ([]WorktreeEntry, error) {
-	out, err := r.Run(cmdWorktree, "list", "--porcelain")
+func ListWorktrees(ctx context.Context, r Runner) ([]WorktreeEntry, error) {
+	out, err := r.Run(ctx, cmdWorktree, "list", "--porcelain")
 	if err != nil {
 		return nil, err
 	}
@@ -120,12 +122,12 @@ func FindEntry(entries []WorktreeEntry, branch string) *WorktreeEntry {
 }
 
 // Prune runs `git worktree prune` to clean up stale worktree references.
-func Prune(r Runner, dryRun bool) (string, error) {
+func Prune(ctx context.Context, r Runner, dryRun bool) (string, error) {
 	args := []string{cmdWorktree, "prune"}
 	if dryRun {
 		args = append(args, "--dry-run")
 	}
-	out, err := r.Run(args...)
+	out, err := r.Run(ctx, args...)
 	if err != nil {
 		return "", errhint.WithFix(
 			fmt.Errorf("prune: %w", err),

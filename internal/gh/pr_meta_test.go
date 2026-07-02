@@ -252,8 +252,8 @@ func TestFetchPRMetaHeadRefNameValidation(t *testing.T) {
 		{"-foo", "leading dash"},
 		{"../etc/passwd", "contains .."},
 		{"/abs/path", "leading slash"},
-		{"a;b", "unsafe headRefName"},
-		{"a b", "unsafe headRefName"},
+		{"a;b", "unsafe git ref name"},
+		{"a b", "unsafe git ref name"},
 	}
 	for _, tt := range invalid {
 		t.Run("reject "+tt.ref, func(t *testing.T) {

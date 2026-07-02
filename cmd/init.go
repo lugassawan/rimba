@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -56,7 +57,7 @@ directory is already personal.
 
 When --agents or -g is used, rimba also registers itself as an MCP server (server name:
 rimba, command: rimba mcp) in client config files (.mcp.json, .cursor/mcp.json,
-~/.claude/settings.json, ~/.codex/config.toml, ~/.gemini/settings.json,
+~/.claude.json, ~/.codex/config.toml, ~/.gemini/settings.json,
 ~/.codeium/windsurf/mcp_config.json, ~/.roo/mcp.json). --agents --local does not
 register MCP — it only updates agent files. Registration is idempotent.`,
 	Annotations: map[string]string{"skipConfig": "true"},
@@ -71,9 +72,10 @@ register MCP — it only updates agent files. Registration is idempotent.`,
 			return runInitGlobal(cmd, m.uninstall)
 		}
 
-		r := newRunner()
+		r := newRunner(cmd.Context())
 
-		repoRoot, err := git.RepoRoot(r)
+		ctx := cmd.Context()
+		repoRoot, err := git.RepoRoot(ctx, r)
 		if err != nil {
 			return err
 		}
@@ -82,10 +84,10 @@ register MCP — it only updates agent files. Registration is idempotent.`,
 
 		dirPath := filepath.Join(repoRoot, config.DirName)
 		legacyPath := filepath.Join(repoRoot, config.FileName)
-		localEntry := filepath.Join(config.DirName, config.LocalFile)
+		globEntry := config.DirName + "/" + config.LocalGlob
 		dirEntry := config.DirName + "/"
 
-		gitignoreEntry := localEntry
+		gitignoreEntry := globEntry
 		if personal {
 			gitignoreEntry = dirEntry
 		}
@@ -94,6 +96,9 @@ register MCP — it only updates agent files. Registration is idempotent.`,
 		case dirExists(dirPath):
 			// .rimba/ directory already exists
 			fmt.Fprintf(cmd.OutOrStdout(), "Config %s already exists, skipping config creation\n", dirPath)
+			if err := reconcileExistingIgnore(cmd, repoRoot, personal); err != nil {
+				return err
+			}
 
 		case fileExists(legacyPath):
 			if err := runInitMigrate(cmd, repoRoot, dirPath, legacyPath, gitignoreEntry, personal); err != nil {
@@ -101,7 +106,7 @@ register MCP — it only updates agent files. Registration is idempotent.`,
 			}
 
 		default:
-			if err := runInitFresh(cmd, r, repoRoot, dirPath, gitignoreEntry, personal); err != nil {
+			if err := runInitFresh(ctx, cmd, r, repoRoot, dirPath, gitignoreEntry, personal); err != nil {
 				return err
 			}
 		}
@@ -115,13 +120,13 @@ register MCP — it only updates agent files. Registration is idempotent.`,
 	},
 }
 
-func runInitFresh(cmd *cobra.Command, r git.Runner, repoRoot, dirPath, gitignoreEntry string, personal bool) error {
-	repoName, err := git.RepoName(r)
+func runInitFresh(ctx context.Context, cmd *cobra.Command, r git.Runner, repoRoot, dirPath, gitignoreEntry string, personal bool) error {
+	repoName, err := git.RepoName(ctx, r)
 	if err != nil {
 		return err
 	}
 
-	defaultBranch, err := git.DefaultBranch(r)
+	defaultBranch, err := git.DefaultBranch(ctx, r)
 	if err != nil {
 		return err
 	}
@@ -155,7 +160,7 @@ func runInitFresh(cmd *cobra.Command, r git.Runner, repoRoot, dirPath, gitignore
 		)
 	}
 
-	added, err := fileutil.EnsureGitignore(repoRoot, gitignoreEntry)
+	added, err := ensureLocalIgnore(repoRoot, gitignoreEntry, personal)
 	if err != nil {
 		return errhint.WithFix(fmt.Errorf("failed to update .gitignore: %w", err), gitignoreHint)
 	}
@@ -195,7 +200,7 @@ func runInitMigrate(cmd *cobra.Command, repoRoot, dirPath, legacyPath, gitignore
 
 	_, _ = fileutil.RemoveGitignoreEntry(repoRoot, config.FileName)
 
-	if _, err := fileutil.EnsureGitignore(repoRoot, gitignoreEntry); err != nil {
+	if _, err := ensureLocalIgnore(repoRoot, gitignoreEntry, personal); err != nil {
 		return errhint.WithFix(fmt.Errorf("failed to update .gitignore: %w", err), gitignoreHint)
 	}
 
@@ -258,7 +263,7 @@ func runInstall(
 		if err != nil {
 			return errhint.WithFix(
 				fmt.Errorf("mcp servers: %w", err),
-				"check write permissions for MCP client configs (.mcp.json, .cursor/mcp.json, ~/.claude/settings.json)",
+				"check write permissions for MCP client configs (.mcp.json, .cursor/mcp.json, ~/.claude.json)",
 			)
 		}
 	}
@@ -281,6 +286,32 @@ func printSection(cmd *cobra.Command, title string, tier installTier, results []
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "    %s (%s)\n", p, r.Action)
 	}
+}
+
+// ensureLocalIgnore updates .gitignore for local config files.
+// Personal mode ignores the whole .rimba/ dir; non-personal mode writes the
+// *.local.toml glob. gitignoreEntry is only used in the personal branch.
+func ensureLocalIgnore(repoRoot, gitignoreEntry string, personal bool) (bool, error) {
+	if personal {
+		return fileutil.EnsureGitignore(repoRoot, gitignoreEntry)
+	}
+	return fileutil.EnsureLocalGlobIgnored(repoRoot)
+}
+
+// reconcileExistingIgnore migrates per-file .gitignore entries to the glob on
+// re-init. Switching from non-personal to personal mode is not handled here.
+func reconcileExistingIgnore(cmd *cobra.Command, repoRoot string, personal bool) error {
+	if personal {
+		return nil
+	}
+	added, err := fileutil.EnsureLocalGlobIgnored(repoRoot)
+	if err != nil {
+		return errhint.WithFix(fmt.Errorf("failed to update .gitignore: %w", err), gitignoreHint)
+	}
+	if added {
+		fmt.Fprintf(cmd.OutOrStdout(), "  Gitignore:    %s added to .gitignore\n", config.DirName+"/"+config.LocalGlob)
+	}
+	return nil
 }
 
 func init() {

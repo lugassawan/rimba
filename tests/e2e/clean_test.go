@@ -141,6 +141,26 @@ func TestCleanMergedForce(t *testing.T) {
 	}
 }
 
+func TestCleanMergedForceDirtyWorktree(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupCleanInitializedRepo(t)
+	wtPath := cleanMergeSetup(t, repo, "dirty-force")
+
+	// Dirty the worktree with a staged tracked file so git worktree remove
+	// without --force would refuse.
+	testutil.CreateFile(t, wtPath, "uncommitted.txt", "dirty content")
+	testutil.GitCmd(t, wtPath, "add", "uncommitted.txt")
+
+	r := rimbaSuccess(t, repo, "clean", flagMergedE2E, flagForceE2E)
+	assertContains(t, r.Stdout, msgRemovedWorktree)
+	assertContains(t, r.Stdout, msgDeletedBranch)
+	assertContains(t, r.Stdout, "Cleaned 1 merged worktree(s)")
+	assertFileNotExists(t, wtPath)
+}
+
 func TestCleanMergedNoMerged(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)

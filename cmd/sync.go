@@ -64,7 +64,7 @@ var syncCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.FromContext(cmd.Context())
 
-		r := newRunner()
+		r := newRunner(cmd.Context())
 		all, _ := cmd.Flags().GetBool(flagAll)
 		useMerge, _ := cmd.Flags().GetBool(flagSyncMerge)
 		includeInherited, _ := cmd.Flags().GetBool(flagIncludeInherited)
@@ -92,7 +92,7 @@ var syncCmd = &cobra.Command{
 			fmt.Fprintln(cmd.OutOrStdout(), "[dry-run] would fetch origin")
 		} else {
 			s.Start("Fetching from origin...")
-			if err := git.Fetch(cmd.Context(), r, "origin"); err != nil {
+			if err := git.Fetch(cmd.Context(), r, "origin", git.FetchArgs{}); err != nil {
 				s.Stop()
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 					return err
@@ -101,12 +101,12 @@ var syncCmd = &cobra.Command{
 			}
 		}
 
-		repoRoot, err := git.MainRepoRoot(r)
+		repoRoot, err := git.MainRepoRoot(cmd.Context(), r)
 		if err != nil {
 			return err
 		}
 
-		worktrees, err := listWorktreeInfos(r)
+		worktrees, err := listWorktreeInfos(cmd.Context(), r)
 		if err != nil {
 			return err
 		}
@@ -138,7 +138,7 @@ func syncOne(ctx context.Context, sc *syncContext, input string, worktrees []res
 		return fmt.Errorf(operations.ErrWorktreeNotFoundFmt, input)
 	}
 
-	dirty, err := git.IsDirty(sc.r, wt.Path)
+	dirty, err := git.IsDirty(ctx, sc.r, wt.Path)
 	if err != nil {
 		return err
 	}

@@ -7,10 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	toml "github.com/pelletier/go-toml/v2"
 
 	"github.com/lugassawan/rimba/internal/errhint"
+	"github.com/lugassawan/rimba/internal/gitref"
 )
 
 // FileName is the legacy config file name used by rimba.
@@ -21,17 +23,36 @@ const (
 	DirName   = ".rimba"
 	TeamFile  = "settings.toml"
 	LocalFile = "settings.local.toml"
+	TrustFile = "trust.local.toml"
+	LocalGlob = "*.local.toml" // gitignore glob for personal *.local.toml overrides
 )
 
+// DefaultCommandTimeout is the subprocess deadline used when command_timeout is unset.
+const DefaultCommandTimeout = 120 * time.Second
+
 type Config struct {
-	WorktreeDir   string   `toml:"worktree_dir,omitempty"`
-	DefaultSource string   `toml:"default_source,omitempty"`
-	CopyFiles     []string `toml:"copy_files"`
-	PostCreate    []string `toml:"post_create,omitempty"`
-	PostRename    []string `toml:"post_rename,omitempty"`
+	WorktreeDir    string   `toml:"worktree_dir,omitempty"`
+	DefaultSource  string   `toml:"default_source,omitempty"`
+	CommandTimeout string   `toml:"command_timeout,omitempty"`
+	CopyFiles      []string `toml:"copy_files"`
+	PostCreate     []string `toml:"post_create,omitempty"`
+	PostRename     []string `toml:"post_rename,omitempty"`
 
 	Deps *DepsConfig       `toml:"deps,omitempty"`
 	Open map[string]string `toml:"open,omitempty"`
+}
+
+// EffectiveCommandTimeout returns the parsed CommandTimeout, or DefaultCommandTimeout
+// when the field is empty, unparseable, or non-positive.
+func (c *Config) EffectiveCommandTimeout() time.Duration {
+	if c.CommandTimeout == "" {
+		return DefaultCommandTimeout
+	}
+	d, err := time.ParseDuration(c.CommandTimeout)
+	if err != nil || d <= 0 {
+		return DefaultCommandTimeout
+	}
+	return d
 }
 
 // DepsConfig holds optional dependency management settings.
@@ -95,6 +116,8 @@ func (c *Config) FillDefaults(repoName, defaultBranch string) {
 func (c *Config) Validate() error {
 	var errs []error
 	errs = appendIf(errs, validateWorktreeDir(c.WorktreeDir)...)
+	errs = appendIf(errs, validateDefaultSource(c.DefaultSource)...)
+	errs = appendIf(errs, validateCommandTimeout(c.CommandTimeout)...)
 	errs = appendIf(errs, validateDeps(c.Deps)...)
 	errs = appendIf(errs, validateOpen(c.Open)...)
 	return errors.Join(errs...)
@@ -149,6 +172,9 @@ func Merge(team, local *Config) *Config {
 	}
 	if local.DefaultSource != "" {
 		merged.DefaultSource = local.DefaultSource
+	}
+	if local.CommandTimeout != "" {
+		merged.CommandTimeout = local.CommandTimeout
 	}
 	if local.CopyFiles != nil {
 		merged.CopyFiles = local.CopyFiles
@@ -316,4 +342,31 @@ func validateOpen(open map[string]string) []error {
 		}
 	}
 	return errs
+}
+
+// validateDefaultSource rejects default_source values that could inject options
+// into git commands. Empty is allowed — FillDefaults supplies the git default branch.
+func validateDefaultSource(src string) []error {
+	if src == "" {
+		return nil
+	}
+	if err := gitref.Validate(src); err != nil {
+		return []error{fmt.Errorf("default_source: %w", err)}
+	}
+	return nil
+}
+
+// validateCommandTimeout rejects non-empty durations that are unparseable or non-positive.
+func validateCommandTimeout(s string) []error {
+	if s == "" {
+		return nil
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return []error{fmt.Errorf("command_timeout: invalid duration %q: %w", s, err)}
+	}
+	if d <= 0 {
+		return []error{fmt.Errorf("command_timeout: duration must be positive, got %q", s)}
+	}
+	return nil
 }

@@ -22,6 +22,7 @@ const (
 	configDir     = ".rimba"
 	teamFile      = "settings.toml"
 	localFile     = "settings.local.toml"
+	localGlob     = "*.local.toml" // gitignore glob — matches LocalGlob in config
 	gitignoreFile = ".gitignore"
 
 	// Output messages asserted in tests.
@@ -56,10 +57,12 @@ const (
 	secretContent = "SECRET=test"
 
 	// Merge test constants.
-	taskMergeMain   = "merge-main"
-	taskMergeKeep   = "merge-keep"
-	taskMergeSrc    = "merge-src"
-	taskMergeDelSrc = "merge-del-src"
+	taskMergeMain       = "merge-main"
+	taskMergeKeep       = "merge-keep"
+	taskMergeSrc        = "merge-src"
+	taskMergeDelSrc     = "merge-del-src"
+	taskMergeRemote     = "merge-remote"
+	taskMergeRemoteKeep = "merge-remote-keep"
 
 	// Conflict-check and merge-plan test constants.
 	taskConflictA = "cc-task-a"

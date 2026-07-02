@@ -47,8 +47,8 @@ type StaleResult struct {
 
 // FindMergedCandidates returns worktrees whose branches are merged into mergeRef.
 // It checks both regular merges and squash-merges.
-func FindMergedCandidates(r git.Runner, mergeRef, mainBranch string) (MergedResult, error) {
-	mergedList, err := git.MergedBranches(r, mergeRef)
+func FindMergedCandidates(ctx context.Context, r git.Runner, mergeRef, mainBranch string) (MergedResult, error) {
+	mergedList, err := git.MergedBranches(ctx, r, mergeRef)
 	if err != nil {
 		return MergedResult{}, errhint.WithFix(
 			fmt.Errorf("failed to list merged branches: %w", err),
@@ -61,7 +61,7 @@ func FindMergedCandidates(r git.Runner, mergeRef, mainBranch string) (MergedResu
 		mergedSet[b] = true
 	}
 
-	entries, err := git.ListWorktrees(r)
+	entries, err := git.ListWorktrees(ctx, r)
 	if err != nil {
 		return MergedResult{}, err
 	}
@@ -74,7 +74,7 @@ func FindMergedCandidates(r git.Runner, mergeRef, mainBranch string) (MergedResu
 		}
 
 		// Fallback: squash-merge detection
-		squashed, err := git.IsSquashMerged(r, mergeRef, e.Branch)
+		squashed, err := git.IsSquashMerged(ctx, r, mergeRef, e.Branch)
 		if err != nil {
 			result.Warnings = append(result.Warnings, fmt.Sprintf("skipped %s: squash-merge check failed: %v", e.Branch, err))
 			continue
@@ -87,8 +87,8 @@ func FindMergedCandidates(r git.Runner, mergeRef, mainBranch string) (MergedResu
 }
 
 // FindStaleCandidates returns worktrees with no commits in the last staleDays days.
-func FindStaleCandidates(r git.Runner, mainBranch string, staleDays int) (StaleResult, error) {
-	entries, err := git.ListWorktrees(r)
+func FindStaleCandidates(ctx context.Context, r git.Runner, mainBranch string, staleDays int) (StaleResult, error) {
+	entries, err := git.ListWorktrees(ctx, r)
 	if err != nil {
 		return StaleResult{}, err
 	}
@@ -97,7 +97,7 @@ func FindStaleCandidates(r git.Runner, mainBranch string, staleDays int) (StaleR
 
 	var result StaleResult
 	for _, e := range git.FilterEntries(entries, mainBranch) {
-		ct, err := git.LastCommitTime(r, e.Branch)
+		ct, err := git.LastCommitTime(ctx, r, e.Branch)
 		if err != nil {
 			result.Warnings = append(result.Warnings, fmt.Sprintf("skipped %s: %v", e.Branch, err))
 			continue
@@ -118,11 +118,12 @@ func FindStaleCandidates(r git.Runner, mainBranch string, staleDays int) (StaleR
 // removed. Callers are responsible for probing RemoteExists before invoking — passing
 // a pre-resolved boolean avoids redundant git remote get-url calls per candidate and
 // ensures the CLI dry-run preview and actual deletion share a single probe result.
-func RemoveCandidates(ctx context.Context, r git.Runner, candidates []CleanCandidate, originPresent bool, onProgress progress.Func) []CleanedItem {
+// force is forwarded to git worktree remove to allow discarding untracked files.
+func RemoveCandidates(ctx context.Context, r git.Runner, candidates []CleanCandidate, originPresent bool, force bool, onProgress progress.Func) []CleanedItem {
 	items := make([]CleanedItem, 0, len(candidates))
 	for _, c := range candidates {
 		progress.Notifyf(onProgress, "Removing %s...", c.Branch)
-		wtRemoved, brDeleted, err := removeAndCleanup(r, c.Path, c.Branch)
+		wtRemoved, brDeleted, err := removeAndCleanup(ctx, r, c.Path, c.Branch, force)
 		item := CleanedItem{
 			Branch:          c.Branch,
 			Path:            c.Path,

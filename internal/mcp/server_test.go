@@ -18,9 +18,20 @@ const (
 	gitRevList     = "rev-list"
 	gitStatus      = "status"
 	gitList        = "list"
+	gitWorktreeAdd = "add"
+	flagVerify     = "--verify"
 	revListEven    = "0\t0"
 	dirtyOutput    = " M dirty.go\n"
 )
+
+// mockGhRunner implements gh.Runner for MCP unit tests.
+type mockGhRunner struct {
+	run func(ctx context.Context, args ...string) ([]byte, error)
+}
+
+func (m *mockGhRunner) Run(ctx context.Context, args ...string) ([]byte, error) {
+	return m.run(ctx, args...)
+}
 
 // mockRunner implements git.Runner for unit tests.
 type mockRunner struct {
@@ -28,26 +39,31 @@ type mockRunner struct {
 	runInDir func(dir string, args ...string) (string, error)
 }
 
-func (m *mockRunner) Run(args ...string) (string, error) {
+func (m *mockRunner) Run(_ context.Context, args ...string) (string, error) {
 	if m.run == nil {
 		return "", nil
 	}
 	return m.run(args...)
 }
 
-func (m *mockRunner) RunInDir(dir string, args ...string) (string, error) {
+func (m *mockRunner) RunInDir(_ context.Context, dir string, args ...string) (string, error) {
 	if m.runInDir == nil {
 		return "", nil
 	}
 	return m.runInDir(dir, args...)
 }
 
-func (m *mockRunner) RunContext(ctx context.Context, args ...string) (string, error) {
-	return m.Run(args...)
-}
-
-func (m *mockRunner) RunInDirContext(ctx context.Context, dir string, args ...string) (string, error) {
-	return m.RunInDir(dir, args...)
+// newGhAuthOK returns a mockGhRunner that answers auth → "Logged in" and
+// all other calls with prJSON.
+func newGhAuthOK(prJSON string) *mockGhRunner {
+	return &mockGhRunner{
+		run: func(_ context.Context, args ...string) ([]byte, error) {
+			if len(args) > 0 && args[0] == "auth" {
+				return []byte("Logged in"), nil
+			}
+			return []byte(prJSON), nil
+		},
+	}
 }
 
 // testConfig returns a minimal config suitable for testing.

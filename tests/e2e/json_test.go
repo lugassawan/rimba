@@ -2,10 +2,14 @@ package e2e_test
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/lugassawan/rimba/internal/deps"
+	"github.com/lugassawan/rimba/internal/resolver"
+	"github.com/lugassawan/rimba/testutil"
 )
 
 // parseEnvelope parses a JSON envelope from stdout and returns the data field.
@@ -109,6 +113,70 @@ func TestListJSONArchived(t *testing.T) {
 	}
 	if len(data) == 0 {
 		t.Error("expected at least one archived branch")
+	}
+}
+
+func TestLogJSON(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", "log-json-task")
+
+	// Make a commit in the worktree so log has something to show
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch := resolver.BranchName(defaultPrefix, "log-json-task")
+	wtPath := resolver.WorktreePath(wtDir, branch)
+	testutil.CreateFile(t, wtPath, "work.txt", "some work")
+	testutil.GitCmd(t, wtPath, "add", ".")
+	testutil.GitCmd(t, wtPath, "commit", "-m", "add log json work")
+
+	r := rimbaSuccess(t, repo, "log", "--json")
+	env := parseEnvelope(t, r.Stdout)
+
+	if env["command"] != "log" {
+		t.Errorf("command = %v, want 'log'", env["command"])
+	}
+
+	data, ok := env["data"].([]any)
+	if !ok {
+		t.Fatalf("data type = %T, want []any", env["data"])
+	}
+	if len(data) == 0 {
+		t.Fatal("expected at least one log entry")
+	}
+
+	var item map[string]any
+	for _, d := range data {
+		if m, ok := d.(map[string]any); ok && m["task"] == "log-json-task" {
+			item = m
+			break
+		}
+	}
+	if item == nil {
+		t.Fatal("log-json-task entry not found in JSON output")
+	}
+
+	for _, field := range []string{"task", "type", "branch", "path", "last_commit", "subject"} {
+		if _, exists := item[field]; !exists {
+			t.Errorf("item missing field %q", field)
+		}
+	}
+	if item["subject"] != "add log json work" {
+		t.Errorf("subject = %v, want 'add log json work'", item["subject"])
+	}
+	lc, _ := item["last_commit"].(string)
+	if _, err := time.Parse(time.RFC3339, lc); err != nil {
+		t.Errorf("last_commit %q is not RFC3339: %v", lc, err)
+	}
+
+	// No ANSI escape codes
+	assertNotContains(t, r.Stdout, "\033[")
+	// No spinner output on stderr
+	if r.Stderr != "" {
+		t.Errorf("expected empty stderr in JSON mode, got: %s", r.Stderr)
 	}
 }
 
