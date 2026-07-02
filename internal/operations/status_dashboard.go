@@ -121,14 +121,12 @@ func SummarizeStatus(entries []StatusEntry, staleThreshold time.Time) StatusSumm
 	return s
 }
 
-// collectStatusEntries gathers dirty/ahead/behind state and last commit time
-// per candidate in parallel. Under detail it also computes size and 7-day
-// velocity. Each per-item operation gets its own withItemTimeout budget, so a
-// slow one (e.g. a large DirSize walk) cannot starve the others; per-item
-// errors leave the pointer nil (non-fatal). This trades a lower worst-case
-// per-candidate latency (one shared budget) for correctness (independent
-// budgets): a candidate where every op stalls can now take up to 4x
-// itemQueryTimeout instead of 1x.
+// collectStatusEntries gathers dirty/ahead/behind state, last commit time,
+// and (under detail) size and 7-day velocity for each candidate in parallel.
+// Each op gets its own withItemTimeout budget, so a slow one (e.g. a large
+// DirSize walk) can't starve the others — a candidate can now take up to
+// 4x itemQueryTimeout worst case, versus 1x with a shared budget. Per-item
+// errors leave the pointer nil (non-fatal).
 func collectStatusEntries(ctx context.Context, gitR git.Runner, candidates []git.WorktreeEntry, detail bool) []StatusEntry {
 	return parallel.Collect(ctx, len(candidates), 8, func(ctx context.Context, i int) StatusEntry {
 		e := candidates[i]
