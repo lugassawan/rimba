@@ -726,6 +726,32 @@ func TestInstallRefusesWhenEndMarkerPrecedesOrphanedBegin(t *testing.T) {
 	}
 }
 
+func TestIsCorruptBlockDetectsSecondOrphanedBegin(t *testing.T) {
+	// A complete first BEGIN/END pair followed by a second, orphaned BEGIN.
+	// removeBlock alone only inspects the first pair and would call this
+	// healthy; isCorruptBlock must also catch the second orphaned marker.
+	content := shebang + "\n\n" + postMergeBlock() + "\n" + BeginMarker + "\nsecond block content\n"
+
+	if !isCorruptBlock(content) {
+		t.Error("expected isCorruptBlock = true when a second, orphaned BEGIN follows a complete first pair")
+	}
+}
+
+func TestCheckReportsCorruptWithSecondOrphanedBegin(t *testing.T) {
+	dir := t.TempDir()
+	hookPath := filepath.Join(dir, PostMergeHook)
+
+	content := shebang + "\n\n" + postMergeBlock() + "\n" + BeginMarker + "\nsecond block content\n"
+	if err := os.WriteFile(hookPath, []byte(content), fileMode); err != nil {
+		t.Fatalf(fatalWriteHook, err)
+	}
+
+	s := Check(dir, PostMergeHook)
+	if !s.Corrupt {
+		t.Error("expected Corrupt = true when a second, orphaned BEGIN follows a complete first pair")
+	}
+}
+
 func TestCheckReportsCorrupt(t *testing.T) {
 	dir := t.TempDir()
 	hookPath := filepath.Join(dir, PostMergeHook)

@@ -197,9 +197,9 @@ func isShebangOnly(content string) bool {
 }
 
 func isCorruptBlock(content string) bool {
-	_, afterBegin, found := strings.Cut(content, BeginMarker)
-	if !found {
-		return false
+	if strings.Count(content, BeginMarker) > 1 {
+		return true
 	}
-	return !strings.Contains(afterBegin, EndMarker)
+	_, err := removeBlock(content)
+	return errors.Is(err, ErrCorruptBlock)
 }
