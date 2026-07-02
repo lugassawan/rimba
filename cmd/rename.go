@@ -124,11 +124,8 @@ var renameCmd = &cobra.Command{
 	},
 }
 
-// reportRenamePush prints the outcome of the remote publish/delete steps triggered by
-// --push, mirroring the remote-cleanup reporting style in cmd/merge.go: a confirmation
-// line on success, a "\nTo fix: <command>" recovery hint on a best-effort failure, and a
-// quiet skip note (no failure framing) when there simply was no origin remote. When there
-// was no upstream to delete (RemoteSkipped), nothing is printed — there is nothing to do.
+// reportRenamePush prints the outcome of --push's publish/delete steps, mirroring
+// the remote-cleanup reporting style in cmd/merge.go.
 func reportRenamePush(cmd *cobra.Command, result operations.RenameResult) {
 	out := cmd.OutOrStdout()
 
