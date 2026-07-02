@@ -3,6 +3,8 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"io"
+	"path/filepath"
 
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hook"
@@ -39,6 +41,8 @@ var hookInstallCmd = &cobra.Command{
 		err = hook.Install(hooksDir, hook.PostMergeHook, hook.PostMergeBlock(branch))
 		if errors.Is(err, hook.ErrAlreadyInstalled) {
 			fmt.Fprintln(out, "Rimba post-merge hook is already installed.")
+		} else if errors.Is(err, hook.ErrCorruptBlock) {
+			return corruptBlockErr(filepath.Join(hooksDir, hook.PostMergeHook))
 		} else if err != nil {
 			return fmt.Errorf("install post-merge hook: %w", err)
 		} else {
@@ -49,6 +53,8 @@ var hookInstallCmd = &cobra.Command{
 		err = hook.Install(hooksDir, hook.PreCommitHook, hook.PreCommitBlock())
 		if errors.Is(err, hook.ErrAlreadyInstalled) {
 			fmt.Fprintln(out, "Rimba pre-commit hook is already installed.")
+		} else if errors.Is(err, hook.ErrCorruptBlock) {
+			return corruptBlockErr(filepath.Join(hooksDir, hook.PreCommitHook))
 		} else if err != nil {
 			return fmt.Errorf("install pre-commit hook: %w", err)
 		} else {
@@ -78,6 +84,8 @@ var hookUninstallCmd = &cobra.Command{
 		err = hook.Uninstall(hooksDir, hook.PostMergeHook)
 		if errors.Is(err, hook.ErrNotInstalled) {
 			// skip silently
+		} else if errors.Is(err, hook.ErrCorruptBlock) {
+			return corruptBlockErr(filepath.Join(hooksDir, hook.PostMergeHook))
 		} else if err != nil {
 			return fmt.Errorf("uninstall post-merge hook: %w", err)
 		} else {
@@ -89,6 +97,8 @@ var hookUninstallCmd = &cobra.Command{
 		err = hook.Uninstall(hooksDir, hook.PreCommitHook)
 		if errors.Is(err, hook.ErrNotInstalled) {
 			// skip silently
+		} else if errors.Is(err, hook.ErrCorruptBlock) {
+			return corruptBlockErr(filepath.Join(hooksDir, hook.PreCommitHook))
 		} else if err != nil {
 			return fmt.Errorf("uninstall pre-commit hook: %w", err)
 		} else {
@@ -119,7 +129,9 @@ var hookStatusCmd = &cobra.Command{
 
 		// Post-merge status
 		pm := hook.Check(hooksDir, hook.PostMergeHook)
-		if pm.Installed {
+		if pm.Corrupt {
+			printCorruptBlock(out, pm.HookPath)
+		} else if pm.Installed {
 			fmt.Fprintln(out, "Rimba post-merge hook is installed.")
 			fmt.Fprintf(out, "  %s\n", pm.HookPath)
 			if pm.HasOther {
@@ -131,7 +143,9 @@ var hookStatusCmd = &cobra.Command{
 
 		// Pre-commit status
 		pc := hook.Check(hooksDir, hook.PreCommitHook)
-		if pc.Installed {
+		if pc.Corrupt {
+			printCorruptBlock(out, pc.HookPath)
+		} else if pc.Installed {
 			fmt.Fprintln(out, "Rimba pre-commit hook is installed.")
 			fmt.Fprintf(out, "  %s\n", pc.HookPath)
 			if pc.HasOther {
@@ -143,6 +157,16 @@ var hookStatusCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+const corruptBlockMsg = "corrupt rimba hook block (BEGIN without END) in %s; resolve manually"
+
+func corruptBlockErr(hookPath string) error {
+	return fmt.Errorf(corruptBlockMsg, hookPath)
+}
+
+func printCorruptBlock(out io.Writer, hookPath string) {
+	fmt.Fprintf(out, "Rimba: "+corruptBlockMsg+".\n", hookPath)
 }
 
 func init() {

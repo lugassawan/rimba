@@ -418,7 +418,10 @@ func TestRemoveBlock(t *testing.T) {
 	block := postMergeBlock()
 	content := shebang + "\n\n" + userHook + "\n" + block + "\n"
 
-	result := removeBlock(content)
+	result, err := removeBlock(content)
+	if err != nil {
+		t.Fatalf("removeBlock: %v", err)
+	}
 	if strings.Contains(result, BeginMarker) {
 		t.Error(errBeginMarkerRemoved)
 	}
@@ -432,7 +435,10 @@ func TestRemoveBlock(t *testing.T) {
 
 func TestRemoveBlockNoBeginMarker(t *testing.T) {
 	content := shebang + "\n\n" + userHook
-	result := removeBlock(content)
+	result, err := removeBlock(content)
+	if err != nil {
+		t.Fatalf("removeBlock: %v", err)
+	}
 	if result != content {
 		t.Errorf("removeBlock should return content unchanged when no markers present\ngot:  %q\nwant: %q", result, content)
 	}
@@ -441,9 +447,9 @@ func TestRemoveBlockNoBeginMarker(t *testing.T) {
 func TestRemoveBlockCorruptBeginOnly(t *testing.T) {
 	// BEGIN at the very start of content, no END marker
 	content := BeginMarker + "\nsome corrupt content\nmore stuff"
-	result := removeBlock(content)
-	if result != "" {
-		t.Errorf("removeBlock should return empty string when BEGIN is at start and no END, got %q", result)
+	_, err := removeBlock(content)
+	if !errors.Is(err, ErrCorruptBlock) {
+		t.Fatalf("removeBlock: got %v, want ErrCorruptBlock", err)
 	}
 }
 
@@ -485,16 +491,13 @@ func TestUninstallReadError(t *testing.T) {
 	}
 }
 
-func TestRemoveBlockNoEndMarker(t *testing.T) {
+func TestRemoveBlockRefusesOnOrphanedBegin(t *testing.T) {
 	// Simulate corrupt file: BEGIN without END
 	content := shebang + "\n\n" + userHook + "\n" + BeginMarker + "\nsome corrupt content"
 
-	result := removeBlock(content)
-	if strings.Contains(result, BeginMarker) {
-		t.Error("BEGIN marker should be removed even without END")
-	}
-	if !strings.Contains(result, userHook) {
-		t.Error("user content before block should be preserved")
+	_, err := removeBlock(content)
+	if !errors.Is(err, ErrCorruptBlock) {
+		t.Fatalf("removeBlock: got %v, want ErrCorruptBlock", err)
 	}
 }
 
@@ -562,7 +565,10 @@ func TestUninstallWriteError(t *testing.T) {
 func TestRemoveBlockBeginOnlyAtStart(t *testing.T) {
 	// BEGIN marker at very start of file with content before END
 	content := BeginMarker + "\nrimba hook content\n" + EndMarker + "\n"
-	result := removeBlock(content)
+	result, err := removeBlock(content)
+	if err != nil {
+		t.Fatalf("removeBlock: %v", err)
+	}
 	if strings.Contains(result, BeginMarker) {
 		t.Error(errBeginMarkerRemoved)
 	}
@@ -581,7 +587,10 @@ func TestRemoveBlockContentAfterEnd(t *testing.T) {
 	afterContent := "echo 'runs after rimba'\n"
 	content := shebang + "\n\n" + block + "\n" + afterContent
 
-	result := removeBlock(content)
+	result, err := removeBlock(content)
+	if err != nil {
+		t.Fatalf("removeBlock: %v", err)
+	}
 	if strings.Contains(result, BeginMarker) {
 		t.Error(errBeginMarkerRemoved)
 	}
@@ -633,5 +642,107 @@ func TestInstallWriteError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "write hook file") {
 		t.Errorf("error = %q, want to contain 'write hook file'", err.Error())
+	}
+}
+
+// --- Corrupt block handling ---
+
+func TestInstallRefusesOnCorruptFile(t *testing.T) {
+	dir := t.TempDir()
+	hookPath := filepath.Join(dir, PostMergeHook)
+
+	corrupt := shebang + "\n\n" + userHook + "\n" + BeginMarker + "\nmy custom lefthook line\n"
+	if err := os.WriteFile(hookPath, []byte(corrupt), fileMode); err != nil {
+		t.Fatalf(fatalWriteHook, err)
+	}
+
+	err := Install(dir, PostMergeHook, postMergeBlock())
+	if !errors.Is(err, ErrCorruptBlock) {
+		t.Fatalf("Install: got %v, want ErrCorruptBlock", err)
+	}
+
+	after, readErr := os.ReadFile(hookPath)
+	if readErr != nil {
+		t.Fatalf(fatalReadHook, readErr)
+	}
+	if string(after) != corrupt {
+		t.Errorf("hook file should be unchanged on corrupt block, got %q, want %q", after, corrupt)
+	}
+}
+
+func TestUninstallRefusesOnCorruptFile(t *testing.T) {
+	dir := t.TempDir()
+	hookPath := filepath.Join(dir, PostMergeHook)
+
+	corrupt := shebang + "\n\n" + userHook + "\n" + BeginMarker + "\nmy custom lefthook line\n"
+	if err := os.WriteFile(hookPath, []byte(corrupt), fileMode); err != nil {
+		t.Fatalf(fatalWriteHook, err)
+	}
+
+	err := Uninstall(dir, PostMergeHook)
+	if !errors.Is(err, ErrCorruptBlock) {
+		t.Fatalf("Uninstall: got %v, want ErrCorruptBlock", err)
+	}
+
+	after, readErr := os.ReadFile(hookPath)
+	if readErr != nil {
+		t.Fatalf(fatalReadHook, readErr)
+	}
+	if string(after) != corrupt {
+		t.Errorf("hook file should be unchanged on corrupt block, got %q, want %q", after, corrupt)
+	}
+}
+
+func TestCheckReportsCorruptWithEndMarkerBeforeOrphanedBegin(t *testing.T) {
+	dir := t.TempDir()
+	hookPath := filepath.Join(dir, PostMergeHook)
+
+	// A stray line matching the END marker text precedes an orphaned BEGIN
+	// that has no real END after it. isCorruptBlock must not be fooled by
+	// substring presence alone — it must agree with removeBlock's ordering.
+	corrupt := shebang + "\n\n" + EndMarker + "\nsome text\n" + BeginMarker + "\necho hi\n"
+	if err := os.WriteFile(hookPath, []byte(corrupt), fileMode); err != nil {
+		t.Fatalf(fatalWriteHook, err)
+	}
+
+	s := Check(dir, PostMergeHook)
+	if !s.Corrupt {
+		t.Error("expected Corrupt = true when END marker precedes an orphaned BEGIN")
+	}
+}
+
+func TestInstallRefusesWhenEndMarkerPrecedesOrphanedBegin(t *testing.T) {
+	dir := t.TempDir()
+	hookPath := filepath.Join(dir, PostMergeHook)
+
+	corrupt := shebang + "\n\n" + EndMarker + "\nsome text\n" + BeginMarker + "\necho hi\n"
+	if err := os.WriteFile(hookPath, []byte(corrupt), fileMode); err != nil {
+		t.Fatalf(fatalWriteHook, err)
+	}
+
+	err := Install(dir, PostMergeHook, postMergeBlock())
+	if !errors.Is(err, ErrCorruptBlock) {
+		t.Fatalf("Install: got %v, want ErrCorruptBlock", err)
+	}
+}
+
+func TestCheckReportsCorrupt(t *testing.T) {
+	dir := t.TempDir()
+	hookPath := filepath.Join(dir, PostMergeHook)
+
+	corrupt := shebang + "\n\n" + userHook + "\n" + BeginMarker + "\nmy custom lefthook line\n"
+	if err := os.WriteFile(hookPath, []byte(corrupt), fileMode); err != nil {
+		t.Fatalf(fatalWriteHook, err)
+	}
+
+	s := Check(dir, PostMergeHook)
+	if !s.Corrupt {
+		t.Error("expected Corrupt = true")
+	}
+	if s.HookPath != hookPath {
+		t.Errorf("HookPath = %q, want %q", s.HookPath, hookPath)
+	}
+	if s.Installed {
+		t.Error("expected Installed = false for a corrupt block")
 	}
 }
