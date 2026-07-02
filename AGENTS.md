@@ -76,4 +76,22 @@ Error: `{"version": "...", "command": "...", "error": "...", "code": "..."}`
 - Never modify `.rimba/settings.toml` programmatically without asking the user
 - Use `RIMBA_DEBUG=1 rimba <cmd>` to log git command timing to stderr when troubleshooting
 
+## MCP Tools
+
+When running inside an MCP-connected agent, prefer the native `mcp__rimba__*` tools over
+shelling out to the `rimba` CLI — they skip a subprocess round-trip. Fall back to the CLI
+when no MCP connection is available.
+
+| MCP tool | CLI equivalent |
+|----------|----------------|
+| `mcp__rimba__add` | `rimba add <task>` |
+| `mcp__rimba__list` | `rimba list` |
+| `mcp__rimba__status` | `rimba status` |
+| `mcp__rimba__sync` | `rimba sync [task]` |
+| `mcp__rimba__merge` | `rimba merge <task>` |
+| `mcp__rimba__remove` | `rimba remove <task>` |
+| `mcp__rimba__clean` | `rimba clean --merged` |
+| `mcp__rimba__exec` | `rimba exec <cmd>` |
+| `mcp__rimba__conflict-check` | `rimba conflict-check` |
+
 <!-- END RIMBA -->
