@@ -159,6 +159,15 @@ func removeGitignoreEntryLocked(repoRoot string, entry string) (bool, error) {
 	return true, os.WriteFile(path, []byte(strings.Join(filtered, "\n")), 0644) //nolint:gosec // .gitignore must be world-readable for git
 }
 
+// withGitignoreLock creates the lock dir, runs fn while holding it, then
+// removes it.
+//
+// Known residual: on a repo that doesn't yet have .rimba/ or
+// .rimba/*.local.toml in .gitignore (i.e. this is the very first call that
+// would establish it), a crash between creating the lock dir and fn()
+// writing that entry leaves an orphaned lock dir not yet covered by any
+// gitignore pattern. This is narrow — it needs a crash in that one
+// first-ever call — and self-heals as soon as any later call succeeds.
 func withGitignoreLock(repoRoot string, fn func() (bool, error)) (retAdded bool, retErr error) {
 	lockPath, err := ensureGitignoreLockDir(repoRoot)
 	if err != nil {

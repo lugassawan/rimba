@@ -674,6 +674,43 @@ func TestEnsureLocalGlobIgnoredNoGitignore(t *testing.T) {
 	}
 }
 
+// TestGitignoreLockDirHiddenByRealGit proves git's own glob matcher (not
+// just filepath.Match) treats the lock dir as ignored, using a real repo.
+func TestGitignoreLockDirHiddenByRealGit(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	dir := t.TempDir()
+	runGit := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	runGit("init", "-q")
+	runGit("config", "user.email", "test@test.com")
+	runGit("config", "user.name", "test")
+
+	writeFile(t, filepath.Join(dir, gitignoreFile), config.DirName+"/"+config.LocalGlob+"\n")
+	runGit("add", gitignoreFile)
+	runGit("commit", "-q", "-m", "init")
+
+	lockPath := filepath.Join(dir, config.DirName, gitignoreLockDirName)
+	if err := os.MkdirAll(lockPath, 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := exec.Command("git", "-C", dir, "status", "--porcelain").Output()
+	if err != nil {
+		t.Fatalf("git status: %v", err)
+	}
+	if len(out) != 0 {
+		t.Errorf("expected lock dir to be hidden by the local glob, git status shows:\n%s", out)
+	}
+}
+
 func readFile(t *testing.T, path string) string {
 	t.Helper()
 	data, err := os.ReadFile(path)
