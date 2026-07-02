@@ -496,3 +496,54 @@ func TestRenamePushNoOriginRemoteSkipsQuietly(t *testing.T) {
 		t.Errorf("output = %q, want no publish/delete output when there is no origin remote", out)
 	}
 }
+
+// renameSetupFailsOnSecondListRunner wraps the standard push mock, additionally
+// failing the *second* `worktree list --porcelain` call: the first serves
+// findWorktree's initial lookup, the second serves PostRenameSetup's deps-refresh
+// listing.
+func renameSetupFailsOnSecondListRunner(repoDir, worktreeOut string) *mockRunner {
+	base := renamePushRunFn(repoDir, worktreeOut, renamePushMockOpts{remoteExists: true, hasUpstream: true})
+	listCalls := 0
+	return &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == "list" {
+				listCalls++
+				if listCalls == 2 {
+					return "", errGitFailed
+				}
+			}
+			return base(args...)
+		},
+		runInDir: renamePushRunInDirFn(renamePushMockOpts{hasUpstream: true}),
+	}
+}
+
+// TestRenamePushReportsOutcomeBeforePostRenameSetupFailure guards the ordering fix:
+// the push outcome must reach stdout even when the later deps-refresh step fails.
+func TestRenamePushReportsOutcomeBeforePostRenameSetupFailure(t *testing.T) {
+	t.Setenv("RIMBA_TRUST_YES", "1")
+	repoDir := t.TempDir()
+	worktreeOut := makeRenameWorktreeOut(repoDir)
+
+	restore := overrideNewRunner(renameSetupFailsOnSecondListRunner(repoDir, worktreeOut))
+	defer restore()
+
+	cfg := &config.Config{WorktreeDir: defaultRelativeWtDir, DefaultSource: branchMain}
+	cmd, buf := newTestCmd()
+	cmd.Flags().BoolP(flagForce, "f", false, "")
+	cmd.Flags().Bool(flagSkipDeps, false, "")
+	cmd.Flags().Bool(flagSkipHooks, false, "")
+	cmd.Flags().Bool(flagPush, false, "")
+	_ = cmd.Flags().Set(flagPush, "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	err := renameCmd.RunE(cmd, []string{"login", "auth"})
+	if err == nil {
+		t.Fatal("expected renameCmd.RunE to return an error from the PostRenameSetup deps-refresh failure")
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "Published branch: origin/feature/auth") {
+		t.Errorf("output = %q, want the push outcome reported despite the later PostRenameSetup failure", out)
+	}
+}
