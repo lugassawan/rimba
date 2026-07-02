@@ -170,7 +170,7 @@ post_create = []
 // cursorContent returns the full content for .cursor/rules/rimba.mdc (whole-file, rimba-owned).
 func cursorContent() string {
 	return `---
-description: rimba git worktree manager commands and workflows
+description: Use for git worktree management — create, list, sync, merge, remove, or clean up worktrees; also relevant before starting new feature/bugfix work that should be isolated in its own branch and directory
 globs:
   - "*.go"
   - ".rimba/settings.toml"
