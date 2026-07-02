@@ -290,3 +290,41 @@ func TestPushForceWithLeaseError(t *testing.T) {
 	}
 	assertContains(t, err, errPushFail)
 }
+
+func TestPushSetUpstream(t *testing.T) {
+	var capturedDir string
+	var capturedArgs []string
+	r := &mockRunner{
+		runInDir: func(dir string, args ...string) (string, error) {
+			capturedDir = dir
+			capturedArgs = args
+			return "", nil
+		},
+	}
+
+	if err := PushSetUpstream(context.Background(), r, fakeDir, remoteOrigin, branchFeature); err != nil {
+		t.Fatalf("PushSetUpstream: %v", err)
+	}
+
+	if capturedDir != fakeDir {
+		t.Errorf("dir = %q, want %q", capturedDir, fakeDir)
+	}
+	wantArgs := []string{"push", "-u", remoteOrigin, branchFeature}
+	if !slices.Equal(capturedArgs, wantArgs) {
+		t.Errorf("args = %v, want %v", capturedArgs, wantArgs)
+	}
+}
+
+func TestPushSetUpstreamError(t *testing.T) {
+	r := &mockRunner{
+		runInDir: func(_ string, _ ...string) (string, error) {
+			return "", errors.New(errPushFail)
+		},
+	}
+
+	err := PushSetUpstream(context.Background(), r, fakeDir, remoteOrigin, branchFeature)
+	if err == nil {
+		t.Fatal("expected error from PushSetUpstream")
+	}
+	assertContains(t, err, errPushFail)
+}

@@ -61,3 +61,9 @@ func PushForceWithLease(ctx context.Context, r Runner, dir string) error {
 	_, err := r.RunInDir(ctx, dir, "push", "--force-with-lease")
 	return err
 }
+
+// PushSetUpstream publishes branch to remote and sets it as the upstream.
+func PushSetUpstream(ctx context.Context, r Runner, dir, remote, branch string) error {
+	_, err := r.RunInDir(ctx, dir, "push", "-u", remote, branch)
+	return err
+}
