@@ -364,6 +364,11 @@ func cleanMergedTestRunner(t *testing.T, mergedOut, worktreeOut string) *mockRun
 			if len(args) >= 1 && args[0] == cmdFetch {
 				return "", errors.New("no remote")
 			}
+			// branchDone's HEAD ("def456", from worktreeOut) is off mainline,
+			// simulating a regular merge-commit merge rather than a fresh branch.
+			if len(args) >= 1 && args[0] == cmdRevList {
+				return "mainlineSha1\nmainlineSha2", nil
+			}
 			return "", nil
 		},
 		runInDir: noopRunInDir,

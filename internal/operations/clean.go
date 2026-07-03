@@ -66,21 +66,20 @@ func FindMergedCandidates(ctx context.Context, r git.Runner, mergeRef, mainBranc
 		return MergedResult{}, err
 	}
 
+	var mainline mainlineLookup
+	if len(mergedList) > 0 {
+		mainline.shas, mainline.err = git.FirstParentChainSHAs(ctx, r, mergeRef)
+	}
+
 	var result MergedResult
 	for _, e := range git.FilterEntries(entries, mainBranch) {
-		if mergedSet[e.Branch] {
-			result.Candidates = append(result.Candidates, CleanCandidate{Path: e.Path, Branch: e.Branch})
+		candidate, warning := classifyMergedEntry(ctx, r, mergeRef, e, mergedSet[e.Branch], mainline)
+		if warning != "" {
+			result.Warnings = append(result.Warnings, warning)
 			continue
 		}
-
-		// Fallback: squash-merge detection
-		squashed, err := git.IsSquashMerged(ctx, r, mergeRef, e.Branch)
-		if err != nil {
-			result.Warnings = append(result.Warnings, fmt.Sprintf("skipped %s: squash-merge check failed: %v", e.Branch, err))
-			continue
-		}
-		if squashed {
-			result.Candidates = append(result.Candidates, CleanCandidate{Path: e.Path, Branch: e.Branch})
+		if candidate != nil {
+			result.Candidates = append(result.Candidates, *candidate)
 		}
 	}
 	return result, nil
@@ -137,6 +136,36 @@ func RemoveCandidates(ctx context.Context, r git.Runner, candidates []CleanCandi
 		items = append(items, item)
 	}
 	return items
+}
+
+// mainlineLookup caches mergeRef's first-parent chain, computed once per
+// FindMergedCandidates call rather than once per branch it checks.
+type mainlineLookup struct {
+	shas map[string]bool
+	err  error
+}
+
+// classifyMergedEntry decides whether a worktree entry should be removed:
+// the first-parent guard when isMergedHit, else squash-merge detection.
+func classifyMergedEntry(ctx context.Context, r git.Runner, mergeRef string, e git.WorktreeEntry, isMergedHit bool, mainline mainlineLookup) (*CleanCandidate, string) {
+	if isMergedHit {
+		if mainline.err != nil {
+			return nil, fmt.Sprintf("skipped %s: mainline check failed: %v", e.Branch, mainline.err)
+		}
+		if git.IsSHAOnChain(e.HEAD, mainline.shas) {
+			return nil, ""
+		}
+		return &CleanCandidate{Path: e.Path, Branch: e.Branch}, ""
+	}
+
+	squashed, err := git.IsSquashMerged(ctx, r, mergeRef, e.Branch)
+	if err != nil {
+		return nil, fmt.Sprintf("skipped %s: squash-merge check failed: %v", e.Branch, err)
+	}
+	if !squashed {
+		return nil, ""
+	}
+	return &CleanCandidate{Path: e.Path, Branch: e.Branch}, ""
 }
 
 // deleteRemoteForItem deletes the remote branch on git.DefaultRemote.

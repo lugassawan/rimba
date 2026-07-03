@@ -1096,6 +1096,53 @@ func TestAddWorktreeFromBranchInsertsDashDash(t *testing.T) {
 	}
 }
 
+func TestFirstParentChainSHAsParsesLines(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if args[0] == cmdRevList {
+				return "sha1\n" + fakeTip + "\n\nsha2\n", nil
+			}
+			return "", errors.New("unexpected call: " + args[0])
+		},
+	}
+
+	shas, err := FirstParentChainSHAs(context.Background(), r, branchMain)
+	if err != nil {
+		t.Fatalf("FirstParentChainSHAs: %v", err)
+	}
+	want := []string{"sha1", fakeTip, "sha2"}
+	if len(shas) != len(want) {
+		t.Fatalf("shas = %v, want %v", shas, want)
+	}
+	for _, sha := range want {
+		if !shas[sha] {
+			t.Errorf("missing %q in %v", sha, shas)
+		}
+	}
+}
+
+func TestFirstParentChainSHAsError(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			return "", errors.New("rev-list failed")
+		},
+	}
+
+	if _, err := FirstParentChainSHAs(context.Background(), r, branchMain); err == nil {
+		t.Fatal("expected error from rev-list failure")
+	}
+}
+
+func TestIsSHAOnChain(t *testing.T) {
+	chain := map[string]bool{fakeTip: true}
+	if !IsSHAOnChain(fakeTip, chain) {
+		t.Error("expected true for a SHA present in the chain")
+	}
+	if IsSHAOnChain("missing", chain) {
+		t.Error("expected false for a SHA absent from the chain")
+	}
+}
+
 func TestAddWorktreeInsertsDashDash(t *testing.T) {
 	const (
 		branch = "feature/my-task"

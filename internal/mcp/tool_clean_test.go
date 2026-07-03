@@ -17,6 +17,7 @@ const (
 	gitRemotePrune = "remote prune"
 	gitRemove      = "remove"
 	gitMerged      = "--merged"
+	gitFirstParent = "--first-parent"
 
 	modeStale  = "stale"
 	modeMerged = "merged"
@@ -26,6 +27,10 @@ const (
 	branchFeatureDone = "feature/done"
 
 	mergedFeatureDoneOutput = "  feature/done\n"
+
+	// mainlineHistory simulates a merge-commit merge: worktreePorcelain's
+	// fixed "HEAD abc123" is off this chain, so the entry counts as removable.
+	mainlineHistory = "mainlineSha1\nmainlineSha2"
 )
 
 // mockCmdKey builds a dispatch key from git arguments.
@@ -53,9 +58,10 @@ func isBranchDelete(args []string) bool {
 // worktree remove and branch delete are supported.
 func newCleanMergedRunner(porcelain, mergedBranches string, fetchOK, allowRemove bool) *mockRunner {
 	responses := map[string]string{
-		gitBranch + " " + gitMerged:   mergedBranches,
-		gitWorktree + " " + gitList:   porcelain,
-		gitWorktree + " " + gitRemove: "",
+		gitBranch + " " + gitMerged:       mergedBranches,
+		gitWorktree + " " + gitList:       porcelain,
+		gitWorktree + " " + gitRemove:     "",
+		gitRevList + " " + gitFirstParent: mainlineHistory,
 	}
 
 	return &mockRunner{
@@ -765,6 +771,13 @@ func TestMcpCleanPruneMultiRemote(t *testing.T) {
 // If pushErr is nil, push --delete succeeds; otherwise it returns pushErr.
 // pushCalled is incremented when push --delete is invoked (nil = ignore).
 func newCleanMergedWithRemoteRunner(porcelain, mergedBranches string, pushErr error, pushCalled *int) *mockRunner {
+	responses := map[string]string{
+		gitBranch + " " + gitMerged:       mergedBranches,
+		gitWorktree + " " + gitList:       porcelain,
+		gitWorktree + " " + gitRemove:     "",
+		gitRevList + " " + gitFirstParent: mainlineHistory,
+	}
+
 	return &mockRunner{
 		run: func(args ...string) (string, error) {
 			if len(args) > 0 && args[0] == gitFetch {
@@ -779,14 +792,8 @@ func newCleanMergedWithRemoteRunner(porcelain, mergedBranches string, pushErr er
 				}
 				return "", pushErr
 			}
-			key := mockCmdKey(args)
-			switch key {
-			case gitBranch + " " + gitMerged:
-				return mergedBranches, nil
-			case gitWorktree + " " + gitList:
-				return porcelain, nil
-			case gitWorktree + " " + gitRemove:
-				return "", nil
+			if out, ok := responses[mockCmdKey(args)]; ok {
+				return out, nil
 			}
 			if isBranchDelete(args) {
 				return "", nil

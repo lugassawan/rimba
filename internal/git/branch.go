@@ -131,6 +131,27 @@ func AheadBehind(ctx context.Context, r Runner, dir string) (ahead, behind int, 
 	return ahead, behind, nil
 }
 
+// FirstParentChainSHAs returns the set of commit SHAs on mergeRef's mainline
+// (first-parent) history.
+func FirstParentChainSHAs(ctx context.Context, r Runner, mergeRef string) (map[string]bool, error) {
+	out, err := r.Run(ctx, cmdRevList, flagFirstParent, mergeRef)
+	if err != nil {
+		return nil, err
+	}
+	shas := make(map[string]bool)
+	for line := range strings.SplitSeq(out, "\n") {
+		if sha := strings.TrimSpace(line); sha != "" {
+			shas[sha] = true
+		}
+	}
+	return shas, nil
+}
+
+// IsSHAOnChain reports whether sha is in chain (e.g. from FirstParentChainSHAs).
+func IsSHAOnChain(sha string, chain map[string]bool) bool {
+	return chain[sha]
+}
+
 // IsSquashMerged reports whether branch's diff patch-id matches any commit in
 // mergeRef since their common merge-base, indicating a squash merge.
 func IsSquashMerged(ctx context.Context, r Runner, mergeRef, branch string) (bool, error) {
