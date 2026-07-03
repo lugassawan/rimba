@@ -322,6 +322,80 @@ func TestCheckoutError(t *testing.T) {
 	}
 }
 
+func TestFirstParentChainSHAsFreshBranch(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	// A branch created from main with no additional commits has its tip on main's mainline.
+	testutil.GitCmd(t, repo, "checkout", "-b", "feature/fresh")
+	tip := strings.TrimSpace(testutil.GitCmd(t, repo, "rev-parse", "feature/fresh"))
+	testutil.GitCmd(t, repo, "checkout", "main")
+
+	mainline, err := git.FirstParentChainSHAs(context.Background(), r, "main")
+	if err != nil {
+		t.Fatalf("FirstParentChainSHAs: %v", err)
+	}
+	if !git.IsSHAOnChain(tip, mainline) {
+		t.Error("expected true for a fresh branch with no own commits")
+	}
+}
+
+func TestFirstParentChainSHAsMergeCommitMerged(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	testutil.GitCmd(t, repo, "checkout", "-b", "feature/merge-commit")
+	testutil.CreateFile(t, repo, "own.txt", "content")
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "own commit")
+	tip := strings.TrimSpace(testutil.GitCmd(t, repo, "rev-parse", "feature/merge-commit"))
+	testutil.GitCmd(t, repo, "checkout", "main")
+	testutil.GitCmd(t, repo, "merge", "--no-ff", "feature/merge-commit", "-m", "merge commit")
+
+	mainline, err := git.FirstParentChainSHAs(context.Background(), r, "main")
+	if err != nil {
+		t.Fatalf("FirstParentChainSHAs: %v", err)
+	}
+	if git.IsSHAOnChain(tip, mainline) {
+		t.Error("expected false: branch tip is the merge's second parent, off mainline")
+	}
+}
+
+func TestFirstParentChainSHAsFastForward(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	testutil.GitCmd(t, repo, "checkout", "-b", "feature/ff")
+	testutil.CreateFile(t, repo, "own.txt", "content")
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "own commit")
+	tip := strings.TrimSpace(testutil.GitCmd(t, repo, "rev-parse", "feature/ff"))
+	testutil.GitCmd(t, repo, "checkout", "main")
+	testutil.GitCmd(t, repo, "merge", "feature/ff")
+
+	// Accepted false-negative: a fast-forward merge leaves the branch tip on
+	// mainline, so clean --merged will not remove it.
+	mainline, err := git.FirstParentChainSHAs(context.Background(), r, "main")
+	if err != nil {
+		t.Fatalf("FirstParentChainSHAs: %v", err)
+	}
+	if !git.IsSHAOnChain(tip, mainline) {
+		t.Error("expected true: fast-forward merge leaves branch tip on mainline")
+	}
+}
+
 func TestCurrentBranchDetachedHead(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipIntegration)
