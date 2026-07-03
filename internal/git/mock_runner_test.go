@@ -325,7 +325,7 @@ func TestRemoveWorktreeForce(t *testing.T) {
 	}
 }
 
-func TestMoveWorktreeNoForce(t *testing.T) {
+func TestMoveWorktreeInsertsDashDash(t *testing.T) {
 	var captured []string
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
@@ -337,8 +337,10 @@ func TestMoveWorktreeNoForce(t *testing.T) {
 	if err := MoveWorktree(r, "/old/path", "/new/path", false); err != nil {
 		t.Fatalf("MoveWorktree: %v", err)
 	}
-	if slices.Contains(captured, flagForce) {
-		t.Error("--force should not be present when force=false")
+
+	want := []string{cmdWorktree, "move", "--", "/old/path", "/new/path"}
+	if !slices.Equal(captured, want) {
+		t.Errorf("args = %v, want %v", captured, want)
 	}
 }
 
@@ -355,14 +357,9 @@ func TestMoveWorktreeForce(t *testing.T) {
 		t.Fatalf("MoveWorktree: %v", err)
 	}
 	// git worktree move requires --force twice to move locked worktrees
-	forceCount := 0
-	for _, a := range captured {
-		if a == flagForce {
-			forceCount++
-		}
-	}
-	if forceCount != 2 {
-		t.Errorf("expected 2 %s flags, got %d in args %v", flagForce, forceCount, captured)
+	want := []string{cmdWorktree, "move", flagForce, flagForce, "--", "/old/path", "/new/path"}
+	if !slices.Equal(captured, want) {
+		t.Errorf("args = %v, want %v", captured, want)
 	}
 }
 

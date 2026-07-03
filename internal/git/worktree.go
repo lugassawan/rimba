@@ -52,10 +52,11 @@ func RemoveWorktree(ctx context.Context, r Runner, path string, force bool) erro
 // When force is true, --force is passed twice so that even locked worktrees can be moved.
 // Intentionally non-cancellable: rollback moves must complete to avoid stranded worktrees.
 func MoveWorktree(r Runner, oldPath, newPath string, force bool) error {
-	args := []string{cmdWorktree, "move", oldPath, newPath}
+	args := []string{cmdWorktree, "move"}
 	if force {
 		args = append(args, flagForce, flagForce)
 	}
+	args = append(args, "--", oldPath, newPath)
 	_, err := r.Run(context.Background(), args...)
 	return err
 }
