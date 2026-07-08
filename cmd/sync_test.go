@@ -23,7 +23,7 @@ func testSyncConfig() *config.Config {
 }
 
 func testSyncPrefixes() []string {
-	return resolver.AllPrefixes()
+	return resolver.DefaultPrefixSet().Strip()
 }
 
 func testSyncSpinner(cmd *cobra.Command) *spinner.Spinner {
@@ -100,6 +100,36 @@ func TestSyncOneSuccess(t *testing.T) {
 			t.Errorf("output = %q, want 'Merged'", buf.String())
 		}
 	})
+}
+
+func TestSyncOneOrphanedHardErrors(t *testing.T) {
+	// Only "TASK-" is configured, so the "PROJ-*" branch is orphaned;
+	// sync has no --force flag, so this guard can never be bypassed here.
+	cfg := &config.Config{
+		DefaultSource: branchMain,
+		Resolver: &config.ResolverConfig{
+			Prefix: []config.PrefixEntry{{Prefix: "TASK-"}},
+		},
+	}
+	worktrees := []resolver.WorktreeInfo{
+		{Branch: branchMain, Path: "/repo"},
+		{Branch: "PROJ-123", Path: "/wt/proj-123"},
+	}
+
+	cmd, _ := newTestCmd()
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return "", nil },
+		runInDir: noopRunInDir,
+	}
+	sc := &syncContext{cmd: cmd, r: r, cfg: cfg, s: testSyncSpinner(cmd)}
+
+	err := syncOne(context.Background(), sc, "PROJ-123", worktrees, cfg.PrefixSet().Strip(), false, false)
+	if err == nil {
+		t.Fatal("expected orphan-guard error, got nil")
+	}
+	if !strings.Contains(err.Error(), "re-add the prefix") {
+		t.Errorf("error = %q, want it to mention re-adding the prefix", err.Error())
+	}
 }
 
 func TestSyncOneNotFound(t *testing.T) {

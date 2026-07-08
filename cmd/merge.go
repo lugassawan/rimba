@@ -46,11 +46,21 @@ var mergeCmd = &cobra.Command{
 			return err
 		}
 
-		sourceService, sourceTask := operations.ResolveTaskInput(args[0], repoRoot)
+		ps := cfg.PrefixSet()
+		sourceService, sourceTask := operations.ResolveTaskInput(args[0], repoRoot, ps)
+
+		source, err := operations.FindWorktree(cmd.Context(), r, sourceService, sourceTask)
+		if err != nil {
+			return err
+		}
+		if err := operations.GuardKnownPrefix(ps, source.Branch, cfg.DefaultSource, false); err != nil {
+			return err
+		}
+
 		intoTaskRaw, _ := cmd.Flags().GetString(flagInto)
 		var intoService, intoTask string
 		if intoTaskRaw != "" {
-			intoService, intoTask = operations.ResolveTaskInput(intoTaskRaw, repoRoot)
+			intoService, intoTask = operations.ResolveTaskInput(intoTaskRaw, repoRoot, ps)
 		}
 		noFF, _ := cmd.Flags().GetBool(flagNoFF)
 		keep, _ := cmd.Flags().GetBool(flagKeep)
@@ -71,6 +81,7 @@ var mergeCmd = &cobra.Command{
 		result, err := operations.MergeWorktree(cmd.Context(), r, operations.MergeParams{
 			SourceTask:    sourceTask,
 			SourceService: sourceService,
+			Source:        &source,
 			IntoTask:      intoTask,
 			IntoService:   intoService,
 			RepoRoot:      repoRoot,

@@ -8,8 +8,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/trust"
 	"github.com/lugassawan/rimba/testutil"
+	mcplib "github.com/mark3labs/mcp-go/mcp"
 )
 
 const (
@@ -950,5 +952,35 @@ func TestAddPRToolRequiresConfig(t *testing.T) {
 	errText := resultError(t, result)
 	if !strings.Contains(errText, "not initialized") {
 		t.Errorf("expected config error, got: %s", errText)
+	}
+}
+
+// TestResolveMCPPrefixTypeCustomAlias verifies a custom prefix's alias token
+// round-trips to its display type name, not just the built-in defaults.
+func TestResolveMCPPrefixTypeCustomAlias(t *testing.T) {
+	ps := resolver.NewPrefixSet([]resolver.PrefixSpec{
+		{Prefix: "PROJ-", Aliases: []string{"proj"}},
+	})
+
+	req := mcplib.CallToolRequest{}
+	req.Params.Arguments = map[string]any{"task": "proj/my-task"}
+
+	got := resolveMCPPrefixType(req, "proj/my-task", ps)
+	if got != "PROJ-" {
+		t.Errorf("resolveMCPPrefixType = %q, want %q", got, "PROJ-")
+	}
+}
+
+// TestResolveMCPPrefixTypeExplicitTypeWins verifies an explicit "type" field
+// takes priority over the task's leading segment.
+func TestResolveMCPPrefixTypeExplicitTypeWins(t *testing.T) {
+	ps := resolver.DefaultPrefixSet()
+
+	req := mcplib.CallToolRequest{}
+	req.Params.Arguments = map[string]any{"type": "hotfix"}
+
+	got := resolveMCPPrefixType(req, "feature/my-task", ps)
+	if got != "hotfix" {
+		t.Errorf("resolveMCPPrefixType = %q, want %q", got, "hotfix")
 	}
 }

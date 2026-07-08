@@ -156,6 +156,51 @@ func TestListWorktreesFilter(t *testing.T) {
 	}
 }
 
+func TestListWorktreesCustomPrefix(t *testing.T) {
+	porcelain := porcelainEntries(
+		struct{ path, branch string }{"/wt/PROJ-123", branchProj123},
+	)
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == cmdList {
+				return porcelain, nil
+			}
+			return "", nil
+		},
+		runInDir: func(_ string, _ ...string) (string, error) { return "", nil },
+	}
+
+	res, err := ListWorktrees(customPrefixContext(), r, nil, ListWorktreesRequest{WorktreeDir: wtDirTest})
+	if err != nil {
+		t.Fatalf("ListWorktrees with custom prefix: %v", err)
+	}
+	if len(res.Rows) != 1 {
+		t.Fatalf("got %d rows, want 1", len(res.Rows))
+	}
+	if res.Rows[0].Task != "123" {
+		t.Errorf("Task = %q, want %q", res.Rows[0].Task, "123")
+	}
+	if res.Rows[0].Type != testCustomPrefix {
+		t.Errorf("Type = %q, want %q", res.Rows[0].Type, testCustomPrefix)
+	}
+
+	// No config in context: built-ins-only PrefixSet doesn't recognize the
+	// custom prefix, so the whole branch name is treated as the task.
+	res, err = ListWorktrees(context.Background(), r, nil, ListWorktreesRequest{WorktreeDir: wtDirTest})
+	if err != nil {
+		t.Fatalf("ListWorktrees without custom prefix: %v", err)
+	}
+	if len(res.Rows) != 1 {
+		t.Fatalf("got %d rows, want 1", len(res.Rows))
+	}
+	if res.Rows[0].Task != branchProj123 {
+		t.Errorf("Task = %q, want %q", res.Rows[0].Task, branchProj123)
+	}
+	if res.Rows[0].Type != "" {
+		t.Errorf("Type = %q, want empty (built-ins-only parity)", res.Rows[0].Type)
+	}
+}
+
 func TestListWorktreesServiceFilter(t *testing.T) {
 	porcelain := porcelainEntries(
 		struct{ path, branch string }{"/wt/auth-api-feature-login", "auth-api/feature/login"},

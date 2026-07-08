@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/resolver"
@@ -29,7 +30,7 @@ func ListWorktreeInfos(ctx context.Context, r git.Runner) ([]resolver.WorktreeIn
 		return nil, err
 	}
 
-	prefixes := resolver.AllPrefixes()
+	prefixes := config.PrefixSetFromContext(ctx).Strip()
 	worktrees := make([]resolver.WorktreeInfo, len(entries))
 	for i, e := range entries {
 		svc, _, _ := resolver.ServiceFromBranch(e.Branch, prefixes)
@@ -50,7 +51,7 @@ func FindWorktree(ctx context.Context, r git.Runner, service, task string) (reso
 		return resolver.WorktreeInfo{}, err
 	}
 
-	prefixes := resolver.AllPrefixes()
+	prefixes := config.PrefixSetFromContext(ctx).Strip()
 	wt, found := resolver.FindBranchForTask(service, task, worktrees, prefixes)
 	if !found {
 		if service == "" {
@@ -69,8 +70,12 @@ func FindWorktree(ctx context.Context, r git.Runner, service, task string) (reso
 
 // FilterByType returns worktrees whose branch prefix matches the given type string.
 // For example, typeStr "feature" matches branches with prefix "feature/".
-func FilterByType(worktrees []resolver.WorktreeInfo, prefixes []string, typeStr string) []resolver.WorktreeInfo {
-	target := typeStr + "/"
+func FilterByType(worktrees []resolver.WorktreeInfo, ps *resolver.PrefixSet, typeStr string) []resolver.WorktreeInfo {
+	target, ok := ps.TypeToPrefix(typeStr)
+	if !ok {
+		return nil
+	}
+	prefixes := ps.Strip()
 	var out []resolver.WorktreeInfo
 	for _, wt := range worktrees {
 		_, matchedPrefix := resolver.TaskFromBranch(wt.Branch, prefixes)
@@ -79,6 +84,22 @@ func FilterByType(worktrees []resolver.WorktreeInfo, prefixes []string, typeStr 
 		}
 	}
 	return out
+}
+
+// FilterOrphaned splits worktrees into kept and excluded by orphan status.
+// No-op (all kept, 0 excluded) when ps.HasCustom() is false.
+func FilterOrphaned(worktrees []resolver.WorktreeInfo, ps *resolver.PrefixSet, mainBranch string) (kept []resolver.WorktreeInfo, excluded int) {
+	if !ps.HasCustom() {
+		return worktrees, 0
+	}
+	for _, wt := range worktrees {
+		if ps.IsOrphan(wt.Branch, mainBranch) {
+			excluded++
+			continue
+		}
+		kept = append(kept, wt)
+	}
+	return kept, excluded
 }
 
 // branchDeleteFailedErr builds the unified recovery error for the

@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
@@ -34,9 +35,15 @@ var removeCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		task := args[0]
 		r := newRunner(cmd.Context())
+		cfg := config.FromContext(cmd.Context())
 
 		wt, err := findWorktree(cmd.Context(), r, task)
 		if err != nil {
+			return err
+		}
+
+		force, _ := cmd.Flags().GetBool(flagForce)
+		if err := operations.GuardKnownPrefix(cfg.PrefixSet(), wt.Branch, cfg.DefaultSource, force); err != nil {
 			return err
 		}
 
@@ -47,7 +54,6 @@ var removeCmd = &cobra.Command{
 			Show()
 
 		keepBranch, _ := cmd.Flags().GetBool(flagKeepBranch)
-		force, _ := cmd.Flags().GetBool(flagForce)
 		dryRun, _ := cmd.Flags().GetBool(flagDryRun)
 
 		if dryRun {

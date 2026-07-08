@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -44,15 +45,25 @@ func init() {
 	rootCmd.AddCommand(completionCmd)
 }
 
+// cmdContext falls back to context.Background() when the command's context
+// was never set (e.g. a completion func invoked directly in a unit test).
+func cmdContext(cmd *cobra.Command) context.Context {
+	if ctx := cmd.Context(); ctx != nil {
+		return ctx
+	}
+	return context.Background()
+}
+
 // completeWorktreeTasks returns task names for shell completion.
 func completeWorktreeTasks(cmd *cobra.Command, toComplete string) []string {
-	r := newRunner(cmd.Context())
-	entries, err := git.ListWorktrees(cmd.Context(), r)
+	ctx := cmdContext(cmd)
+	r := newRunner(ctx)
+	entries, err := git.ListWorktrees(ctx, r)
 	if err != nil {
 		return nil
 	}
 
-	prefixes := resolver.AllPrefixes()
+	prefixes := config.PrefixSetFromContext(ctx).Strip()
 	var tasks []string
 	for _, e := range entries {
 		if e.Bare || e.Branch == "" {
@@ -85,8 +96,8 @@ func completeOpenShortcuts(cmd *cobra.Command, toComplete string) []string {
 
 // completeArchivedTasks returns task names from archived branches (branches not in any active worktree).
 func completeArchivedTasks(cmd *cobra.Command, toComplete string) []string {
-	r := newRunner(cmd.Context())
-	ctx := cmd.Context()
+	ctx := cmdContext(cmd)
+	r := newRunner(ctx)
 
 	mainBranch, _ := resolveMainBranch(ctx, r)
 
@@ -95,7 +106,7 @@ func completeArchivedTasks(cmd *cobra.Command, toComplete string) []string {
 		return nil
 	}
 
-	prefixes := resolver.AllPrefixes()
+	prefixes := config.PrefixSetFromContext(ctx).Strip()
 	var tasks []string
 	for _, b := range archived {
 		task, _ := resolver.PureTaskFromBranch(b, prefixes)

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/progress"
+	"github.com/lugassawan/rimba/internal/resolver"
 )
 
 const (
@@ -79,6 +80,88 @@ func TestMergeWorktreeMergeToMain(t *testing.T) {
 	}
 	if !result.SourceRemoved {
 		t.Error("expected source to be auto-removed when merging to main")
+	}
+}
+
+func TestMergeWorktreePreResolvedSourceSkipsWorktreeList(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == gitCmdWorktree {
+				t.Fatal("MergeWorktree should not list worktrees when Source is pre-resolved and merging to main")
+			}
+			return "", nil
+		},
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return "", errors.New("no MERGE_HEAD")
+			}
+			return "", nil
+		},
+	}
+
+	source := &resolver.WorktreeInfo{Path: "/wt/feature-login", Branch: branchFeatureLogin}
+	result, err := MergeWorktree(context.Background(), r, MergeParams{
+		Source:     source,
+		SourceTask: "login",
+		RepoRoot:   "/repo",
+		MainBranch: "main",
+		Keep:       true,
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.SourceBranch != branchFeatureLogin {
+		t.Errorf("SourceBranch = %q, want %q", result.SourceBranch, branchFeatureLogin)
+	}
+	if result.SourcePath != "/wt/feature-login" {
+		t.Errorf("SourcePath = %q, want %q", result.SourcePath, "/wt/feature-login")
+	}
+}
+
+func TestMergeWorktreeCustomPrefix(t *testing.T) {
+	porcelain := porcelainEntries(
+		struct{ path, branch string }{"/repo", "main"},
+		struct{ path, branch string }{"/wt/PROJ-123", branchProj123},
+	)
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == gitCmdWorktree {
+				return porcelain, nil
+			}
+			return "", nil
+		},
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == gitCmdStatus {
+				return "", nil
+			}
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return "", errors.New("no MERGE_HEAD")
+			}
+			return "", nil
+		},
+	}
+
+	result, err := MergeWorktree(customPrefixContext(), r, MergeParams{
+		SourceTask: "123",
+		RepoRoot:   "/repo",
+		MainBranch: "main",
+	}, nil)
+	if err != nil {
+		t.Fatalf("MergeWorktree with custom prefix: %v", err)
+	}
+	if result.SourceBranch != branchProj123 {
+		t.Errorf("SourceBranch = %q, want %q", result.SourceBranch, branchProj123)
+	}
+
+	// No config in context: built-ins-only PrefixSet cannot resolve task "123"
+	// against branch branchProj123.
+	_, err = MergeWorktree(context.Background(), r, MergeParams{
+		SourceTask: "123",
+		RepoRoot:   "/repo",
+		MainBranch: "main",
+	}, nil)
+	if err == nil {
+		t.Fatal("expected MergeWorktree to fail without custom prefix config (built-ins-only parity)")
 	}
 }
 

@@ -272,6 +272,30 @@ func newCleanPruneCmd() (*cobra.Command, *bytes.Buffer) {
 	return cmd, buf
 }
 
+// TestCleanCmdRunEWithoutRimbaConfig verifies clean (annotated skipConfig)
+// keeps succeeding when no .rimba/settings.toml is reachable.
+func TestCleanCmdRunEWithoutRimbaConfig(t *testing.T) {
+	restore := overrideNewRunner(&mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdWorktreeTest {
+				return "", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	})
+	defer restore()
+
+	cmd, _ := newTestCmd()
+	cmd.Flags().Bool(flagDryRun, false, "")
+	cmd.Flags().Bool(flagMerged, false, "")
+	cmd.Flags().Bool(flagStale, false, "")
+
+	if err := cleanCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf(fatalCleanPrune, err)
+	}
+}
+
 func TestCleanPruneSuccess(t *testing.T) {
 	cmd, buf := newCleanPruneCmd()
 	r := &mockRunner{

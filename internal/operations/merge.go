@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/progress"
@@ -15,14 +16,17 @@ import (
 type MergeParams struct {
 	SourceTask    string
 	SourceService string
-	IntoTask      string // empty = merge into main
-	IntoService   string
-	RepoRoot      string
-	MainBranch    string
-	NoFF          bool
-	Keep          bool
-	Delete        bool
-	DryRun        bool
+	// Source, when set, skips re-resolving the source worktree from
+	// SourceTask/SourceService — for callers that already resolved it (e.g. for a guard check).
+	Source      *resolver.WorktreeInfo
+	IntoTask    string // empty = merge into main
+	IntoService string
+	RepoRoot    string
+	MainBranch  string
+	NoFF        bool
+	Keep        bool
+	Delete      bool
+	DryRun      bool
 }
 
 // MergeResult holds the outcome of a merge operation.
@@ -48,33 +52,9 @@ type dirtyResult struct {
 // MergeWorktree merges a source worktree branch into main or another worktree.
 // It handles worktree resolution, concurrent dirty checks, merge execution, and cleanup.
 func MergeWorktree(ctx context.Context, r git.Runner, params MergeParams, onProgress progress.Func) (MergeResult, error) {
-	worktrees, err := ListWorktreeInfos(ctx, r)
+	source, targetDir, targetLabel, mergingToMain, err := resolveMergeEndpoints(ctx, r, params)
 	if err != nil {
 		return MergeResult{}, err
-	}
-
-	prefixes := resolver.AllPrefixes()
-
-	// Resolve source
-	source, found := resolver.FindBranchForTask(params.SourceService, params.SourceTask, worktrees, prefixes)
-	if !found {
-		return MergeResult{}, fmt.Errorf(ErrWorktreeNotFoundFmt, params.SourceTask)
-	}
-
-	// Resolve target
-	var targetDir, targetLabel string
-	mergingToMain := params.IntoTask == ""
-
-	if mergingToMain {
-		targetDir = params.RepoRoot
-		targetLabel = params.MainBranch
-	} else {
-		target, tgtFound := resolver.FindBranchForTask(params.IntoService, params.IntoTask, worktrees, prefixes)
-		if !tgtFound {
-			return MergeResult{}, fmt.Errorf(ErrWorktreeNotFoundFmt, params.IntoTask)
-		}
-		targetDir = target.Path
-		targetLabel = target.Branch
 	}
 
 	plan := &Plan{DryRun: params.DryRun}
@@ -131,6 +111,41 @@ func MergeWorktree(ctx context.Context, r git.Runner, params MergeParams, onProg
 	}
 
 	return result, nil
+}
+
+// resolveMergeEndpoints resolves the source and target worktrees for a merge.
+// Skips the worktree-list lookup entirely when params.Source is pre-resolved and merging to main.
+func resolveMergeEndpoints(ctx context.Context, r git.Runner, params MergeParams) (source resolver.WorktreeInfo, targetDir, targetLabel string, mergingToMain bool, err error) {
+	mergingToMain = params.IntoTask == ""
+
+	if params.Source != nil && mergingToMain {
+		return *params.Source, params.RepoRoot, params.MainBranch, true, nil
+	}
+
+	worktrees, err := ListWorktreeInfos(ctx, r)
+	if err != nil {
+		return resolver.WorktreeInfo{}, "", "", mergingToMain, err
+	}
+	prefixes := config.PrefixSetFromContext(ctx).Strip()
+
+	if params.Source != nil {
+		source = *params.Source
+	} else {
+		var found bool
+		if source, found = resolver.FindBranchForTask(params.SourceService, params.SourceTask, worktrees, prefixes); !found {
+			return resolver.WorktreeInfo{}, "", "", mergingToMain, fmt.Errorf(ErrWorktreeNotFoundFmt, params.SourceTask)
+		}
+	}
+
+	if mergingToMain {
+		return source, params.RepoRoot, params.MainBranch, true, nil
+	}
+
+	target, tgtFound := resolver.FindBranchForTask(params.IntoService, params.IntoTask, worktrees, prefixes)
+	if !tgtFound {
+		return resolver.WorktreeInfo{}, "", "", mergingToMain, fmt.Errorf(ErrWorktreeNotFoundFmt, params.IntoTask)
+	}
+	return source, target.Path, target.Branch, mergingToMain, nil
 }
 
 // deleteMergedRemote deletes the remote tracking branch after a merge cleanup.

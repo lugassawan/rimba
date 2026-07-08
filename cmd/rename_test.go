@@ -63,6 +63,110 @@ func TestRenameSuccess(t *testing.T) {
 	}
 }
 
+// orphanedRenameConfig configures only "TASK-", so a "PROJ-*" branch is
+// orphaned while HasCustom() stays true.
+func orphanedRenameConfig() *config.Config {
+	return &config.Config{
+		WorktreeDir:   defaultRelativeWtDir,
+		DefaultSource: branchMain,
+		Resolver: &config.ResolverConfig{
+			Prefix: []config.PrefixEntry{{Prefix: "TASK-"}},
+		},
+	}
+}
+
+func TestRenameOrphanedPrefixHardErrors(t *testing.T) {
+	repoDir := t.TempDir()
+	cfg := orphanedRenameConfig()
+	_ = config.Save(filepath.Join(repoDir, config.FileName), cfg)
+
+	worktreeOut := strings.Join([]string{
+		wtPrefix + repoDir,
+		headABC123,
+		branchRefMain,
+		"",
+		"worktree /wt/proj-123",
+		headDEF456,
+		"branch refs/heads/PROJ-123",
+		"",
+	}, "\n")
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdGitCommonDir {
+				return filepath.Join(repoDir, ".git"), nil
+			}
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			return worktreeOut, nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, _ := newTestCmd()
+	cmd.Flags().BoolP(flagForce, "f", false, "")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	err := renameCmd.RunE(cmd, []string{"PROJ-123", "PROJ-456"})
+	if err == nil {
+		t.Fatal("expected orphan-guard error, got nil")
+	}
+	if !strings.Contains(err.Error(), "re-add the prefix") {
+		t.Errorf("error = %q, want it to mention re-adding the prefix", err.Error())
+	}
+}
+
+func TestRenameOrphanedPrefixForceBypasses(t *testing.T) {
+	repoDir := t.TempDir()
+	cfg := orphanedRenameConfig()
+	_ = config.Save(filepath.Join(repoDir, config.FileName), cfg)
+
+	worktreeOut := strings.Join([]string{
+		wtPrefix + repoDir,
+		headABC123,
+		branchRefMain,
+		"",
+		"worktree /wt/proj-123",
+		headDEF456,
+		"branch refs/heads/PROJ-123",
+		"",
+	}, "\n")
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdGitCommonDir {
+				return filepath.Join(repoDir, ".git"), nil
+			}
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return "", errGitFailed // BranchExists returns false
+			}
+			return worktreeOut, nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().BoolP(flagForce, "f", false, "")
+	_ = cmd.Flags().Set(flagForce, "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	err := renameCmd.RunE(cmd, []string{"PROJ-123", "PROJ-456"})
+	if err != nil {
+		t.Fatalf("renameCmd.RunE with --force: %v", err)
+	}
+	if !strings.Contains(buf.String(), "Renamed worktree") {
+		t.Errorf("output = %q, want 'Renamed worktree'", buf.String())
+	}
+}
+
 func TestRenameBranchAlreadyExists(t *testing.T) {
 	repoDir := t.TempDir()
 	cfg := &config.Config{WorktreeDir: defaultRelativeWtDir, DefaultSource: branchMain}

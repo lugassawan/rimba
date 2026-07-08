@@ -40,7 +40,7 @@ to see available archived branches.`,
 			return err
 		}
 
-		service, task := operations.ResolveTaskInput(args[0], repoRoot)
+		service, task := operations.ResolveTaskInput(args[0], repoRoot, config.PrefixSetFromContext(cmd.Context()))
 		cfg := config.FromContext(cmd.Context())
 
 		branch, err := operations.FindArchivedBranch(cmd.Context(), r, service, task)

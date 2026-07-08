@@ -35,11 +35,13 @@ func handleRemove(hctx *HandlerContext) server.ToolHandlerFunc {
 				`provide the task argument, e.g. remove { task: "my-task" }`)), nil
 		}
 
-		if _, err := hctx.requireConfig(); err != nil {
-			return errorResult(err), nil
+		cfg, cfgErr := hctx.requireConfig()
+		if cfgErr != nil {
+			return errorResult(cfgErr), nil
 		}
 
-		service, task := operations.ResolveTaskInput(task, hctx.RepoRoot)
+		ps := hctx.PrefixSet()
+		service, task := operations.ResolveTaskInput(task, hctx.RepoRoot, ps)
 
 		keepBranch := req.GetBool("keep_branch", false)
 		force := req.GetBool("force", false)
@@ -49,6 +51,10 @@ func handleRemove(hctx *HandlerContext) server.ToolHandlerFunc {
 		wt, findErr := operations.FindWorktree(ctx, r, service, task)
 		if findErr != nil {
 			return errorResult(findErr), nil
+		}
+
+		if err := operations.GuardKnownPrefix(ps, wt.Branch, cfg.DefaultSource, force); err != nil {
+			return errorResult(err), nil
 		}
 
 		result, err := operations.RemoveWorktree(ctx, r, wt, task, keepBranch, force, nil)

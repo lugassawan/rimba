@@ -58,6 +58,45 @@ func TestMergeIntoMainSuccess(t *testing.T) {
 	}
 }
 
+func TestMergeOrphanedSourceHardErrors(t *testing.T) {
+	// Only "TASK-" is configured, so the "PROJ-*" source branch is orphaned;
+	// merge has no --force flag, so this guard can never be bypassed here.
+	cfg := &config.Config{
+		DefaultSource: branchMain,
+		WorktreeDir:   defaultRelativeWtDir,
+		Resolver: &config.ResolverConfig{
+			Prefix: []config.PrefixEntry{{Prefix: "TASK-"}},
+		},
+	}
+	worktreeOut := orphanedProjWorktreeOut
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoPath, nil
+			}
+			return worktreeOut, nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, _ := newTestCmd()
+	cmd.Flags().String(flagInto, "", "")
+	cmd.Flags().Bool(flagNoFF, false, "")
+	cmd.Flags().Bool(flagKeep, false, "")
+	cmd.Flags().Bool(flagDelete, false, "")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	err := mergeCmd.RunE(cmd, []string{"PROJ-123"})
+	if err == nil {
+		t.Fatal("expected orphan-guard error, got nil")
+	}
+	if !strings.Contains(err.Error(), "re-add the prefix") {
+		t.Errorf("error = %q, want it to mention re-adding the prefix", err.Error())
+	}
+}
+
 func TestMergeKeep(t *testing.T) {
 	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: defaultRelativeWtDir}
 	r := mergeTestRunner(nil)

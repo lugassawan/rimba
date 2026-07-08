@@ -52,7 +52,8 @@ var execCmd = &cobra.Command{
 // injected runner and executor so both production and tests use the same path.
 func runExec(cmd *cobra.Command, args []string, r git.Runner, execFn execRunner) error {
 	opts := execReadFlags(cmd)
-	if err := execValidateFlags(opts); err != nil {
+	ps := config.PrefixSetFromContext(cmd.Context())
+	if err := execValidateFlags(opts, ps); err != nil {
 		return err
 	}
 
@@ -62,11 +63,11 @@ func runExec(cmd *cobra.Command, args []string, r git.Runner, execFn execRunner)
 	defer s.Stop()
 	s.Start("Collecting worktrees...")
 
-	prefixes := resolver.AllPrefixes()
-	filtered, err := execSelectWorktrees(cmd, r, s, opts, prefixes)
+	filtered, err := execSelectWorktrees(cmd, r, s, opts, ps)
 	if err != nil {
 		return err
 	}
+	filtered = excludeOrphaned(cmd, filtered, ps, defaultSourceFromContext(cmd.Context()))
 
 	if len(filtered) == 0 {
 		s.Stop()
@@ -74,7 +75,7 @@ func runExec(cmd *cobra.Command, args []string, r git.Runner, execFn execRunner)
 		return nil
 	}
 
-	targets := execBuildTargets(filtered, prefixes)
+	targets := execBuildTargets(filtered, ps.Strip())
 	s.Update(fmt.Sprintf("Running in %d worktree(s)...", len(targets)))
 
 	results := execFn(cmd.Context(), executor.Config{
@@ -90,7 +91,7 @@ func runExec(cmd *cobra.Command, args []string, r git.Runner, execFn execRunner)
 	if isJSON(cmd) {
 		return execRenderJSON(cmd, args[0], results)
 	}
-	return execRenderText(cmd, results, prefixes)
+	return execRenderText(cmd, results, ps.Strip())
 }
 
 // addExecFlags registers exec-specific flags on c, shared by execCmd and buildExecCmd.
@@ -147,14 +148,14 @@ func execReadFlags(cmd *cobra.Command) execOpts {
 	}
 }
 
-func execValidateFlags(opts execOpts) error {
+func execValidateFlags(opts execOpts, ps *resolver.PrefixSet) error {
 	if !opts.all && opts.typeFilter == "" {
 		return errhint.WithFix(
 			errors.New("provide --all or --type to select worktrees"),
 			"run: rimba exec --all <cmd>  OR  rimba exec --type <prefix> <cmd>",
 		)
 	}
-	if err := validateTypeFilter(opts.typeFilter); err != nil {
+	if err := validateTypeFilter(opts.typeFilter, ps); err != nil {
 		return err
 	}
 	if opts.concurrency < 0 {
@@ -179,7 +180,7 @@ func execShowHints(cmd *cobra.Command) {
 		Show()
 }
 
-func execSelectWorktrees(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, opts execOpts, prefixes []string) ([]resolver.WorktreeInfo, error) {
+func execSelectWorktrees(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, opts execOpts, ps *resolver.PrefixSet) ([]resolver.WorktreeInfo, error) {
 	ctx := cmd.Context()
 	cfg := config.FromContext(ctx)
 	worktrees, err := listWorktreeInfos(ctx, r)
@@ -189,8 +190,9 @@ func execSelectWorktrees(cmd *cobra.Command, r git.Runner, s *spinner.Spinner, o
 
 	var filtered []resolver.WorktreeInfo
 	if opts.typeFilter != "" {
-		filtered = operations.FilterByType(worktrees, prefixes, opts.typeFilter)
+		filtered = operations.FilterByType(worktrees, ps, opts.typeFilter)
 	} else {
+		prefixes := ps.Strip()
 		allTasks := operations.CollectTasks(worktrees, prefixes)
 		filtered = operations.FilterEligible(worktrees, prefixes, cfg.DefaultSource, allTasks, true)
 	}
@@ -257,6 +259,18 @@ func init() {
 	addExecFlags(execCmd)
 	_ = execCmd.RegisterFlagCompletionFunc(flagType, typeFilterCompletion())
 	rootCmd.AddCommand(execCmd)
+}
+
+// excludeOrphaned drops worktrees under a no-longer-configured prefix,
+// warning to stderr when any are excluded.
+func excludeOrphaned(cmd *cobra.Command, worktrees []resolver.WorktreeInfo, ps *resolver.PrefixSet, mainBranch string) []resolver.WorktreeInfo {
+	kept, excluded := operations.FilterOrphaned(worktrees, ps, mainBranch)
+	if excluded > 0 {
+		fmt.Fprintf(cmd.ErrOrStderr(),
+			"Warning: excluding %d worktree(s) with an unrecognized prefix (re-add it to [[resolver.prefix]] to include them)\n",
+			excluded)
+	}
+	return kept
 }
 
 // filterDirtyWorktrees filters worktrees to only those with uncommitted changes.

@@ -9,6 +9,7 @@ import (
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
+	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
 )
@@ -57,7 +58,7 @@ and CI rollup. CI symbols: ✓ success · ● pending · ✗ failure · – unkn
 			return listArchivedBranches(cmd, r, mainBranch)
 		}
 
-		if err := listValidateType(opts.typeFilter); err != nil {
+		if err := listValidateType(opts.typeFilter, config.PrefixSetFromContext(cmdContext(cmd))); err != nil {
 			return err
 		}
 
@@ -136,8 +137,8 @@ func listReadFlags(cmd *cobra.Command) listOpts {
 	}
 }
 
-func listValidateType(typeFilter string) error {
-	return validateTypeFilter(typeFilter)
+func listValidateType(typeFilter string, ps *resolver.PrefixSet) error {
+	return validateTypeFilter(typeFilter, ps)
 }
 
 func listShowHints(cmd *cobra.Command) {

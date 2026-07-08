@@ -1,9 +1,12 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/lugassawan/rimba/internal/config"
 )
 
 const (
@@ -19,6 +22,7 @@ func TestRemoveSuccess(t *testing.T) {
 	defer restore()
 
 	cmd, buf := newTestCmd()
+	cmd.SetContext(config.WithConfig(context.Background(), &config.Config{}))
 	cmd.Flags().Bool(flagKeepBranch, false, "")
 	cmd.Flags().Bool(flagForce, false, "")
 
@@ -44,6 +48,7 @@ func TestRemoveKeepBranch(t *testing.T) {
 	defer restore()
 
 	cmd, buf := newTestCmd()
+	cmd.SetContext(config.WithConfig(context.Background(), &config.Config{}))
 	cmd.Flags().Bool(flagKeepBranch, false, "")
 	cmd.Flags().Bool(flagForce, false, "")
 	_ = cmd.Flags().Set(flagKeepBranch, "true")
@@ -61,6 +66,65 @@ func TestRemoveKeepBranch(t *testing.T) {
 	}
 }
 
+// orphanedRemoveConfig configures only "TASK-", so a "PROJ-*" branch is
+// orphaned while HasCustom() stays true.
+func orphanedRemoveConfig() *config.Config {
+	return &config.Config{
+		DefaultSource: branchMain,
+		Resolver: &config.ResolverConfig{
+			Prefix: []config.PrefixEntry{{Prefix: "TASK-"}},
+		},
+	}
+}
+
+func TestRemoveOrphanedPrefixHardErrors(t *testing.T) {
+	worktreeOut := orphanedProjWorktreeOut
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return worktreeOut, nil },
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, _ := newTestCmd()
+	cmd.SetContext(config.WithConfig(context.Background(), orphanedRemoveConfig()))
+	cmd.Flags().Bool(flagKeepBranch, false, "")
+	cmd.Flags().Bool(flagForce, false, "")
+
+	err := removeCmd.RunE(cmd, []string{"PROJ-123"})
+	if err == nil {
+		t.Fatal("expected orphan-guard error, got nil")
+	}
+	if !strings.Contains(err.Error(), "re-add the prefix") {
+		t.Errorf("error = %q, want it to mention re-adding the prefix", err.Error())
+	}
+}
+
+func TestRemoveOrphanedPrefixForceBypasses(t *testing.T) {
+	worktreeOut := orphanedProjWorktreeOut
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return worktreeOut, nil },
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.SetContext(config.WithConfig(context.Background(), orphanedRemoveConfig()))
+	cmd.Flags().Bool(flagKeepBranch, false, "")
+	cmd.Flags().Bool(flagForce, false, "")
+	_ = cmd.Flags().Set(flagForce, "true")
+
+	err := removeCmd.RunE(cmd, []string{"PROJ-123"})
+	if err != nil {
+		t.Fatalf("removeCmd.RunE with --force: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Removed worktree") {
+		t.Errorf("output = %q, want 'Removed worktree'", out)
+	}
+}
+
 func TestRemoveWorktreeNotFound(t *testing.T) {
 	r := &mockRunner{
 		run:      func(_ ...string) (string, error) { return removeWorktreeOut, nil },
@@ -70,6 +134,7 @@ func TestRemoveWorktreeNotFound(t *testing.T) {
 	defer restore()
 
 	cmd, _ := newTestCmd()
+	cmd.SetContext(config.WithConfig(context.Background(), &config.Config{}))
 	cmd.Flags().Bool(flagKeepBranch, false, "")
 	cmd.Flags().Bool(flagForce, false, "")
 
@@ -93,6 +158,7 @@ func TestRemoveWorktreeFails(t *testing.T) {
 	defer restore()
 
 	cmd, _ := newTestCmd()
+	cmd.SetContext(config.WithConfig(context.Background(), &config.Config{}))
 	cmd.Flags().Bool(flagKeepBranch, false, "")
 	cmd.Flags().Bool(flagForce, false, "")
 
@@ -111,6 +177,7 @@ func TestRemoveDryRun(t *testing.T) {
 	defer restore()
 
 	cmd, buf := newTestCmd()
+	cmd.SetContext(config.WithConfig(context.Background(), &config.Config{}))
 	cmd.Flags().Bool(flagKeepBranch, false, "")
 	cmd.Flags().Bool(flagForce, false, "")
 	cmd.Flags().Bool(flagDryRun, false, "")
@@ -142,6 +209,7 @@ func TestRemoveBranchDeleteFails(t *testing.T) {
 	defer restore()
 
 	cmd, buf := newTestCmd()
+	cmd.SetContext(config.WithConfig(context.Background(), &config.Config{}))
 	cmd.Flags().Bool(flagKeepBranch, false, "")
 	cmd.Flags().Bool(flagForce, false, "")
 

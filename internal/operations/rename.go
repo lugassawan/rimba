@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/resolver"
@@ -38,7 +39,7 @@ type RenameParams struct {
 // RenameWorktree renames a worktree's directory and branch.
 // It inherits the prefix from the current branch unless p.NewPrefix is set.
 func RenameWorktree(ctx context.Context, r git.Runner, p RenameParams) (RenameResult, error) {
-	prefixes := resolver.AllPrefixes()
+	prefixes := config.PrefixSetFromContext(ctx).Strip()
 
 	svc, _, matchedPrefix := resolver.ServiceFromBranch(p.WT.Branch, prefixes)
 	if matchedPrefix == "" {

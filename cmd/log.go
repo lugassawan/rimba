@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/parallel"
@@ -41,6 +42,7 @@ var logCmd = &cobra.Command{
   rimba log --since 7d --limit 10`,
 	Annotations: map[string]string{"skipConfig": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		cmd.SetContext(withBestEffortConfig(cmd))
 		ctx := cmd.Context()
 		r := newRunner(cmd.Context())
 
@@ -123,7 +125,7 @@ func init() {
 // collectLogEntries gathers commit info for each candidate in parallel,
 // returning only valid entries sorted by commit time descending.
 func collectLogEntries(ctx context.Context, r git.Runner, candidates []git.WorktreeEntry, s *spinner.Spinner) []logEntry {
-	prefixes := resolver.AllPrefixes()
+	prefixes := config.PrefixSetFromContext(ctx).Strip()
 	s.Update("Collecting commit info...")
 	results := parallel.Collect(ctx, len(candidates), 8, func(ctx context.Context, i int) logEntry {
 		itemCtx, cancel := git.WithItemTimeout(ctx)

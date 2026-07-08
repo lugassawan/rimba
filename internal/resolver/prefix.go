@@ -36,7 +36,7 @@ var orderedTypes = []PrefixType{
 }
 
 // prefixAliases maps non-canonical tokens to their canonical PrefixType.
-// Compiled-in and closed, like prefixMap — not user-configurable (see #269).
+// Compiled-in and closed, like prefixMap — not user-configurable.
 var prefixAliases = map[string]PrefixType{
 	"fix": PrefixBugfix,
 }
@@ -50,17 +50,12 @@ func PrefixString(pt PrefixType) (string, bool) {
 
 // AllPrefixes returns all known prefix strings in a deterministic order.
 func AllPrefixes() []string {
-	out := make([]string, len(orderedTypes))
-	for i, pt := range orderedTypes {
-		out[i] = prefixMap[pt]
-	}
-	return out
+	return DefaultPrefixSet().Strip()
 }
 
 // ValidPrefixType reports whether s is a recognized PrefixType value.
 func ValidPrefixType(s string) bool {
-	_, ok := prefixMap[PrefixType(s)]
-	return ok
+	return DefaultPrefixSet().ValidType(s)
 }
 
 // PrefixTokenToString resolves a leading path segment that is either a
@@ -68,11 +63,5 @@ func ValidPrefixType(s string) bool {
 // prefix string. alias is true when the token was a non-canonical alias;
 // ok is false when the token is neither a prefix nor an alias.
 func PrefixTokenToString(token string) (prefix string, alias bool, ok bool) {
-	if s, ok := prefixMap[PrefixType(token)]; ok {
-		return s, false, true
-	}
-	if pt, ok := prefixAliases[token]; ok {
-		return prefixMap[pt], true, true
-	}
-	return "", false, false
+	return DefaultPrefixSet().TokenToPrefix(token)
 }

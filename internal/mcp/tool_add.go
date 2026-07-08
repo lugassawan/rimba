@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/errhint"
@@ -30,7 +29,6 @@ func registerAddTool(s *server.MCPServer, hctx *HandlerContext) {
 		),
 		mcp.WithString("type",
 			mcp.Description("Prefix type (default: feature)"),
-			mcp.Enum("feature", "bugfix", "hotfix", "docs", "test", "chore"),
 		),
 		mcp.WithString("source",
 			mcp.Description("Source branch to create worktree from (default from config); applies to task mode only"),
@@ -77,9 +75,10 @@ func handleAddTask(ctx context.Context, hctx *HandlerContext, req mcp.CallToolRe
 			`provide the task argument, e.g. add { task: "my-feature" }`)), nil
 	}
 
-	service, task := operations.ResolveTaskInput(rawTask, hctx.RepoRoot)
+	ps := hctx.PrefixSet()
+	service, task := operations.ResolveTaskInput(rawTask, hctx.RepoRoot, ps)
 
-	prefixType := resolveMCPPrefixType(req, rawTask)
+	prefixType := resolveMCPPrefixType(req, rawTask, ps)
 
 	cfg, cfgErr := hctx.requireConfig()
 	if cfgErr != nil {
@@ -90,14 +89,11 @@ func handleAddTask(ctx context.Context, hctx *HandlerContext, req mcp.CallToolRe
 		return errorResult(err), nil
 	}
 
-	if !resolver.ValidPrefixType(prefixType) {
-		return errorResult(errhint.WithFix(
-			fmt.Errorf("invalid type %q", prefixType),
-			"use one of: feature, bugfix, hotfix, docs, test, chore (or omit to default to feature)",
-		)), nil
+	if !ps.ValidType(prefixType) {
+		return invalidTypeResult(prefixType, ps, " (or omit to default to feature)"), nil
 	}
 
-	prefix, _ := resolver.PrefixString(resolver.PrefixType(prefixType))
+	prefix, _ := ps.TypeToPrefix(prefixType)
 
 	source := req.GetString("source", "")
 	if source == "" {
@@ -126,14 +122,14 @@ func handleAddTask(ctx context.Context, hctx *HandlerContext, req mcp.CallToolRe
 // resolveMCPPrefixType falls back to rawTask's leading segment (mirroring
 // cmd/add.go's resolveAddPrefix) when "type" is omitted; the "type" enum
 // itself stays canonical-only.
-func resolveMCPPrefixType(req mcp.CallToolRequest, rawTask string) string {
+func resolveMCPPrefixType(req mcp.CallToolRequest, rawTask string, ps *resolver.PrefixSet) string {
 	if t := req.GetString("type", ""); t != "" {
 		return t
 	}
 
 	if candidate, _ := resolver.SplitServiceInput(rawTask); candidate != "" {
-		if prefix, _, ok := resolver.PrefixTokenToString(candidate); ok {
-			return strings.TrimSuffix(prefix, "/")
+		if prefix, _, ok := ps.TokenToPrefix(candidate); ok {
+			return ps.TypeName(prefix)
 		}
 	}
 

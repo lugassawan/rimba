@@ -43,7 +43,7 @@ func makeBenchEntries(n int) []git.WorktreeEntry { //nolint:unparam // n is para
 func BenchmarkListStatusCollectionSequential(b *testing.B) {
 	r := &benchMockRunner{}
 	entries := makeBenchEntries(10)
-	prefixes := resolver.AllPrefixes()
+	prefixes := resolver.DefaultPrefixSet().Strip()
 
 	b.ResetTimer()
 	for b.Loop() {
@@ -65,7 +65,7 @@ func BenchmarkListStatusCollectionSequential(b *testing.B) {
 func BenchmarkListStatusCollectionParallel(b *testing.B) {
 	r := &benchMockRunner{}
 	entries := makeBenchEntries(10)
-	prefixes := resolver.AllPrefixes()
+	prefixes := resolver.DefaultPrefixSet().Strip()
 
 	b.ResetTimer()
 	for b.Loop() {
@@ -98,7 +98,7 @@ func BenchmarkListStatusCollectionParallel(b *testing.B) {
 func BenchmarkListWithTypeFilter(b *testing.B) {
 	r := &benchMockRunner{}
 	entries := makeBenchEntries(10)
-	prefixes := resolver.AllPrefixes()
+	prefixes := resolver.DefaultPrefixSet().Strip()
 	filterType := benchFilterType
 
 	b.ResetTimer()
@@ -133,7 +133,7 @@ func BenchmarkListWithTypeFilter(b *testing.B) {
 func BenchmarkListWithoutTypeFilter(b *testing.B) {
 	r := &benchMockRunner{}
 	entries := makeBenchEntries(10)
-	prefixes := resolver.AllPrefixes()
+	prefixes := resolver.DefaultPrefixSet().Strip()
 
 	b.ResetTimer()
 	for b.Loop() {

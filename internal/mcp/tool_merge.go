@@ -41,22 +41,32 @@ func handleMerge(hctx *HandlerContext) server.ToolHandlerFunc {
 				`provide the source argument, e.g. merge { source: "my-feature" }`)), nil
 		}
 
-		sourceService, sourceTask := operations.ResolveTaskInput(sourceTask, hctx.RepoRoot)
-
-		intoTask := req.GetString("into", "")
-		var intoService string
-		if intoTask != "" {
-			intoService, intoTask = operations.ResolveTaskInput(intoTask, hctx.RepoRoot)
-		}
+		ps := hctx.PrefixSet()
+		sourceService, sourceTask := operations.ResolveTaskInput(sourceTask, hctx.RepoRoot, ps)
 
 		cfg, cfgErr := hctx.requireConfig()
 		if cfgErr != nil {
 			return errorResult(cfgErr), nil
 		}
 
+		source, findErr := operations.FindWorktree(ctx, hctx.Runner, sourceService, sourceTask)
+		if findErr != nil {
+			return errorResult(findErr), nil
+		}
+		if err := operations.GuardKnownPrefix(ps, source.Branch, cfg.DefaultSource, false); err != nil {
+			return errorResult(err), nil
+		}
+
+		intoTask := req.GetString("into", "")
+		var intoService string
+		if intoTask != "" {
+			intoService, intoTask = operations.ResolveTaskInput(intoTask, hctx.RepoRoot, ps)
+		}
+
 		result, err := operations.MergeWorktree(ctx, hctx.Runner, operations.MergeParams{
 			SourceTask:    sourceTask,
 			SourceService: sourceService,
+			Source:        &source,
 			IntoTask:      intoTask,
 			IntoService:   intoService,
 			RepoRoot:      hctx.RepoRoot,

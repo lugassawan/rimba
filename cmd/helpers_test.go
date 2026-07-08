@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/spf13/cobra"
 )
 
 // notGitRepoRunner returns a mockRunner that simulates running outside a git repository.
@@ -198,6 +199,140 @@ func TestFindWorktreeError(t *testing.T) {
 	}
 	if _, err := findWorktree(context.Background(), r, "login"); err == nil {
 		t.Fatal(errExpected)
+	}
+}
+
+func TestWithBestEffortConfigNoRepo(t *testing.T) {
+	restore := overrideNewRunner(notGitRepoRunner())
+	defer restore()
+
+	cmd := &cobra.Command{Use: "status", Annotations: map[string]string{"skipConfig": "true"}}
+	ctx := context.Background()
+	cmd.SetContext(ctx)
+
+	got := withBestEffortConfig(cmd)
+	if got != ctx {
+		t.Fatal("expected withBestEffortConfig to return the original context unchanged when no repo is present")
+	}
+	if config.FromContext(got) != nil {
+		t.Error("expected no config in context when no repo is present")
+	}
+}
+
+func TestWithBestEffortConfigNilContext(t *testing.T) {
+	restore := overrideNewRunner(notGitRepoRunner())
+	defer restore()
+
+	cmd := &cobra.Command{Use: "status", Annotations: map[string]string{"skipConfig": "true"}}
+
+	got := withBestEffortConfig(cmd)
+	if got == nil {
+		t.Fatal("expected non-nil context")
+	}
+}
+
+func TestWithBestEffortConfigValidCustomPrefix(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &config.Config{
+		WorktreeDir:   "../worktrees",
+		DefaultSource: "main",
+		Resolver: &config.ResolverConfig{
+			Prefix: []config.PrefixEntry{{Prefix: "PROJ-"}},
+		},
+	}
+	if err := config.Save(filepath.Join(dir, config.FileName), cfg); err != nil {
+		t.Fatalf("Save config: %v", err)
+	}
+
+	r := repoRootRunner(dir, nil)
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd := &cobra.Command{Use: "status", Annotations: map[string]string{"skipConfig": "true"}}
+	cmd.SetContext(context.Background())
+
+	got := withBestEffortConfig(cmd)
+	loaded := config.FromContext(got)
+	if loaded == nil {
+		t.Fatal("expected config to be loaded from a valid repo")
+	}
+	if !config.PrefixSetFromContext(got).HasCustom() {
+		t.Error("expected PrefixSetFromContext to report HasCustom() true")
+	}
+}
+
+func TestWithBestEffortConfigEmptyDefaultSourceDetectsBranch(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &config.Config{
+		WorktreeDir: "../worktrees",
+		Resolver: &config.ResolverConfig{
+			Prefix: []config.PrefixEntry{{Prefix: "PROJ-"}},
+		},
+	}
+	if err := config.Save(filepath.Join(dir, config.FileName), cfg); err != nil {
+		t.Fatalf("Save config: %v", err)
+	}
+
+	r := repoRootRunner(dir, func(args ...string) (string, error) {
+		if len(args) >= 1 && args[0] == "symbolic-ref" {
+			return "refs/remotes/origin/main", nil
+		}
+		return "", errors.New("unexpected")
+	})
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd := &cobra.Command{Use: "status", Annotations: map[string]string{"skipConfig": "true"}}
+	cmd.SetContext(context.Background())
+
+	got := withBestEffortConfig(cmd)
+	loaded := config.FromContext(got)
+	if loaded == nil {
+		t.Fatal("expected config to be loaded when DefaultSource is empty and default branch detection succeeds")
+	}
+	if loaded.DefaultSource != branchMain {
+		t.Errorf("DefaultSource = %q, want %q (auto-detected)", loaded.DefaultSource, branchMain)
+	}
+}
+
+func TestWithBestEffortConfigAlreadyLoaded(t *testing.T) {
+	existing := &config.Config{WorktreeDir: "../worktrees", DefaultSource: "main"}
+	ctx := config.WithConfig(context.Background(), existing)
+
+	cmd := &cobra.Command{Use: "status", Annotations: map[string]string{"skipConfig": "true"}}
+	cmd.SetContext(ctx)
+
+	got := withBestEffortConfig(cmd)
+	if got != ctx {
+		t.Error("expected withBestEffortConfig to return the original context unchanged when config is already loaded")
+	}
+}
+
+func TestWithBestEffortConfigInvalidConfigSwallowed(t *testing.T) {
+	dir := t.TempDir()
+	// An invalid config: a resolver entry with an empty prefix fails Validate().
+	cfg := &config.Config{
+		WorktreeDir:   "../worktrees",
+		DefaultSource: "main",
+		Resolver: &config.ResolverConfig{
+			Prefix: []config.PrefixEntry{{Prefix: ""}},
+		},
+	}
+	if err := config.Save(filepath.Join(dir, config.FileName), cfg); err != nil {
+		t.Fatalf("Save config: %v", err)
+	}
+
+	r := repoRootRunner(dir, nil)
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd := &cobra.Command{Use: "status", Annotations: map[string]string{"skipConfig": "true"}}
+	ctx := context.Background()
+	cmd.SetContext(ctx)
+
+	got := withBestEffortConfig(cmd)
+	if got != ctx {
+		t.Error("expected withBestEffortConfig to return the original context unchanged when config is invalid")
 	}
 }
 

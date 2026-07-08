@@ -28,8 +28,7 @@ func registerExecTool(s *server.MCPServer, hctx *HandlerContext) {
 			mcp.Description("Target all eligible worktrees"),
 		),
 		mcp.WithString("type",
-			mcp.Description("Filter by prefix type (feature, bugfix, hotfix, docs, test, chore)"),
-			mcp.Enum("feature", "bugfix", "hotfix", "docs", "test", "chore"),
+			mcp.Description("Filter by prefix type (built-in: feature, bugfix, hotfix, docs, test, chore; or any custom type configured in [[resolver.prefix]])"),
 		),
 		mcp.WithBoolean("dirty",
 			mcp.Description("Only run in worktrees with uncommitted changes"),
@@ -74,11 +73,9 @@ func handleExec(hctx *HandlerContext) server.ToolHandlerFunc {
 				"set all=true to target every worktree, or pass type=<prefix>")), nil
 		}
 
-		if typeFilter != "" && !resolver.ValidPrefixType(typeFilter) {
-			return errorResult(errhint.WithFix(
-				fmt.Errorf("invalid type %q", typeFilter),
-				"use one of: feature, bugfix, hotfix, docs, test, chore",
-			)), nil
+		ps := cfg.PrefixSet()
+		if typeFilter != "" && !ps.ValidType(typeFilter) {
+			return invalidTypeResult(typeFilter, ps, ""), nil
 		}
 
 		filtered, err := resolveExecTargets(ctx, hctx.Runner, cfg, typeFilter, dirty)
@@ -105,12 +102,13 @@ func resolveExecTargets(ctx context.Context, r git.Runner, cfg *config.Config, t
 		return nil, err
 	}
 
-	prefixes := resolver.AllPrefixes()
+	ps := cfg.PrefixSet()
 
 	var filtered []resolver.WorktreeInfo
 	if typeFilter != "" {
-		filtered = operations.FilterByType(worktrees, prefixes, typeFilter)
+		filtered = operations.FilterByType(worktrees, ps, typeFilter)
 	} else {
+		prefixes := ps.Strip()
 		allTasks := operations.CollectTasks(worktrees, prefixes)
 		filtered = operations.FilterEligible(worktrees, prefixes, cfg.DefaultSource, allTasks, true)
 	}
@@ -119,12 +117,27 @@ func resolveExecTargets(ctx context.Context, r git.Runner, cfg *config.Config, t
 		filtered = filterDirty(ctx, r, filtered)
 	}
 
+	filtered = excludeOrphanedExec(filtered, ps, cfg.DefaultSource)
+
 	return filtered, nil
+}
+
+// excludeOrphanedExec drops worktrees under a no-longer-configured custom
+// prefix, warning to os.Stderr (mirroring filterDirty) when any are excluded.
+func excludeOrphanedExec(worktrees []resolver.WorktreeInfo, ps *resolver.PrefixSet, mainBranch string) []resolver.WorktreeInfo {
+	kept, excluded := operations.FilterOrphaned(worktrees, ps, mainBranch)
+	if excluded > 0 {
+		fmt.Fprintf(os.Stderr,
+			"Warning: excluding %d worktree(s) with an unrecognized prefix (re-add it to [[resolver.prefix]] to include them)\n",
+			excluded)
+	}
+
+	return kept
 }
 
 // runExecCommand executes a command across worktrees and returns the result.
 func runExecCommand(ctx context.Context, command string, filtered []resolver.WorktreeInfo, concurrency int, failFast bool) (*mcp.CallToolResult, error) {
-	prefixes := resolver.AllPrefixes()
+	prefixes := config.PrefixSetFromContext(ctx).Strip()
 
 	targets := make([]executor.Target, len(filtered))
 	for i, wt := range filtered {

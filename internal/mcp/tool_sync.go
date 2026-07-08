@@ -42,6 +42,7 @@ type syncOpts struct {
 	useMerge     bool
 	push         bool
 	fetchWarning string
+	ps           *resolver.PrefixSet
 }
 
 func handleSync(hctx *HandlerContext) server.ToolHandlerFunc {
@@ -64,7 +65,7 @@ func handleSync(hctx *HandlerContext) server.ToolHandlerFunc {
 
 		var service string
 		if task != "" {
-			service, task = operations.ResolveTaskInput(task, hctx.RepoRoot)
+			service, task = operations.ResolveTaskInput(task, hctx.RepoRoot, hctx.PrefixSet())
 		}
 
 		r := hctx.Runner
@@ -80,12 +81,14 @@ func handleSync(hctx *HandlerContext) server.ToolHandlerFunc {
 			return errorResult(err), nil
 		}
 
-		prefixes := resolver.AllPrefixes()
+		ps := cfg.PrefixSet()
+		prefixes := ps.Strip()
 		opts := syncOpts{
 			mainBranch:   cfg.DefaultSource,
 			useMerge:     useMerge,
 			push:         !noPush,
 			fetchWarning: fetchWarning,
+			ps:           ps,
 		}
 
 		if !all {
@@ -102,6 +105,10 @@ func syncSingle(ctx context.Context, r git.Runner, service, task string, worktre
 			fmt.Errorf("worktree not found for task %q", task),
 			"run the list tool to see available tasks",
 		)), nil
+	}
+
+	if err := operations.GuardKnownPrefix(opts.ps, wt.Branch, opts.mainBranch, false); err != nil {
+		return errorResult(err), nil
 	}
 
 	sr := operations.SyncWorktree(ctx, r, opts.mainBranch, wt, opts.useMerge, opts.push)

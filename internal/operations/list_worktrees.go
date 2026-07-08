@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/gh"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/parallel"
@@ -64,7 +65,7 @@ func ListWorktrees(
 		return ListWorktreesResult{}, err
 	}
 
-	prefixes := resolver.AllPrefixes()
+	prefixes := config.PrefixSetFromContext(ctx).Strip()
 	candidates := buildListCandidates(entries, req.WorktreeDir, req.CurrentPath, req.TypeFilter, prefixes)
 
 	var (

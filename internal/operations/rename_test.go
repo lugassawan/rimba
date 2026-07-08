@@ -50,6 +50,37 @@ func TestRenameWorktreeSuccess(t *testing.T) {
 	}
 }
 
+func TestRenameWorktreeCustomPrefix(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return "", errGitFailed // BranchExists returns false
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	wt := resolver.WorktreeInfo{Branch: branchProj123, Path: "/wt/PROJ-123"}
+	res, err := RenameWorktree(customPrefixContext(), r, RenameParams{WT: wt, NewTask: "456", WtDir: wtDir})
+	if err != nil {
+		t.Fatalf("RenameWorktree with custom prefix: %v", err)
+	}
+	if res.NewBranch != "PROJ-456" {
+		t.Errorf("NewBranch = %q, want %q", res.NewBranch, "PROJ-456")
+	}
+
+	// No config in context: built-ins-only PrefixSet doesn't recognize "PROJ-",
+	// so the rename falls back to the default "feature/" type.
+	res, err = RenameWorktree(context.Background(), r, RenameParams{WT: wt, NewTask: "456", WtDir: wtDir})
+	if err != nil {
+		t.Fatalf("RenameWorktree without custom prefix: %v", err)
+	}
+	if res.NewBranch != "feature/456" {
+		t.Errorf("NewBranch = %q, want %q (default fallback)", res.NewBranch, "feature/456")
+	}
+}
+
 func TestRenameWorktreeBranchExists(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
