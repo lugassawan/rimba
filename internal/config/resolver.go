@@ -77,14 +77,21 @@ func validateResolver(rc *ResolverConfig) []error {
 // NewPrefixSet implicitly registers for a brand-new custom prefix (or reuses
 // when folding into a built-in) — to the prefix it belongs to. This lets
 // validateAliasNotShadowing catch an alias silently stealing another
-// entry's own creation token, not just a built-in's.
+// entry's own creation token, not just a built-in's. First-write-wins: when
+// two entries normalize to the same token, the first declared entry is
+// recorded as the owner, so collision errors consistently blame later
+// duplicates regardless of iteration order.
 func buildOwnTokens(entries []PrefixEntry, builtins *resolver.PrefixSet) map[string]string {
 	own := make(map[string]string, len(entries))
 	for _, e := range entries {
 		if e.Prefix == "" {
 			continue
 		}
-		own[builtins.TypeName(e.Prefix)] = e.Prefix
+		token := builtins.TypeName(e.Prefix)
+		if _, exists := own[token]; exists {
+			continue
+		}
+		own[token] = e.Prefix
 	}
 	return own
 }
@@ -186,6 +193,14 @@ func validateAliasNotShadowing(alias, entryPrefix string, builtins *resolver.Pre
 			fmt.Errorf("config: resolver.prefix: alias %q shadows built-in prefix %q", alias, builtinPrefix),
 			"rename the alias, or set prefix = \""+builtinPrefix+"\" in [[resolver.prefix]] in .rimba/settings.toml",
 		)
+	}
+	if alias == builtins.TypeName(entryPrefix) {
+		// alias is this entry's own canonical token: ownTokens[alias] and
+		// ownTokens[TypeName(entryPrefix)] are the identical map entry, so
+		// any collision here is already reported by validatePrefixNotColliding
+		// against entryPrefix itself. Checking it again here would just
+		// double-report the same root cause.
+		return nil
 	}
 	if ownerPrefix, ok := ownTokens[alias]; ok && ownerPrefix != entryPrefix {
 		return errhint.WithFix(

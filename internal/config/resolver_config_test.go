@@ -293,6 +293,93 @@ func TestConfigValidateResolver(t *testing.T) {
 	}
 }
 
+// TestConfigValidateResolverCollisionOrderIndependent proves the
+// prefix-collision error is reported exactly once regardless of which of two
+// colliding entries is declared first (buildOwnTokens is first-write-wins).
+func TestConfigValidateResolverCollisionOrderIndependent(t *testing.T) {
+	tests := []struct {
+		name    string
+		entries []config.PrefixEntry
+	}{
+		{
+			name: "PROJ/ declared before PROJ",
+			entries: []config.PrefixEntry{
+				{Prefix: "PROJ/"},
+				{Prefix: "PROJ"},
+			},
+		},
+		{
+			name: "PROJ declared before PROJ/",
+			entries: []config.PrefixEntry{
+				{Prefix: "PROJ"},
+				{Prefix: "PROJ/"},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.Config{
+				WorktreeDir: "../wt",
+				Resolver:    &config.ResolverConfig{Prefix: tt.entries},
+			}
+			err := cfg.Validate()
+			if err == nil {
+				t.Fatal("Validate() returned nil, want a collision error")
+			}
+			msg := err.Error()
+			if got := strings.Count(msg, "collides with another entry's prefix"); got != 1 {
+				t.Errorf("Validate() error = %q, want exactly 1 collision error, got %d", msg, got)
+			}
+		})
+	}
+}
+
+// TestConfigValidateResolverSelfAliasNotDoubleReported proves that when an
+// entry's alias equals its own canonical token, and that same entry's prefix
+// collides with a separate entry, the collision is reported exactly once
+// (via the prefix check) rather than twice (prefix check + alias-shadow
+// check on the same underlying ownTokens entry), regardless of entry order.
+func TestConfigValidateResolverSelfAliasNotDoubleReported(t *testing.T) {
+	tests := []struct {
+		name    string
+		entries []config.PrefixEntry
+	}{
+		{
+			name: "self-aliasing entry declared first",
+			entries: []config.PrefixEntry{
+				{Prefix: "PROJ/", Aliases: []string{"PROJ"}},
+				{Prefix: "PROJ"},
+			},
+		},
+		{
+			name: "self-aliasing entry declared second",
+			entries: []config.PrefixEntry{
+				{Prefix: "PROJ"},
+				{Prefix: "PROJ/", Aliases: []string{"PROJ"}},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.Config{
+				WorktreeDir: "../wt",
+				Resolver:    &config.ResolverConfig{Prefix: tt.entries},
+			}
+			err := cfg.Validate()
+			if err == nil {
+				t.Fatal("Validate() returned nil, want a collision error")
+			}
+			msg := err.Error()
+			if got := strings.Count(msg, "collides with another entry's prefix"); got != 1 {
+				t.Errorf("Validate() error = %q, want exactly 1 prefix-collision error, got %d", msg, got)
+			}
+			if strings.Contains(msg, "shadows prefix") {
+				t.Errorf("Validate() error = %q, want no redundant alias-shadow error for a self-referencing alias", msg)
+			}
+		})
+	}
+}
+
 // --- Merge tests ---
 
 func TestMergeResolverLocalNilPreservesTeam(t *testing.T) {
