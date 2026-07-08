@@ -184,10 +184,8 @@ func runInitFresh(ctx context.Context, cmd *cobra.Command, r git.Runner, repoRoo
 	return nil
 }
 
-// detectCopyFiles falls back to config.DefaultCopyFiles() on an empty or
-// failed scan; scan failures are non-fatal so init never fails on detection.
-// autoDetected is false whenever the fallback was used, so callers can
-// distinguish "found in your repo" from "using the default set".
+// detectCopyFiles falls back to config.DefaultCopyFiles() when the scan is
+// empty or fails; scan failures are non-fatal so init never fails.
 func detectCopyFiles(ctx context.Context, cmd *cobra.Command, r git.Runner, repoRoot string) (files []string, autoDetected bool) {
 	candFiles, candDirs := config.CandidateCopyFiles()
 	pathspecs := append(append([]string{}, candFiles...), candDirs...)

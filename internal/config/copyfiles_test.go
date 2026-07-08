@@ -11,7 +11,10 @@ func TestCandidateCopyFiles(t *testing.T) {
 	files, dirs := config.CandidateCopyFiles()
 
 	wantFiles := []string{
-		".env", ".env.local", ".env.development.local", ".env.production.local",
+		".env", ".env.local",
+		".env.development", ".env.development.local",
+		".env.production", ".env.production.local",
+		".env.test", ".env.test.local",
 		".envrc", ".tool-versions", ".python-version", ".dev.vars", ".npmrc",
 	}
 	if !reflect.DeepEqual(files, wantFiles) {
@@ -34,6 +37,11 @@ func TestDetectCopyFiles(t *testing.T) {
 			name:    "file exact match",
 			ignored: []string{".env"},
 			want:    []string{".env"},
+		},
+		{
+			name:    "non-.local env tier variants match",
+			ignored: []string{".env.production", ".env.test"},
+			want:    []string{".env.production", ".env.test"},
 		},
 		{
 			name:    "dir prefix match",

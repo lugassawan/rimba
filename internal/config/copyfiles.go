@@ -6,7 +6,10 @@ import "strings"
 // copy_files auto-detection on rimba init.
 func CandidateCopyFiles() (files, dirs []string) {
 	files = []string{
-		".env", ".env.local", ".env.development.local", ".env.production.local",
+		".env", ".env.local",
+		".env.development", ".env.development.local",
+		".env.production", ".env.production.local",
+		".env.test", ".env.test.local",
 		".envrc", ".tool-versions", ".python-version", ".dev.vars", ".npmrc",
 	}
 	dirs = []string{".vscode", ".idea", ".cursor", ".claude"}
