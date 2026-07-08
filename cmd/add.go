@@ -119,11 +119,12 @@ func runAddPR(cmd *cobra.Command, r git.Runner, ghR gh.Runner, prNum int, postOp
 
 func runAddTask(cmd *cobra.Command, r git.Runner, arg string, cfg *config.Config, repoRoot string, postOpts operations.PostCreateOptions, s *spinner.Spinner) error {
 	service, task := operations.ResolveTaskInput(arg, repoRoot)
-	prefix := resolvedPrefixString(cmd)
+	sel := resolvePrefixSelection(cmd)
+	prefix := sel.Prefix
 
-	if !hasExplicitPrefixFlag(cmd) {
-		if candidate, _ := resolver.SplitServiceInput(arg); resolver.ValidPrefixType(candidate) {
-			if p, ok := resolver.PrefixString(resolver.PrefixType(candidate)); ok {
+	if !sel.Explicit {
+		if candidate, _ := resolver.SplitServiceInput(arg); candidate != "" {
+			if p, _, ok := resolver.PrefixTokenToString(candidate); ok {
 				prefix = p
 			}
 		}

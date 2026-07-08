@@ -6,39 +6,21 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func TestHasExplicitPrefixFlag(t *testing.T) {
-	t.Run("no flag set", func(t *testing.T) {
-		cmd := &cobra.Command{Use: "test"}
-		addPrefixFlags(cmd)
-		if hasExplicitPrefixFlag(cmd) {
-			t.Error("expected false when no flag set")
-		}
-	})
-
-	t.Run("bugfix flag set", func(t *testing.T) {
-		cmd := &cobra.Command{Use: "test"}
-		addPrefixFlags(cmd)
-		if err := cmd.Flags().Set("bugfix", "true"); err != nil {
-			t.Fatal(err)
-		}
-		if !hasExplicitPrefixFlag(cmd) {
-			t.Error("expected true when bugfix flag set")
-		}
-	})
-}
-
-func TestResolvedPrefixString(t *testing.T) {
+func TestResolvePrefixSelection(t *testing.T) {
 	tests := []struct {
-		name string
-		flag string // flag to set (empty = default/feature)
-		want string
+		name         string
+		flag         string // flag to set (empty = default/feature)
+		wantPrefix   string
+		wantExplicit bool
+		wantAlias    bool
 	}{
-		{"default_feature", "", "feature/"},
-		{"bugfix", "bugfix", "bugfix/"},
-		{"hotfix", "hotfix", "hotfix/"},
-		{"docs", "docs", "docs/"},
-		{"test", "test", "test/"},
-		{"chore", "chore", "chore/"},
+		{"default_feature", "", "feature/", false, false},
+		{"bugfix", "bugfix", "bugfix/", true, false},
+		{"hotfix", "hotfix", "hotfix/", true, false},
+		{"docs", "docs", "docs/", true, false},
+		{"test", "test", "test/", true, false},
+		{"chore", "chore", "chore/", true, false},
+		{"fix_alias", "fix", "bugfix/", true, true},
 	}
 
 	for _, tt := range tests {
@@ -52,10 +34,25 @@ func TestResolvedPrefixString(t *testing.T) {
 				}
 			}
 
-			got := resolvedPrefixString(cmd)
-			if got != tt.want {
-				t.Errorf("resolvedPrefixString() = %q, want %q", got, tt.want)
+			got := resolvePrefixSelection(cmd)
+			if got.Prefix != tt.wantPrefix || got.Explicit != tt.wantExplicit || got.Alias != tt.wantAlias {
+				t.Errorf("resolvePrefixSelection() = %+v, want {Prefix: %q, Explicit: %v, Alias: %v}",
+					got, tt.wantPrefix, tt.wantExplicit, tt.wantAlias)
 			}
 		})
+	}
+}
+
+func TestFixBugfixMutuallyExclusive(t *testing.T) {
+	cmd := &cobra.Command{Use: "test"}
+	addPrefixFlags(cmd)
+	if err := cmd.Flags().Set("fix", "true"); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Flags().Set("bugfix", "true"); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.ValidateFlagGroups(); err == nil {
+		t.Error("expected --fix and --bugfix to be mutually exclusive")
 	}
 }
