@@ -67,7 +67,7 @@ func validateResolver(rc *ResolverConfig) []error {
 	ownTokens := buildOwnTokens(rc.Prefix, builtins)
 
 	for i, entry := range rc.Prefix {
-		errs = append(errs, validateResolverPrefix(i, entry.Prefix, seenPrefixes)...)
+		errs = append(errs, validateResolverPrefix(i, entry.Prefix, seenPrefixes, builtins, ownTokens)...)
 		errs = append(errs, validateResolverAliases(entry, seenAliases, builtins, ownTokens)...)
 	}
 	return errs
@@ -90,8 +90,9 @@ func buildOwnTokens(entries []PrefixEntry, builtins *resolver.PrefixSet) map[str
 }
 
 // validateResolverPrefix checks a single entry's Prefix field: non-empty,
-// ref-safe, and unique across all [[resolver.prefix]] entries.
-func validateResolverPrefix(index int, prefix string, seen map[string]bool) []error {
+// ref-safe, unique across all [[resolver.prefix]] entries, and not silently
+// colliding with a built-in's or another entry's own canonical token.
+func validateResolverPrefix(index int, prefix string, seen map[string]bool, builtins *resolver.PrefixSet, ownTokens map[string]string) []error {
 	if prefix == "" {
 		return []error{errhint.WithFix(
 			fmt.Errorf("config: resolver.prefix[%d]: prefix is empty", index),
@@ -111,6 +112,32 @@ func validateResolverPrefix(index int, prefix string, seen map[string]bool) []er
 		)}
 	}
 	seen[prefix] = true
+	if err := validatePrefixNotColliding(index, prefix, builtins, ownTokens); err != nil {
+		return []error{err}
+	}
+	return nil
+}
+
+// validatePrefixNotColliding reports an error if prefix, once registered,
+// would silently overwrite an existing token mapping: a built-in's own type
+// name or alias reused as a raw prefix (e.g. "bugfix" without the trailing
+// "/", or the "fix" alias), or another entry's own canonical token (e.g.
+// "PROJ/" and "PROJ" both normalizing to the same type). Without this check,
+// PrefixSet.foldOrAdd's exact-string membership match treats such a prefix
+// as brand new and silently redefines the colliding token.
+func validatePrefixNotColliding(index int, prefix string, builtins *resolver.PrefixSet, ownTokens map[string]string) error {
+	if builtinPrefix, _, ok := builtins.TokenToPrefix(prefix); ok && builtinPrefix != prefix {
+		return errhint.WithFix(
+			fmt.Errorf("config: resolver.prefix[%d]: prefix %q collides with built-in prefix %q", index, prefix, builtinPrefix),
+			"choose a prefix that doesn't match a built-in type name or alias in .rimba/settings.toml",
+		)
+	}
+	if owner, ok := ownTokens[builtins.TypeName(prefix)]; ok && owner != prefix {
+		return errhint.WithFix(
+			fmt.Errorf("config: resolver.prefix[%d]: prefix %q collides with another entry's prefix %q", index, prefix, owner),
+			"use distinct prefixes that don't normalize to the same type name in .rimba/settings.toml",
+		)
+	}
 	return nil
 }
 

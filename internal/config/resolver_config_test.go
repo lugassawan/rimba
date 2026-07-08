@@ -240,6 +240,33 @@ func TestConfigValidateResolver(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "bare prefix colliding with built-in type name (no trailing slash) rejected",
+			resolver: &config.ResolverConfig{
+				Prefix: []config.PrefixEntry{{Prefix: "bugfix"}},
+			},
+			wantErr:    true,
+			wantSubstr: []string{"collides with built-in prefix", "bugfix/"},
+		},
+		{
+			name: "bare prefix colliding with built-in alias rejected",
+			resolver: &config.ResolverConfig{
+				Prefix: []config.PrefixEntry{{Prefix: "fix"}},
+			},
+			wantErr:    true,
+			wantSubstr: []string{"collides with built-in prefix", "bugfix/"},
+		},
+		{
+			name: "two custom prefixes normalizing to the same type collide",
+			resolver: &config.ResolverConfig{
+				Prefix: []config.PrefixEntry{
+					{Prefix: "PROJ/"},
+					{Prefix: "PROJ"},
+				},
+			},
+			wantErr:    true,
+			wantSubstr: []string{"collides with another entry's prefix"},
+		},
 	}
 
 	for _, tt := range tests {
