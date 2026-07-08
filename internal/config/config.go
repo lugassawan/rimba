@@ -38,8 +38,9 @@ type Config struct {
 	PostCreate     []string `toml:"post_create,omitempty"`
 	PostRename     []string `toml:"post_rename,omitempty"`
 
-	Deps *DepsConfig       `toml:"deps,omitempty"`
-	Open map[string]string `toml:"open,omitempty"`
+	Deps     *DepsConfig       `toml:"deps,omitempty"`
+	Open     map[string]string `toml:"open,omitempty"`
+	Resolver *ResolverConfig   `toml:"resolver,omitempty"`
 }
 
 // EffectiveCommandTimeout returns the parsed CommandTimeout, or DefaultCommandTimeout
@@ -120,6 +121,7 @@ func (c *Config) Validate() error {
 	errs = appendIf(errs, validateCommandTimeout(c.CommandTimeout)...)
 	errs = appendIf(errs, validateDeps(c.Deps)...)
 	errs = appendIf(errs, validateOpen(c.Open)...)
+	errs = appendIf(errs, validateResolver(c.Resolver)...)
 	return errors.Join(errs...)
 }
 
@@ -190,6 +192,9 @@ func Merge(team, local *Config) *Config {
 	}
 	if local.Open != nil {
 		merged.Open = local.Open
+	}
+	if local.Resolver != nil {
+		merged.Resolver = local.Resolver
 	}
 
 	return &merged
