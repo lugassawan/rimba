@@ -46,6 +46,12 @@ func TestResolveTaskInput(t *testing.T) {
 			wantTask:    "crash-fix",
 		},
 		{
+			name:        "fix alias prefix",
+			input:       "fix/crash-fix",
+			wantService: "",
+			wantTask:    "crash-fix",
+		},
+		{
 			name:        "valid service directory",
 			input:       "auth-api/my-task",
 			wantService: "auth-api",

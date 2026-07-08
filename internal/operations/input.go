@@ -12,7 +12,7 @@ import (
 //
 // Decision logic:
 //  1. No "/" in input → standard mode ("", input)
-//  2. Part before "/" is a known prefix → standard mode, sanitize rest
+//  2. Part before "/" is a known prefix or alias → standard mode, sanitize rest
 //  3. Part before "/" is a directory in repoRoot → monorepo (service, sanitized rest)
 //  4. Otherwise → standard mode, sanitize full input
 func ResolveTaskInput(input, repoRoot string) (service, task string) {
@@ -21,7 +21,7 @@ func ResolveTaskInput(input, repoRoot string) (service, task string) {
 		return "", input
 	}
 
-	if resolver.ValidPrefixType(candidate) {
+	if _, _, ok := resolver.PrefixTokenToString(candidate); ok {
 		return "", resolver.SanitizeTask(rest)
 	}
 
