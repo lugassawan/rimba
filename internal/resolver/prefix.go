@@ -49,30 +49,28 @@ func PrefixString(pt PrefixType) (string, bool) {
 }
 
 // AllPrefixes returns all known prefix strings in a deterministic order.
+//
+// Deprecated: this is a thin wrapper over DefaultPrefixSet().Strip(),
+// kept for existing call sites (see #269).
 func AllPrefixes() []string {
-	out := make([]string, len(orderedTypes))
-	for i, pt := range orderedTypes {
-		out[i] = prefixMap[pt]
-	}
-	return out
+	return DefaultPrefixSet().Strip()
 }
 
 // ValidPrefixType reports whether s is a recognized PrefixType value.
+//
+// Deprecated: this is a thin wrapper over DefaultPrefixSet().ValidType(),
+// kept for existing call sites (see #269).
 func ValidPrefixType(s string) bool {
-	_, ok := prefixMap[PrefixType(s)]
-	return ok
+	return DefaultPrefixSet().ValidType(s)
 }
 
 // PrefixTokenToString resolves a leading path segment that is either a
 // canonical prefix name ("bugfix") or a known alias ("fix") to its branch
 // prefix string. alias is true when the token was a non-canonical alias;
 // ok is false when the token is neither a prefix nor an alias.
+//
+// Deprecated: this is a thin wrapper over DefaultPrefixSet().TokenToPrefix(),
+// kept for existing call sites (see #269).
 func PrefixTokenToString(token string) (prefix string, alias bool, ok bool) {
-	if s, ok := prefixMap[PrefixType(token)]; ok {
-		return s, false, true
-	}
-	if pt, ok := prefixAliases[token]; ok {
-		return prefixMap[pt], true, true
-	}
-	return "", false, false
+	return DefaultPrefixSet().TokenToPrefix(token)
 }
