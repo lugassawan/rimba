@@ -365,6 +365,38 @@ func TestRenameRetypeFlag(t *testing.T) {
 	}
 }
 
+// TestRenameFixFlagNoAliasNotice confirms --fix retypes to bugfix/ on rename
+// (shared addPrefixFlags), but rename never prints the "interpreting 'fix' as
+// 'bugfix/'" notice — that notice is add-only by design.
+func TestRenameFixFlagNoAliasNotice(t *testing.T) {
+	repoDir := t.TempDir()
+	cfg := &config.Config{WorktreeDir: defaultRelativeWtDir, DefaultSource: branchMain}
+	worktreeOut := makeRenameWorktreeOut(repoDir)
+	restore := overrideNewRunner(makeRenameRunner(repoDir, worktreeOut))
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().BoolP(flagForce, "f", false, "")
+	cmd.Flags().Bool(flagSkipDeps, false, "")
+	cmd.Flags().Bool(flagSkipHooks, false, "")
+	addPrefixFlags(cmd)
+	_ = cmd.Flags().Set(flagSkipDeps, "true")
+	_ = cmd.Flags().Set(flagSkipHooks, "true")
+	_ = cmd.Flags().Set("fix", "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	if err := renameCmd.RunE(cmd, []string{"login"}); err != nil {
+		t.Fatalf("renameCmd.RunE: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "feature/login -> bugfix/login") {
+		t.Errorf("output = %q, want 'feature/login -> bugfix/login'", out)
+	}
+	if strings.Contains(out, "interpreting") {
+		t.Errorf("output = %q, rename should never print the fix-alias notice", out)
+	}
+}
+
 // --skip-deps is set so PostRenameSetup does no real work.
 func newRenamePushTestCmd(cfg *config.Config) (*cobra.Command, *bytes.Buffer) {
 	cmd, buf := newTestCmd()
