@@ -303,6 +303,105 @@ func TestAddToolBugfixType(t *testing.T) {
 	}
 }
 
+// TestAddToolTaskPositionalFixAliasNoExplicitType confirms that omitting
+// "type" no longer silently drops a "fix/" prefix segment to feature/ — the
+// positional segment is consulted the same way cmd/add.go's CLI path does.
+// "type" stays canonical-only (mcp.Enum has no "fix" entry); this only
+// affects how the "task" string's leading segment is interpreted.
+func TestAddToolTaskPositionalFixAliasNoExplicitType(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == gitRevParse {
+				return "", errors.New("not found")
+			}
+			if len(args) > 0 && args[0] == gitWorktree {
+				return "", nil
+			}
+			return "", nil
+		},
+	}
+	cfg := testConfig()
+	cfg.CopyFiles = nil
+	hctx := testContext(r)
+	hctx.Config = cfg
+	handler := handleAdd(hctx)
+
+	result := callTool(t, handler, map[string]any{
+		"task":       "fix/my-bug",
+		"skip_deps":  true,
+		"skip_hooks": true,
+	})
+	data := unmarshalJSON[addResult](t, result)
+	if data.Branch != "bugfix/my-bug" {
+		t.Errorf("branch = %q, want %q", data.Branch, "bugfix/my-bug")
+	}
+}
+
+// TestAddToolTaskPositionalCanonicalPrefixNoExplicitType locks in the same
+// fix for canonical prefixes: "bugfix/x" with no explicit "type" must resolve
+// to bugfix/, not silently default to feature/. This was a pre-existing gap
+// (not introduced by the fix-alias feature) closed by the same change.
+func TestAddToolTaskPositionalCanonicalPrefixNoExplicitType(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == gitRevParse {
+				return "", errors.New("not found")
+			}
+			if len(args) > 0 && args[0] == gitWorktree {
+				return "", nil
+			}
+			return "", nil
+		},
+	}
+	cfg := testConfig()
+	cfg.CopyFiles = nil
+	hctx := testContext(r)
+	hctx.Config = cfg
+	handler := handleAdd(hctx)
+
+	result := callTool(t, handler, map[string]any{
+		"task":       "bugfix/my-bug",
+		"skip_deps":  true,
+		"skip_hooks": true,
+	})
+	data := unmarshalJSON[addResult](t, result)
+	if data.Branch != "bugfix/my-bug" {
+		t.Errorf("branch = %q, want %q", data.Branch, "bugfix/my-bug")
+	}
+}
+
+// TestAddToolExplicitTypeWinsOverPositionalAlias confirms an explicit "type"
+// always wins over the positional segment, matching CLI flag precedence.
+func TestAddToolExplicitTypeWinsOverPositionalAlias(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == gitRevParse {
+				return "", errors.New("not found")
+			}
+			if len(args) > 0 && args[0] == gitWorktree {
+				return "", nil
+			}
+			return "", nil
+		},
+	}
+	cfg := testConfig()
+	cfg.CopyFiles = nil
+	hctx := testContext(r)
+	hctx.Config = cfg
+	handler := handleAdd(hctx)
+
+	result := callTool(t, handler, map[string]any{
+		"task":       "fix/my-bug",
+		"type":       "hotfix",
+		"skip_deps":  true,
+		"skip_hooks": true,
+	})
+	data := unmarshalJSON[addResult](t, result)
+	if data.Branch != "hotfix/my-bug" {
+		t.Errorf("branch = %q, want %q", data.Branch, "hotfix/my-bug")
+	}
+}
+
 func TestAddToolPathAlreadyExists(t *testing.T) {
 	// Create a temp dir to simulate existing worktree path
 	tmpDir := t.TempDir()

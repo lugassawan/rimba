@@ -53,8 +53,8 @@ var renameCmd = &cobra.Command{
 		_, newTask = operations.ResolveTaskInput(newTask, repoRoot)
 
 		var newPrefix string
-		if hasExplicitPrefixFlag(cmd) {
-			newPrefix = resolvedPrefixString(cmd)
+		if sel := resolvePrefixSelection(cmd); sel.Explicit {
+			newPrefix = sel.Prefix
 		}
 
 		if err := ensureTrust(cmd, repoRoot, cfg); err != nil {
