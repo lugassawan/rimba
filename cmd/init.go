@@ -133,7 +133,7 @@ func runInitFresh(ctx context.Context, cmd *cobra.Command, r git.Runner, repoRoo
 	}
 
 	cfg := &config.Config{
-		CopyFiles: detectCopyFiles(ctx, r, repoRoot),
+		CopyFiles: detectCopyFiles(ctx, cmd, r, repoRoot),
 	}
 
 	if err := os.MkdirAll(dirPath, 0750); err != nil {
@@ -182,13 +182,15 @@ func runInitFresh(ctx context.Context, cmd *cobra.Command, r git.Runner, repoRoo
 // detectCopyFiles scans repoRoot for candidate local/secret files and dirs
 // that git ignores, returning the tailored set for a fresh config. Falls
 // back to config.DefaultCopyFiles() when the scan is empty or errors —
-// scan failures are non-fatal so init never fails on detection.
-func detectCopyFiles(ctx context.Context, r git.Runner, repoRoot string) []string {
+// scan failures are non-fatal so init never fails on detection, but a
+// warning is printed so a broken/unusual git setup isn't silently masked.
+func detectCopyFiles(ctx context.Context, cmd *cobra.Command, r git.Runner, repoRoot string) []string {
 	files, dirs := config.CandidateCopyFiles()
 	pathspecs := append(append([]string{}, files...), dirs...)
 
 	ignored, err := git.ListIgnoredUntracked(ctx, r, repoRoot, pathspecs)
 	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: copy_files detection failed: %v — using defaults\n", err)
 		return config.DefaultCopyFiles()
 	}
 
