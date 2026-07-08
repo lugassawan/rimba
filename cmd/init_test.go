@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -51,6 +52,119 @@ func TestInitSuccess(t *testing.T) {
 	wtDir := filepath.Join(repoDir, config.DefaultWorktreeDir(repoName))
 	if _, err := os.Stat(wtDir); os.IsNotExist(err) {
 		t.Errorf("worktree dir not created at %s", wtDir)
+	}
+}
+
+func TestInitFreshDetectsCopyFiles(t *testing.T) {
+	repoDir := t.TempDir()
+
+	r := repoRootRunner(repoDir, func(args ...string) (string, error) {
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", nil
+	})
+	r.runInDir = func(_ string, args ...string) (string, error) {
+		if len(args) > 0 && args[0] == "ls-files" {
+			return ".env\n.claude/settings.local.json", nil
+		}
+		return "", nil
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	if err := initCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("initCmd.RunE: %v", err)
+	}
+
+	cfg, err := config.LoadDir(filepath.Join(repoDir, config.DirName))
+	if err != nil {
+		t.Fatalf("LoadDir: %v", err)
+	}
+	want := []string{".env", ".claude"}
+	if !reflect.DeepEqual(cfg.CopyFiles, want) {
+		t.Errorf("CopyFiles = %v, want %v", cfg.CopyFiles, want)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, ".env") || !strings.Contains(out, ".claude") {
+		t.Errorf("summary output should mention detected copy_files, got:\n%s", out)
+	}
+	if strings.Contains(out, "(default)") {
+		t.Errorf("summary output should not mark auto-detected copy_files as default, got:\n%s", out)
+	}
+}
+
+func TestInitFreshEmptyScanFallsBackToDefaults(t *testing.T) {
+	repoDir := t.TempDir()
+
+	r := repoRootRunner(repoDir, func(args ...string) (string, error) {
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", nil
+	})
+	// runInDir already defaults to noopRunInDir, returning "" for ls-files.
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	if err := initCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("initCmd.RunE: %v", err)
+	}
+
+	cfg, err := config.LoadDir(filepath.Join(repoDir, config.DirName))
+	if err != nil {
+		t.Fatalf("LoadDir: %v", err)
+	}
+	if !reflect.DeepEqual(cfg.CopyFiles, config.DefaultCopyFiles()) {
+		t.Errorf("CopyFiles = %v, want defaults %v", cfg.CopyFiles, config.DefaultCopyFiles())
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "(default)") {
+		t.Errorf("summary output should mark empty-scan copy_files as default, got:\n%s", out)
+	}
+}
+
+func TestInitFreshScanErrorFallsBackToDefaults(t *testing.T) {
+	repoDir := t.TempDir()
+
+	r := repoRootRunner(repoDir, func(args ...string) (string, error) {
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", nil
+	})
+	r.runInDir = func(_ string, args ...string) (string, error) {
+		if len(args) > 0 && args[0] == "ls-files" {
+			return "", errors.New("ls-files failed")
+		}
+		return "", nil
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	if err := initCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("initCmd.RunE: %v", err)
+	}
+
+	cfg, err := config.LoadDir(filepath.Join(repoDir, config.DirName))
+	if err != nil {
+		t.Fatalf("LoadDir: %v", err)
+	}
+	if !reflect.DeepEqual(cfg.CopyFiles, config.DefaultCopyFiles()) {
+		t.Errorf("CopyFiles = %v, want defaults %v", cfg.CopyFiles, config.DefaultCopyFiles())
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "Warning:") || !strings.Contains(out, "ls-files failed") {
+		t.Errorf("output should contain a Warning mentioning the scan error, got:\n%s", out)
+	}
+	if !strings.Contains(out, "(default)") {
+		t.Errorf("summary output should mark scan-error copy_files as default, got:\n%s", out)
 	}
 }
 

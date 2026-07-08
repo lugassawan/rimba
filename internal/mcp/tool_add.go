@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/errhint"
@@ -70,15 +71,15 @@ func handleAdd(hctx *HandlerContext) server.ToolHandlerFunc {
 }
 
 func handleAddTask(ctx context.Context, hctx *HandlerContext, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	task := req.GetString("task", "")
-	if task == "" {
+	rawTask := req.GetString("task", "")
+	if rawTask == "" {
 		return errorResult(errhint.WithFix(errors.New("task is required"),
 			`provide the task argument, e.g. add { task: "my-feature" }`)), nil
 	}
 
-	service, task := operations.ResolveTaskInput(task, hctx.RepoRoot)
+	service, task := operations.ResolveTaskInput(rawTask, hctx.RepoRoot)
 
-	prefixType := req.GetString("type", "feature")
+	prefixType := resolveMCPPrefixType(req, rawTask)
 
 	cfg, cfgErr := hctx.requireConfig()
 	if cfgErr != nil {
@@ -120,6 +121,23 @@ func handleAddTask(ctx context.Context, hctx *HandlerContext, req mcp.CallToolRe
 		Path:   result.Path,
 		Source: result.Source,
 	})
+}
+
+// resolveMCPPrefixType falls back to rawTask's leading segment (mirroring
+// cmd/add.go's resolveAddPrefix) when "type" is omitted; the "type" enum
+// itself stays canonical-only.
+func resolveMCPPrefixType(req mcp.CallToolRequest, rawTask string) string {
+	if t := req.GetString("type", ""); t != "" {
+		return t
+	}
+
+	if candidate, _ := resolver.SplitServiceInput(rawTask); candidate != "" {
+		if prefix, _, ok := resolver.PrefixTokenToString(candidate); ok {
+			return strings.TrimSuffix(prefix, "/")
+		}
+	}
+
+	return string(resolver.DefaultPrefixType)
 }
 
 func handleAddPR(ctx context.Context, hctx *HandlerContext, req mcp.CallToolRequest, prNum int) (*mcp.CallToolResult, error) {

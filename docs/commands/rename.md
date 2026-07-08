@@ -57,6 +57,7 @@ rimba rename auth --bugfix
 | `--skip-hooks` | Skip post-rename hooks |
 | `--push` | Publish the renamed branch and delete the old remote branch |
 | `--bugfix` | Change branch type to `bugfix/` |
+| `--fix` | Alias for `--bugfix` |
 | `--hotfix` | Change branch type to `hotfix/` |
 | `--docs` | Change branch type to `docs/` |
 | `--test` | Change branch type to `test/` |

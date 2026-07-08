@@ -2,7 +2,7 @@
 set -eu
 
 usage() {
-    echo "Usage: $0 <version|--auto>"
+    echo "Usage: $0 <version|--auto|--major|--minor|--patch>"
     echo ""
     echo "Create and push a release tag to trigger the GitHub Actions release workflow."
     echo ""
@@ -10,6 +10,9 @@ usage() {
     echo "  $0 1.1.0"
     echo "  $0 v1.1.0"
     echo "  $0 --auto"
+    echo "  $0 --patch          # force patch bump (vX.Y.Z+1)"
+    echo "  $0 --minor          # force minor bump (vX.Y+1.0)"
+    echo "  $0 --major          # force major bump (vX+1.0.0)"
     exit 1
 }
 
@@ -105,6 +108,11 @@ detect_next_version() {
         IFS="$OLD_IFS"
     fi
 
+    # Force a specific bump when requested via --major/--minor/--patch
+    if [ -n "${forced_bump:-}" ]; then
+        bump="$forced_bump"
+    fi
+
     # Parse current version
     major=$(echo "$latest_tag" | sed 's/^v//' | cut -d. -f1)
     minor=$(echo "$latest_tag" | sed 's/^v//' | cut -d. -f2)
@@ -152,7 +160,11 @@ detect_next_version() {
         echo ""
     fi
 
-    echo "Next version: $next_version"
+    if [ -n "${forced_bump:-}" ]; then
+        echo "Next version: $next_version   (forced: $forced_bump)"
+    else
+        echo "Next version: $next_version"
+    fi
     echo ""
 
     # Prompt for confirmation
@@ -170,17 +182,21 @@ detect_next_version() {
 # Require exactly one argument
 [ $# -eq 1 ] || usage
 
-if [ "$1" = "--auto" ]; then
-    detect_next_version
-else
-    version="$1"
-
-    # Normalize: ensure v prefix
-    case "$version" in
-        v*) ;;
-        *)  version="v${version}" ;;
-    esac
-fi
+forced_bump=""
+case "$1" in
+    --auto)  detect_next_version ;;
+    --major) forced_bump="major"; detect_next_version ;;
+    --minor) forced_bump="minor"; detect_next_version ;;
+    --patch) forced_bump="patch"; detect_next_version ;;
+    -*)      usage ;;
+    *)
+        version="$1"
+        case "$version" in
+            v*) ;;
+            *)  version="v${version}" ;;
+        esac
+        ;;
+esac
 
 # Validate semver format (vX.Y.Z)
 echo "$version" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$' \
