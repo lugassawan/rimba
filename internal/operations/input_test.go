@@ -87,3 +87,32 @@ func TestResolveTaskInput(t *testing.T) {
 		})
 	}
 }
+
+// TestResolveTaskInputDirectoryWinsOverAlias confirms a real service directory
+// named "fix" wins over the "fix" alias. Canonical prefixes (e.g. "bugfix")
+// intentionally keep the opposite precedence (prefix wins over a same-named
+// directory) — that's pre-existing, unchanged behavior. Aliases get the
+// lower-risk precedence since alias tokens are far more likely to collide
+// with a real directory name than domain-specific canonical prefix names.
+func TestResolveTaskInputDirectoryWinsOverAlias(t *testing.T) {
+	repoRoot := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repoRoot, "fix"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	service, task := operations.ResolveTaskInput("fix/my-task", repoRoot)
+	if service != "fix" || task != "my-task" {
+		t.Errorf(`ResolveTaskInput("fix/my-task") = (%q, %q), want ("fix", "my-task")`, service, task)
+	}
+}
+
+// TestResolveTaskInputAliasAppliesWithoutDirectory confirms the alias still
+// resolves normally when no colliding directory exists.
+func TestResolveTaskInputAliasAppliesWithoutDirectory(t *testing.T) {
+	repoRoot := t.TempDir()
+
+	service, task := operations.ResolveTaskInput("fix/my-task", repoRoot)
+	if service != "" || task != "my-task" {
+		t.Errorf(`ResolveTaskInput("fix/my-task") = (%q, %q), want ("", "my-task")`, service, task)
+	}
+}

@@ -12,22 +12,32 @@ import (
 //
 // Decision logic:
 //  1. No "/" in input → standard mode ("", input)
-//  2. Part before "/" is a known prefix or alias → standard mode, sanitize rest
+//  2. Part before "/" is a known canonical prefix → standard mode, sanitize rest
 //  3. Part before "/" is a directory in repoRoot → monorepo (service, sanitized rest)
-//  4. Otherwise → standard mode, sanitize full input
+//  4. Part before "/" is a known alias (e.g. "fix") → standard mode, sanitize rest
+//  5. Otherwise → standard mode, sanitize full input
+//
+// Canonical prefixes are checked before the directory match (unchanged,
+// pre-existing precedence); aliases are checked after, so a real service
+// directory that happens to share an alias's name (e.g. "fix") is not
+// shadowed by the alias.
 func ResolveTaskInput(input, repoRoot string) (service, task string) {
 	candidate, rest := resolver.SplitServiceInput(input)
 	if candidate == "" {
 		return "", input
 	}
 
-	if _, _, ok := resolver.PrefixTokenToString(candidate); ok {
+	if resolver.ValidPrefixType(candidate) {
 		return "", resolver.SanitizeTask(rest)
 	}
 
 	dirPath := filepath.Join(repoRoot, candidate)
 	if info, err := os.Stat(dirPath); err == nil && info.IsDir() {
 		return candidate, resolver.SanitizeTask(rest)
+	}
+
+	if _, _, ok := resolver.PrefixTokenToString(candidate); ok {
+		return "", resolver.SanitizeTask(rest)
 	}
 
 	return "", resolver.SanitizeTask(input)
