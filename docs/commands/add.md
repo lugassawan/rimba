@@ -29,6 +29,7 @@ rimba add auth-api/my-feature --bugfix # Monorepo: branch auth-api/bugfix/my-fea
 rimba add pr:123                       # Create worktree from PR #123's head branch
 rimba add pr:123 --task review/auth-tweak  # Override auto-derived task name
 rimba add branch:feature/my-feature   # Promote current branch to its own worktree
+rimba add fix/auth-null-check          # Alias → bugfix/auth-null-check, with a stderr notice
 ```
 
 ## Common workflows
@@ -73,8 +74,9 @@ rimba add branch:feature/refactor
 
 | Flag | Description |
 |------|-------------|
-| `--bugfix` | Use `bugfix/` branch prefix |
-| `--hotfix` | Use `hotfix/` branch prefix |
+| `--bugfix` | Use `bugfix/` branch prefix, for a minor bug fix that's part of the normal dev workflow |
+| `--fix` | Alias for `--bugfix` |
+| `--hotfix` | Use `hotfix/` branch prefix, for an urgent production patch that jumps the queue ahead of normal review |
 | `--docs` | Use `docs/` branch prefix |
 | `--test` | Use `test/` branch prefix |
 | `--chore` | Use `chore/` branch prefix |
@@ -82,6 +84,9 @@ rimba add branch:feature/refactor
 | `--task` | Override auto-derived task name (`pr:<num>` mode only) |
 | `--skip-deps` | Skip dependency detection and installation |
 | `--skip-hooks` | Skip post-create hooks |
+
+{: .note }
+> **No prefix flag defaults to `feature/`.** A bug fix needs an explicit `--bugfix`/`--hotfix` (or the `--fix`/`fix/<task>` alias) — otherwise it silently lands on the `feature/` prefix.
 
 ## Related commands
 

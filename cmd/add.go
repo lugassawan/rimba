@@ -16,6 +16,7 @@ import (
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
+	"github.com/lugassawan/rimba/internal/termcolor"
 	"github.com/spf13/cobra"
 )
 
@@ -119,14 +120,9 @@ func runAddPR(cmd *cobra.Command, r git.Runner, ghR gh.Runner, prNum int, postOp
 
 func runAddTask(cmd *cobra.Command, r git.Runner, arg string, cfg *config.Config, repoRoot string, postOpts operations.PostCreateOptions, s *spinner.Spinner) error {
 	service, task := operations.ResolveTaskInput(arg, repoRoot)
-	prefix := resolvedPrefixString(cmd)
-
-	if !hasExplicitPrefixFlag(cmd) {
-		if candidate, _ := resolver.SplitServiceInput(arg); resolver.ValidPrefixType(candidate) {
-			if p, ok := resolver.PrefixString(resolver.PrefixType(candidate)); ok {
-				prefix = p
-			}
-		}
+	prefix, aliasUsed := resolveAddPrefix(cmd, arg)
+	if aliasUsed {
+		printFixAliasNotice(cmd)
 	}
 
 	source, _ := cmd.Flags().GetString(flagSource)
@@ -163,6 +159,30 @@ func runAddTask(cmd *cobra.Command, r git.Runner, arg string, cfg *config.Config
 	printWorktreeResult(cmd, header, result)
 
 	return nil
+}
+
+// resolveAddPrefix prefers an explicit prefix flag over a positional segment.
+// aliasUsed gates the one-line stderr notice.
+func resolveAddPrefix(cmd *cobra.Command, arg string) (prefix string, aliasUsed bool) {
+	sel := resolvePrefixSelection(cmd)
+	if sel.Explicit {
+		return sel.Prefix, sel.Alias
+	}
+
+	if candidate, _ := resolver.SplitServiceInput(arg); candidate != "" {
+		if p, alias, ok := resolver.PrefixTokenToString(candidate); ok {
+			return p, alias
+		}
+	}
+
+	return sel.Prefix, false
+}
+
+// printFixAliasNotice makes the fix→bugfix/ interpretation visible instead
+// of silent (see #360).
+func printFixAliasNotice(cmd *cobra.Command) {
+	msg := "interpreting 'fix' as 'bugfix/'; use --hotfix for urgent production patches"
+	fmt.Fprintln(cmd.ErrOrStderr(), hintPainter(cmd).Paint(msg, termcolor.Gray))
 }
 
 func runAddBranch(cmd *cobra.Command, r git.Runner, cfg *config.Config, repoRoot, branch string) error {
