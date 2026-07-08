@@ -91,6 +91,9 @@ func TestInitFreshDetectsCopyFiles(t *testing.T) {
 	if !strings.Contains(out, ".env") || !strings.Contains(out, ".claude") {
 		t.Errorf("summary output should mention detected copy_files, got:\n%s", out)
 	}
+	if strings.Contains(out, "(default)") {
+		t.Errorf("summary output should not mark auto-detected copy_files as default, got:\n%s", out)
+	}
 }
 
 func TestInitFreshEmptyScanFallsBackToDefaults(t *testing.T) {
@@ -106,7 +109,7 @@ func TestInitFreshEmptyScanFallsBackToDefaults(t *testing.T) {
 	restore := overrideNewRunner(r)
 	defer restore()
 
-	cmd, _ := newTestCmd()
+	cmd, buf := newTestCmd()
 	if err := initCmd.RunE(cmd, nil); err != nil {
 		t.Fatalf("initCmd.RunE: %v", err)
 	}
@@ -117,6 +120,11 @@ func TestInitFreshEmptyScanFallsBackToDefaults(t *testing.T) {
 	}
 	if !reflect.DeepEqual(cfg.CopyFiles, config.DefaultCopyFiles()) {
 		t.Errorf("CopyFiles = %v, want defaults %v", cfg.CopyFiles, config.DefaultCopyFiles())
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "(default)") {
+		t.Errorf("summary output should mark empty-scan copy_files as default, got:\n%s", out)
 	}
 }
 
@@ -154,6 +162,9 @@ func TestInitFreshScanErrorFallsBackToDefaults(t *testing.T) {
 	out := buf.String()
 	if !strings.Contains(out, "Warning:") || !strings.Contains(out, "ls-files failed") {
 		t.Errorf("output should contain a Warning mentioning the scan error, got:\n%s", out)
+	}
+	if !strings.Contains(out, "(default)") {
+		t.Errorf("summary output should mark scan-error copy_files as default, got:\n%s", out)
 	}
 }
 

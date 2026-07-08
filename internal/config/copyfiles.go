@@ -2,9 +2,8 @@ package config
 
 import "strings"
 
-// CandidateCopyFiles returns the curated candidates considered for
-// auto-detected copy_files on fresh init: files matched by exact path, and
-// dirs matched when they contain at least one git-ignored untracked file.
+// CandidateCopyFiles returns the curated files and dirs considered for
+// copy_files auto-detection on rimba init.
 func CandidateCopyFiles() (files, dirs []string) {
 	files = []string{
 		".env", ".env.local", ".env.development.local", ".env.production.local",
@@ -14,10 +13,8 @@ func CandidateCopyFiles() (files, dirs []string) {
 	return files, dirs
 }
 
-// DetectCopyFiles maps git-ignored untracked paths against the candidate
-// list and returns matched candidates in candidate order, deduped. A file
-// candidate matches an exact path; a dir candidate matches if any ignored
-// path sits under it.
+// DetectCopyFiles matches candidates against ignored, in candidate order: a
+// file matches by exact path, a dir matches if any ignored path sits under it.
 func DetectCopyFiles(ignored []string) []string {
 	files, dirs := CandidateCopyFiles()
 	ignoredSet := make(map[string]bool, len(ignored))

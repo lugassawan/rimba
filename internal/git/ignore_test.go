@@ -66,6 +66,27 @@ func TestListIgnoredUntrackedEmptyOutput(t *testing.T) {
 	}
 }
 
+func TestListIgnoredUntrackedEmptyPathspecsShortCircuits(t *testing.T) {
+	called := false
+	r := &mockRunner{
+		runInDir: func(_ string, _ ...string) (string, error) {
+			called = true
+			return "should-not-be-reached", nil
+		},
+	}
+
+	got, err := ListIgnoredUntracked(context.Background(), r, fakeDir, nil)
+	if err != nil {
+		t.Fatalf("ListIgnoredUntracked: %v", err)
+	}
+	if got != nil {
+		t.Errorf("expected nil, got %v", got)
+	}
+	if called {
+		t.Error("expected RunInDir not to be called for empty pathspecs")
+	}
+}
+
 func TestListIgnoredUntrackedError(t *testing.T) {
 	r := &mockRunner{
 		runInDir: func(_ string, _ ...string) (string, error) {
