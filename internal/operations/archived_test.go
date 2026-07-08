@@ -39,6 +39,36 @@ func TestFindArchivedBranch(t *testing.T) {
 	}
 }
 
+func TestFindArchivedBranchCustomPrefix(t *testing.T) {
+	mr := &mockRunner{
+		run: func(args ...string) (string, error) {
+			switch {
+			case args[0] == cmdBranch:
+				return "main\nPROJ-123", nil
+			case args[0] == cmdWorktreeTest && args[1] == cmdList:
+				return wtListMainOnly, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	branch, err := FindArchivedBranch(customPrefixContext(), mr, "", "123")
+	if err != nil {
+		t.Fatalf("FindArchivedBranch with custom prefix: %v", err)
+	}
+	if branch != branchProj123 {
+		t.Errorf("branch = %q, want %q", branch, branchProj123)
+	}
+
+	// Parity: with no config in context, built-ins-only prefixes never build
+	// branchProj123 as a search candidate, so the lookup fails — matching
+	// pre-migration behavior byte-for-byte.
+	if _, err := FindArchivedBranch(context.Background(), mr, "", "123"); err == nil {
+		t.Fatal("expected FindArchivedBranch to fail without custom prefix config (built-ins-only parity)")
+	}
+}
+
 func TestFindArchivedBranchNotFound(t *testing.T) {
 	mr := &mockRunner{
 		run: func(args ...string) (string, error) {

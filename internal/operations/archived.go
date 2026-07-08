@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/resolver"
 )
@@ -21,7 +22,7 @@ func FindArchivedBranch(ctx context.Context, r git.Runner, service, task string)
 		return "", err
 	}
 
-	prefixes := resolver.AllPrefixes()
+	prefixes := config.PrefixSetFromContext(ctx).Strip()
 
 	if b, ok := searchByPrefixedTask(branches, active, prefixes, service, task); ok {
 		return b, nil

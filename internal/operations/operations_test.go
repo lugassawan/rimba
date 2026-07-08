@@ -5,8 +5,25 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/resolver"
 )
+
+// testCustomPrefix and branchProj123 are shared fixtures for tests proving
+// operations recognize a custom-prefixed branch from a context-carried
+// resolver.PrefixSet (see #269).
+const (
+	testCustomPrefix = "PROJ-"
+	branchProj123    = "PROJ-123"
+)
+
+// customPrefixContext returns a context carrying a config with a single
+// custom [[resolver.prefix]] entry (no built-in aliasing), for exercising the
+// config.PrefixSetFromContext funnel in operations tests.
+func customPrefixContext() context.Context {
+	cfg := &config.Config{Resolver: &config.ResolverConfig{Prefix: []config.PrefixEntry{{Prefix: testCustomPrefix}}}}
+	return config.WithConfig(context.Background(), cfg)
+}
 
 func TestListWorktreeInfos(t *testing.T) {
 	porcelain := strings.Join([]string{
@@ -91,6 +108,68 @@ func TestFindWorktree(t *testing.T) {
 	})
 }
 
+func TestListWorktreeInfosCustomPrefix(t *testing.T) {
+	porcelain := strings.Join([]string{
+		"worktree /repo",
+		"HEAD abc123",
+		"branch refs/heads/main",
+		"",
+		"worktree /repo-worktrees/PROJ-123",
+		"HEAD def456",
+		"branch refs/heads/PROJ-123",
+		"",
+	}, "\n")
+
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return porcelain, nil },
+		runInDir: noopRunInDir,
+	}
+
+	infos, err := ListWorktreeInfos(customPrefixContext(), r)
+	if err != nil {
+		t.Fatalf("ListWorktreeInfos: %v", err)
+	}
+	if len(infos) != 2 {
+		t.Fatalf("got %d worktrees, want 2", len(infos))
+	}
+	if infos[1].Branch != branchProj123 {
+		t.Errorf("infos[1].Branch = %q, want %q", infos[1].Branch, branchProj123)
+	}
+}
+
+func TestFindWorktreeCustomPrefix(t *testing.T) {
+	porcelain := strings.Join([]string{
+		"worktree /repo",
+		"HEAD abc123",
+		"branch refs/heads/main",
+		"",
+		"worktree /repo-worktrees/PROJ-123",
+		"HEAD def456",
+		"branch refs/heads/PROJ-123",
+		"",
+	}, "\n")
+
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return porcelain, nil },
+		runInDir: noopRunInDir,
+	}
+
+	wt, err := FindWorktree(customPrefixContext(), r, "", "123")
+	if err != nil {
+		t.Fatalf("FindWorktree with custom prefix: %v", err)
+	}
+	if wt.Branch != branchProj123 {
+		t.Errorf("Branch = %q, want %q", wt.Branch, branchProj123)
+	}
+
+	// Parity: with no config in context, PrefixSetFromContext degrades to
+	// built-ins only, so the custom-prefixed branch's stripped task ("123")
+	// is not resolvable — behavior is byte-identical to pre-migration code.
+	if _, err := FindWorktree(context.Background(), r, "", "123"); err == nil {
+		t.Fatal("expected FindWorktree to fail without custom prefix config (built-ins-only parity)")
+	}
+}
+
 func TestFindWorktreeAmbiguity(t *testing.T) {
 	// Two service-scoped worktrees with the same task name
 	porcelain := strings.Join([]string{
@@ -139,7 +218,7 @@ func TestFindWorktreeError(t *testing.T) {
 }
 
 func TestFilterByType(t *testing.T) {
-	prefixes := resolver.AllPrefixes()
+	ps := resolver.DefaultPrefixSet()
 	worktrees := []resolver.WorktreeInfo{
 		{Branch: branchFeature},
 		{Branch: branchBugfixTypo},
@@ -147,7 +226,7 @@ func TestFilterByType(t *testing.T) {
 		{Branch: "feature/signup"},
 	}
 
-	features := FilterByType(worktrees, prefixes, "feature")
+	features := FilterByType(worktrees, ps, "feature")
 	if len(features) != 2 {
 		t.Fatalf("expected 2 feature worktrees, got %d", len(features))
 	}
@@ -158,13 +237,38 @@ func TestFilterByType(t *testing.T) {
 		t.Errorf("features[1] = %q, want %q", features[1].Branch, "feature/signup")
 	}
 
-	bugfixes := FilterByType(worktrees, prefixes, "bugfix")
+	bugfixes := FilterByType(worktrees, ps, "bugfix")
 	if len(bugfixes) != 1 {
 		t.Fatalf("expected 1 bugfix worktree, got %d", len(bugfixes))
 	}
 
-	hotfixes := FilterByType(worktrees, prefixes, "hotfix")
+	hotfixes := FilterByType(worktrees, ps, "hotfix")
 	if len(hotfixes) != 0 {
 		t.Errorf("expected 0 hotfix worktrees, got %d", len(hotfixes))
+	}
+}
+
+func TestFilterByTypeCustomPrefixWithoutSlash(t *testing.T) {
+	ps := resolver.NewPrefixSet([]resolver.PrefixSpec{{Prefix: testCustomPrefix}})
+	worktrees := []resolver.WorktreeInfo{
+		{Branch: branchProj123},
+		{Branch: branchFeature},
+	}
+
+	matches := FilterByType(worktrees, ps, testCustomPrefix)
+	if len(matches) != 1 {
+		t.Fatalf("expected 1 match, got %d", len(matches))
+	}
+	if matches[0].Branch != branchProj123 {
+		t.Errorf("matches[0] = %q, want %q", matches[0].Branch, branchProj123)
+	}
+}
+
+func TestFilterByTypeUnrecognizedTypeReturnsEmpty(t *testing.T) {
+	ps := resolver.DefaultPrefixSet()
+	worktrees := []resolver.WorktreeInfo{{Branch: branchFeature}}
+
+	if got := FilterByType(worktrees, ps, "nonexistent"); got != nil {
+		t.Errorf("expected nil for unrecognized type, got %v", got)
 	}
 }

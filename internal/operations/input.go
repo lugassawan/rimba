@@ -21,13 +21,13 @@ import (
 // pre-existing precedence); aliases are checked after, so a real service
 // directory that happens to share an alias's name (e.g. "fix") is not
 // shadowed by the alias.
-func ResolveTaskInput(input, repoRoot string) (service, task string) {
+func ResolveTaskInput(input, repoRoot string, ps *resolver.PrefixSet) (service, task string) {
 	candidate, rest := resolver.SplitServiceInput(input)
 	if candidate == "" {
 		return "", input
 	}
 
-	if resolver.ValidPrefixType(candidate) {
+	if ps.ValidType(candidate) {
 		return "", resolver.SanitizeTask(rest)
 	}
 
@@ -36,7 +36,7 @@ func ResolveTaskInput(input, repoRoot string) (service, task string) {
 		return candidate, resolver.SanitizeTask(rest)
 	}
 
-	if _, _, ok := resolver.PrefixTokenToString(candidate); ok {
+	if _, _, ok := ps.TokenToPrefix(candidate); ok {
 		return "", resolver.SanitizeTask(rest)
 	}
 

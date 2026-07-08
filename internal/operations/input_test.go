@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/operations"
+	"github.com/lugassawan/rimba/internal/resolver"
 )
 
 func TestResolveTaskInput(t *testing.T) {
@@ -77,9 +78,10 @@ func TestResolveTaskInput(t *testing.T) {
 		},
 	}
 
+	ps := resolver.DefaultPrefixSet()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service, task := operations.ResolveTaskInput(tt.input, repoRoot)
+			service, task := operations.ResolveTaskInput(tt.input, repoRoot, ps)
 			if service != tt.wantService || task != tt.wantTask {
 				t.Errorf("ResolveTaskInput(%q) = (%q, %q), want (%q, %q)",
 					tt.input, service, task, tt.wantService, tt.wantTask)
@@ -100,7 +102,7 @@ func TestResolveTaskInputDirectoryWinsOverAlias(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	service, task := operations.ResolveTaskInput("fix/my-task", repoRoot)
+	service, task := operations.ResolveTaskInput("fix/my-task", repoRoot, resolver.DefaultPrefixSet())
 	if service != "fix" || task != "my-task" {
 		t.Errorf(`ResolveTaskInput("fix/my-task") = (%q, %q), want ("fix", "my-task")`, service, task)
 	}
@@ -111,8 +113,25 @@ func TestResolveTaskInputDirectoryWinsOverAlias(t *testing.T) {
 func TestResolveTaskInputAliasAppliesWithoutDirectory(t *testing.T) {
 	repoRoot := t.TempDir()
 
-	service, task := operations.ResolveTaskInput("fix/my-task", repoRoot)
+	service, task := operations.ResolveTaskInput("fix/my-task", repoRoot, resolver.DefaultPrefixSet())
 	if service != "" || task != "my-task" {
 		t.Errorf(`ResolveTaskInput("fix/my-task") = (%q, %q), want ("", "my-task")`, service, task)
+	}
+}
+
+// TestResolveTaskInputCustomPrefixAlias confirms a custom prefix alias (e.g.
+// "proj" registered as an alias for a custom "PROJ-" prefix) is recognized
+// as a prefix token rather than mis-parsed as part of a plain task name (see
+// #269). Previously, without a live PrefixSet, "proj/123" would have fallen
+// through to the plain-task-name branch.
+func TestResolveTaskInputCustomPrefixAlias(t *testing.T) {
+	repoRoot := t.TempDir()
+	ps := resolver.NewPrefixSet([]resolver.PrefixSpec{
+		{Prefix: "PROJ-", Aliases: []string{"proj"}},
+	})
+
+	service, task := operations.ResolveTaskInput("proj/123", repoRoot, ps)
+	if service != "" || task != "123" {
+		t.Errorf(`ResolveTaskInput("proj/123") = (%q, %q), want ("", "123")`, service, task)
 	}
 }

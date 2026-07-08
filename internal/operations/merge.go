@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/progress"
@@ -53,7 +54,7 @@ func MergeWorktree(ctx context.Context, r git.Runner, params MergeParams, onProg
 		return MergeResult{}, err
 	}
 
-	prefixes := resolver.AllPrefixes()
+	prefixes := config.PrefixSetFromContext(ctx).Strip()
 
 	// Resolve source
 	source, found := resolver.FindBranchForTask(params.SourceService, params.SourceTask, worktrees, prefixes)

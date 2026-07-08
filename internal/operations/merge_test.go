@@ -82,6 +82,54 @@ func TestMergeWorktreeMergeToMain(t *testing.T) {
 	}
 }
 
+func TestMergeWorktreeCustomPrefix(t *testing.T) {
+	porcelain := porcelainEntries(
+		struct{ path, branch string }{"/repo", "main"},
+		struct{ path, branch string }{"/wt/PROJ-123", branchProj123},
+	)
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == gitCmdWorktree {
+				return porcelain, nil
+			}
+			return "", nil
+		},
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == gitCmdStatus {
+				return "", nil
+			}
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return "", errors.New("no MERGE_HEAD")
+			}
+			return "", nil
+		},
+	}
+
+	result, err := MergeWorktree(customPrefixContext(), r, MergeParams{
+		SourceTask: "123",
+		RepoRoot:   "/repo",
+		MainBranch: "main",
+	}, nil)
+	if err != nil {
+		t.Fatalf("MergeWorktree with custom prefix: %v", err)
+	}
+	if result.SourceBranch != branchProj123 {
+		t.Errorf("SourceBranch = %q, want %q", result.SourceBranch, branchProj123)
+	}
+
+	// Parity: with no config in context, the built-ins-only PrefixSet cannot
+	// resolve task "123" against branch branchProj123 — matching pre-migration
+	// behavior byte-for-byte.
+	_, err = MergeWorktree(context.Background(), r, MergeParams{
+		SourceTask: "123",
+		RepoRoot:   "/repo",
+		MainBranch: "main",
+	}, nil)
+	if err == nil {
+		t.Fatal("expected MergeWorktree to fail without custom prefix config (built-ins-only parity)")
+	}
+}
+
 func TestMergeWorktreeMergeToMainKeep(t *testing.T) {
 	r := mergeRunner(nil)
 

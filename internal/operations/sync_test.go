@@ -15,7 +15,7 @@ const (
 )
 
 func TestCollectTasks(t *testing.T) {
-	prefixes := resolver.AllPrefixes()
+	prefixes := resolver.DefaultPrefixSet().Strip()
 
 	tests := []struct {
 		name      string
@@ -54,7 +54,7 @@ func TestCollectTasks(t *testing.T) {
 }
 
 func TestFilterEligibleBasic(t *testing.T) {
-	prefixes := resolver.AllPrefixes()
+	prefixes := resolver.DefaultPrefixSet().Strip()
 	worktrees := []resolver.WorktreeInfo{
 		{Branch: branchMain},
 		{Branch: ""},
@@ -75,7 +75,7 @@ func TestFilterEligibleBasic(t *testing.T) {
 }
 
 func TestFilterEligibleInherited(t *testing.T) {
-	prefixes := resolver.AllPrefixes()
+	prefixes := resolver.DefaultPrefixSet().Strip()
 	worktrees := []resolver.WorktreeInfo{
 		{Branch: branchMain},
 		{Branch: branchFeature},
@@ -95,7 +95,7 @@ func TestFilterEligibleInherited(t *testing.T) {
 }
 
 func TestFilterEligibleNumericSuffix(t *testing.T) {
-	prefixes := resolver.AllPrefixes()
+	prefixes := resolver.DefaultPrefixSet().Strip()
 	worktrees := []resolver.WorktreeInfo{
 		{Branch: branchMain},
 		{Branch: "feature/login"},
