@@ -23,6 +23,8 @@ Local settings override team settings. Fields omitted from the local file inheri
 
 ### Team config (`.rimba/settings.toml`)
 
+`rimba init` auto-detects `copy_files` from gitignored local files present in the repo (falling back to a default set when none are found). Example:
+
 ```toml
 copy_files = ['.env', '.env.local', '.envrc', '.tool-versions', '.vscode']
 
@@ -80,7 +82,7 @@ rimba init
 
 | Field | Description | Default |
 |-------|-------------|---------|
-| `copy_files` | Files or directories to copy from repo root into new worktrees | `.env`, `.env.local`, `.envrc`, `.tool-versions` |
+| `copy_files` | Files or directories to copy from repo root into new worktrees | auto-detected on `rimba init` from gitignored local files; falls back to `.env`, `.env.local`, `.envrc`, `.tool-versions` |
 | `post_create` | Shell commands to run in new worktrees after creation | (none) |
 | `open.<name>` | Named shortcut command for `rimba open --with <name>` | (none) |
 | `deps.auto_detect` | Auto-detect dependency modules from lockfiles | `true` |
