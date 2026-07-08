@@ -33,7 +33,7 @@
 🌿 **Core Workflow**
 
 - **Automatic branch naming** — fixed prefix types (`feature/`, `bugfix/`, `hotfix/`, `docs/`, `test/`, `chore/`) selected per task via flags
-- **File & directory copying** — auto-copies `.env`, `.env.local`, `.envrc`, `.tool-versions` and other files or directories (e.g. `.vscode/`) into new worktrees
+- **File & directory copying** — `rimba init` auto-detects gitignored local files and dirs (`.env`, `.claude`, `.vscode`, etc) and copies them into new worktrees; falls back to a sensible default set when nothing is detected
 - **Duplicate worktrees** — copy an existing worktree with auto-suffixed or custom name
 - **Local merge** — merge worktree branches into main or other worktrees with auto-cleanup
 - **Sync worktrees** — rebase or merge onto the latest main branch, with bulk sync support
@@ -150,7 +150,7 @@ rimba remove my-feature
 
 ## Configuration
 
-`rimba init` creates a `.rimba/` directory with team-shared and personal config files:
+`rimba init` creates a `.rimba/` directory with team-shared and personal config files. `copy_files` is auto-detected from gitignored local files present in the repo (falling back to a default set when none are found); example team config:
 
 ```toml
 copy_files = ['.env', '.env.local', '.envrc', '.tool-versions', '.vscode']
