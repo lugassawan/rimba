@@ -54,6 +54,10 @@ var duplicateCmd = &cobra.Command{
 		}
 
 		ps := cfg.PrefixSet()
+		if err := operations.GuardKnownPrefix(ps, wt.Branch, cfg.DefaultSource, false); err != nil {
+			return err
+		}
+
 		_, task = operations.ResolveTaskInput(task, repoRoot, ps)
 
 		prefixes := ps.Strip()

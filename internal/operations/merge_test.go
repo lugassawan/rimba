@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/progress"
+	"github.com/lugassawan/rimba/internal/resolver"
 )
 
 const (
@@ -79,6 +80,41 @@ func TestMergeWorktreeMergeToMain(t *testing.T) {
 	}
 	if !result.SourceRemoved {
 		t.Error("expected source to be auto-removed when merging to main")
+	}
+}
+
+func TestMergeWorktreePreResolvedSourceSkipsWorktreeList(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == gitCmdWorktree {
+				t.Fatal("MergeWorktree should not list worktrees when Source is pre-resolved and merging to main")
+			}
+			return "", nil
+		},
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return "", errors.New("no MERGE_HEAD")
+			}
+			return "", nil
+		},
+	}
+
+	source := &resolver.WorktreeInfo{Path: "/wt/feature-login", Branch: branchFeatureLogin}
+	result, err := MergeWorktree(context.Background(), r, MergeParams{
+		Source:     source,
+		SourceTask: "login",
+		RepoRoot:   "/repo",
+		MainBranch: "main",
+		Keep:       true,
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.SourceBranch != branchFeatureLogin {
+		t.Errorf("SourceBranch = %q, want %q", result.SourceBranch, branchFeatureLogin)
+	}
+	if result.SourcePath != "/wt/feature-login" {
+		t.Errorf("SourcePath = %q, want %q", result.SourcePath, "/wt/feature-login")
 	}
 }
 

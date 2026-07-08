@@ -81,6 +81,7 @@ var mergeCmd = &cobra.Command{
 		result, err := operations.MergeWorktree(cmd.Context(), r, operations.MergeParams{
 			SourceTask:    sourceTask,
 			SourceService: sourceService,
+			Source:        &source,
 			IntoTask:      intoTask,
 			IntoService:   intoService,
 			RepoRoot:      repoRoot,

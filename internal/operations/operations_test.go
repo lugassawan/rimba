@@ -272,3 +272,38 @@ func TestFilterByTypeUnrecognizedTypeReturnsEmpty(t *testing.T) {
 		t.Errorf("expected nil for unrecognized type, got %v", got)
 	}
 }
+
+func TestFilterOrphanedNoCustomIsNoOp(t *testing.T) {
+	ps := resolver.DefaultPrefixSet()
+	worktrees := []resolver.WorktreeInfo{{Branch: branchFeature}, {Branch: "OLD-999"}}
+
+	kept, excluded := FilterOrphaned(worktrees, ps, branchMain)
+	if excluded != 0 {
+		t.Errorf("excluded = %d, want 0 when no custom prefixes are configured", excluded)
+	}
+	if len(kept) != len(worktrees) {
+		t.Errorf("kept = %d worktrees, want all %d", len(kept), len(worktrees))
+	}
+}
+
+func TestFilterOrphanedExcludesOrphanedBranches(t *testing.T) {
+	ps := resolver.NewPrefixSet([]resolver.PrefixSpec{{Prefix: testCustomPrefix}})
+	worktrees := []resolver.WorktreeInfo{
+		{Branch: branchProj123},
+		{Branch: "OLD-999"},
+		{Branch: branchMain},
+	}
+
+	kept, excluded := FilterOrphaned(worktrees, ps, branchMain)
+	if excluded != 1 {
+		t.Fatalf("excluded = %d, want 1", excluded)
+	}
+	if len(kept) != 2 {
+		t.Fatalf("kept = %d worktrees, want 2", len(kept))
+	}
+	for _, wt := range kept {
+		if wt.Branch == "OLD-999" {
+			t.Errorf("kept contains orphaned branch %q", wt.Branch)
+		}
+	}
+}

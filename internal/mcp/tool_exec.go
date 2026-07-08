@@ -126,20 +126,7 @@ func resolveExecTargets(ctx context.Context, r git.Runner, cfg *config.Config, t
 // prefix that is no longer configured, warning to os.Stderr (mirroring
 // filterDirty's warning channel) when any are excluded.
 func excludeOrphanedExec(worktrees []resolver.WorktreeInfo, ps *resolver.PrefixSet, mainBranch string) []resolver.WorktreeInfo {
-	if !ps.HasCustom() {
-		return worktrees
-	}
-
-	var kept []resolver.WorktreeInfo
-	var excluded int
-	for _, wt := range worktrees {
-		if ps.IsOrphan(wt.Branch, mainBranch) {
-			excluded++
-			continue
-		}
-		kept = append(kept, wt)
-	}
-
+	kept, excluded := operations.FilterOrphaned(worktrees, ps, mainBranch)
 	if excluded > 0 {
 		fmt.Fprintf(os.Stderr,
 			"Warning: excluding %d worktree(s) with an unrecognized prefix (re-add it to [[resolver.prefix]] to include them)\n",

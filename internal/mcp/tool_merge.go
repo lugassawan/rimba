@@ -66,6 +66,7 @@ func handleMerge(hctx *HandlerContext) server.ToolHandlerFunc {
 		result, err := operations.MergeWorktree(ctx, hctx.Runner, operations.MergeParams{
 			SourceTask:    sourceTask,
 			SourceService: sourceService,
+			Source:        &source,
 			IntoTask:      intoTask,
 			IntoService:   intoService,
 			RepoRoot:      hctx.RepoRoot,

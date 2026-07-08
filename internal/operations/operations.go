@@ -86,6 +86,22 @@ func FilterByType(worktrees []resolver.WorktreeInfo, ps *resolver.PrefixSet, typ
 	return out
 }
 
+// FilterOrphaned splits worktrees into kept and excluded by orphan status.
+// No-op (all kept, 0 excluded) when ps.HasCustom() is false.
+func FilterOrphaned(worktrees []resolver.WorktreeInfo, ps *resolver.PrefixSet, mainBranch string) (kept []resolver.WorktreeInfo, excluded int) {
+	if !ps.HasCustom() {
+		return worktrees, 0
+	}
+	for _, wt := range worktrees {
+		if ps.IsOrphan(wt.Branch, mainBranch) {
+			excluded++
+			continue
+		}
+		kept = append(kept, wt)
+	}
+	return kept, excluded
+}
+
 // branchDeleteFailedErr builds the unified recovery error for the
 // "worktree removed but branch delete failed" partial-failure case.
 func branchDeleteFailedErr(branch string, cause error) error {
