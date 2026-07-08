@@ -19,7 +19,7 @@ type PrefixEntry struct {
 }
 
 // ResolverConfig holds the optional [resolver] section, letting teams declare
-// custom branch prefixes and creation aliases on top of the built-ins (see #269).
+// custom branch prefixes and creation aliases on top of the built-ins.
 type ResolverConfig struct {
 	Prefix []PrefixEntry `toml:"prefix"`
 }

@@ -954,7 +954,7 @@ func TestResolveAddPrefixCustomAlias(t *testing.T) {
 
 // TestPrintAliasNoticeCustomAliasIsGeneric proves a custom alias (e.g. "proj")
 // gets a generic notice, not the hardcoded "fix" -> "bugfix/" message it would
-// have wrongly inherited before aliasToken threading (regression for #269).
+// have wrongly inherited before aliasToken threading.
 func TestPrintAliasNoticeCustomAliasIsGeneric(t *testing.T) {
 	cmd, buf := newTestCmd()
 	printAliasNotice(cmd, "proj", "PROJ-")

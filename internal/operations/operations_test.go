@@ -11,7 +11,7 @@ import (
 
 // testCustomPrefix and branchProj123 are shared fixtures for tests proving
 // operations recognize a custom-prefixed branch from a context-carried
-// resolver.PrefixSet (see #269).
+// resolver.PrefixSet.
 const (
 	testCustomPrefix = "PROJ-"
 	branchProj123    = "PROJ-123"

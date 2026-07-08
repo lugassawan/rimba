@@ -11,8 +11,8 @@ type PrefixSpec struct {
 }
 
 // PrefixSet is a registry of branch prefixes and their creation aliases.
-// DefaultPrefixSet reproduces today's hardcoded behavior exactly; NewPrefixSet
-// additively merges custom specs on top of the built-ins (see #269).
+// DefaultPrefixSet returns the built-in set only; NewPrefixSet
+// additively merges custom specs on top of the built-ins.
 type PrefixSet struct {
 	strip         []string            // ordered prefix strings to strip, in match priority order
 	tokenToPrefix map[string]string   // creation token (canonical type name or alias) -> prefix string
@@ -20,8 +20,8 @@ type PrefixSet struct {
 	hasCustom     bool
 }
 
-// DefaultPrefixSet returns a PrefixSet containing only the built-in prefixes,
-// identical in behavior to the package-level free functions in prefix.go.
+// DefaultPrefixSet returns a PrefixSet containing only the built-in prefixes
+// (feature/, bugfix/, hotfix/, docs/, test/, chore/, and the "fix" alias).
 func DefaultPrefixSet() *PrefixSet {
 	s := &PrefixSet{
 		strip:         make([]string, 0, len(orderedTypes)),

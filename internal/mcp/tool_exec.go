@@ -128,8 +128,7 @@ func resolveExecTargets(ctx context.Context, r git.Runner, cfg *config.Config, t
 
 // excludeOrphanedExec drops worktrees whose branch was created under a custom
 // prefix that is no longer configured, warning to os.Stderr (mirroring
-// filterDirty's warning channel) when any are excluded. It is a genuine
-// no-op when ps.HasCustom() is false.
+// filterDirty's warning channel) when any are excluded.
 func excludeOrphanedExec(worktrees []resolver.WorktreeInfo, ps *resolver.PrefixSet, mainBranch string) []resolver.WorktreeInfo {
 	if !ps.HasCustom() {
 		return worktrees

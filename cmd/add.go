@@ -184,8 +184,8 @@ func resolveAddPrefix(cmd *cobra.Command, arg string, ps *resolver.PrefixSet) (p
 	return sel.Prefix, false, ""
 }
 
-// printAliasNotice makes an alias interpretation visible instead of silent
-// (see #360). The built-in "fix" alias keeps its original message (including
+// printAliasNotice makes an alias interpretation visible instead of silent.
+// The built-in "fix" alias keeps its original message (including
 // the --hotfix suggestion); any other alias, including custom ones
 // configured via [[resolver.prefix]], gets a generic message.
 func printAliasNotice(cmd *cobra.Command, token, prefix string) {

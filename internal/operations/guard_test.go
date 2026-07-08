@@ -91,7 +91,7 @@ func TestGuardKnownPrefix(t *testing.T) {
 }
 
 // TestGuardKnownPrefixEndToEnd is the capstone round-trip test for the
-// configurable-prefixes feature (#269): a branch created under a custom
+// configurable-prefixes feature: a branch created under a custom
 // prefix that is later removed from .rimba/settings.toml becomes orphaned,
 // and GuardKnownPrefix hard-errors on it (unless force=true) — but only when
 // the *current* config still has at least one custom prefix configured.
