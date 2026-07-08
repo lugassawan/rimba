@@ -291,10 +291,10 @@ func testListFilterMatch(t *testing.T, dirty, behind bool, statusOut, revListOut
 }
 
 func TestValidPrefixType(t *testing.T) {
-	if !resolver.ValidPrefixType("feature") {
+	if !resolver.DefaultPrefixSet().ValidType("feature") {
 		t.Error("expected 'feature' to be valid")
 	}
-	if resolver.ValidPrefixType("nonexistent") {
+	if resolver.DefaultPrefixSet().ValidType("nonexistent") {
 		t.Error("expected 'nonexistent' to be invalid")
 	}
 }
@@ -724,27 +724,27 @@ func TestListBehindFilterWithMatch(t *testing.T) {
 }
 
 func TestListValidateTypeEmpty(t *testing.T) {
-	if err := listValidateType(""); err != nil {
+	if err := listValidateType("", resolver.DefaultPrefixSet()); err != nil {
 		t.Errorf("expected nil for empty type, got %v", err)
 	}
 }
 
 func TestListValidateTypeValid(t *testing.T) {
-	if err := listValidateType("feature"); err != nil {
+	if err := listValidateType(typeFeature, resolver.DefaultPrefixSet()); err != nil {
 		t.Errorf("expected nil for valid type, got %v", err)
 	}
 }
 
 func TestListReadFlags(t *testing.T) {
 	cmd, _ := newListTestCmd()
-	_ = cmd.Flags().Set(flagType, "feature")
+	_ = cmd.Flags().Set(flagType, typeFeature)
 	_ = cmd.Flags().Set(flagService, "web")
 	_ = cmd.Flags().Set(flagDirty, "true")
 	_ = cmd.Flags().Set(flagBehind, "true")
 	_ = cmd.Flags().Set(flagArchived, "true")
 	_ = cmd.Flags().Set(flagFull, "true")
 	opts := listReadFlags(cmd)
-	if opts.typeFilter != "feature" || opts.service != "web" || !opts.dirty || !opts.behind || !opts.archived || !opts.full {
+	if opts.typeFilter != typeFeature || opts.service != "web" || !opts.dirty || !opts.behind || !opts.archived || !opts.full {
 		t.Errorf("unexpected opts: %+v", opts)
 	}
 }

@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"io"
+	"path/filepath"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/debug"
@@ -86,6 +87,43 @@ func findWorktree(ctx context.Context, r git.Runner, input string) (resolver.Wor
 	if err != nil {
 		return operations.FindWorktree(ctx, r, "", input)
 	}
-	service, task := operations.ResolveTaskInput(input, repoRoot)
+	service, task := operations.ResolveTaskInput(input, repoRoot, config.PrefixSetFromContext(ctx))
 	return operations.FindWorktree(ctx, r, service, task)
+}
+
+// withBestEffortConfig loads config on a best-effort basis for commands
+// annotated skipConfig (status/clean/log): these must keep running with no
+// repo/config present, but should still pick up custom prefixes when a valid
+// .rimba/settings.toml happens to be reachable. Every failure (no repo,
+// unreadable/invalid config, failed validation) is swallowed and the original
+// context is returned unchanged — this helper never fails.
+func withBestEffortConfig(cmd *cobra.Command) context.Context {
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if config.FromContext(ctx) != nil {
+		return ctx // already loaded (e.g. tests injecting config directly)
+	}
+	r := newRunner(ctx)
+	repoRoot, err := git.MainRepoRoot(ctx, r)
+	if err != nil {
+		return ctx
+	}
+	cfg, err := config.Resolve(repoRoot)
+	if err != nil {
+		return ctx
+	}
+	var defaultBranch string
+	if cfg.DefaultSource == "" {
+		defaultBranch, err = git.DefaultBranch(ctx, r)
+		if err != nil {
+			return ctx
+		}
+	}
+	cfg.FillDefaults(filepath.Base(repoRoot), defaultBranch)
+	if err := cfg.Validate(); err != nil {
+		return ctx
+	}
+	return config.WithConfig(ctx, cfg)
 }

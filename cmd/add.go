@@ -119,10 +119,11 @@ func runAddPR(cmd *cobra.Command, r git.Runner, ghR gh.Runner, prNum int, postOp
 }
 
 func runAddTask(cmd *cobra.Command, r git.Runner, arg string, cfg *config.Config, repoRoot string, postOpts operations.PostCreateOptions, s *spinner.Spinner) error {
-	service, task := operations.ResolveTaskInput(arg, repoRoot)
-	prefix, aliasUsed := resolveAddPrefix(cmd, arg)
+	ps := cfg.PrefixSet()
+	service, task := operations.ResolveTaskInput(arg, repoRoot, ps)
+	prefix, aliasUsed, aliasToken := resolveAddPrefix(cmd, arg, ps)
 	if aliasUsed {
-		printFixAliasNotice(cmd)
+		printAliasNotice(cmd, aliasToken, prefix)
 	}
 
 	source, _ := cmd.Flags().GetString(flagSource)
@@ -162,26 +163,36 @@ func runAddTask(cmd *cobra.Command, r git.Runner, arg string, cfg *config.Config
 }
 
 // resolveAddPrefix prefers an explicit prefix flag over a positional segment.
-// aliasUsed gates the one-line stderr notice.
-func resolveAddPrefix(cmd *cobra.Command, arg string) (prefix string, aliasUsed bool) {
+// aliasUsed gates the one-line stderr notice; aliasToken is the token that
+// was interpreted as an alias ("fix" for the built-in --fix flag, or the
+// matched positional token for any other alias, including custom ones).
+func resolveAddPrefix(cmd *cobra.Command, arg string, ps *resolver.PrefixSet) (prefix string, aliasUsed bool, aliasToken string) {
 	sel := resolvePrefixSelection(cmd)
 	if sel.Explicit {
-		return sel.Prefix, sel.Alias
+		if sel.Alias {
+			return sel.Prefix, true, "fix"
+		}
+		return sel.Prefix, false, ""
 	}
 
 	if candidate, _ := resolver.SplitServiceInput(arg); candidate != "" {
-		if p, alias, ok := resolver.PrefixTokenToString(candidate); ok {
-			return p, alias
+		if p, alias, ok := ps.TokenToPrefix(candidate); ok {
+			return p, alias, candidate
 		}
 	}
 
-	return sel.Prefix, false
+	return sel.Prefix, false, ""
 }
 
-// printFixAliasNotice makes the fix→bugfix/ interpretation visible instead
-// of silent (see #360).
-func printFixAliasNotice(cmd *cobra.Command) {
-	msg := "interpreting 'fix' as 'bugfix/'; use --hotfix for urgent production patches"
+// printAliasNotice makes an alias interpretation visible instead of silent
+// (see #360). The built-in "fix" alias keeps its original message (including
+// the --hotfix suggestion); any other alias, including custom ones
+// configured via [[resolver.prefix]], gets a generic message.
+func printAliasNotice(cmd *cobra.Command, token, prefix string) {
+	msg := fmt.Sprintf("interpreting %q as %q", token, prefix)
+	if token == "fix" {
+		msg = "interpreting 'fix' as 'bugfix/'; use --hotfix for urgent production patches"
+	}
 	fmt.Fprintln(cmd.ErrOrStderr(), hintPainter(cmd).Paint(msg, termcolor.Gray))
 }
 

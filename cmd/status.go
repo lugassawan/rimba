@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/resolver"
@@ -29,6 +30,7 @@ in the last 7 days. With --detail, rows are sorted largest-first.`,
   rimba status --stale-days 7    # consider worktrees stale after 7 days`,
 	Annotations: map[string]string{"skipConfig": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		cmd.SetContext(withBestEffortConfig(cmd))
 		r := newRunner(cmd.Context())
 		staleDays, _ := cmd.Flags().GetInt(flagStaleDays)
 		detail, _ := cmd.Flags().GetBool(flagDetail)
@@ -64,10 +66,12 @@ in the last 7 days. With --detail, rows are sorted largest-first.`,
 		noColor, _ := cmd.Flags().GetBool(flagNoColor)
 		p := termcolor.NewPainter(noColor)
 		renderStatusDashboard(cmd.OutOrStdout(), p, statusRender{
-			results:   res.Entries,
-			staleDays: staleDays,
-			detail:    detail,
-			footprint: res.Footprint,
+			results:    res.Entries,
+			staleDays:  staleDays,
+			detail:     detail,
+			footprint:  res.Footprint,
+			ps:         config.PrefixSetFromContext(cmd.Context()),
+			mainBranch: defaultSourceFromContext(cmd.Context()),
 		})
 		return nil
 	},
@@ -80,17 +84,19 @@ func init() {
 }
 
 type statusRender struct {
-	results   []operations.StatusEntry
-	staleDays int
-	detail    bool
-	footprint *operations.DiskFootprint
+	results    []operations.StatusEntry
+	staleDays  int
+	detail     bool
+	footprint  *operations.DiskFootprint
+	ps         *resolver.PrefixSet
+	mainBranch string
 }
 
 // renderStatusDashboard prints the summary header and per-worktree table.
 func renderStatusDashboard(out io.Writer, p *termcolor.Painter, r statusRender) {
 	staleThreshold := time.Now().Add(-time.Duration(r.staleDays) * 24 * time.Hour)
 	summary := operations.SummarizeStatus(r.results, staleThreshold)
-	prefixes := resolver.AllPrefixes()
+	prefixes := r.ps.Strip()
 
 	fmt.Fprintf(out, "Worktrees: %s  Dirty: %s  Stale: %s  Behind: %s\n",
 		p.Paint(strconv.Itoa(summary.Total), termcolor.Bold),
@@ -119,11 +125,23 @@ func renderStatusDashboard(out io.Writer, p *termcolor.Painter, r statusRender) 
 	}
 	tbl.AddRow(header...)
 
+	flagOrphans := r.ps.HasCustom()
+
+	var orphaned int
 	for _, e := range r.results {
-		tbl.AddRow(buildStatusRow(e, prefixes, staleThreshold, p, r.detail)...)
+		isOrphan := flagOrphans && r.ps.IsOrphan(e.Entry.Branch, r.mainBranch)
+		if isOrphan {
+			orphaned++
+		}
+		tbl.AddRow(buildStatusRow(e, prefixes, staleThreshold, p, r.detail, isOrphan)...)
 	}
 
 	tbl.Render(out)
+
+	if orphaned > 0 {
+		fmt.Fprintf(out, "⚠ %d worktree(s) use a prefix no longer in [[resolver.prefix]] — re-add it or remove the worktree\n", orphaned)
+	}
+
 	renderActionHints(out, p, summary)
 }
 
@@ -172,11 +190,14 @@ func renderActionHints(out io.Writer, p *termcolor.Painter, summary operations.S
 }
 
 // buildStatusRow formats a single worktree row for the status table.
-func buildStatusRow(r operations.StatusEntry, prefixes []string, staleThreshold time.Time, p *termcolor.Painter, detail bool) []string {
+func buildStatusRow(r operations.StatusEntry, prefixes []string, staleThreshold time.Time, p *termcolor.Painter, detail, isOrphan bool) []string {
 	task, typeName := resolver.TaskAndType(r.Entry.Branch, prefixes)
 
 	taskCell := "  " + task
 	typeCell := typeName
+	if isOrphan {
+		typeCell += " ⚠"
+	}
 	if c := typeColor(typeName); c != "" {
 		typeCell = p.Paint(typeCell, c)
 	}
@@ -219,7 +240,7 @@ func formatAgeCell(r operations.StatusEntry, staleThreshold time.Time, p *termco
 // writeStatusJSON builds the JSON output for the status command.
 func writeStatusJSON(cmd *cobra.Command, results []operations.StatusEntry, staleDays int, footprint *operations.DiskFootprint) error {
 	staleThreshold := time.Now().Add(-time.Duration(staleDays) * 24 * time.Hour)
-	prefixes := resolver.AllPrefixes()
+	prefixes := config.PrefixSetFromContext(cmdContext(cmd)).Strip()
 
 	opsSummary := operations.SummarizeStatus(results, staleThreshold)
 	summary := output.StatusSummary{

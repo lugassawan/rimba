@@ -111,7 +111,7 @@ var syncCmd = &cobra.Command{
 			return err
 		}
 
-		prefixes := resolver.AllPrefixes()
+		prefixes := cfg.PrefixSet().Strip()
 		sc := &syncContext{cmd: cmd, r: r, cfg: cfg, s: s, repoRoot: repoRoot, dryRun: dryRun}
 
 		if all {
@@ -132,10 +132,14 @@ func init() {
 }
 
 func syncOne(ctx context.Context, sc *syncContext, input string, worktrees []resolver.WorktreeInfo, prefixes []string, useMerge, push bool) error {
-	service, task := operations.ResolveTaskInput(input, sc.repoRoot)
+	service, task := operations.ResolveTaskInput(input, sc.repoRoot, sc.cfg.PrefixSet())
 	wt, found := resolver.FindBranchForTask(service, task, worktrees, prefixes)
 	if !found {
 		return fmt.Errorf(operations.ErrWorktreeNotFoundFmt, input)
+	}
+
+	if err := operations.GuardKnownPrefix(sc.cfg.PrefixSet(), wt.Branch, sc.cfg.DefaultSource, false); err != nil {
+		return err
 	}
 
 	dirty, err := git.IsDirty(ctx, sc.r, wt.Path)

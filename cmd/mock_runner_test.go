@@ -20,6 +20,7 @@ const (
 	pathWtDone      = "/wt/feature-done"
 	pathWorktree    = "/worktree"
 	errExpected     = "expected error"
+	typeFeature     = "feature"
 
 	// Shared porcelain helpers
 	wtPrefix              = "worktree "
@@ -59,6 +60,11 @@ const (
 	refsRemotesOriginMain = "refs/remotes/origin/main"
 	aheadBehindZero       = "0\t0"
 	repoPath              = "/repo"
+
+	// orphanedProjWorktreeOut lists a main worktree plus one under "PROJ-",
+	// used across orphan-guard tests (remove/rename/merge) where "PROJ-" is
+	// not among the configured custom prefixes.
+	orphanedProjWorktreeOut = "worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /wt/proj-123\nHEAD def456\nbranch refs/heads/PROJ-123\n"
 
 	branchDevelop    = "develop"
 	taskLogin        = "login"

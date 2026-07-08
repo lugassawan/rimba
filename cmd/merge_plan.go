@@ -28,7 +28,7 @@ var mergePlanCmd = &cobra.Command{
 			return err
 		}
 
-		prefixes := resolver.AllPrefixes()
+		prefixes := cfg.PrefixSet().Strip()
 		allTasks := operations.CollectTasks(worktrees, prefixes)
 		eligible := operations.FilterEligible(worktrees, prefixes, cfg.DefaultSource, allTasks, true)
 

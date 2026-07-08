@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/gh"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
@@ -11,6 +13,16 @@ import (
 	"github.com/lugassawan/rimba/internal/termcolor"
 	"github.com/spf13/cobra"
 )
+
+// defaultSourceFromContext returns the configured main branch, or "" when no
+// config is present in ctx (nil-safe; config.FromContext may return nil).
+func defaultSourceFromContext(ctx context.Context) string {
+	cfg := config.FromContext(ctx)
+	if cfg == nil {
+		return ""
+	}
+	return cfg.DefaultSource
+}
 
 func listRenderEmpty(cmd *cobra.Command, msg string) error {
 	if isJSON(cmd) {
@@ -55,9 +67,14 @@ func listRenderTable(cmd *cobra.Command, rows []resolver.WorktreeDetail, full bo
 		fmt.Fprintln(cmd.ErrOrStderr(), p.Paint(ghWarning, termcolor.Yellow))
 	}
 
+	ps := config.PrefixSetFromContext(cmd.Context())
+	mainBranch := defaultSourceFromContext(cmd.Context())
+	flagOrphans := ps.HasCustom()
+
 	tbl := termcolor.NewTable(2)
 	tbl.AddRow(listHeader(p, hasService, full)...)
 
+	var orphaned int
 	for _, row := range rows {
 		taskCell := "  " + row.Task
 		if row.IsCurrent {
@@ -66,6 +83,10 @@ func listRenderTable(cmd *cobra.Command, rows []resolver.WorktreeDetail, full bo
 		}
 
 		typeCell := row.Type
+		if flagOrphans && ps.IsOrphan(row.Branch, mainBranch) {
+			orphaned++
+			typeCell += " ⚠"
+		}
 		if c := typeColor(row.Type); c != "" {
 			typeCell = p.Paint(typeCell, c)
 		}
@@ -80,6 +101,10 @@ func listRenderTable(cmd *cobra.Command, rows []resolver.WorktreeDetail, full bo
 	}
 
 	tbl.Render(cmd.OutOrStdout())
+
+	if orphaned > 0 {
+		fmt.Fprintf(cmd.ErrOrStderr(), "⚠ %d worktree(s) use a prefix no longer in [[resolver.prefix]] — re-add it or remove the worktree\n", orphaned)
+	}
 }
 
 func listHeader(p *termcolor.Painter, hasService, full bool) []string {
@@ -137,7 +162,7 @@ func listArchivedBranches(cmd *cobra.Command, r git.Runner, mainBranch string) e
 		return err
 	}
 
-	prefixes := resolver.AllPrefixes()
+	prefixes := config.PrefixSetFromContext(cmdContext(cmd)).Strip()
 
 	if isJSON(cmd) {
 		items := make([]output.ListArchivedItem, 0, len(archived))

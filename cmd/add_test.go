@@ -10,6 +10,7 @@ import (
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/operations"
+	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/testutil"
 	"github.com/spf13/cobra"
 )
@@ -913,17 +914,68 @@ func TestResolveAddPrefixAgreesWithResolveTaskInput(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.arg, func(t *testing.T) {
-			_, task := operations.ResolveTaskInput(tt.arg, repoRoot)
+			_, task := operations.ResolveTaskInput(tt.arg, repoRoot, resolver.DefaultPrefixSet())
 			if task != tt.wantTask {
 				t.Errorf("ResolveTaskInput(%q) task = %q, want %q", tt.arg, task, tt.wantTask)
 			}
 
 			cmd, _ := newTestCmd()
 			addPrefixFlags(cmd)
-			prefix, _ := resolveAddPrefix(cmd, tt.arg)
+			prefix, _, _ := resolveAddPrefix(cmd, tt.arg, resolver.DefaultPrefixSet())
 			if prefix != tt.wantPrefix {
 				t.Errorf("resolveAddPrefix(%q) prefix = %q, want %q", tt.arg, prefix, tt.wantPrefix)
 			}
 		})
+	}
+}
+
+// TestResolveAddPrefixCustomAlias verifies that resolveAddPrefix round-trips
+// a custom prefix's alias token to the registered prefix string, proving the
+// PrefixSet-based lookup (not just the built-in defaults) drives resolution.
+func TestResolveAddPrefixCustomAlias(t *testing.T) {
+	ps := resolver.NewPrefixSet([]resolver.PrefixSpec{
+		{Prefix: "PROJ-", Aliases: []string{"proj"}},
+	})
+
+	cmd, _ := newTestCmd()
+	addPrefixFlags(cmd)
+
+	prefix, aliasUsed, aliasToken := resolveAddPrefix(cmd, "proj/x", ps)
+	if prefix != "PROJ-" {
+		t.Errorf("resolveAddPrefix(%q) prefix = %q, want %q", "proj/x", prefix, "PROJ-")
+	}
+	if !aliasUsed {
+		t.Error("expected aliasUsed=true for the 'proj' alias token")
+	}
+	if aliasToken != "proj" {
+		t.Errorf("resolveAddPrefix(%q) aliasToken = %q, want %q", "proj/x", aliasToken, "proj")
+	}
+}
+
+// TestPrintAliasNoticeCustomAliasIsGeneric proves a custom alias (e.g. "proj")
+// gets a generic notice, not the hardcoded "fix" -> "bugfix/" message it would
+// have wrongly inherited before aliasToken threading (regression for #269).
+func TestPrintAliasNoticeCustomAliasIsGeneric(t *testing.T) {
+	cmd, buf := newTestCmd()
+	printAliasNotice(cmd, "proj", "PROJ-")
+
+	out := buf.String()
+	if strings.Contains(out, "bugfix") || strings.Contains(out, "--hotfix") {
+		t.Errorf("printAliasNotice(%q, %q) = %q, must not mention the built-in fix/bugfix wording", "proj", "PROJ-", out)
+	}
+	if !strings.Contains(out, "proj") || !strings.Contains(out, "PROJ-") {
+		t.Errorf("printAliasNotice(%q, %q) = %q, want it to mention both the token and resolved prefix", "proj", "PROJ-", out)
+	}
+}
+
+// TestPrintAliasNoticeFixAliasKeepsLegacyMessage proves the built-in "fix"
+// alias still gets its original message with the --hotfix suggestion.
+func TestPrintAliasNoticeFixAliasKeepsLegacyMessage(t *testing.T) {
+	cmd, buf := newTestCmd()
+	printAliasNotice(cmd, "fix", "bugfix/")
+
+	out := buf.String()
+	if !strings.Contains(out, "bugfix") || !strings.Contains(out, "--hotfix") {
+		t.Errorf("printAliasNotice(%q, %q) = %q, want the legacy fix/bugfix/--hotfix message preserved", "fix", "bugfix/", out)
 	}
 }

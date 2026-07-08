@@ -73,7 +73,7 @@ func TestPrintExecResultsOk(t *testing.T) {
 		},
 	}
 
-	printExecResults(cmd, p, results, resolver.AllPrefixes())
+	printExecResults(cmd, p, results, resolver.DefaultPrefixSet().Strip())
 	out := buf.String()
 
 	if !strings.Contains(out, "login") {
@@ -99,7 +99,7 @@ func TestPrintExecResultsNonZeroExit(t *testing.T) {
 		},
 	}
 
-	printExecResults(cmd, p, results, resolver.AllPrefixes())
+	printExecResults(cmd, p, results, resolver.DefaultPrefixSet().Strip())
 	out := buf.String()
 
 	if !strings.Contains(out, "exit 1") {
@@ -121,7 +121,7 @@ func TestPrintExecResultsCancelled(t *testing.T) {
 		},
 	}
 
-	printExecResults(cmd, p, results, resolver.AllPrefixes())
+	printExecResults(cmd, p, results, resolver.DefaultPrefixSet().Strip())
 	out := buf.String()
 
 	if !strings.Contains(out, "cancelled") {
@@ -140,7 +140,7 @@ func TestPrintExecResultsError(t *testing.T) {
 		},
 	}
 
-	printExecResults(cmd, p, results, resolver.AllPrefixes())
+	printExecResults(cmd, p, results, resolver.DefaultPrefixSet().Strip())
 	out := buf.String()
 
 	if !strings.Contains(out, "error") {
@@ -318,7 +318,6 @@ func testExecSpinner(cmd *cobra.Command) *spinner.Spinner {
 }
 
 func TestExecReadFlags(t *testing.T) {
-	const typeFeature = "feature"
 	cmd := &cobra.Command{}
 	cmd.Flags().Bool(flagAll, false, "")
 	cmd.Flags().String(flagType, "", "")
@@ -335,37 +334,37 @@ func TestExecReadFlags(t *testing.T) {
 }
 
 func TestExecValidateFlagsNeedsAllOrType(t *testing.T) {
-	if err := execValidateFlags(execOpts{}); err == nil {
+	if err := execValidateFlags(execOpts{}, resolver.DefaultPrefixSet()); err == nil {
 		t.Error("expected error when neither --all nor --type set")
 	}
 }
 
 func TestExecValidateFlagsInvalidType(t *testing.T) {
-	err := execValidateFlags(execOpts{typeFilter: "nope"})
+	err := execValidateFlags(execOpts{typeFilter: "nope"}, resolver.DefaultPrefixSet())
 	if err == nil || !strings.Contains(err.Error(), "invalid type") {
 		t.Errorf("expected invalid type error, got %v", err)
 	}
 }
 
 func TestExecValidateFlagsOK(t *testing.T) {
-	if err := execValidateFlags(execOpts{all: true}); err != nil {
+	if err := execValidateFlags(execOpts{all: true}, resolver.DefaultPrefixSet()); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if err := execValidateFlags(execOpts{typeFilter: "feature"}); err != nil {
+	if err := execValidateFlags(execOpts{typeFilter: typeFeature}, resolver.DefaultPrefixSet()); err != nil {
 		t.Errorf("unexpected error for valid type: %v", err)
 	}
 	// zero concurrency is valid (unlimited)
-	if err := execValidateFlags(execOpts{all: true, concurrency: 0}); err != nil {
+	if err := execValidateFlags(execOpts{all: true, concurrency: 0}, resolver.DefaultPrefixSet()); err != nil {
 		t.Errorf("unexpected error for concurrency=0: %v", err)
 	}
 	// positive concurrency is valid
-	if err := execValidateFlags(execOpts{all: true, concurrency: 4}); err != nil {
+	if err := execValidateFlags(execOpts{all: true, concurrency: 4}, resolver.DefaultPrefixSet()); err != nil {
 		t.Errorf("unexpected error for concurrency=4: %v", err)
 	}
 }
 
 func TestExecValidateFlagsNegativeConcurrency(t *testing.T) {
-	err := execValidateFlags(execOpts{all: true, concurrency: -1})
+	err := execValidateFlags(execOpts{all: true, concurrency: -1}, resolver.DefaultPrefixSet())
 	if err == nil {
 		t.Fatal("expected error for negative concurrency")
 	}
@@ -382,7 +381,7 @@ func TestExecBuildTargets(t *testing.T) {
 		{Branch: "feature/foo", Path: "/tmp/foo"},
 		{Branch: "bugfix/bar", Path: "/tmp/bar"},
 	}
-	targets := execBuildTargets(wts, resolver.AllPrefixes())
+	targets := execBuildTargets(wts, resolver.DefaultPrefixSet().Strip())
 	if len(targets) != 2 {
 		t.Fatalf("got %d targets, want 2", len(targets))
 	}
@@ -436,7 +435,7 @@ func TestExecRenderTextFailureReturnsError(t *testing.T) {
 	results := []executor.Result{
 		{Target: executor.Target{Task: "foo", Branch: "feature/foo"}, ExitCode: 1},
 	}
-	if err := execRenderText(cmd, results, resolver.AllPrefixes()); err == nil {
+	if err := execRenderText(cmd, results, resolver.DefaultPrefixSet().Strip()); err == nil {
 		t.Error("expected error on non-zero exit")
 	}
 }
@@ -450,7 +449,7 @@ func TestExecRenderTextSuccess(t *testing.T) {
 	results := []executor.Result{
 		{Target: executor.Target{Task: "foo", Branch: "feature/foo"}, ExitCode: 0},
 	}
-	if err := execRenderText(cmd, results, resolver.AllPrefixes()); err != nil {
+	if err := execRenderText(cmd, results, resolver.DefaultPrefixSet().Strip()); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -463,7 +462,7 @@ func TestExecSelectWorktreesListError(t *testing.T) {
 	cmd, _ := newTestCmd()
 	cmd.SetContext(config.WithConfig(context.Background(), &config.Config{DefaultSource: "main"}))
 	s := spinner.New(spinnerOpts(cmd))
-	_, err := execSelectWorktrees(cmd, r, s, execOpts{all: true}, resolver.AllPrefixes())
+	_, err := execSelectWorktrees(cmd, r, s, execOpts{all: true}, resolver.DefaultPrefixSet())
 	if err == nil {
 		t.Fatal("expected error from listWorktreeInfos")
 	}
@@ -491,7 +490,7 @@ func TestExecSelectWorktreesTypeFilter(t *testing.T) {
 	cmd, _ := newTestCmd()
 	cmd.SetContext(config.WithConfig(context.Background(), &config.Config{DefaultSource: "main"}))
 	s := spinner.New(spinnerOpts(cmd))
-	got, err := execSelectWorktrees(cmd, r, s, execOpts{typeFilter: "feature"}, resolver.AllPrefixes())
+	got, err := execSelectWorktrees(cmd, r, s, execOpts{typeFilter: typeFeature}, resolver.DefaultPrefixSet())
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -518,12 +517,62 @@ func TestExecSelectWorktreesAllEligible(t *testing.T) {
 	cmd, _ := newTestCmd()
 	cmd.SetContext(config.WithConfig(context.Background(), &config.Config{DefaultSource: "main"}))
 	s := spinner.New(spinnerOpts(cmd))
-	got, err := execSelectWorktrees(cmd, r, s, execOpts{all: true}, resolver.AllPrefixes())
+	got, err := execSelectWorktrees(cmd, r, s, execOpts{all: true}, resolver.DefaultPrefixSet())
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	if len(got) == 0 {
 		t.Error("expected at least one eligible worktree")
+	}
+}
+
+func TestExcludeOrphanedNoOpWhenNoCustomPrefix(t *testing.T) {
+	cmd, _ := newTestCmd()
+	worktrees := []resolver.WorktreeInfo{
+		{Branch: "feature/foo"},
+		{Branch: "some-orphan-looking-branch"},
+	}
+
+	got := excludeOrphaned(cmd, worktrees, resolver.DefaultPrefixSet(), branchMain)
+
+	if len(got) != len(worktrees) {
+		t.Errorf("excludeOrphaned() with no custom prefix = %d worktrees, want all %d kept (no-op)", len(got), len(worktrees))
+	}
+}
+
+func TestExcludeOrphanedExcludesAndWarns(t *testing.T) {
+	cmd, buf := newTestCmd()
+	ps := resolver.NewPrefixSet([]resolver.PrefixSpec{{Prefix: "TASK-"}})
+	worktrees := []resolver.WorktreeInfo{
+		{Branch: "TASK-123"},
+		{Branch: "PROJ-456"}, // orphaned: PROJ- is not configured
+	}
+
+	got := excludeOrphaned(cmd, worktrees, ps, branchMain)
+
+	if len(got) != 1 || got[0].Branch != "TASK-123" {
+		t.Errorf("excludeOrphaned() = %+v, want only the TASK-123 worktree kept", got)
+	}
+	if !strings.Contains(buf.String(), "excluding 1 worktree") {
+		t.Errorf("excludeOrphaned() stderr = %q, want an exclusion warning", buf.String())
+	}
+}
+
+func TestExcludeOrphanedKeepsAllWhenNoneOrphaned(t *testing.T) {
+	cmd, buf := newTestCmd()
+	ps := resolver.NewPrefixSet([]resolver.PrefixSpec{{Prefix: "PROJ-"}})
+	worktrees := []resolver.WorktreeInfo{
+		{Branch: "PROJ-1"},
+		{Branch: "PROJ-2"},
+	}
+
+	got := excludeOrphaned(cmd, worktrees, ps, branchMain)
+
+	if len(got) != 2 {
+		t.Errorf("excludeOrphaned() = %+v, want both worktrees kept", got)
+	}
+	if strings.Contains(buf.String(), "excluding") {
+		t.Errorf("excludeOrphaned() stderr = %q, want no warning when nothing is orphaned", buf.String())
 	}
 }
 

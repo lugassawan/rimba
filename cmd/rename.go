@@ -50,7 +50,12 @@ var renameCmd = &cobra.Command{
 			return err
 		}
 
-		_, newTask = operations.ResolveTaskInput(newTask, repoRoot)
+		force, _ := cmd.Flags().GetBool(flagForce)
+		if err := operations.GuardKnownPrefix(cfg.PrefixSet(), wt.Branch, cfg.DefaultSource, force); err != nil {
+			return err
+		}
+
+		_, newTask = operations.ResolveTaskInput(newTask, repoRoot, cfg.PrefixSet())
 
 		var newPrefix string
 		if sel := resolvePrefixSelection(cmd); sel.Explicit {
@@ -73,7 +78,6 @@ var renameCmd = &cobra.Command{
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
 
-		force, _ := cmd.Flags().GetBool(flagForce)
 		push, _ := cmd.Flags().GetBool(flagPush)
 		startMsg := "Renaming worktree..."
 		if push {
@@ -99,7 +103,7 @@ var renameCmd = &cobra.Command{
 			reportRenamePush(cmd, result)
 		}
 
-		prefixes := resolver.AllPrefixes()
+		prefixes := cfg.PrefixSet().Strip()
 		svc, _, _ := resolver.ServiceFromBranch(result.NewBranch, prefixes)
 		var configModules []config.ModuleConfig
 		if cfg.Deps != nil {

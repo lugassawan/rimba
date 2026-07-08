@@ -53,9 +53,10 @@ var duplicateCmd = &cobra.Command{
 			return err
 		}
 
-		_, task = operations.ResolveTaskInput(task, repoRoot)
+		ps := cfg.PrefixSet()
+		_, task = operations.ResolveTaskInput(task, repoRoot, ps)
 
-		prefixes := resolver.AllPrefixes()
+		prefixes := ps.Strip()
 
 		if wt.Branch == cfg.DefaultSource {
 			return fmt.Errorf("cannot duplicate the default branch %q; use 'rimba add' instead", cfg.DefaultSource)
@@ -70,7 +71,7 @@ var duplicateCmd = &cobra.Command{
 		asFlag, _ := cmd.Flags().GetString(flagAs)
 		var newTask string
 		if asFlag != "" {
-			_, newTask = operations.ResolveTaskInput(asFlag, repoRoot)
+			_, newTask = operations.ResolveTaskInput(asFlag, repoRoot, ps)
 		} else {
 			// Auto-suffix: try task-1, task-2, etc.
 			for i := 1; i <= maxDuplicateSuffix; i++ {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
@@ -35,6 +36,7 @@ var cleanCmd = &cobra.Command{
   rimba clean --stale --stale-days 7`,
 	Annotations: map[string]string{"skipConfig": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		cmd.SetContext(withBestEffortConfig(cmd))
 		r := newRunner(cmd.Context())
 		merged, _ := cmd.Flags().GetBool(flagMerged)
 		stale, _ := cmd.Flags().GetBool(flagStale)
@@ -308,7 +310,7 @@ func flattenStaleCandidates(candidates []operations.StaleCandidate) []operations
 }
 
 func printMergedCandidates(cmd *cobra.Command, candidates []operations.CleanCandidate, remotePresent bool) {
-	prefixes := resolver.AllPrefixes()
+	prefixes := config.PrefixSetFromContext(cmd.Context()).Strip()
 	fmt.Fprintln(cmd.OutOrStdout(), "Merged worktrees:")
 	for _, c := range candidates {
 		task, _ := resolver.PureTaskFromBranch(c.Branch, prefixes)
@@ -320,7 +322,7 @@ func printMergedCandidates(cmd *cobra.Command, candidates []operations.CleanCand
 }
 
 func printStaleCandidates(cmd *cobra.Command, candidates []operations.StaleCandidate) {
-	prefixes := resolver.AllPrefixes()
+	prefixes := config.PrefixSetFromContext(cmd.Context()).Strip()
 	fmt.Fprintln(cmd.OutOrStdout(), "Stale worktrees:")
 	for _, c := range candidates {
 		task, _ := resolver.PureTaskFromBranch(c.Branch, prefixes)
