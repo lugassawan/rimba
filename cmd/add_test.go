@@ -829,3 +829,101 @@ func TestAddBranchStashApplyConflict(t *testing.T) {
 		t.Error("stash should NOT be dropped on conflict")
 	}
 }
+
+func runAddTaskForAliasTest(t *testing.T, args ...string) string {
+	t.Helper()
+	repoDir := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(repoDir, ".worktrees"), 0755)
+	cfg := &config.Config{WorktreeDir: ".worktrees"}
+
+	restore := overrideNewRunner(makeWorktreeGitRunner(repoDir))
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().StringP(flagSource, "s", "", "")
+	cmd.Flags().Bool(flagSkipDeps, false, "")
+	cmd.Flags().Bool(flagSkipHooks, false, "")
+	addPrefixFlags(cmd)
+	_ = cmd.Flags().Set(flagSkipDeps, "true")
+	_ = cmd.Flags().Set(flagSkipHooks, "true")
+	for _, a := range args[1:] {
+		_ = cmd.Flags().Set(a, "true")
+	}
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	if err := addCmd.RunE(cmd, []string{args[0]}); err != nil {
+		t.Fatalf("addCmd.RunE %v: %v", args, err)
+	}
+	return buf.String()
+}
+
+func TestAddFixPositionalAliasNoticeAndBranch(t *testing.T) {
+	out := runAddTaskForAliasTest(t, "fix/manual-check")
+	if !strings.Contains(out, "Branch: bugfix/manual-check") {
+		t.Errorf("output = %q, want branch bugfix/manual-check", out)
+	}
+	if !strings.Contains(out, "fix") || !strings.Contains(out, "bugfix") {
+		t.Errorf("output = %q, want a notice mentioning fix and bugfix", out)
+	}
+}
+
+func TestAddFixFlagAliasNoticeAndBranch(t *testing.T) {
+	out := runAddTaskForAliasTest(t, "manual-check2", "fix")
+	if !strings.Contains(out, "Branch: bugfix/manual-check2") {
+		t.Errorf("output = %q, want branch bugfix/manual-check2", out)
+	}
+	if !strings.Contains(out, "fix") || !strings.Contains(out, "bugfix") {
+		t.Errorf("output = %q, want a notice mentioning fix and bugfix", out)
+	}
+}
+
+func TestAddBugfixPositionalNoAliasNotice(t *testing.T) {
+	out := runAddTaskForAliasTest(t, "bugfix/manual-check3")
+	if !strings.Contains(out, "Branch: bugfix/manual-check3") {
+		t.Errorf("output = %q, want branch bugfix/manual-check3", out)
+	}
+	if strings.Contains(out, "interpreting") {
+		t.Errorf("output = %q, should not contain alias notice", out)
+	}
+}
+
+func TestAddExplicitBugfixFlagWinsOverFixPositional(t *testing.T) {
+	out := runAddTaskForAliasTest(t, "fix/manual-check4", "bugfix")
+	if !strings.Contains(out, "Branch: bugfix/manual-check4") {
+		t.Errorf("output = %q, want branch bugfix/manual-check4", out)
+	}
+	if strings.Contains(out, "interpreting") {
+		t.Errorf("output = %q, should not contain alias notice when flag is explicit", out)
+	}
+}
+
+func TestResolveAddPrefixAgreesWithResolveTaskInput(t *testing.T) {
+	repoRoot := t.TempDir()
+
+	tests := []struct {
+		arg        string
+		wantTask   string
+		wantPrefix string
+	}{
+		{"fix/x", "x", "bugfix/"},
+		{"bugfix/x", "x", "bugfix/"},
+		{"feature/x", "x", "feature/"},
+		{"nope/x", "nope-x", "feature/"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.arg, func(t *testing.T) {
+			_, task := operations.ResolveTaskInput(tt.arg, repoRoot)
+			if task != tt.wantTask {
+				t.Errorf("ResolveTaskInput(%q) task = %q, want %q", tt.arg, task, tt.wantTask)
+			}
+
+			cmd, _ := newTestCmd()
+			addPrefixFlags(cmd)
+			prefix, _ := resolveAddPrefix(cmd, tt.arg)
+			if prefix != tt.wantPrefix {
+				t.Errorf("resolveAddPrefix(%q) prefix = %q, want %q", tt.arg, prefix, tt.wantPrefix)
+			}
+		})
+	}
+}
