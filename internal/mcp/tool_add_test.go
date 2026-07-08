@@ -955,9 +955,8 @@ func TestAddPRToolRequiresConfig(t *testing.T) {
 	}
 }
 
-// TestResolveMCPPrefixTypeCustomAlias verifies that resolveMCPPrefixType
-// round-trips a custom prefix's alias token (via the task's leading segment)
-// to the correct display type name, not just the built-in defaults.
+// TestResolveMCPPrefixTypeCustomAlias verifies a custom prefix's alias token
+// round-trips to its display type name, not just the built-in defaults.
 func TestResolveMCPPrefixTypeCustomAlias(t *testing.T) {
 	ps := resolver.NewPrefixSet([]resolver.PrefixSpec{
 		{Prefix: "PROJ-", Aliases: []string{"proj"}},

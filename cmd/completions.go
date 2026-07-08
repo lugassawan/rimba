@@ -45,9 +45,8 @@ func init() {
 	rootCmd.AddCommand(completionCmd)
 }
 
-// cmdContext returns cmd.Context(), falling back to context.Background()
-// when the command's context was never set (e.g. a completion func invoked
-// directly on a global command variable in a unit test).
+// cmdContext falls back to context.Background() when the command's context
+// was never set (e.g. a completion func invoked directly in a unit test).
 func cmdContext(cmd *cobra.Command) context.Context {
 	if ctx := cmd.Context(); ctx != nil {
 		return ctx

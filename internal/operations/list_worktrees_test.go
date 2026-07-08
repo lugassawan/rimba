@@ -184,9 +184,8 @@ func TestListWorktreesCustomPrefix(t *testing.T) {
 		t.Errorf("Type = %q, want %q", res.Rows[0].Type, testCustomPrefix)
 	}
 
-	// Parity: with no config in context, the built-ins-only PrefixSet does
-	// not recognize the custom prefix, so the whole branch name is treated as
-	// the task and Type is empty — matching pre-migration behavior byte-for-byte.
+	// No config in context: built-ins-only PrefixSet doesn't recognize the
+	// custom prefix, so the whole branch name is treated as the task.
 	res, err = ListWorktrees(context.Background(), r, nil, ListWorktreesRequest{WorktreeDir: wtDirTest})
 	if err != nil {
 		t.Fatalf("ListWorktrees without custom prefix: %v", err)

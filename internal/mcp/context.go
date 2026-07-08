@@ -17,10 +17,8 @@ type HandlerContext struct {
 	Version  string
 }
 
-// PrefixSet resolves the resolver.PrefixSet for this handler context: the
-// configured custom prefixes merged with the built-ins, or just the
-// built-ins when no config is available. Never returns nil, mirroring
-// config.PrefixSetFromContext's contract.
+// PrefixSet returns the configured prefixes merged with built-ins (or just
+// built-ins if unconfigured); never nil, mirroring config.PrefixSetFromContext.
 func (h *HandlerContext) PrefixSet() *resolver.PrefixSet {
 	if h.Config == nil {
 		return resolver.DefaultPrefixSet()

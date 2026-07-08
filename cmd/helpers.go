@@ -91,12 +91,8 @@ func findWorktree(ctx context.Context, r git.Runner, input string) (resolver.Wor
 	return operations.FindWorktree(ctx, r, service, task)
 }
 
-// withBestEffortConfig loads config on a best-effort basis for commands
-// annotated skipConfig (status/clean/log): these must keep running with no
-// repo/config present, but should still pick up custom prefixes when a valid
-// .rimba/settings.toml happens to be reachable. Every failure (no repo,
-// unreadable/invalid config, failed validation) is swallowed and the original
-// context is returned unchanged — this helper never fails.
+// withBestEffortConfig lets skipConfig commands (status/clean/log) pick up
+// custom prefixes when reachable, without failing if no repo/config exists.
 func withBestEffortConfig(cmd *cobra.Command) context.Context {
 	ctx := cmd.Context()
 	if ctx == nil {

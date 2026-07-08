@@ -2,17 +2,15 @@ package resolver
 
 import "strings"
 
-// PrefixSpec describes a single prefix registration: the branch prefix
-// string itself (e.g. "feature/" or a custom "PROJ-") and the creation
-// tokens (aliases) that should resolve to it.
+// PrefixSpec pairs a branch prefix (e.g. "feature/" or custom "PROJ-") with
+// the creation aliases that resolve to it.
 type PrefixSpec struct {
 	Prefix  string
 	Aliases []string
 }
 
-// PrefixSet is a registry of branch prefixes and their creation aliases.
-// DefaultPrefixSet returns the built-in set only; NewPrefixSet
-// additively merges custom specs on top of the built-ins.
+// PrefixSet is a registry of branch prefixes and their creation aliases;
+// see DefaultPrefixSet and NewPrefixSet.
 type PrefixSet struct {
 	strip         []string            // ordered prefix strings to strip, in match priority order
 	tokenToPrefix map[string]string   // creation token (canonical type name or alias) -> prefix string
@@ -43,11 +41,8 @@ func DefaultPrefixSet() *PrefixSet {
 	return s
 }
 
-// NewPrefixSet builds a PrefixSet by additively merging custom specs on top
-// of the built-ins. A custom spec whose Prefix matches an existing built-in
-// prefix string folds its Aliases into that built-in (without duplicating the
-// prefix in Strip()). A custom spec with a new Prefix string registers a
-// brand-new creatable+strippable type and sets HasCustom() true.
+// NewPrefixSet merges custom specs onto the built-ins: a spec matching an
+// existing prefix folds its aliases in instead of duplicating Strip().
 func NewPrefixSet(custom []PrefixSpec) *PrefixSet {
 	s := DefaultPrefixSet()
 	for _, spec := range custom {
@@ -64,10 +59,8 @@ func (s *PrefixSet) Strip() []string {
 	return out
 }
 
-// TokenToPrefix resolves a leading path segment that is either a canonical
-// type name ("bugfix") or a known alias ("fix") to its branch prefix string.
-// alias is true when the token was a non-canonical alias; ok is false when
-// the token is neither a known type name nor an alias.
+// TokenToPrefix resolves a type name or alias token to its prefix string.
+// alias reports whether t was a non-canonical alias; ok is false if unknown.
 func (s *PrefixSet) TokenToPrefix(t string) (prefix string, alias bool, ok bool) {
 	p, ok := s.tokenToPrefix[t]
 	if !ok {
@@ -86,10 +79,8 @@ func (s *PrefixSet) ValidType(t string) bool {
 	return s.TypeName(p) == t
 }
 
-// TypeName returns the display type name for a matched branch prefix string.
-// For built-ins this is the canonical PrefixType string (e.g. "feature/" ->
-// "feature"). For custom prefixes it strips a trailing "/" if present,
-// otherwise returns the prefix as-is (e.g. "PROJ-" -> "PROJ-").
+// TypeName returns the display name for prefix by trimming a trailing "/"
+// (e.g. "feature/" -> "feature", "PROJ-" -> "PROJ-").
 func (s *PrefixSet) TypeName(prefix string) string {
 	return strings.TrimSuffix(prefix, "/")
 }
@@ -106,8 +97,7 @@ func (s *PrefixSet) TypeToPrefix(typeName string) (string, bool) {
 }
 
 // TypeNames returns the display type name for every registered prefix, in
-// Strip() order — the single source of truth for "valid types" hints and
-// shell completions, so built-in and custom prefixes are listed uniformly.
+// Strip() order — the source of truth for "valid types" hints and completions.
 func (s *PrefixSet) TypeNames() []string {
 	out := make([]string, len(s.strip))
 	for i, p := range s.strip {
@@ -116,9 +106,8 @@ func (s *PrefixSet) TypeNames() []string {
 	return out
 }
 
-// IsOrphan reports whether branch was created under a prefix that is no
-// longer registered in this set. It is always false when branch is the main
-// branch, regardless of prefix match.
+// IsOrphan reports whether branch's prefix is no longer registered.
+// Always false for mainBranch, regardless of prefix match.
 func (s *PrefixSet) IsOrphan(branch, mainBranch string) bool {
 	if branch == mainBranch {
 		return false

@@ -8,8 +8,7 @@ import (
 )
 
 // GuardKnownPrefix hard-errors when branch was created under a custom prefix
-// that is no longer configured. It is a no-op (nil) whenever ps.HasCustom() is
-// false, force is true, branch == mainBranch, or branch matches a known prefix.
+// that is no longer configured; no-op if ps.HasCustom() is false or force is true.
 func GuardKnownPrefix(ps *resolver.PrefixSet, branch, mainBranch string, force bool) error {
 	if !ps.HasCustom() || force || !ps.IsOrphan(branch, mainBranch) {
 		return nil

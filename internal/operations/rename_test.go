@@ -70,9 +70,8 @@ func TestRenameWorktreeCustomPrefix(t *testing.T) {
 		t.Errorf("NewBranch = %q, want %q", res.NewBranch, "PROJ-456")
 	}
 
-	// Parity: with no config in context, the built-ins-only PrefixSet does
-	// not recognize "PROJ-" as a prefix, so the rename falls back to the
-	// default "feature/" type — matching pre-migration behavior byte-for-byte.
+	// No config in context: built-ins-only PrefixSet doesn't recognize "PROJ-",
+	// so the rename falls back to the default "feature/" type.
 	res, err = RenameWorktree(context.Background(), r, RenameParams{WT: wt, NewTask: "456", WtDir: wtDir})
 	if err != nil {
 		t.Fatalf("RenameWorktree without custom prefix: %v", err)

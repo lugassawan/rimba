@@ -163,9 +163,8 @@ func runAddTask(cmd *cobra.Command, r git.Runner, arg string, cfg *config.Config
 }
 
 // resolveAddPrefix prefers an explicit prefix flag over a positional segment.
-// aliasUsed gates the one-line stderr notice; aliasToken is the token that
-// was interpreted as an alias ("fix" for the built-in --fix flag, or the
-// matched positional token for any other alias, including custom ones).
+// aliasToken carries the matched alias text (built-in "fix" or a custom
+// alias) so printAliasNotice can word the notice correctly.
 func resolveAddPrefix(cmd *cobra.Command, arg string, ps *resolver.PrefixSet) (prefix string, aliasUsed bool, aliasToken string) {
 	sel := resolvePrefixSelection(cmd)
 	if sel.Explicit {
@@ -184,10 +183,8 @@ func resolveAddPrefix(cmd *cobra.Command, arg string, ps *resolver.PrefixSet) (p
 	return sel.Prefix, false, ""
 }
 
-// printAliasNotice makes an alias interpretation visible instead of silent.
-// The built-in "fix" alias keeps its original message (including
-// the --hotfix suggestion); any other alias, including custom ones
-// configured via [[resolver.prefix]], gets a generic message.
+// printAliasNotice keeps the built-in "fix" alias's --hotfix suggestion
+// verbatim; any other alias, including custom ones, gets a generic message.
 func printAliasNotice(cmd *cobra.Command, token, prefix string) {
 	msg := fmt.Sprintf("interpreting %q as %q", token, prefix)
 	if token == "fix" {

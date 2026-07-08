@@ -272,10 +272,8 @@ func newCleanPruneCmd() (*cobra.Command, *bytes.Buffer) {
 	return cmd, buf
 }
 
-// TestCleanCmdRunEWithoutRimbaConfig is a run-anywhere regression test:
-// clean is annotated skipConfig and must keep succeeding when no
-// .rimba/settings.toml is reachable (withBestEffortConfig swallows the
-// resolve failure and returns the original context unchanged).
+// TestCleanCmdRunEWithoutRimbaConfig verifies clean (annotated skipConfig)
+// keeps succeeding when no .rimba/settings.toml is reachable.
 func TestCleanCmdRunEWithoutRimbaConfig(t *testing.T) {
 	restore := overrideNewRunner(&mockRunner{
 		run: func(args ...string) (string, error) {

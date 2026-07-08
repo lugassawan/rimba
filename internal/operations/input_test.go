@@ -120,10 +120,7 @@ func TestResolveTaskInputAliasAppliesWithoutDirectory(t *testing.T) {
 }
 
 // TestResolveTaskInputCustomPrefixAlias confirms a custom prefix alias (e.g.
-// "proj" registered as an alias for a custom "PROJ-" prefix) is recognized
-// as a prefix token rather than mis-parsed as part of a plain task name.
-// Previously, without a live PrefixSet, "proj/123" would have fallen
-// through to the plain-task-name branch.
+// "proj" for "PROJ-") is recognized as a prefix token, not a plain task name.
 func TestResolveTaskInputCustomPrefixAlias(t *testing.T) {
 	repoRoot := t.TempDir()
 	ps := resolver.NewPrefixSet([]resolver.PrefixSpec{

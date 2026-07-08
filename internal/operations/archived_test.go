@@ -61,9 +61,8 @@ func TestFindArchivedBranchCustomPrefix(t *testing.T) {
 		t.Errorf("branch = %q, want %q", branch, branchProj123)
 	}
 
-	// Parity: with no config in context, built-ins-only prefixes never build
-	// branchProj123 as a search candidate, so the lookup fails — matching
-	// pre-migration behavior byte-for-byte.
+	// No config in context: built-ins-only prefixes never build branchProj123
+	// as a search candidate, so the lookup fails.
 	if _, err := FindArchivedBranch(context.Background(), mr, "", "123"); err == nil {
 		t.Fatal("expected FindArchivedBranch to fail without custom prefix config (built-ins-only parity)")
 	}

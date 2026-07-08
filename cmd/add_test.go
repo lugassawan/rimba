@@ -929,9 +929,8 @@ func TestResolveAddPrefixAgreesWithResolveTaskInput(t *testing.T) {
 	}
 }
 
-// TestResolveAddPrefixCustomAlias verifies that resolveAddPrefix round-trips
-// a custom prefix's alias token to the registered prefix string, proving the
-// PrefixSet-based lookup (not just the built-in defaults) drives resolution.
+// TestResolveAddPrefixCustomAlias proves a custom alias resolves via
+// PrefixSet lookup, not just the built-in defaults.
 func TestResolveAddPrefixCustomAlias(t *testing.T) {
 	ps := resolver.NewPrefixSet([]resolver.PrefixSpec{
 		{Prefix: "PROJ-", Aliases: []string{"proj"}},
@@ -952,9 +951,8 @@ func TestResolveAddPrefixCustomAlias(t *testing.T) {
 	}
 }
 
-// TestPrintAliasNoticeCustomAliasIsGeneric proves a custom alias (e.g. "proj")
-// gets a generic notice, not the hardcoded "fix" -> "bugfix/" message it would
-// have wrongly inherited before aliasToken threading.
+// TestPrintAliasNoticeCustomAliasIsGeneric proves a custom alias gets a
+// generic notice, not the hardcoded "fix" -> "bugfix/" message.
 func TestPrintAliasNoticeCustomAliasIsGeneric(t *testing.T) {
 	cmd, buf := newTestCmd()
 	printAliasNotice(cmd, "proj", "PROJ-")

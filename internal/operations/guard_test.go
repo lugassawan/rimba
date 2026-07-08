@@ -90,11 +90,8 @@ func TestGuardKnownPrefix(t *testing.T) {
 	}
 }
 
-// TestGuardKnownPrefixEndToEnd is the capstone round-trip test for the
-// configurable-prefixes feature: a branch created under a custom
-// prefix that is later removed from .rimba/settings.toml becomes orphaned,
-// and GuardKnownPrefix hard-errors on it (unless force=true) — but only when
-// the *current* config still has at least one custom prefix configured.
+// TestGuardKnownPrefixEndToEnd verifies a branch whose custom prefix is later
+// removed from config becomes orphaned and GuardKnownPrefix hard-errors on it.
 func TestGuardKnownPrefixEndToEnd(t *testing.T) {
 	t.Parallel()
 
@@ -121,9 +118,8 @@ func TestGuardKnownPrefixEndToEnd(t *testing.T) {
 		t.Errorf("GuardKnownPrefix with prefix still configured = %v, want nil", err)
 	}
 
-	// Config 2: PROJ- was removed, but TASK- is configured instead. HasCustom()
-	// stays true, so the guard is "active" — and PROJ-123 no longer matches any
-	// registered prefix, so it is now orphaned relative to this config.
+	// Config 2: PROJ- was removed, TASK- configured instead — PROJ-123 no
+	// longer matches any registered prefix, so it is now orphaned.
 	cfg2 := &config.Config{
 		DefaultSource: mainBranchGuard,
 		Resolver: &config.ResolverConfig{
@@ -150,13 +146,8 @@ func TestGuardKnownPrefixEndToEnd(t *testing.T) {
 		t.Errorf("GuardKnownPrefix(force=true) = %v, want nil", err)
 	}
 
-	// Config 3: no custom prefixes at all (the common case — every existing
-	// rimba user today). HasCustom() is false, so per GuardKnownPrefix's own
-	// contract this is a no-op even though the branch would "orphan" relative
-	// to cfg1/cfg2's registered prefixes. This is intentional: orphan detection
-	// only activates when the *current* repo config has at least one custom
-	// prefix — a repo with zero custom prefixes has nothing to be orphaned
-	// relative to, and built-in-only behavior applies uninterrupted.
+	// Config 3: no custom prefixes at all. HasCustom() is false, so the guard
+	// is a no-op even though the branch would "orphan" under cfg1/cfg2.
 	cfg3 := &config.Config{DefaultSource: mainBranchGuard}
 	ps3 := cfg3.PrefixSet()
 	if ps3.HasCustom() {

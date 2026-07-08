@@ -59,10 +59,8 @@ func TestMergeIntoMainSuccess(t *testing.T) {
 }
 
 func TestMergeOrphanedSourceHardErrors(t *testing.T) {
-	// "TASK-" is the only configured custom prefix, so a "PROJ-*" source
-	// branch (created under a prefix that used to be configured but no
-	// longer is) is orphaned while HasCustom() stays true. merge has no
-	// --force flag, so this guard can never be bypassed here.
+	// Only "TASK-" is configured, so the "PROJ-*" source branch is orphaned;
+	// merge has no --force flag, so this guard can never be bypassed here.
 	cfg := &config.Config{
 		DefaultSource: branchMain,
 		WorktreeDir:   defaultRelativeWtDir,

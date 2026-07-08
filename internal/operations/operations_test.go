@@ -10,16 +10,14 @@ import (
 )
 
 // testCustomPrefix and branchProj123 are shared fixtures for tests proving
-// operations recognize a custom-prefixed branch from a context-carried
-// resolver.PrefixSet.
+// operations recognize a custom-prefixed branch from a context-carried PrefixSet.
 const (
 	testCustomPrefix = "PROJ-"
 	branchProj123    = "PROJ-123"
 )
 
 // customPrefixContext returns a context carrying a config with a single
-// custom [[resolver.prefix]] entry (no built-in aliasing), for exercising the
-// config.PrefixSetFromContext funnel in operations tests.
+// custom [[resolver.prefix]] entry (no built-in aliasing).
 func customPrefixContext() context.Context {
 	cfg := &config.Config{Resolver: &config.ResolverConfig{Prefix: []config.PrefixEntry{{Prefix: testCustomPrefix}}}}
 	return config.WithConfig(context.Background(), cfg)
@@ -162,9 +160,8 @@ func TestFindWorktreeCustomPrefix(t *testing.T) {
 		t.Errorf("Branch = %q, want %q", wt.Branch, branchProj123)
 	}
 
-	// Parity: with no config in context, PrefixSetFromContext degrades to
-	// built-ins only, so the custom-prefixed branch's stripped task ("123")
-	// is not resolvable — behavior is byte-identical to pre-migration code.
+	// No config in context: PrefixSetFromContext degrades to built-ins only,
+	// so the custom-prefixed branch's stripped task ("123") is not resolvable.
 	if _, err := FindWorktree(context.Background(), r, "", "123"); err == nil {
 		t.Fatal("expected FindWorktree to fail without custom prefix config (built-ins-only parity)")
 	}

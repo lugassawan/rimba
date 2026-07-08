@@ -261,9 +261,8 @@ func init() {
 	rootCmd.AddCommand(execCmd)
 }
 
-// excludeOrphaned drops worktrees whose branch was created under a custom
-// prefix that is no longer configured, warning to stderr when any are
-// excluded.
+// excludeOrphaned drops worktrees under a no-longer-configured prefix,
+// warning to stderr when any are excluded.
 func excludeOrphaned(cmd *cobra.Command, worktrees []resolver.WorktreeInfo, ps *resolver.PrefixSet, mainBranch string) []resolver.WorktreeInfo {
 	kept, excluded := operations.FilterOrphaned(worktrees, ps, mainBranch)
 	if excluded > 0 {

@@ -62,8 +62,7 @@ const (
 	repoPath              = "/repo"
 
 	// orphanedProjWorktreeOut lists a main worktree plus one under "PROJ-",
-	// used across orphan-guard tests (remove/rename/merge) where "PROJ-" is
-	// not among the configured custom prefixes.
+	// shared across orphan-guard tests where "PROJ-" isn't configured.
 	orphanedProjWorktreeOut = "worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /wt/proj-123\nHEAD def456\nbranch refs/heads/PROJ-123\n"
 
 	branchDevelop    = "develop"

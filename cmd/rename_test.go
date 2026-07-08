@@ -63,9 +63,8 @@ func TestRenameSuccess(t *testing.T) {
 	}
 }
 
-// orphanedRenameConfig returns a config where "TASK-" is the only configured
-// custom prefix, so a "PROJ-*" branch (created under a prefix that used to
-// be configured but no longer is) is orphaned while HasCustom() stays true.
+// orphanedRenameConfig configures only "TASK-", so a "PROJ-*" branch is
+// orphaned while HasCustom() stays true.
 func orphanedRenameConfig() *config.Config {
 	return &config.Config{
 		WorktreeDir:   defaultRelativeWtDir,

@@ -153,9 +153,8 @@ func TestMergeWorktreeCustomPrefix(t *testing.T) {
 		t.Errorf("SourceBranch = %q, want %q", result.SourceBranch, branchProj123)
 	}
 
-	// Parity: with no config in context, the built-ins-only PrefixSet cannot
-	// resolve task "123" against branch branchProj123 — matching pre-migration
-	// behavior byte-for-byte.
+	// No config in context: built-ins-only PrefixSet cannot resolve task "123"
+	// against branch branchProj123.
 	_, err = MergeWorktree(context.Background(), r, MergeParams{
 		SourceTask: "123",
 		RepoRoot:   "/repo",

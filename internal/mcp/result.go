@@ -15,10 +15,8 @@ func errorResult(err error) *mcp.CallToolResult {
 	return mcp.NewToolResultError(err.Error())
 }
 
-// invalidTypeResult builds the standard "invalid type" error result, listing
-// the valid prefix types. extraHint is appended verbatim to the fix hint,
-// letting call sites add site-specific trailing guidance (e.g. a default-type
-// note) while sharing the same underlying message construction.
+// invalidTypeResult builds the "invalid type" error, listing valid types.
+// extraHint is appended verbatim so call sites can add trailing guidance.
 func invalidTypeResult(typeName string, ps *resolver.PrefixSet, extraHint string) *mcp.CallToolResult {
 	return errorResult(errhint.WithFix(
 		fmt.Errorf("invalid type %q", typeName),

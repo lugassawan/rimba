@@ -64,10 +64,8 @@ func TestMergeToolSourceNotFound(t *testing.T) {
 }
 
 func TestMergeToolOrphanedSourceHardErrors(t *testing.T) {
-	// "TASK-" is the only configured custom prefix, so a "PROJ-*" source
-	// branch (created under a prefix that used to be configured but no
-	// longer is) is orphaned while HasCustom() stays true. This tool has no
-	// force param, so this guard can never be bypassed here.
+	// TASK- is the only configured prefix, so orphaned PROJ-* triggers a hard
+	// error here since this tool has no force param to bypass the guard.
 	porcelain := worktreePorcelain(
 		struct{ path, branch string }{"/repo", "main"},
 		struct{ path, branch string }{"/wt/proj-123", "PROJ-123"},

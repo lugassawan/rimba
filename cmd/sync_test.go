@@ -103,10 +103,8 @@ func TestSyncOneSuccess(t *testing.T) {
 }
 
 func TestSyncOneOrphanedHardErrors(t *testing.T) {
-	// "TASK-" is the only configured custom prefix, so a "PROJ-*" branch
-	// (created under a prefix that used to be configured but no longer is)
-	// is orphaned while HasCustom() stays true. sync has no --force flag,
-	// so this guard can never be bypassed here.
+	// Only "TASK-" is configured, so the "PROJ-*" branch is orphaned;
+	// sync has no --force flag, so this guard can never be bypassed here.
 	cfg := &config.Config{
 		DefaultSource: branchMain,
 		Resolver: &config.ResolverConfig{

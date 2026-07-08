@@ -99,10 +99,8 @@ func TestRemoveToolSuccess(t *testing.T) {
 	}
 }
 
-// orphanedRemoveToolContext returns a HandlerContext where "TASK-" is the
-// only configured custom prefix, so a "PROJ-*" branch (created under a
-// prefix that used to be configured but no longer is) is orphaned while
-// HasCustom() stays true.
+// orphanedRemoveToolContext configures "TASK-" as the only custom prefix, so
+// a "PROJ-*" branch is orphaned even though HasCustom() stays true.
 func orphanedRemoveToolContext(r *mockRunner) *HandlerContext {
 	return &HandlerContext{
 		Runner: r,

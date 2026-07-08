@@ -293,9 +293,8 @@ func TestConfigValidateResolver(t *testing.T) {
 	}
 }
 
-// TestConfigValidateResolverCollisionOrderIndependent proves the
-// prefix-collision error is reported exactly once regardless of which of two
-// colliding entries is declared first (buildOwnTokens is first-write-wins).
+// TestConfigValidateResolverCollisionOrderIndependent proves the collision
+// error is reported exactly once regardless of declaration order.
 func TestConfigValidateResolverCollisionOrderIndependent(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -334,11 +333,8 @@ func TestConfigValidateResolverCollisionOrderIndependent(t *testing.T) {
 	}
 }
 
-// TestConfigValidateResolverSelfAliasNotDoubleReported proves that when an
-// entry's alias equals its own canonical token, and that same entry's prefix
-// collides with a separate entry, the collision is reported exactly once
-// (via the prefix check) rather than twice (prefix check + alias-shadow
-// check on the same underlying ownTokens entry), regardless of entry order.
+// TestConfigValidateResolverSelfAliasNotDoubleReported proves a self-aliasing
+// entry's collision is reported once (prefix check), not twice, regardless of order.
 func TestConfigValidateResolverSelfAliasNotDoubleReported(t *testing.T) {
 	tests := []struct {
 		name    string

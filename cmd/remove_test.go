@@ -66,9 +66,8 @@ func TestRemoveKeepBranch(t *testing.T) {
 	}
 }
 
-// orphanedRemoveConfig returns a config where "TASK-" is the only configured
-// custom prefix, so a "PROJ-*" branch (created under a prefix that used to be
-// configured but no longer is) is orphaned while HasCustom() stays true.
+// orphanedRemoveConfig configures only "TASK-", so a "PROJ-*" branch is
+// orphaned while HasCustom() stays true.
 func orphanedRemoveConfig() *config.Config {
 	return &config.Config{
 		DefaultSource: branchMain,
