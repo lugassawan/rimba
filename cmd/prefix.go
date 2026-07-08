@@ -43,10 +43,7 @@ type prefixSelection struct {
 	Alias    bool
 }
 
-// resolvePrefixSelection checks which prefix flag is set and returns the corresponding
-// branch prefix string (e.g. "bugfix/"), whether a flag was explicitly set, and whether
-// that flag was an alias (e.g. --fix). Falls back to the default ("feature/") when no
-// flag is set.
+// resolvePrefixSelection falls back to the default prefix when no flag is set.
 func resolvePrefixSelection(cmd *cobra.Command) prefixSelection {
 	for _, pf := range prefixFlags {
 		if set, _ := cmd.Flags().GetBool(pf.Flag); set {

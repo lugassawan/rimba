@@ -123,13 +123,9 @@ func handleAddTask(ctx context.Context, hctx *HandlerContext, req mcp.CallToolRe
 	})
 }
 
-// resolveMCPPrefixType returns the explicit "type" argument when set.
-// Otherwise it derives the prefix type from rawTask's leading path segment
-// (canonical prefix or alias, e.g. "fix"), mirroring cmd/add.go's
-// resolveAddPrefix so the CLI and MCP surfaces agree on what a bare
-// "fix/<task>"-shaped input means. The "type" enum itself stays
-// canonical-only (no "fix" entry) — this only changes how the positional
-// "task" string is interpreted when "type" is omitted.
+// resolveMCPPrefixType falls back to rawTask's leading segment (mirroring
+// cmd/add.go's resolveAddPrefix) when "type" is omitted; the "type" enum
+// itself stays canonical-only.
 func resolveMCPPrefixType(req mcp.CallToolRequest, rawTask string) string {
 	if t := req.GetString("type", ""); t != "" {
 		return t
