@@ -40,7 +40,8 @@ func handleRemove(hctx *HandlerContext) server.ToolHandlerFunc {
 			return errorResult(cfgErr), nil
 		}
 
-		service, task := operations.ResolveTaskInput(task, hctx.RepoRoot, hctx.PrefixSet())
+		ps := hctx.PrefixSet()
+		service, task := operations.ResolveTaskInput(task, hctx.RepoRoot, ps)
 
 		keepBranch := req.GetBool("keep_branch", false)
 		force := req.GetBool("force", false)
@@ -52,7 +53,7 @@ func handleRemove(hctx *HandlerContext) server.ToolHandlerFunc {
 			return errorResult(findErr), nil
 		}
 
-		if err := operations.GuardKnownPrefix(hctx.PrefixSet(), wt.Branch, cfg.DefaultSource, force); err != nil {
+		if err := operations.GuardKnownPrefix(ps, wt.Branch, cfg.DefaultSource, force); err != nil {
 			return errorResult(err), nil
 		}
 

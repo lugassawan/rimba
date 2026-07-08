@@ -81,13 +81,14 @@ func handleSync(hctx *HandlerContext) server.ToolHandlerFunc {
 			return errorResult(err), nil
 		}
 
-		prefixes := cfg.PrefixSet().Strip()
+		ps := cfg.PrefixSet()
+		prefixes := ps.Strip()
 		opts := syncOpts{
 			mainBranch:   cfg.DefaultSource,
 			useMerge:     useMerge,
 			push:         !noPush,
 			fetchWarning: fetchWarning,
-			ps:           cfg.PrefixSet(),
+			ps:           ps,
 		}
 
 		if !all {
