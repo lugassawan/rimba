@@ -152,7 +152,7 @@ See AGENTS.md at the repo root for full rimba documentation.
 ### Config Shape (` + "`" + `.rimba/settings.toml` + "`" + `)
 
 ` + "```" + `toml
-copy_files = [".env", ".env.local", ".envrc", ".tool-versions"]
+copy_files = [".env", ".claude"]  # auto-detected on init from gitignored local files
 post_create = []
 ` + "```" + `
 

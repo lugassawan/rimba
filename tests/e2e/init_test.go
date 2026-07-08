@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -30,6 +31,43 @@ func TestInitCreatesConfigAndDir(t *testing.T) {
 	assertFileExists(t, filepath.Join(repo, gitignoreFile))
 	globEntry := configDir + "/" + localGlob
 	assertGitignoreContains(t, repo, globEntry)
+}
+
+func TestInitDetectsCopyFilesFromGitignore(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupRepo(t)
+	if err := os.WriteFile(filepath.Join(repo, gitignoreFile), []byte(".env\n*.local.toml\n"), 0644); err != nil {
+		t.Fatalf("write %s: %v", gitignoreFile, err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".env"), []byte("X=1\n"), 0644); err != nil {
+		t.Fatalf("write .env: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(repo, ".claude"), 0755); err != nil {
+		t.Fatalf("mkdir .claude: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".claude", "settings.local.toml"), []byte("x = 1\n"), 0644); err != nil {
+		t.Fatalf("write .claude/settings.local.toml: %v", err)
+	}
+
+	rimbaSuccess(t, repo, "init")
+
+	cfg, err := config.Resolve(repo)
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	if !slices.Contains(cfg.CopyFiles, ".env") {
+		t.Errorf("copy_files = %v, want it to contain %q", cfg.CopyFiles, ".env")
+	}
+	if !slices.Contains(cfg.CopyFiles, ".claude") {
+		t.Errorf("copy_files = %v, want it to contain %q", cfg.CopyFiles, ".claude")
+	}
+	if slices.Contains(cfg.CopyFiles, ".envrc") {
+		t.Errorf("copy_files = %v, should not contain phantom %q", cfg.CopyFiles, ".envrc")
+	}
 }
 
 func TestInitConfigDefaults(t *testing.T) {

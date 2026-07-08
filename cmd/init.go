@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/lugassawan/rimba/internal/agentfile"
 	"github.com/lugassawan/rimba/internal/config"
@@ -132,7 +133,7 @@ func runInitFresh(ctx context.Context, cmd *cobra.Command, r git.Runner, repoRoo
 	}
 
 	cfg := &config.Config{
-		CopyFiles: config.DefaultCopyFiles(),
+		CopyFiles: detectCopyFiles(ctx, r, repoRoot),
 	}
 
 	if err := os.MkdirAll(dirPath, 0750); err != nil {
@@ -169,12 +170,33 @@ func runInitFresh(ctx context.Context, cmd *cobra.Command, r git.Runner, repoRoo
 	fmt.Fprintf(cmd.OutOrStdout(), "  Config:       %s\n", filepath.Join(dirPath, config.TeamFile))
 	fmt.Fprintf(cmd.OutOrStdout(), "  Worktree dir: %s\n", wtDir)
 	fmt.Fprintf(cmd.OutOrStdout(), "  Source:       %s\n", defaultBranch)
+	fmt.Fprintf(cmd.OutOrStdout(), "  Copy files:   %s\n", strings.Join(cfg.CopyFiles, ", "))
 	if added {
 		fmt.Fprintf(cmd.OutOrStdout(), "  Gitignore:    %s added to .gitignore\n", gitignoreEntry)
 	} else {
 		fmt.Fprintf(cmd.OutOrStdout(), "  Gitignore:    %s (already in .gitignore)\n", gitignoreEntry)
 	}
 	return nil
+}
+
+// detectCopyFiles scans repoRoot for candidate local/secret files and dirs
+// that git ignores, returning the tailored set for a fresh config. Falls
+// back to config.DefaultCopyFiles() when the scan is empty or errors —
+// scan failures are non-fatal so init never fails on detection.
+func detectCopyFiles(ctx context.Context, r git.Runner, repoRoot string) []string {
+	files, dirs := config.CandidateCopyFiles()
+	pathspecs := append(append([]string{}, files...), dirs...)
+
+	ignored, err := git.ListIgnoredUntracked(ctx, r, repoRoot, pathspecs)
+	if err != nil {
+		return config.DefaultCopyFiles()
+	}
+
+	detected := config.DetectCopyFiles(ignored)
+	if len(detected) == 0 {
+		return config.DefaultCopyFiles()
+	}
+	return detected
 }
 
 func runInitMigrate(cmd *cobra.Command, repoRoot, dirPath, legacyPath, gitignoreEntry string, personal bool) error {
