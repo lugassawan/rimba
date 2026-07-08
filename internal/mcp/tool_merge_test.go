@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/lugassawan/rimba/internal/config"
 )
 
 const (
@@ -58,6 +60,38 @@ func TestMergeToolSourceNotFound(t *testing.T) {
 	errText := resultError(t, result)
 	if !strings.Contains(errText, "not found") {
 		t.Errorf("expected 'not found' error, got: %s", errText)
+	}
+}
+
+func TestMergeToolOrphanedSourceHardErrors(t *testing.T) {
+	// "TASK-" is the only configured custom prefix, so a "PROJ-*" source
+	// branch (created under a prefix that used to be configured but no
+	// longer is) is orphaned while HasCustom() stays true. This tool has no
+	// force param, so this guard can never be bypassed here.
+	porcelain := worktreePorcelain(
+		struct{ path, branch string }{"/repo", "main"},
+		struct{ path, branch string }{"/wt/proj-123", "PROJ-123"},
+	)
+	r := &mockRunner{
+		run: func(args ...string) (string, error) { return porcelain, nil },
+	}
+	hctx := &HandlerContext{
+		Runner: r,
+		Config: &config.Config{
+			DefaultSource: "main",
+			Resolver: &config.ResolverConfig{
+				Prefix: []config.PrefixEntry{{Prefix: "TASK-"}},
+			},
+		},
+		RepoRoot: "/repo",
+		Version:  "test",
+	}
+	handler := handleMerge(hctx)
+
+	result := callTool(t, handler, map[string]any{"source": "PROJ-123"})
+	errText := resultError(t, result)
+	if !strings.Contains(errText, "re-add the prefix") {
+		t.Errorf("expected orphan-guard error mentioning re-adding the prefix, got: %s", errText)
 	}
 }
 

@@ -5,7 +5,6 @@ import (
 
 	"github.com/lugassawan/rimba/internal/conflict"
 	"github.com/lugassawan/rimba/internal/operations"
-	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -36,7 +35,7 @@ func handleConflictCheck(hctx *HandlerContext) server.ToolHandlerFunc {
 			return errorResult(err), nil
 		}
 
-		prefixes := resolver.AllPrefixes()
+		prefixes := cfg.PrefixSet().Strip()
 		allTasks := operations.CollectTasks(worktrees, prefixes)
 		eligible := operations.FilterEligible(worktrees, prefixes, cfg.DefaultSource, allTasks, true)
 

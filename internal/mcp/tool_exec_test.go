@@ -268,6 +268,59 @@ func TestFilterDirtyErrorIncludedAndWarned(t *testing.T) {
 	}
 }
 
+func TestExcludeOrphanedExecNoOpWhenNoCustomPrefix(t *testing.T) {
+	worktrees := []resolver.WorktreeInfo{
+		{Branch: "feature/foo"},
+		{Branch: "some-orphan-looking-branch"},
+	}
+
+	got := excludeOrphanedExec(worktrees, resolver.DefaultPrefixSet(), "main")
+
+	if len(got) != len(worktrees) {
+		t.Errorf("excludeOrphanedExec() with no custom prefix = %d worktrees, want all %d kept (no-op)", len(got), len(worktrees))
+	}
+}
+
+func TestExcludeOrphanedExecExcludesAndWarns(t *testing.T) {
+	ps := resolver.NewPrefixSet([]resolver.PrefixSpec{{Prefix: "TASK-"}})
+	worktrees := []resolver.WorktreeInfo{
+		{Branch: "TASK-123"},
+		{Branch: "PROJ-456"}, // orphaned: PROJ- is not configured
+	}
+
+	origStderr := os.Stderr
+	pr, pw, _ := os.Pipe()
+	os.Stderr = pw
+
+	got := excludeOrphanedExec(worktrees, ps, "main")
+
+	pw.Close()
+	os.Stderr = origStderr
+	var stderrBuf strings.Builder
+	_, _ = io.Copy(&stderrBuf, pr)
+
+	if len(got) != 1 || got[0].Branch != "TASK-123" {
+		t.Errorf("excludeOrphanedExec() = %+v, want only the TASK-123 worktree kept", got)
+	}
+	if !strings.Contains(stderrBuf.String(), "excluding 1 worktree") {
+		t.Errorf("excludeOrphanedExec() stderr = %q, want an exclusion warning", stderrBuf.String())
+	}
+}
+
+func TestExcludeOrphanedExecKeepsAllWhenNoneOrphaned(t *testing.T) {
+	ps := resolver.NewPrefixSet([]resolver.PrefixSpec{{Prefix: "PROJ-"}})
+	worktrees := []resolver.WorktreeInfo{
+		{Branch: "PROJ-1"},
+		{Branch: "PROJ-2"},
+	}
+
+	got := excludeOrphanedExec(worktrees, ps, "main")
+
+	if len(got) != 2 {
+		t.Errorf("excludeOrphanedExec() = %+v, want both worktrees kept", got)
+	}
+}
+
 func TestExecToolWithTypeFilter(t *testing.T) {
 	porcelain := worktreePorcelain(
 		struct{ path, branch string }{"/repo", "main"},

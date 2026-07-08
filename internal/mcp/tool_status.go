@@ -74,7 +74,7 @@ func handleStatus(hctx *HandlerContext) server.ToolHandlerFunc {
 		})
 
 		staleThreshold := time.Now().Add(-time.Duration(staleDays) * 24 * time.Hour)
-		prefixes := resolver.AllPrefixes()
+		prefixes := hctx.PrefixSet().Strip()
 
 		summary, items := buildStatusResult(results, staleThreshold, prefixes)
 

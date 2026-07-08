@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/lugassawan/rimba/internal/config"
 )
 
 func TestRemoveToolRequiresTask(t *testing.T) {
@@ -94,6 +96,64 @@ func TestRemoveToolSuccess(t *testing.T) {
 	}
 	if !data.BranchDeleted {
 		t.Error("expected branch_deleted=true")
+	}
+}
+
+// orphanedRemoveToolContext returns a HandlerContext where "TASK-" is the
+// only configured custom prefix, so a "PROJ-*" branch (created under a
+// prefix that used to be configured but no longer is) is orphaned while
+// HasCustom() stays true.
+func orphanedRemoveToolContext(r *mockRunner) *HandlerContext {
+	return &HandlerContext{
+		Runner: r,
+		Config: &config.Config{
+			DefaultSource: "main",
+			Resolver: &config.ResolverConfig{
+				Prefix: []config.PrefixEntry{{Prefix: "TASK-"}},
+			},
+		},
+		RepoRoot: "/repo",
+		Version:  "test",
+	}
+}
+
+func orphanedRemoveToolRunner() *mockRunner {
+	porcelain := worktreePorcelain(
+		struct{ path, branch string }{"/repo", "main"},
+		struct{ path, branch string }{"/wt/proj-123", "PROJ-123"},
+	)
+	return &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == gitWorktree && args[1] == gitList {
+				return porcelain, nil
+			}
+			return "", nil
+		},
+	}
+}
+
+func TestRemoveToolOrphanedPrefixHardErrors(t *testing.T) {
+	hctx := orphanedRemoveToolContext(orphanedRemoveToolRunner())
+	handler := handleRemove(hctx)
+
+	result := callTool(t, handler, map[string]any{"task": "PROJ-123"})
+	errText := resultError(t, result)
+	if !strings.Contains(errText, "re-add the prefix") {
+		t.Errorf("expected orphan-guard error mentioning re-adding the prefix, got: %s", errText)
+	}
+}
+
+func TestRemoveToolOrphanedPrefixForceBypasses(t *testing.T) {
+	hctx := orphanedRemoveToolContext(orphanedRemoveToolRunner())
+	handler := handleRemove(hctx)
+
+	result := callTool(t, handler, map[string]any{"task": "PROJ-123", "force": true})
+	data := unmarshalJSON[removeResult](t, result)
+	if data.Branch != "PROJ-123" {
+		t.Errorf("branch = %q, want %q", data.Branch, "PROJ-123")
+	}
+	if !data.WorktreeRemoved {
+		t.Error("expected worktree_removed=true when force bypasses the orphan guard")
 	}
 }
 

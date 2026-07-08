@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/git"
@@ -18,8 +19,7 @@ func registerListTool(s *server.MCPServer, hctx *HandlerContext) {
 	tool := mcp.NewTool("list",
 		mcp.WithDescription("List all worktrees with their branch, path, and status"),
 		mcp.WithString("type",
-			mcp.Description("Filter by prefix type (feature, bugfix, hotfix, docs, test, chore)"),
-			mcp.Enum("feature", "bugfix", "hotfix", "docs", "test", "chore"),
+			mcp.Description("Filter by prefix type (built-in: feature, bugfix, hotfix, docs, test, chore; or any custom type configured in [[resolver.prefix]])"),
 		),
 		mcp.WithBoolean("dirty",
 			mcp.Description("Only show worktrees with uncommitted changes"),
@@ -52,10 +52,11 @@ func handleList(hctx *HandlerContext) server.ToolHandlerFunc {
 			return errorResult(err), nil
 		}
 
-		if typeFilter != "" && !resolver.ValidPrefixType(typeFilter) {
+		ps := cfg.PrefixSet()
+		if typeFilter != "" && !ps.ValidType(typeFilter) {
 			return errorResult(errhint.WithFix(
 				fmt.Errorf("invalid type %q", typeFilter),
-				"use one of: feature, bugfix, hotfix, docs, test, chore",
+				"use one of: "+strings.Join(ps.TypeNames(), ", "),
 			)), nil
 		}
 
@@ -99,7 +100,7 @@ func handleListArchived(ctx context.Context, r git.Runner, hctx *HandlerContext)
 		return errorResult(err), nil
 	}
 
-	prefixes := resolver.AllPrefixes()
+	prefixes := hctx.PrefixSet().Strip()
 	items := make([]listArchivedItem, 0, len(archived))
 	for _, b := range archived {
 		task, typeName := resolver.TaskAndType(b, prefixes)
