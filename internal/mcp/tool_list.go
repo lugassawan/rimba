@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"strings"
 
-	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/resolver"
@@ -54,10 +52,7 @@ func handleList(hctx *HandlerContext) server.ToolHandlerFunc {
 
 		ps := cfg.PrefixSet()
 		if typeFilter != "" && !ps.ValidType(typeFilter) {
-			return errorResult(errhint.WithFix(
-				fmt.Errorf("invalid type %q", typeFilter),
-				"use one of: "+strings.Join(ps.TypeNames(), ", "),
-			)), nil
+			return invalidTypeResult(typeFilter, ps, ""), nil
 		}
 
 		res, err := operations.ListWorktrees(ctx, r, nil, operations.ListWorktreesRequest{

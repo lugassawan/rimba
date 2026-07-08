@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/errhint"
@@ -91,10 +90,7 @@ func handleAddTask(ctx context.Context, hctx *HandlerContext, req mcp.CallToolRe
 	}
 
 	if !ps.ValidType(prefixType) {
-		return errorResult(errhint.WithFix(
-			fmt.Errorf("invalid type %q", prefixType),
-			"use one of: "+strings.Join(ps.TypeNames(), ", ")+" (or omit to default to feature)",
-		)), nil
+		return invalidTypeResult(prefixType, ps, " (or omit to default to feature)"), nil
 	}
 
 	prefix, _ := ps.TypeToPrefix(prefixType)

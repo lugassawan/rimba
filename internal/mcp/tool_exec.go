@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/errhint"
@@ -76,10 +75,7 @@ func handleExec(hctx *HandlerContext) server.ToolHandlerFunc {
 
 		ps := cfg.PrefixSet()
 		if typeFilter != "" && !ps.ValidType(typeFilter) {
-			return errorResult(errhint.WithFix(
-				fmt.Errorf("invalid type %q", typeFilter),
-				"use one of: "+strings.Join(ps.TypeNames(), ", "),
-			)), nil
+			return invalidTypeResult(typeFilter, ps, ""), nil
 		}
 
 		filtered, err := resolveExecTargets(ctx, hctx.Runner, cfg, typeFilter, dirty)
