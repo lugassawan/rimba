@@ -64,6 +64,17 @@ func TestAddMutuallyExclusiveFlags(t *testing.T) {
 	assertContains(t, r.Stderr, "none of the others can be")
 }
 
+func TestAddRejectsUnsafeTaskName(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+
+	r := rimbaFail(t, repo, "add", "foo..bar")
+	assertContains(t, r.Stderr, "invalid task name")
+}
+
 func TestAddCustomSource(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
