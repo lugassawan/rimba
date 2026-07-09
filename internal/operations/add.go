@@ -2,6 +2,7 @@ package operations
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -116,6 +117,9 @@ func AddWorktree(ctx context.Context, r git.Runner, params AddParams, onProgress
 // (leading dash, path traversal, control/shell chars) before branch creation.
 func validateBranchInput(task, service string) error {
 	const hint = "use only letters, digits, '.', '_', '/', '-'; no leading '-' or '..'"
+	if task == "" {
+		return errhint.WithFix(errors.New("task name is required"), hint)
+	}
 	if err := gitref.Validate(task); err != nil {
 		return errhint.WithFix(fmt.Errorf("invalid task name: %w", err), hint)
 	}

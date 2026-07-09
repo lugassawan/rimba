@@ -286,6 +286,36 @@ func TestAddWorktreeRejectsUnsafeInput(t *testing.T) {
 	}
 }
 
+func TestAddWorktreeRejectsEmptyTask(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			t.Fatalf("git command should not run before validation, got args: %v", args)
+			return "", nil
+		},
+		runInDir: func(dir string, args ...string) (string, error) {
+			t.Fatalf("git command should not run before validation, got dir: %s args: %v", dir, args)
+			return "", nil
+		},
+	}
+
+	_, err := AddWorktree(context.Background(), r, AddParams{
+		Task:   "",
+		Prefix: "feature/",
+		Source: branchMain,
+		PostCreateOptions: PostCreateOptions{
+			WorktreeDir: "/tmp/wt",
+			SkipDeps:    true,
+			SkipHooks:   true,
+		},
+	}, nil)
+	if err == nil {
+		t.Fatal("expected error for empty task")
+	}
+	if !strings.Contains(err.Error(), "task name is required") {
+		t.Errorf("expected 'task name is required' error, got: %v", err)
+	}
+}
+
 func TestAddWorktreeAllowsSafeInput(t *testing.T) {
 	tests := []struct {
 		name string
