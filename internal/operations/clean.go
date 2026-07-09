@@ -171,10 +171,8 @@ func classifyMergedEntry(ctx context.Context, r git.Runner, mergeRef string, e g
 	return &CleanCandidate{Path: e.Path, Branch: e.Branch}, ""
 }
 
-// squashMergedCached is git.IsSquashMerged, but reuses the mergeBase..mergeRef
-// mainline patch-ID set across candidates that share the same merge-base with
-// mergeRef (e.g. branches forked at the same commit), instead of recomputing it
-// per branch. cache is scoped to a single FindMergedCandidates call.
+// squashMergedCached is git.IsSquashMerged, but reuses the mainline patch-ID set
+// across candidates sharing a merge-base; cache is scoped to one FindMergedCandidates call.
 func squashMergedCached(ctx context.Context, r git.Runner, mergeRef, branch string, cache map[string]map[string]bool) (bool, error) {
 	mergeBase, err := git.MergeBase(ctx, r, mergeRef, branch)
 	if err != nil {

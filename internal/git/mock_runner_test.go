@@ -191,10 +191,7 @@ func TestDeleteBranchAlreadyGoneIsIdempotent(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			calls = append(calls, args)
-			// Both the delete attempt and the fallback existence check fail —
-			// simulates a branch that's already gone (or was deleted concurrently
-			// between an earlier existence check and the delete call, the TOCTOU
-			// race a check-before-act design would be exposed to).
+			// Both calls fail — simulates a branch that's already gone.
 			return "", errors.New("fatal: needed a single revision")
 		},
 	}

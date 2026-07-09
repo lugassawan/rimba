@@ -67,8 +67,7 @@ func TestDeleteBranchLeadingDashName(t *testing.T) {
 	r := &git.ExecRunner{Dir: repo}
 
 	// git branch/checkout refuse to create a ref beginning with "-", so use
-	// update-ref to create the fixture directly (mirrors how such a ref could
-	// otherwise arise, e.g. via a lower-level ref write).
+	// update-ref to create the fixture directly.
 	testutil.GitCmd(t, repo, "update-ref", "refs/heads/-leading-dash", "HEAD")
 
 	if err := git.DeleteBranch(context.Background(), r, "-leading-dash", false); err != nil {

@@ -118,9 +118,8 @@ func TestRemoveWorktreeLeadingDashPath(t *testing.T) {
 	repo := testutil.NewTestRepo(t)
 	r := &git.ExecRunner{Dir: repo}
 
-	// A relative path is used deliberately: paths sourced from ListWorktrees are
-	// always absolute (git canonicalizes them), so this is the one case where a
-	// leading-dash operand can actually reach the git subprocess unmangled.
+	// Relative path: ListWorktrees paths are always absolute, so this is the
+	// one case a leading-dash operand can actually reach the subprocess.
 	if err := git.AddWorktree(context.Background(), r, "-dashwt", "feat/dashwt", "main"); err != nil {
 		t.Fatalf(fatalAddWorktree, err)
 	}

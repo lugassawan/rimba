@@ -51,8 +51,7 @@ func (r *ExecRunner) RunInDir(ctx context.Context, dir string, args ...string) (
 }
 
 // errMsg builds the error text from stderr and stdout: both when both are
-// present (so a caller matching on either stream never silently loses the
-// other), otherwise whichever one is non-empty.
+// present, otherwise whichever one is non-empty.
 func errMsg(stderr, stdout string) string {
 	switch {
 	case stderr != "" && stdout != "":

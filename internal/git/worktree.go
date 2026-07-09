@@ -49,11 +49,8 @@ func RemoveWorktree(ctx context.Context, r Runner, path string, force bool) erro
 	return err
 }
 
-// MoveWorktree moves the worktree from oldPath to newPath.
-// When force is true, --force is passed twice so that even locked worktrees can be moved.
-// Cancellable via ctx. Rollback callers must pass context.Background() instead of the
-// original caller's ctx, so a cancelled rollback still completes and doesn't strand
-// the worktree between oldPath and newPath.
+// MoveWorktree moves the worktree from oldPath to newPath (force passes --force twice).
+// Cancellable via ctx; rollback callers should pass context.Background() to avoid stranding it.
 func MoveWorktree(ctx context.Context, r Runner, oldPath, newPath string, force bool) error {
 	args := []string{cmdWorktree, "move"}
 	if force {

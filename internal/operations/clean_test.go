@@ -221,9 +221,7 @@ func sharedMergeBaseRunFunc(wt string, logInvocations *int) func(args ...string)
 }
 
 // TestFindMergedCandidatesSquashMergeCachesMainlinePatchIDsByMergeBase locks in
-// finding #5: when multiple slow-path candidates share the same merge-base with
-// mergeRef, the expensive `git log -p mergeBase..mergeRef` (+ ComputePatchIDs)
-// step must run once per distinct merge-base, not once per candidate branch.
+// finding #5: the mainline patch-ID computation runs once per merge-base, not per branch.
 func TestFindMergedCandidatesSquashMergeCachesMainlinePatchIDsByMergeBase(t *testing.T) {
 	defer func(orig func(context.Context, string) (map[string]bool, error)) {
 		git.ComputePatchIDs = orig
@@ -304,10 +302,8 @@ func distinctMergeBaseRunFunc(wt string, logCallsByRange map[string]int) func(ar
 	}
 }
 
-// TestFindMergedCandidatesSquashMergeDistinctMergeBasesNotConflated ensures the
-// per-merge-base cache keys correctly — two candidates with different merge-bases
-// must each get their own mainline patch-ID computation, and a match for one must
-// not leak into the other.
+// TestFindMergedCandidatesSquashMergeDistinctMergeBasesNotConflated ensures distinct
+// merge-bases get their own computation, and a match for one doesn't leak into the other.
 func TestFindMergedCandidatesSquashMergeDistinctMergeBasesNotConflated(t *testing.T) {
 	defer func(orig func(context.Context, string) (map[string]bool, error)) {
 		git.ComputePatchIDs = orig

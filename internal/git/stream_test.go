@@ -10,8 +10,7 @@ import (
 )
 
 // writeFakeGit puts a fake "git" executable at the front of PATH so tests can
-// control stdout/stderr/exit-code deterministically, independent of the
-// installed git version's actual message wording.
+// control stdout/stderr/exit-code deterministically.
 func writeFakeGit(t *testing.T, script string) {
 	t.Helper()
 	if runtime.GOOS == "windows" {

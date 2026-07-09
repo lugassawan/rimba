@@ -55,11 +55,8 @@ func BranchExists(ctx context.Context, r Runner, branch string) bool {
 	return err == nil
 }
 
-// DeleteBranch deletes a local branch. If force is true, uses -D instead of -d.
-// Already-gone branches are treated as success (idempotent). The existence check
-// runs only as a fallback after a failed delete, not as a precondition — checking
-// first would leave a TOCTOU window where a branch deleted concurrently between
-// the check and the delete call surfaces as a spurious error instead of nil.
+// DeleteBranch deletes a local branch (-D if force). Already-gone branches are
+// idempotent — checked after a failed delete to avoid a TOCTOU race.
 func DeleteBranch(ctx context.Context, r Runner, branch string, force bool) error {
 	flag := "-d"
 	if force {
@@ -174,11 +171,8 @@ func IsSquashMerged(ctx context.Context, r Runner, mergeRef, branch string) (boo
 	return patchIDsIntersect(branchPIDs, mainlinePIDs), nil
 }
 
-// IsSquashMergedWithMainlinePatchIDs is IsSquashMerged for a caller that already
-// knows branch's merge-base with mergeRef and has a precomputed mainline patch-ID
-// set for that merge-base (see MainlinePatchIDsSince). Callers checking many
-// branches against the same mergeRef can compute mainlinePIDs once per distinct
-// merge-base and reuse it here, instead of IsSquashMerged recomputing it per branch.
+// IsSquashMergedWithMainlinePatchIDs is IsSquashMerged with a precomputed mainline
+// patch-ID set, letting callers cache it once per merge-base across many branches.
 func IsSquashMergedWithMainlinePatchIDs(ctx context.Context, r Runner, mergeBase, branch string, mainlinePIDs map[string]bool) (bool, error) {
 	branchPIDs, empty, err := branchOwnPatchIDs(ctx, r, mergeBase, branch)
 	if err != nil || empty {
@@ -188,8 +182,7 @@ func IsSquashMergedWithMainlinePatchIDs(ctx context.Context, r Runner, mergeBase
 }
 
 // MainlinePatchIDsSince returns the patch-ID set for mergeRef's history since
-// mergeBase (exclusive). Exposed so callers checking multiple branches against the
-// same mergeRef can cache this by mergeBase and avoid recomputing identical ranges.
+// mergeBase (exclusive), so callers can cache it by mergeBase across branches.
 func MainlinePatchIDsSince(ctx context.Context, r Runner, mergeBase, mergeRef string) (map[string]bool, error) {
 	mergeRefDiffs, err := r.Run(ctx, CmdLog, "-p", "--no-merges", mergeBase+".."+mergeRef)
 	if err != nil {
@@ -277,8 +270,7 @@ func LocalBranches(ctx context.Context, r Runner) ([]string, error) {
 }
 
 // branchOwnPatchIDs returns branch's patch-ID set relative to mergeBase, and
-// whether branch has no commits of its own since mergeBase (in which case the
-// caller should skip the mainline comparison entirely).
+// whether branch has no commits of its own (caller should skip the mainline compare).
 func branchOwnPatchIDs(ctx context.Context, r Runner, mergeBase, branch string) (pids map[string]bool, empty bool, _ error) {
 	tip, err := r.Run(ctx, cmdRevParse, "--verify", branch)
 	if err != nil {
