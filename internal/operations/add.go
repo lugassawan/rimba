@@ -2,6 +2,7 @@ package operations
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/lugassawan/rimba/internal/deps"
 	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/gitref"
 	"github.com/lugassawan/rimba/internal/progress"
 	"github.com/lugassawan/rimba/internal/resolver"
 )
@@ -63,6 +65,9 @@ func AddWorktree(ctx context.Context, r git.Runner, params AddParams, onProgress
 	}
 
 	// Validate
+	if err := validateBranchInput(params.Task, params.Service); err != nil {
+		return result, err
+	}
 	if git.BranchExists(ctx, r, branch) {
 		return result, errhint.WithFix(
 			fmt.Errorf("branch %q already exists", branch),
@@ -106,4 +111,22 @@ func AddWorktree(ctx context.Context, r git.Runner, params AddParams, onProgress
 	result.HookResults = pcResult.HookResults
 
 	return result, nil
+}
+
+// validateBranchInput rejects task/service names that are unsafe as git refs
+// (leading dash, path traversal, control/shell chars) before branch creation.
+func validateBranchInput(task, service string) error {
+	const hint = "use only letters, digits, '.', '_', '/', '-'; no leading '-' or '..'"
+	if task == "" {
+		return errhint.WithFix(errors.New("task name is required"), hint)
+	}
+	if err := gitref.Validate(task); err != nil {
+		return errhint.WithFix(fmt.Errorf("invalid task name: %w", err), hint)
+	}
+	if service != "" {
+		if err := gitref.Validate(service); err != nil {
+			return errhint.WithFix(fmt.Errorf("invalid service name: %w", err), hint)
+		}
+	}
+	return nil
 }
