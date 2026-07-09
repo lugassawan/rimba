@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lugassawan/rimba/internal/gitref"
 	"github.com/lugassawan/rimba/internal/progress"
 )
 
@@ -236,6 +237,127 @@ func TestAddWorktreeWithDeps(t *testing.T) {
 	// DepsResults will be nil because no package.json etc. exists in the tmpDir
 	if result.DepsResults != nil {
 		t.Errorf("expected nil deps results (no modules), got %v", result.DepsResults)
+	}
+}
+
+func TestAddWorktreeRejectsUnsafeInput(t *testing.T) {
+	tests := []struct {
+		name    string
+		task    string
+		service string
+	}{
+		{name: "leading dash task", task: "-oops"},
+		{name: "dotdot task", task: "foo..bar"},
+		{name: "space in task", task: "a b"},
+		{name: "semicolon in task", task: "a;b"},
+		{name: "unsafe service", task: "x", service: ".."},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &mockRunner{
+				run: func(args ...string) (string, error) {
+					t.Fatalf("git command should not run before validation, got args: %v", args)
+					return "", nil
+				},
+				runInDir: func(dir string, args ...string) (string, error) {
+					t.Fatalf("git command should not run before validation, got dir: %s args: %v", dir, args)
+					return "", nil
+				},
+			}
+
+			_, err := AddWorktree(context.Background(), r, AddParams{
+				Task:    tc.task,
+				Service: tc.service,
+				Prefix:  "feature/",
+				Source:  branchMain,
+				PostCreateOptions: PostCreateOptions{
+					WorktreeDir: "/tmp/wt",
+					SkipDeps:    true,
+					SkipHooks:   true,
+				},
+			}, nil)
+			if err == nil {
+				t.Fatal("expected error for unsafe input")
+			}
+			if !errors.Is(err, gitref.ErrUnsafeRefName) {
+				t.Errorf("expected errors.Is ErrUnsafeRefName, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestAddWorktreeRejectsEmptyTask(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			t.Fatalf("git command should not run before validation, got args: %v", args)
+			return "", nil
+		},
+		runInDir: func(dir string, args ...string) (string, error) {
+			t.Fatalf("git command should not run before validation, got dir: %s args: %v", dir, args)
+			return "", nil
+		},
+	}
+
+	_, err := AddWorktree(context.Background(), r, AddParams{
+		Task:   "",
+		Prefix: "feature/",
+		Source: branchMain,
+		PostCreateOptions: PostCreateOptions{
+			WorktreeDir: "/tmp/wt",
+			SkipDeps:    true,
+			SkipHooks:   true,
+		},
+	}, nil)
+	if err == nil {
+		t.Fatal("expected error for empty task")
+	}
+	if !strings.Contains(err.Error(), "task name is required") {
+		t.Errorf("expected 'task name is required' error, got: %v", err)
+	}
+}
+
+func TestAddWorktreeAllowsSafeInput(t *testing.T) {
+	tests := []struct {
+		name string
+		task string
+	}{
+		{name: "simple task", task: "my-task"},
+		{name: "pr review task", task: "review/123-slug"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			wtDir := filepath.Join(tmpDir, ".worktrees")
+
+			r := &mockRunner{
+				run: func(args ...string) (string, error) {
+					if len(args) > 0 && args[0] == cmdRevParse {
+						return "", errors.New("not found")
+					}
+					if len(args) > 0 && args[0] == gitCmdWorktree && len(args) > 1 && args[1] == gitSubcmdAdd {
+						_ = os.MkdirAll(args[2], 0o755)
+						return "", nil
+					}
+					return "", nil
+				},
+				runInDir: noopRunInDir,
+			}
+
+			_, err := AddWorktree(context.Background(), r, AddParams{
+				Task:   tc.task,
+				Prefix: "feature/",
+				Source: branchMain,
+				PostCreateOptions: PostCreateOptions{
+					RepoRoot:    tmpDir,
+					WorktreeDir: wtDir,
+					SkipDeps:    true,
+					SkipHooks:   true,
+				},
+			}, nil)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
 	}
 }
 
