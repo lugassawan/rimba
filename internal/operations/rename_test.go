@@ -178,7 +178,7 @@ func TestRenameWorktreeBranchRenameFails(t *testing.T) {
 				moveCount++
 				return "", nil
 			}
-			if len(args) >= 2 && args[0] == "branch" && args[1] == "-m" {
+			if len(args) >= 2 && args[0] == cmdBranch && args[1] == "-m" {
 				return "", errors.New(errRenameFailed)
 			}
 			return "", nil
@@ -222,7 +222,7 @@ func TestRenameWorktreeBranchRenameFailsRollbackFails(t *testing.T) {
 				}
 				return "", nil
 			}
-			if len(args) >= 2 && args[0] == "branch" && args[1] == "-m" {
+			if len(args) >= 2 && args[0] == cmdBranch && args[1] == "-m" {
 				return "", errors.New(errRenameFailed)
 			}
 			return "", nil
@@ -246,6 +246,49 @@ func TestRenameWorktreeBranchRenameFailsRollbackFails(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "git worktree move") {
 		t.Errorf("error = %q, want 'git worktree move' hint fragment", err.Error())
+	}
+}
+
+func TestRenameWorktreeRollbackSurvivesCancelledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	moveCount := 0
+	r := &ctxAwareMockRunner{
+		run: func(ctx context.Context, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return "", errGitFailed // BranchExists returns false
+			}
+			if len(args) >= 2 && args[0] == cmdWorktree && args[1] == cmdMove {
+				moveCount++
+				if moveCount == 1 {
+					// Forward move succeeded; cancel the caller's context now to
+					// simulate cancellation arriving between the two worktree moves.
+					cancel()
+					return "", nil
+				}
+				// Rollback move must not observe the caller's cancelled context —
+				// MoveWorktree's rollback call site passes context.Background().
+				if ctx.Err() != nil {
+					return "", errors.New("rollback saw cancelled context: " + ctx.Err().Error())
+				}
+				return "", nil
+			}
+			if len(args) >= 2 && args[0] == cmdBranch && args[1] == "-m" {
+				return "", errors.New(errRenameFailed)
+			}
+			return "", nil
+		},
+	}
+
+	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
+	_, err := RenameWorktree(ctx, r, RenameParams{WT: wt, NewTask: "auth", WtDir: wtDir})
+	if err == nil {
+		t.Fatal("expected error from branch rename failure")
+	}
+	if strings.Contains(err.Error(), "rollback saw cancelled context") {
+		t.Errorf("rollback move must use context.Background(), not the caller's cancelled ctx: %v", err)
+	}
+	if moveCount != 2 {
+		t.Fatalf("expected 2 worktree move calls (forward + rollback), got %d", moveCount)
 	}
 }
 
@@ -404,14 +447,14 @@ func TestRenameWorktreePushSuccess(t *testing.T) {
 	if calls.pushArgs == nil {
 		t.Fatal("expected push -u to run")
 	}
-	if len(calls.pushArgs) < 4 || calls.pushArgs[1] != "-u" || calls.pushArgs[3] != branchAuth {
-		t.Errorf("push args = %v, want [push -u origin %s]", calls.pushArgs, branchAuth)
+	if len(calls.pushArgs) < 5 || calls.pushArgs[1] != "-u" || calls.pushArgs[4] != branchAuth {
+		t.Errorf("push args = %v, want [push -u origin -- %s]", calls.pushArgs, branchAuth)
 	}
 	if calls.deleteArgs == nil {
 		t.Fatal("expected push --delete to run")
 	}
-	if len(calls.deleteArgs) < 4 || calls.deleteArgs[2] != "--delete" || calls.deleteArgs[3] != branchFeature {
-		t.Errorf("delete args = %v, want [push origin --delete %s]", calls.deleteArgs, branchFeature)
+	if len(calls.deleteArgs) < 5 || calls.deleteArgs[2] != "--delete" || calls.deleteArgs[4] != branchFeature {
+		t.Errorf("delete args = %v, want [push origin --delete -- %s]", calls.deleteArgs, branchFeature)
 	}
 	if !res.Published {
 		t.Error("expected Published = true")

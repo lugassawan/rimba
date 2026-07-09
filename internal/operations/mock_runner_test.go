@@ -36,3 +36,17 @@ func (m *mockRunner) RunInDir(_ context.Context, dir string, args ...string) (st
 func noopRunInDir(_ string, _ ...string) (string, error) {
 	return "", nil
 }
+
+// ctxAwareMockRunner implements git.Runner, forwarding the context to run so
+// tests can assert which context a given call actually received.
+type ctxAwareMockRunner struct {
+	run func(ctx context.Context, args ...string) (string, error)
+}
+
+func (m *ctxAwareMockRunner) Run(ctx context.Context, args ...string) (string, error) {
+	return m.run(ctx, args...)
+}
+
+func (m *ctxAwareMockRunner) RunInDir(ctx context.Context, _ string, args ...string) (string, error) {
+	return m.run(ctx, args...)
+}

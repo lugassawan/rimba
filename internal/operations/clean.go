@@ -3,6 +3,7 @@ package operations
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/lugassawan/rimba/internal/errhint"
@@ -71,9 +72,11 @@ func FindMergedCandidates(ctx context.Context, r git.Runner, mergeRef, mainBranc
 		mainline.shas, mainline.err = git.FirstParentChainSHAs(ctx, r, mergeRef)
 	}
 
+	mainlinePIDsByBase := make(map[string]map[string]bool)
+
 	var result MergedResult
 	for _, e := range git.FilterEntries(entries, mainBranch) {
-		candidate, warning := classifyMergedEntry(ctx, r, mergeRef, e, mergedSet[e.Branch], mainline)
+		candidate, warning := classifyMergedEntry(ctx, r, mergeRef, e, mergedSet[e.Branch], mainline, mainlinePIDsByBase)
 		if warning != "" {
 			result.Warnings = append(result.Warnings, warning)
 			continue
@@ -147,7 +150,7 @@ type mainlineLookup struct {
 
 // classifyMergedEntry decides whether a worktree entry should be removed:
 // the first-parent guard when isMergedHit, else squash-merge detection.
-func classifyMergedEntry(ctx context.Context, r git.Runner, mergeRef string, e git.WorktreeEntry, isMergedHit bool, mainline mainlineLookup) (*CleanCandidate, string) {
+func classifyMergedEntry(ctx context.Context, r git.Runner, mergeRef string, e git.WorktreeEntry, isMergedHit bool, mainline mainlineLookup, mainlinePIDsByBase map[string]map[string]bool) (*CleanCandidate, string) {
 	if isMergedHit {
 		if mainline.err != nil {
 			return nil, fmt.Sprintf("skipped %s: mainline check failed: %v", e.Branch, mainline.err)
@@ -158,7 +161,7 @@ func classifyMergedEntry(ctx context.Context, r git.Runner, mergeRef string, e g
 		return &CleanCandidate{Path: e.Path, Branch: e.Branch}, ""
 	}
 
-	squashed, err := git.IsSquashMerged(ctx, r, mergeRef, e.Branch)
+	squashed, err := squashMergedCached(ctx, r, mergeRef, e.Branch, mainlinePIDsByBase)
 	if err != nil {
 		return nil, fmt.Sprintf("skipped %s: squash-merge check failed: %v", e.Branch, err)
 	}
@@ -166,6 +169,29 @@ func classifyMergedEntry(ctx context.Context, r git.Runner, mergeRef string, e g
 		return nil, ""
 	}
 	return &CleanCandidate{Path: e.Path, Branch: e.Branch}, ""
+}
+
+// squashMergedCached is git.IsSquashMerged, but reuses the mergeBase..mergeRef
+// mainline patch-ID set across candidates that share the same merge-base with
+// mergeRef (e.g. branches forked at the same commit), instead of recomputing it
+// per branch. cache is scoped to a single FindMergedCandidates call.
+func squashMergedCached(ctx context.Context, r git.Runner, mergeRef, branch string, cache map[string]map[string]bool) (bool, error) {
+	mergeBase, err := git.MergeBase(ctx, r, mergeRef, branch)
+	if err != nil {
+		return false, err
+	}
+	mergeBase = strings.TrimSpace(mergeBase)
+
+	mainlinePIDs, ok := cache[mergeBase]
+	if !ok {
+		mainlinePIDs, err = git.MainlinePatchIDsSince(ctx, r, mergeBase, mergeRef)
+		if err != nil {
+			return false, err
+		}
+		cache[mergeBase] = mainlinePIDs
+	}
+
+	return git.IsSquashMergedWithMainlinePatchIDs(ctx, r, mergeBase, branch, mainlinePIDs)
 }
 
 // deleteRemoteForItem deletes the remote branch on git.DefaultRemote.

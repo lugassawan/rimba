@@ -73,7 +73,7 @@ func RenameWorktree(ctx context.Context, r git.Runner, p RenameParams) (RenameRe
 		hadOriginUpstream = hasUpstream && upstreamRemote == git.DefaultRemote
 	}
 
-	if err := git.MoveWorktree(r, p.WT.Path, newPath, p.Force); err != nil {
+	if err := git.MoveWorktree(ctx, r, p.WT.Path, newPath, p.Force); err != nil {
 		return RenameResult{}, errhint.WithFix(
 			fmt.Errorf("failed to move worktree: %w", err),
 			"unlock the worktree if locked: git worktree unlock "+p.WT.Path+", then retry: rimba rename",
@@ -81,7 +81,9 @@ func RenameWorktree(ctx context.Context, r git.Runner, p RenameParams) (RenameRe
 	}
 
 	if err := git.RenameBranch(ctx, r, p.WT.Branch, newBranch); err != nil {
-		if rbErr := git.MoveWorktree(r, newPath, p.WT.Path, p.Force); rbErr != nil {
+		// Rollback must complete even if the caller's ctx is cancelled — otherwise
+		// a cancellation could strand the worktree at newPath with no branch.
+		if rbErr := git.MoveWorktree(context.Background(), r, newPath, p.WT.Path, p.Force); rbErr != nil {
 			return RenameResult{}, errhint.WithFix(
 				fmt.Errorf("failed to rename branch %q → %q: %w\nRollback failed — worktree is at %s: %w",
 					p.WT.Branch, newBranch, err, newPath, rbErr),
