@@ -5,6 +5,8 @@ import (
 	"errors"
 	"slices"
 	"testing"
+
+	"github.com/lugassawan/rimba/testutil"
 )
 
 const (
@@ -90,8 +92,9 @@ func TestRebase(t *testing.T) {
 	if capturedDir != fakeDir {
 		t.Errorf("dir = %q, want %q", capturedDir, fakeDir)
 	}
-	if len(capturedArgs) != 2 || capturedArgs[0] != "rebase" || capturedArgs[1] != branchMain {
-		t.Errorf("expected [rebase main], got %v", capturedArgs)
+	want := []string{"rebase", "--", branchMain}
+	if !slices.Equal(capturedArgs, want) {
+		t.Errorf("args = %v, want %v", capturedArgs, want)
 	}
 }
 
@@ -107,6 +110,24 @@ func TestRebaseError(t *testing.T) {
 		t.Fatal("expected error from Rebase")
 	}
 	assertContains(t, err, errRebaseFail)
+}
+
+func TestRebaseLeadingDashBranchName(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegrationGit)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &ExecRunner{Dir: repo}
+
+	testutil.GitCmd(t, repo, "update-ref", "refs/heads/-rebase-onto", "HEAD")
+	testutil.CreateFile(t, repo, "extra.txt", "content")
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "extra commit")
+
+	if err := Rebase(context.Background(), r, repo, "-rebase-onto"); err != nil {
+		t.Fatalf("Rebase onto leading-dash name: %v", err)
+	}
 }
 
 func TestAbortRebase(t *testing.T) {
@@ -360,9 +381,27 @@ func TestPushSetUpstream(t *testing.T) {
 	if capturedDir != fakeDir {
 		t.Errorf("dir = %q, want %q", capturedDir, fakeDir)
 	}
-	wantArgs := []string{"push", "-u", remoteOrigin, branchFeature}
+	wantArgs := []string{"push", "-u", remoteOrigin, "--", branchFeature}
 	if !slices.Equal(capturedArgs, wantArgs) {
 		t.Errorf("args = %v, want %v", capturedArgs, wantArgs)
+	}
+}
+
+func TestPushSetUpstreamLeadingDashBranchName(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegrationGit)
+	}
+
+	remoteDir := t.TempDir()
+	testutil.GitCmd(t, remoteDir, "init", "--bare", "-q")
+
+	repo := testutil.NewTestRepo(t)
+	r := &ExecRunner{Dir: repo}
+	testutil.GitCmd(t, repo, "remote", "add", "origin", remoteDir)
+	testutil.GitCmd(t, repo, "update-ref", "refs/heads/-push-dash", "HEAD")
+
+	if err := PushSetUpstream(context.Background(), r, repo, "origin", "-push-dash"); err != nil {
+		t.Fatalf("PushSetUpstream on leading-dash name: %v", err)
 	}
 }
 

@@ -66,6 +66,56 @@ func TestFetchPassesContext(t *testing.T) {
 	}
 }
 
+func TestMoveWorktreePassesContext(t *testing.T) {
+	sentinel := context.WithValue(context.Background(), ctxKey{}, "sentinel")
+	r := &ctxMockRunner{}
+
+	if err := MoveWorktree(sentinel, r, "/old", "/new", false); err != nil {
+		t.Fatalf("MoveWorktree: %v", err)
+	}
+
+	if r.capturedCtx == nil {
+		t.Fatal("context was not captured")
+	}
+	if r.capturedCtx.Value(ctxKey{}) != "sentinel" {
+		t.Error("sentinel context value not propagated")
+	}
+}
+
+func TestMoveWorktreeContextCancelledReturnsFast(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	blocker := make(chan struct{})
+	r := &ctxMockRunner{
+		run: func(ctx context.Context, args ...string) (string, error) {
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-blocker:
+				return "", nil
+			}
+		},
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- MoveWorktree(ctx, r, "/old", "/new", false)
+	}()
+
+	time.Sleep(10 * time.Millisecond)
+	cancel()
+	close(blocker)
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected context.Canceled, got: %v", err)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("MoveWorktree did not return within 1s after cancellation")
+	}
+}
+
 func TestRebaseContextCancelledReturnsFast(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 

@@ -58,6 +58,49 @@ func TestDeleteBranch(t *testing.T) {
 	}
 }
 
+func TestDeleteBranchLeadingDashName(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	// git branch/checkout refuse to create a ref beginning with "-", so use
+	// update-ref to create the fixture directly.
+	testutil.GitCmd(t, repo, "update-ref", "refs/heads/-leading-dash", "HEAD")
+
+	if err := git.DeleteBranch(context.Background(), r, "-leading-dash", false); err != nil {
+		t.Fatalf("DeleteBranch on leading-dash name: %v", err)
+	}
+
+	if git.BranchExists(context.Background(), r, "-leading-dash") {
+		t.Error("branch should not exist after delete")
+	}
+}
+
+func TestRenameBranchLeadingDashOldName(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	testutil.GitCmd(t, repo, "update-ref", "refs/heads/-leading-dash-rename", "HEAD")
+
+	if err := git.RenameBranch(context.Background(), r, "-leading-dash-rename", "renamed-ok"); err != nil {
+		t.Fatalf("RenameBranch from leading-dash name: %v", err)
+	}
+
+	if !git.BranchExists(context.Background(), r, "renamed-ok") {
+		t.Error("expected renamed-ok branch to exist")
+	}
+	if git.BranchExists(context.Background(), r, "-leading-dash-rename") {
+		t.Error("expected old leading-dash branch to be gone")
+	}
+}
+
 func TestLastCommitTime(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipIntegration)

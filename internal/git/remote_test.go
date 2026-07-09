@@ -6,7 +6,11 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/lugassawan/rimba/testutil"
 )
+
+const skipIntegrationGit = "skipping integration test"
 
 func TestDeleteRemoteBranchSuccess(t *testing.T) {
 	var captured []string
@@ -19,7 +23,7 @@ func TestDeleteRemoteBranchSuccess(t *testing.T) {
 	if err := DeleteRemoteBranch(context.Background(), r, "origin", "feature/done"); err != nil {
 		t.Fatalf("DeleteRemoteBranch: %v", err)
 	}
-	want := []string{"push", "origin", "--delete", "feature/done"}
+	want := []string{"push", "origin", "--delete", "--", "feature/done"}
 	if len(captured) != len(want) {
 		t.Fatalf("args = %v, want %v", captured, want)
 	}
@@ -56,6 +60,25 @@ func TestDeleteRemoteBranchFailure(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "To fix:") {
 		t.Errorf("error = %q, want it to contain hint", err.Error())
+	}
+}
+
+func TestDeleteRemoteBranchLeadingDashName(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegrationGit)
+	}
+
+	remoteDir := t.TempDir()
+	testutil.GitCmd(t, remoteDir, "init", "--bare", "-q")
+
+	repo := testutil.NewTestRepo(t)
+	r := &ExecRunner{Dir: repo}
+	testutil.GitCmd(t, repo, "remote", "add", "origin", remoteDir)
+	testutil.GitCmd(t, repo, "update-ref", "refs/heads/-del-dash", "HEAD")
+	testutil.GitCmd(t, repo, "push", "origin", "--", "-del-dash")
+
+	if err := DeleteRemoteBranch(context.Background(), r, "origin", "-del-dash"); err != nil {
+		t.Fatalf("DeleteRemoteBranch on leading-dash name: %v", err)
 	}
 }
 

@@ -55,16 +55,15 @@ func BranchExists(ctx context.Context, r Runner, branch string) bool {
 	return err == nil
 }
 
-// DeleteBranch deletes a local branch. If force is true, uses -D instead of -d.
-// Already-gone branches are treated as success (idempotent).
+// DeleteBranch deletes a local branch (-D if force). Already-gone branches are
+// idempotent — checked after a failed delete to avoid a TOCTOU race.
 func DeleteBranch(ctx context.Context, r Runner, branch string, force bool) error {
 	flag := "-d"
 	if force {
 		flag = "-D"
 	}
-	_, err := r.Run(ctx, "branch", flag, branch)
-	// git emits "error: branch 'X' not found." — assumes LC_ALL=C or English git.
-	if err != nil && strings.Contains(err.Error(), "branch '") && strings.Contains(err.Error(), "not found") {
+	_, err := r.Run(ctx, "branch", flag, "--", branch)
+	if err != nil && !BranchExists(ctx, r, branch) {
 		return nil // already gone — idempotent
 	}
 	return err
@@ -72,7 +71,7 @@ func DeleteBranch(ctx context.Context, r Runner, branch string, force bool) erro
 
 // RenameBranch renames a local branch from oldBranch to newBranch.
 func RenameBranch(ctx context.Context, r Runner, oldBranch, newBranch string) error {
-	_, err := r.Run(ctx, "branch", "-m", oldBranch, newBranch)
+	_, err := r.Run(ctx, "branch", "-m", "--", oldBranch, newBranch)
 	return err
 }
 
@@ -160,42 +159,36 @@ func IsSquashMerged(ctx context.Context, r Runner, mergeRef, branch string) (boo
 		return false, err
 	}
 
-	tip, err := r.Run(ctx, cmdRevParse, "--verify", branch)
-	if err != nil {
+	branchPIDs, empty, err := branchOwnPatchIDs(ctx, r, mergeBase, branch)
+	if err != nil || empty {
 		return false, err
 	}
 
-	if strings.TrimSpace(mergeBase) == strings.TrimSpace(tip) { // empty branch — nothing squash-merged
-		return false, nil
-	}
-
-	branchDiff, err := r.Run(ctx, CmdDiff, mergeBase, branch)
+	mainlinePIDs, err := MainlinePatchIDsSince(ctx, r, mergeBase, mergeRef)
 	if err != nil {
 		return false, err
 	}
-	branchPIDs, err := ComputePatchIDs(ctx, branchDiff)
-	if err != nil {
+	return patchIDsIntersect(branchPIDs, mainlinePIDs), nil
+}
+
+// IsSquashMergedWithMainlinePatchIDs is IsSquashMerged with a precomputed mainline
+// patch-ID set, letting callers cache it once per merge-base across many branches.
+func IsSquashMergedWithMainlinePatchIDs(ctx context.Context, r Runner, mergeBase, branch string, mainlinePIDs map[string]bool) (bool, error) {
+	branchPIDs, empty, err := branchOwnPatchIDs(ctx, r, mergeBase, branch)
+	if err != nil || empty {
 		return false, err
 	}
-	if len(branchPIDs) == 0 {
-		return false, nil
-	}
+	return patchIDsIntersect(branchPIDs, mainlinePIDs), nil
+}
 
+// MainlinePatchIDsSince returns the patch-ID set for mergeRef's history since
+// mergeBase (exclusive), so callers can cache it by mergeBase across branches.
+func MainlinePatchIDsSince(ctx context.Context, r Runner, mergeBase, mergeRef string) (map[string]bool, error) {
 	mergeRefDiffs, err := r.Run(ctx, CmdLog, "-p", "--no-merges", mergeBase+".."+mergeRef)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	mergeRefPIDs, err := ComputePatchIDs(ctx, mergeRefDiffs)
-	if err != nil {
-		return false, err
-	}
-
-	for pid := range mergeRefPIDs {
-		if branchPIDs[pid] {
-			return true, nil
-		}
-	}
-	return false, nil
+	return ComputePatchIDs(ctx, mergeRefDiffs)
 }
 
 // MergedBranches returns branches that have been merged into the given branch.
@@ -274,6 +267,37 @@ func LocalBranches(ctx context.Context, r Runner) ([]string, error) {
 		}
 	}
 	return branches, nil
+}
+
+// branchOwnPatchIDs returns branch's patch-ID set relative to mergeBase, and
+// whether branch has no commits of its own (caller should skip the mainline compare).
+func branchOwnPatchIDs(ctx context.Context, r Runner, mergeBase, branch string) (pids map[string]bool, empty bool, _ error) {
+	tip, err := r.Run(ctx, cmdRevParse, "--verify", branch)
+	if err != nil {
+		return nil, false, err
+	}
+	if strings.TrimSpace(mergeBase) == strings.TrimSpace(tip) { // empty branch — nothing squash-merged
+		return nil, true, nil
+	}
+
+	branchDiff, err := r.Run(ctx, CmdDiff, mergeBase, branch)
+	if err != nil {
+		return nil, false, err
+	}
+	branchPIDs, err := ComputePatchIDs(ctx, branchDiff)
+	if err != nil {
+		return nil, false, err
+	}
+	return branchPIDs, len(branchPIDs) == 0, nil
+}
+
+func patchIDsIntersect(a, b map[string]bool) bool {
+	for pid := range b {
+		if a[pid] {
+			return true
+		}
+	}
+	return false
 }
 
 func parseCount(s string, v *int) {

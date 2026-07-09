@@ -44,7 +44,7 @@ func RemotePrune(ctx context.Context, r Runner, remote string, dryRun bool) ([]s
 // DeleteRemoteBranch deletes a branch on the given remote.
 // An already-gone remote ref is treated as success (idempotent).
 func DeleteRemoteBranch(ctx context.Context, r Runner, remote, branch string) error {
-	_, err := r.Run(ctx, "push", remote, "--delete", branch)
+	_, err := r.Run(ctx, "push", remote, "--delete", "--", branch)
 	if err == nil {
 		return nil
 	}

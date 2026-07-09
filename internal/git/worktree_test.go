@@ -110,6 +110,25 @@ func TestRemoveWorktree(t *testing.T) {
 	}
 }
 
+func TestRemoveWorktreeLeadingDashPath(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	// Relative path: ListWorktrees paths are always absolute, so this is the
+	// one case a leading-dash operand can actually reach the subprocess.
+	if err := git.AddWorktree(context.Background(), r, "-dashwt", "feat/dashwt", "main"); err != nil {
+		t.Fatalf(fatalAddWorktree, err)
+	}
+
+	if err := git.RemoveWorktree(context.Background(), r, "-dashwt", false); err != nil {
+		t.Fatalf("RemoveWorktree on leading-dash relative path: %v", err)
+	}
+}
+
 func TestFilterEntries(t *testing.T) {
 	entries := []git.WorktreeEntry{
 		{Path: "/repo", Branch: "main", Bare: false},
@@ -171,7 +190,7 @@ func TestMoveWorktree(t *testing.T) {
 	}
 
 	newPath := filepath.Join(filepath.Dir(repo), "wt-moved")
-	if err := git.MoveWorktree(r, oldPath, newPath, false); err != nil {
+	if err := git.MoveWorktree(context.Background(), r, oldPath, newPath, false); err != nil {
 		t.Fatalf("MoveWorktree: %v", err)
 	}
 

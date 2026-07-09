@@ -197,6 +197,144 @@ func TestFindMergedCandidatesSquashMerge(t *testing.T) {
 	}
 }
 
+// sharedMergeBaseRunFunc backs TestFindMergedCandidatesSquashMergeCachesMainlinePatchIDsByMergeBase:
+// two candidates that share a merge-base, counting mainline log invocations.
+func sharedMergeBaseRunFunc(wt string, logInvocations *int) func(args ...string) (string, error) {
+	return func(args ...string) (string, error) {
+		switch {
+		case len(args) > 0 && args[0] == gitCmdBranch:
+			return "", nil // no normal merges — force squash-check path for both
+		case len(args) > 0 && args[0] == gitCmdWorktree:
+			return wt, nil
+		case len(args) > 0 && args[0] == git.CmdMergeBase:
+			return "shared-base", nil // both branches share the same merge-base
+		case len(args) > 0 && args[0] == cmdRevParse:
+			return "tip-" + args[2], nil // distinct tip, never equals mergeBase
+		case len(args) > 0 && args[0] == git.CmdDiff:
+			return "diff-" + args[2], nil
+		case len(args) > 0 && args[0] == git.CmdLog:
+			*logInvocations++
+			return "mainline-log", nil
+		}
+		return "", nil
+	}
+}
+
+// TestFindMergedCandidatesSquashMergeCachesMainlinePatchIDsByMergeBase locks in
+// finding #5: the mainline patch-ID computation runs once per merge-base, not per branch.
+func TestFindMergedCandidatesSquashMergeCachesMainlinePatchIDsByMergeBase(t *testing.T) {
+	defer func(orig func(context.Context, string) (map[string]bool, error)) {
+		git.ComputePatchIDs = orig
+	}(git.ComputePatchIDs)
+
+	git.ComputePatchIDs = func(_ context.Context, diff string) (map[string]bool, error) {
+		if diff == "mainline-log" {
+			return map[string]bool{"mainlinePID": true}, nil
+		}
+		return map[string]bool{"branchPID": true}, nil // never matches mainlinePID
+	}
+
+	wt := porcelainEntries(
+		struct{ path, branch string }{"/repo", "main"},
+		struct{ path, branch string }{"/wt/a", "feature/a"},
+		struct{ path, branch string }{"/wt/b", "feature/b"},
+	)
+
+	logInvocations := 0
+	r := &mockRunner{
+		run:      sharedMergeBaseRunFunc(wt, &logInvocations),
+		runInDir: noopRunInDir,
+	}
+
+	result, err := FindMergedCandidates(context.Background(), r, "origin/main", "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Candidates) != 0 {
+		t.Fatalf("expected 0 candidates (branchPID never matches mainlinePID), got %d: %+v", len(result.Candidates), result.Candidates)
+	}
+	if logInvocations != 1 {
+		t.Errorf("expected mainline log to be computed once for the shared merge-base, got %d invocations", logInvocations)
+	}
+}
+
+// distinctMergeBasePatchIDs backs TestFindMergedCandidatesSquashMergeDistinctMergeBasesNotConflated.
+func distinctMergeBasePatchIDs(_ context.Context, diff string) (map[string]bool, error) {
+	switch diff {
+	case "mainline-log-a":
+		return map[string]bool{"sharedPID": true}, nil
+	case "mainline-log-b":
+		return map[string]bool{"otherPID": true}, nil
+	case "diff-feature/a":
+		return map[string]bool{"sharedPID": true}, nil // matches base-a's mainline
+	default:
+		return map[string]bool{"branchOnlyPID": true}, nil // matches neither
+	}
+}
+
+// distinctMergeBaseRunFunc backs TestFindMergedCandidatesSquashMergeDistinctMergeBasesNotConflated:
+// two candidates with different merge-bases, counting log calls per range.
+func distinctMergeBaseRunFunc(wt string, logCallsByRange map[string]int) func(args ...string) (string, error) {
+	return func(args ...string) (string, error) {
+		switch {
+		case len(args) > 0 && args[0] == gitCmdBranch:
+			return "", nil
+		case len(args) > 0 && args[0] == gitCmdWorktree:
+			return wt, nil
+		case len(args) > 0 && args[0] == git.CmdMergeBase:
+			if args[2] == "feature/a" {
+				return "base-a", nil
+			}
+			return "base-b", nil
+		case len(args) > 0 && args[0] == cmdRevParse:
+			return "tip-" + args[2], nil
+		case len(args) > 0 && args[0] == git.CmdDiff:
+			return "diff-" + args[2], nil
+		case len(args) > 0 && args[0] == git.CmdLog:
+			rangeArg := args[len(args)-1]
+			logCallsByRange[rangeArg]++
+			if rangeArg == "base-a..origin/main" {
+				return "mainline-log-a", nil
+			}
+			return "mainline-log-b", nil
+		}
+		return "", nil
+	}
+}
+
+// TestFindMergedCandidatesSquashMergeDistinctMergeBasesNotConflated ensures distinct
+// merge-bases get their own computation, and a match for one doesn't leak into the other.
+func TestFindMergedCandidatesSquashMergeDistinctMergeBasesNotConflated(t *testing.T) {
+	defer func(orig func(context.Context, string) (map[string]bool, error)) {
+		git.ComputePatchIDs = orig
+	}(git.ComputePatchIDs)
+
+	git.ComputePatchIDs = distinctMergeBasePatchIDs
+
+	wt := porcelainEntries(
+		struct{ path, branch string }{"/repo", "main"},
+		struct{ path, branch string }{"/wt/a", "feature/a"},
+		struct{ path, branch string }{"/wt/b", "feature/b"},
+	)
+
+	logCallsByRange := map[string]int{}
+	r := &mockRunner{
+		run:      distinctMergeBaseRunFunc(wt, logCallsByRange),
+		runInDir: noopRunInDir,
+	}
+
+	result, err := FindMergedCandidates(context.Background(), r, "origin/main", "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Candidates) != 1 || result.Candidates[0].Branch != "feature/a" {
+		t.Fatalf("expected only feature/a as a candidate, got %+v", result.Candidates)
+	}
+	if logCallsByRange["base-a..origin/main"] != 1 || logCallsByRange["base-b..origin/main"] != 1 {
+		t.Errorf("expected one mainline log call per distinct merge-base, got %v", logCallsByRange)
+	}
+}
+
 func TestFindMergedCandidatesNoCandidates(t *testing.T) {
 	wt := porcelainEntries(
 		struct{ path, branch string }{"/repo", "main"},

@@ -1,6 +1,7 @@
 package git
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -38,12 +39,28 @@ func (r *ExecRunner) RunInDir(ctx context.Context, dir string, args ...string) (
 		cmd.Dir = dir
 	}
 
-	out, err := cmd.CombinedOutput()
-	result := strings.TrimSpace(string(out))
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	result := strings.TrimSpace(stdout.String())
 	if err != nil {
-		return result, fmt.Errorf("git %s: %s: %w", strings.Join(args, " "), result, err)
+		return result, fmt.Errorf("git %s: %s: %w", strings.Join(args, " "), errMsg(strings.TrimSpace(stderr.String()), result), err)
 	}
 	return result, nil
+}
+
+// errMsg builds the error text from stderr and stdout: both when both are
+// present, otherwise whichever one is non-empty.
+func errMsg(stderr, stdout string) string {
+	switch {
+	case stderr != "" && stdout != "":
+		return stderr + "\n" + stdout
+	case stderr != "":
+		return stderr
+	default:
+		return stdout
+	}
 }
 
 func stableGitEnv(environ []string) []string {
