@@ -1,6 +1,7 @@
 package git
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -38,10 +39,17 @@ func (r *ExecRunner) RunInDir(ctx context.Context, dir string, args ...string) (
 		cmd.Dir = dir
 	}
 
-	out, err := cmd.CombinedOutput()
-	result := strings.TrimSpace(string(out))
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	result := strings.TrimSpace(stdout.String())
 	if err != nil {
-		return result, fmt.Errorf("git %s: %s: %w", strings.Join(args, " "), result, err)
+		msg := strings.TrimSpace(stderr.String())
+		if msg == "" {
+			msg = result
+		}
+		return result, fmt.Errorf("git %s: %s: %w", strings.Join(args, " "), msg, err)
 	}
 	return result, nil
 }
