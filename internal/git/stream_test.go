@@ -51,6 +51,22 @@ func TestRunInDirErrorIncludesStderr(t *testing.T) {
 	}
 }
 
+func TestRunInDirErrorIncludesBothStreamsWhenBothPresent(t *testing.T) {
+	writeFakeGit(t, "#!/bin/sh\necho 'stdout-diagnostic'\necho 'fatal: boom' 1>&2\nexit 1\n")
+
+	r := &ExecRunner{}
+	_, err := r.Run(context.Background(), "status")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "fatal: boom") {
+		t.Errorf("error = %v, want it to contain stderr text", err)
+	}
+	if !strings.Contains(err.Error(), "stdout-diagnostic") {
+		t.Errorf("error = %v, want it to also contain stdout text — a future caller matching on either stream must not lose the other", err)
+	}
+}
+
 func TestRunInDirErrorFallsBackToStdoutWhenStderrEmpty(t *testing.T) {
 	writeFakeGit(t, "#!/bin/sh\necho 'only stdout message'\nexit 1\n")
 

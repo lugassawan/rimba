@@ -45,13 +45,23 @@ func (r *ExecRunner) RunInDir(ctx context.Context, dir string, args ...string) (
 	err := cmd.Run()
 	result := strings.TrimSpace(stdout.String())
 	if err != nil {
-		msg := strings.TrimSpace(stderr.String())
-		if msg == "" {
-			msg = result
-		}
-		return result, fmt.Errorf("git %s: %s: %w", strings.Join(args, " "), msg, err)
+		return result, fmt.Errorf("git %s: %s: %w", strings.Join(args, " "), errMsg(strings.TrimSpace(stderr.String()), result), err)
 	}
 	return result, nil
+}
+
+// errMsg builds the error text from stderr and stdout: both when both are
+// present (so a caller matching on either stream never silently loses the
+// other), otherwise whichever one is non-empty.
+func errMsg(stderr, stdout string) string {
+	switch {
+	case stderr != "" && stdout != "":
+		return stderr + "\n" + stdout
+	case stderr != "":
+		return stderr
+	default:
+		return stdout
+	}
 }
 
 func stableGitEnv(environ []string) []string {

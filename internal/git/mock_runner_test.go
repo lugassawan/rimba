@@ -186,23 +186,29 @@ func TestDeleteBranchForce(t *testing.T) {
 	}
 }
 
-func TestDeleteBranchAlreadyGoneSkipsDelete(t *testing.T) {
+func TestDeleteBranchAlreadyGoneIsIdempotent(t *testing.T) {
 	var calls [][]string
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			calls = append(calls, args)
-			// rev-parse --verify fails: branch does not exist.
+			// Both the delete attempt and the fallback existence check fail —
+			// simulates a branch that's already gone (or was deleted concurrently
+			// between an earlier existence check and the delete call, the TOCTOU
+			// race a check-before-act design would be exposed to).
 			return "", errors.New("fatal: needed a single revision")
 		},
 	}
 	if err := DeleteBranch(context.Background(), r, "gone", false); err != nil {
 		t.Fatalf("expected nil for already-gone branch, got: %v", err)
 	}
-	if len(calls) != 1 {
-		t.Fatalf("expected only the existence check to run, got %d calls: %v", len(calls), calls)
+	if len(calls) != 2 {
+		t.Fatalf("expected delete attempt + fallback existence check, got %d calls: %v", len(calls), calls)
 	}
-	if calls[0][0] != cmdRevParse {
-		t.Errorf("expected existence check via %s, got %v", cmdRevParse, calls[0])
+	if calls[0][0] != "branch" {
+		t.Errorf("expected delete attempted first (act-then-check, not check-then-act), got %v", calls[0])
+	}
+	if calls[1][0] != cmdRevParse {
+		t.Errorf("expected existence check as the fallback on delete failure, got %v", calls[1])
 	}
 }
 
@@ -210,7 +216,7 @@ func TestDeleteBranchOtherErrorPropagates(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			if args[0] == cmdRevParse {
-				return "", nil // branch exists
+				return "", nil // branch exists — delete failure is a real error, not "already gone"
 			}
 			return "", errors.New("error: Cannot delete branch 'main' checked out at '/repo'")
 		},

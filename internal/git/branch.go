@@ -56,16 +56,19 @@ func BranchExists(ctx context.Context, r Runner, branch string) bool {
 }
 
 // DeleteBranch deletes a local branch. If force is true, uses -D instead of -d.
-// Already-gone branches are treated as success (idempotent).
+// Already-gone branches are treated as success (idempotent). The existence check
+// runs only as a fallback after a failed delete, not as a precondition — checking
+// first would leave a TOCTOU window where a branch deleted concurrently between
+// the check and the delete call surfaces as a spurious error instead of nil.
 func DeleteBranch(ctx context.Context, r Runner, branch string, force bool) error {
-	if !BranchExists(ctx, r, branch) {
-		return nil // already gone — idempotent
-	}
 	flag := "-d"
 	if force {
 		flag = "-D"
 	}
 	_, err := r.Run(ctx, "branch", flag, "--", branch)
+	if err != nil && !BranchExists(ctx, r, branch) {
+		return nil // already gone — idempotent
+	}
 	return err
 }
 
