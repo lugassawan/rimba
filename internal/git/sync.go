@@ -24,7 +24,7 @@ func Fetch(ctx context.Context, r Runner, remote string, args FetchArgs) error {
 
 // Rebase runs `git rebase <branch>` inside the given directory.
 func Rebase(ctx context.Context, r Runner, dir, branch string) error {
-	_, err := r.RunInDir(ctx, dir, "rebase", branch)
+	_, err := r.RunInDir(ctx, dir, "rebase", "--", branch)
 	return err
 }
 
@@ -78,6 +78,6 @@ func PushForceWithLease(ctx context.Context, r Runner, dir string) error {
 
 // PushSetUpstream publishes branch to remote and sets it as the upstream.
 func PushSetUpstream(ctx context.Context, r Runner, dir, remote, branch string) error {
-	_, err := r.RunInDir(ctx, dir, "push", "-u", remote, branch)
+	_, err := r.RunInDir(ctx, dir, "push", "-u", remote, "--", branch)
 	return err
 }

@@ -171,7 +171,7 @@ func TestMoveWorktree(t *testing.T) {
 	}
 
 	newPath := filepath.Join(filepath.Dir(repo), "wt-moved")
-	if err := git.MoveWorktree(r, oldPath, newPath, false); err != nil {
+	if err := git.MoveWorktree(context.Background(), r, oldPath, newPath, false); err != nil {
 		t.Fatalf("MoveWorktree: %v", err)
 	}
 

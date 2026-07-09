@@ -30,6 +30,7 @@ const (
 	fakeTip          = "tip789"
 	fakeDiff         = "some diff"
 	fakeLog          = "fake log"
+	fakeDiffText     = "fake diff"
 )
 
 // mockRunner implements Runner with configurable closures for testing.
@@ -179,42 +180,43 @@ func TestDeleteBranchForce(t *testing.T) {
 		t.Fatalf("DeleteBranch: %v", err)
 	}
 
-	if len(captured) != 3 || captured[1] != flagForceD {
-		t.Errorf("expected flag %s, got args %v", flagForceD, captured)
+	want := []string{"branch", flagForceD, "--", branchOld}
+	if !slices.Equal(captured, want) {
+		t.Errorf("args = %v, want %v", captured, want)
 	}
 }
 
-func TestDeleteBranchNotFoundIsIdempotent(t *testing.T) {
+func TestDeleteBranchAlreadyGoneSkipsDelete(t *testing.T) {
+	var calls [][]string
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
-			return "", errors.New("error: branch 'gone' not found.")
+			calls = append(calls, args)
+			// rev-parse --verify fails: branch does not exist.
+			return "", errors.New("fatal: needed a single revision")
 		},
 	}
 	if err := DeleteBranch(context.Background(), r, "gone", false); err != nil {
 		t.Fatalf("expected nil for already-gone branch, got: %v", err)
+	}
+	if len(calls) != 1 {
+		t.Fatalf("expected only the existence check to run, got %d calls: %v", len(calls), calls)
+	}
+	if calls[0][0] != cmdRevParse {
+		t.Errorf("expected existence check via %s, got %v", cmdRevParse, calls[0])
 	}
 }
 
 func TestDeleteBranchOtherErrorPropagates(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
+			if args[0] == cmdRevParse {
+				return "", nil // branch exists
+			}
 			return "", errors.New("error: Cannot delete branch 'main' checked out at '/repo'")
 		},
 	}
 	if err := DeleteBranch(context.Background(), r, "main", false); err == nil {
 		t.Fatal("expected non-nil error for checked-out branch")
-	}
-}
-
-func TestDeleteBranchNotFoundWithoutBranchKeywordPropagates(t *testing.T) {
-	// "not found" alone (no "branch '") must NOT be swallowed — tight substring match.
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			return "", errors.New("ref not found")
-		},
-	}
-	if err := DeleteBranch(context.Background(), r, "gone", false); err == nil {
-		t.Fatal("expected non-nil error when 'branch \\'' is absent from the message")
 	}
 }
 
@@ -231,14 +233,9 @@ func TestRenameBranch(t *testing.T) {
 		t.Fatalf("RenameBranch: %v", err)
 	}
 
-	want := []string{"branch", "-m", branchOld, branchNew}
-	if len(captured) != len(want) {
-		t.Fatalf("args = %v, want %v", captured, want)
-	}
-	for i, w := range want {
-		if captured[i] != w {
-			t.Errorf("args[%d] = %q, want %q", i, captured[i], w)
-		}
+	want := []string{"branch", "-m", "--", branchOld, branchNew}
+	if !slices.Equal(captured, want) {
+		t.Errorf("args = %v, want %v", captured, want)
 	}
 }
 
@@ -320,8 +317,27 @@ func TestRemoveWorktreeForce(t *testing.T) {
 	if err := RemoveWorktree(context.Background(), r, fakePath, true); err != nil {
 		t.Fatalf("RemoveWorktree: %v", err)
 	}
-	if !slices.Contains(captured, flagForce) {
-		t.Errorf(errExpectedInFmt, flagForce, captured)
+	want := []string{cmdWorktree, "remove", flagForce, "--", fakePath}
+	if !slices.Equal(captured, want) {
+		t.Errorf("args = %v, want %v", captured, want)
+	}
+}
+
+func TestRemoveWorktreeNoForceInsertsDashDash(t *testing.T) {
+	var captured []string
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			captured = args
+			return "", nil
+		},
+	}
+
+	if err := RemoveWorktree(context.Background(), r, fakePath, false); err != nil {
+		t.Fatalf("RemoveWorktree: %v", err)
+	}
+	want := []string{cmdWorktree, "remove", "--", fakePath}
+	if !slices.Equal(captured, want) {
+		t.Errorf("args = %v, want %v", captured, want)
 	}
 }
 
@@ -334,7 +350,7 @@ func TestMoveWorktreeInsertsDashDash(t *testing.T) {
 		},
 	}
 
-	if err := MoveWorktree(r, "/old/path", "/new/path", false); err != nil {
+	if err := MoveWorktree(context.Background(), r, "/old/path", "/new/path", false); err != nil {
 		t.Fatalf("MoveWorktree: %v", err)
 	}
 
@@ -353,7 +369,7 @@ func TestMoveWorktreeForce(t *testing.T) {
 		},
 	}
 
-	if err := MoveWorktree(r, "/old/path", "/new/path", true); err != nil {
+	if err := MoveWorktree(context.Background(), r, "/old/path", "/new/path", true); err != nil {
 		t.Fatalf("MoveWorktree: %v", err)
 	}
 	// git worktree move requires --force twice to move locked worktrees
@@ -649,7 +665,7 @@ func TestIsSquashMerged(t *testing.T) {
 			case cmdRevParse:
 				return fakeTip, nil
 			case CmdDiff:
-				return "fake diff", nil
+				return fakeDiffText, nil
 			case CmdLog:
 				return fakeLog, nil
 			}
@@ -663,6 +679,66 @@ func TestIsSquashMerged(t *testing.T) {
 	}
 	if !merged {
 		t.Error("expected squash-merged branch to be detected")
+	}
+}
+
+func TestIsSquashMergedWithMainlinePatchIDsMatch(t *testing.T) {
+	defer func(orig func(context.Context, string) (map[string]bool, error)) {
+		ComputePatchIDs = orig
+	}(ComputePatchIDs)
+	ComputePatchIDs = func(_ context.Context, _ string) (map[string]bool, error) {
+		return map[string]bool{fakeSHA: true}, nil
+	}
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			switch args[0] {
+			case cmdRevParse:
+				return fakeTip, nil
+			case CmdDiff:
+				return fakeDiffText, nil
+			}
+			return "", errors.New("unexpected call: " + args[0]) // no MergeBase/CmdLog: mainline is precomputed
+		},
+	}
+
+	mainlinePIDs := map[string]bool{fakeSHA: true}
+	merged, err := IsSquashMergedWithMainlinePatchIDs(context.Background(), r, fakeSHA, branchFeature, mainlinePIDs)
+	if err != nil {
+		t.Fatalf("IsSquashMergedWithMainlinePatchIDs: %v", err)
+	}
+	if !merged {
+		t.Error("expected squash-merged branch to be detected against the precomputed mainline set")
+	}
+}
+
+func TestIsSquashMergedWithMainlinePatchIDsNoMatch(t *testing.T) {
+	defer func(orig func(context.Context, string) (map[string]bool, error)) {
+		ComputePatchIDs = orig
+	}(ComputePatchIDs)
+	ComputePatchIDs = func(_ context.Context, _ string) (map[string]bool, error) {
+		return map[string]bool{"branch-only-pid": true}, nil
+	}
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			switch args[0] {
+			case cmdRevParse:
+				return fakeTip, nil
+			case CmdDiff:
+				return fakeDiffText, nil
+			}
+			return "", errors.New("unexpected call: " + args[0])
+		},
+	}
+
+	mainlinePIDs := map[string]bool{"mainline-only-pid": true}
+	merged, err := IsSquashMergedWithMainlinePatchIDs(context.Background(), r, fakeSHA, branchFeature, mainlinePIDs)
+	if err != nil {
+		t.Fatalf("IsSquashMergedWithMainlinePatchIDs: %v", err)
+	}
+	if merged {
+		t.Error("expected no match against a disjoint precomputed mainline set")
 	}
 }
 
@@ -685,7 +761,7 @@ func TestIsSquashMergedNotMerged(t *testing.T) {
 			case cmdRevParse:
 				return fakeTip, nil
 			case CmdDiff:
-				return "fake diff", nil
+				return fakeDiffText, nil
 			case CmdLog:
 				return fakeLog, nil
 			}

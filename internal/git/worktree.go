@@ -40,24 +40,27 @@ func AddWorktreeFromBranch(ctx context.Context, r Runner, path, branch string) e
 
 // RemoveWorktree removes the worktree at the given path.
 func RemoveWorktree(ctx context.Context, r Runner, path string, force bool) error {
-	args := []string{cmdWorktree, "remove", path}
+	args := []string{cmdWorktree, "remove"}
 	if force {
 		args = append(args, flagForce)
 	}
+	args = append(args, "--", path)
 	_, err := r.Run(ctx, args...)
 	return err
 }
 
 // MoveWorktree moves the worktree from oldPath to newPath.
 // When force is true, --force is passed twice so that even locked worktrees can be moved.
-// Intentionally non-cancellable: rollback moves must complete to avoid stranded worktrees.
-func MoveWorktree(r Runner, oldPath, newPath string, force bool) error {
+// Cancellable via ctx. Rollback callers must pass context.Background() instead of the
+// original caller's ctx, so a cancelled rollback still completes and doesn't strand
+// the worktree between oldPath and newPath.
+func MoveWorktree(ctx context.Context, r Runner, oldPath, newPath string, force bool) error {
 	args := []string{cmdWorktree, "move"}
 	if force {
 		args = append(args, flagForce, flagForce)
 	}
 	args = append(args, "--", oldPath, newPath)
-	_, err := r.Run(context.Background(), args...)
+	_, err := r.Run(ctx, args...)
 	return err
 }
 
