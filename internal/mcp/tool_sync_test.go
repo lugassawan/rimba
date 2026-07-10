@@ -47,6 +47,22 @@ func TestSyncToolRequiresConfig(t *testing.T) {
 	}
 }
 
+func TestSyncToolRejectsInvalidConfig(t *testing.T) {
+	hctx := &HandlerContext{
+		Runner:   &mockRunner{},
+		Config:   &config.Config{DefaultSource: "--upload-pack=x"},
+		RepoRoot: "/repo",
+		Version:  "test",
+	}
+	handler := handleSync(hctx)
+
+	result := callTool(t, handler, map[string]any{"all": true})
+	errText := resultError(t, result)
+	if !strings.Contains(errText, "default_source") {
+		t.Errorf("expected default_source validation error, got: %s", errText)
+	}
+}
+
 func TestSyncToolTaskNotFound(t *testing.T) {
 	porcelain := worktreePorcelain(
 		struct{ path, branch string }{"/repo", "main"},

@@ -12,7 +12,7 @@ func Merge(ctx context.Context, r Runner, dir, branch string, noFF bool) error {
 	if noFF {
 		args = append(args, "--no-ff")
 	}
-	args = append(args, branch)
+	args = append(args, "--", branch)
 	_, err := r.RunInDir(ctx, dir, args...)
 	return err
 }
