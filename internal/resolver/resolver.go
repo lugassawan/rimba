@@ -102,9 +102,10 @@ func TaskAndType(branch string, prefixes []string) (task, typeName string) {
 
 // WorktreeInfo holds parsed information about a worktree.
 type WorktreeInfo struct {
-	Path    string
-	Branch  string
-	Service string
+	Path     string
+	Branch   string
+	Service  string
+	Prunable bool
 }
 
 // FindBranchForTask searches worktrees for one matching the given service and task.

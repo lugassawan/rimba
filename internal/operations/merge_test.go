@@ -378,6 +378,57 @@ func TestMergeWorktreeCleanupPartialFailure(t *testing.T) {
 	}
 }
 
+// TestMergeWorktreeCleanupPrunableSurfacesOnResult guards the merge-side hint
+// fix: when the source worktree is prunable, MergeResult.SourcePrunable must
+// be set so cmd/merge.go can print a prune-based recovery hint instead of the
+// doomed `git worktree remove --force` command (#374).
+func TestMergeWorktreeCleanupPrunableSurfacesOnResult(t *testing.T) {
+	wt := strings.Join([]string{
+		"worktree /repo",
+		"HEAD abc123",
+		"branch refs/heads/main",
+		"",
+		"worktree /wt/feature-login",
+		"HEAD def456",
+		"branch refs/heads/feature/login",
+		"prunable gitdir file points to non-existent location",
+		"",
+	}, "\n")
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == gitCmdWorktree && args[1] == "list" {
+				return wt, nil
+			}
+			if len(args) >= 2 && args[0] == gitCmdWorktree && args[1] == "prune" {
+				return "", errors.New("prune failed")
+			}
+			return "", nil
+		},
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && (args[0] == gitCmdStatus || args[0] == gitCmdMerge) {
+				return "", nil
+			}
+			return "", nil
+		},
+	}
+
+	result, err := MergeWorktree(context.Background(), r, MergeParams{
+		SourceTask: "login",
+		RepoRoot:   "/repo",
+		MainBranch: "main",
+	}, nil)
+	if err != nil {
+		t.Fatalf("expected no fatal error (cleanup failure is non-fatal), got: %v", err)
+	}
+	if !result.SourcePrunable {
+		t.Error("expected SourcePrunable to be true")
+	}
+	if result.RemoveError == nil {
+		t.Error("expected RemoveError to be set when git worktree prune fails")
+	}
+}
+
 func TestMergeWorktreeProgressCallbacks(t *testing.T) {
 	r := mergeRunner(nil)
 

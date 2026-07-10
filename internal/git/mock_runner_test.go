@@ -1056,6 +1056,63 @@ func TestMainRepoRootRelativePathRepoRootError(t *testing.T) {
 	assertContains(t, err, errNotAGitRepo)
 }
 
+func TestCommonDirRelativePath(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == flagGitCommonDir {
+				return fakeGitDir, nil
+			}
+			if len(args) >= 2 && args[1] == flagShowToplevel {
+				return fakeRepoDir, nil
+			}
+			return "", errors.New("unexpected command")
+		},
+	}
+
+	want := filepath.Join(fakeRepoDir, fakeGitDir)
+	got, err := CommonDir(context.Background(), r)
+	if err != nil {
+		t.Fatalf("CommonDir: %v", err)
+	}
+	if got != want {
+		t.Errorf("CommonDir = %q, want %q", got, want)
+	}
+}
+
+func TestCommonDirAbsolutePath(t *testing.T) {
+	want := filepath.Join(fakeRepoDir, fakeGitDir)
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == flagGitCommonDir {
+				return want, nil
+			}
+			return "", errors.New("unexpected command")
+		},
+	}
+
+	got, err := CommonDir(context.Background(), r)
+	if err != nil {
+		t.Fatalf("CommonDir: %v", err)
+	}
+	if got != want {
+		t.Errorf("CommonDir = %q, want %q", got, want)
+	}
+}
+
+func TestCommonDirError(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			return "", errors.New(errNotARepo)
+		},
+	}
+
+	_, err := CommonDir(context.Background(), r)
+	if err == nil {
+		t.Fatal("expected error from CommonDir")
+	}
+	assertContains(t, err, errNotAGitRepo)
+}
+
 func TestLastCommitInfoEmptyOutput(t *testing.T) {
 	r := &mockRunner{
 		run: func(_ ...string) (string, error) {

@@ -106,6 +106,13 @@ func DefaultBranch(ctx context.Context, r Runner) (string, error) {
 	)
 }
 
+// CommonDir returns the absolute path to the git common directory, shared by
+// the main worktree and every linked worktree. Exported for callers (e.g.
+// `rimba doctor`) that need to locate <commonDir>/worktrees/*/index.lock.
+func CommonDir(ctx context.Context, r Runner) (string, error) {
+	return resolveCommonDir(ctx, r)
+}
+
 // resolveCommonDir returns the absolute path to the git common directory.
 // --git-common-dir may return a relative path; this resolves it against the repo root.
 func resolveCommonDir(ctx context.Context, r Runner) (string, error) {

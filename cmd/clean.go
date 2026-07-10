@@ -198,7 +198,7 @@ func runClean(ctx context.Context, cmd *cobra.Command, r git.Runner, s cleanStra
 	if dryRun {
 		return nil
 	}
-	if !force && !confirmRemoval(cmd, len(candidates), s.label) {
+	if !force && !confirmRemoval(cmd, len(candidates), s.label+" worktree(s)") {
 		fmt.Fprintln(cmd.OutOrStdout(), "Aborted.")
 		return nil
 	}
@@ -331,8 +331,12 @@ func printStaleCandidates(cmd *cobra.Command, candidates []operations.StaleCandi
 	}
 }
 
-func confirmRemoval(cmd *cobra.Command, count int, label string) bool {
-	fmt.Fprintf(cmd.OutOrStdout(), "\nRemove %d %s worktree(s)? [y/N] ", count, label)
+// confirmRemoval prompts "Remove <count> <noun>? [y/N]" and reports whether
+// the user answered y/yes. Shared by clean's worktree removal and doctor's
+// stale-lock removal — callers supply the full noun phrase (e.g. "merged
+// worktree(s)", "stale index.lock file(s)").
+func confirmRemoval(cmd *cobra.Command, count int, noun string) bool {
+	fmt.Fprintf(cmd.OutOrStdout(), "\nRemove %d %s? [y/N] ", count, noun)
 	reader := bufio.NewReader(cmd.InOrStdin())
 	answer, _ := reader.ReadString('\n')
 	answer = strings.TrimSpace(strings.ToLower(answer))
@@ -348,7 +352,11 @@ func printWarnings(cmd *cobra.Command, warnings []string) {
 func printCleanedItems(cmd *cobra.Command, items []operations.CleanedItem) {
 	for _, item := range items {
 		if !item.WorktreeRemoved {
-			fmt.Fprintf(cmd.OutOrStdout(), "Failed to remove worktree %s\nTo remove manually: rimba remove %s\n", item.Branch, item.Branch)
+			hint := "git worktree remove --force -- " + item.Path
+			if item.Prunable {
+				hint = "git worktree prune"
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Failed to remove worktree %s\nTo remove manually: %s\n", item.Branch, hint)
 			continue
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "Removed worktree: %s\n", item.Path)

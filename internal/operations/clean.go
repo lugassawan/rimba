@@ -13,8 +13,9 @@ import (
 
 // CleanCandidate holds a branch/path pair eligible for removal.
 type CleanCandidate struct {
-	Path   string
-	Branch string
+	Path     string
+	Branch   string
+	Prunable bool
 }
 
 // StaleCandidate extends CleanCandidate with the last commit time.
@@ -27,6 +28,7 @@ type StaleCandidate struct {
 type CleanedItem struct {
 	Branch          string
 	Path            string
+	Prunable        bool
 	WorktreeRemoved bool
 	BranchDeleted   bool
 	RemoteDeleted   bool  // true if the remote branch was successfully deleted
@@ -107,7 +109,7 @@ func FindStaleCandidates(ctx context.Context, r git.Runner, mainBranch string, s
 
 		if ct.Before(threshold) {
 			result.Candidates = append(result.Candidates, StaleCandidate{
-				CleanCandidate: CleanCandidate{Path: e.Path, Branch: e.Branch},
+				CleanCandidate: CleanCandidate{Path: e.Path, Branch: e.Branch, Prunable: e.Prunable},
 				LastCommit:     ct,
 			})
 		}
@@ -125,10 +127,11 @@ func RemoveCandidates(ctx context.Context, r git.Runner, candidates []CleanCandi
 	items := make([]CleanedItem, 0, len(candidates))
 	for _, c := range candidates {
 		progress.Notifyf(onProgress, "Removing %s...", c.Branch)
-		wtRemoved, brDeleted, err := removeAndCleanup(ctx, r, c.Path, c.Branch, force)
+		wtRemoved, brDeleted, err := removeAndCleanup(ctx, r, c.Path, c.Branch, force, c.Prunable)
 		item := CleanedItem{
 			Branch:          c.Branch,
 			Path:            c.Path,
+			Prunable:        c.Prunable,
 			WorktreeRemoved: wtRemoved,
 			BranchDeleted:   brDeleted,
 			Error:           err,
@@ -158,7 +161,7 @@ func classifyMergedEntry(ctx context.Context, r git.Runner, mergeRef string, e g
 		if git.IsSHAOnChain(e.HEAD, mainline.shas) {
 			return nil, ""
 		}
-		return &CleanCandidate{Path: e.Path, Branch: e.Branch}, ""
+		return &CleanCandidate{Path: e.Path, Branch: e.Branch, Prunable: e.Prunable}, ""
 	}
 
 	squashed, err := squashMergedCached(ctx, r, mergeRef, e.Branch, mainlinePIDsByBase)
@@ -168,7 +171,7 @@ func classifyMergedEntry(ctx context.Context, r git.Runner, mergeRef string, e g
 	if !squashed {
 		return nil, ""
 	}
-	return &CleanCandidate{Path: e.Path, Branch: e.Branch}, ""
+	return &CleanCandidate{Path: e.Path, Branch: e.Branch, Prunable: e.Prunable}, ""
 }
 
 // squashMergedCached is git.IsSquashMerged, but reuses the mainline patch-ID set

@@ -48,6 +48,11 @@ const (
 	taskRmPartial  = "rm-partial-task"
 	taskDirtyOne   = "dirty-one"
 
+	// #374/#380/doctor recovery test constants.
+	taskPrunableRemove = "prunable-remove-task"
+	taskPrunableClean  = "prunable-clean-task"
+	taskDoctorLock     = "doctor-lock-task"
+
 	// Duplicate test constants.
 	taskDupA      = "task-a"
 	taskDupB      = "task-b"

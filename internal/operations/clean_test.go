@@ -111,6 +111,52 @@ func TestFindMergedCandidatesFreshWorktreeNotRemoved(t *testing.T) {
 	}
 }
 
+// TestFindMergedCandidatesPrunableEntry guards #374: a worktree whose .git
+// file was deleted out-of-band still shows up in `git branch --merged`
+// (its ref still exists) but git also marks the porcelain entry prunable.
+// The resulting candidate must carry Prunable so removal routes through
+// git worktree prune instead of the doomed git worktree remove --force.
+func TestFindMergedCandidatesPrunableEntry(t *testing.T) {
+	wt := strings.Join([]string{
+		"worktree /repo",
+		"HEAD abc123",
+		"branch refs/heads/main",
+		"",
+		"worktree /wt/broken",
+		"HEAD def456",
+		"branch refs/heads/feature/broken",
+		"prunable gitdir file points to non-existent location",
+		"",
+	}, "\n")
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == gitCmdBranch {
+				return "  feature/broken\n", nil
+			}
+			if len(args) > 0 && args[0] == gitCmdWorktree {
+				return wt, nil
+			}
+			if len(args) > 0 && args[0] == gitCmdRevList {
+				return "otherSha1\notherSha2", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	result, err := FindMergedCandidates(context.Background(), r, "origin/main", "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Candidates) != 1 {
+		t.Fatalf("expected 1 candidate, got %d: %+v", len(result.Candidates), result.Candidates)
+	}
+	if !result.Candidates[0].Prunable {
+		t.Error("expected candidate.Prunable = true for a worktree with a deleted .git file")
+	}
+}
+
 // TestFindMergedCandidatesMergeCommitRemoved locks in the merge-commit-merged
 // case: the branch tip is off mainline, so it must still be removed.
 func TestFindMergedCandidatesMergeCommitRemoved(t *testing.T) {
@@ -406,6 +452,44 @@ func TestFindStaleCandidatesFound(t *testing.T) {
 	}
 }
 
+func TestFindStaleCandidatesPrunableEntry(t *testing.T) {
+	wt := strings.Join([]string{
+		"worktree /repo",
+		"HEAD abc123",
+		"branch refs/heads/main",
+		"",
+		"worktree /wt/broken",
+		"HEAD def456",
+		"branch refs/heads/feature/broken",
+		"prunable gitdir file points to non-existent location",
+		"",
+	}, "\n")
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == gitCmdWorktree {
+				return wt, nil
+			}
+			if len(args) > 0 && args[0] == gitCmdLog {
+				return "1577836800\told commit", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	result, err := FindStaleCandidates(context.Background(), r, "main", 14)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Candidates) != 1 {
+		t.Fatalf("expected 1 candidate, got %d", len(result.Candidates))
+	}
+	if !result.Candidates[0].Prunable {
+		t.Error("expected candidate.Prunable = true for a worktree with a deleted .git file")
+	}
+}
+
 func TestFindStaleCandidatesNoneStale(t *testing.T) {
 	wt := porcelainEntries(
 		struct{ path, branch string }{"/repo", "main"},
@@ -502,6 +586,41 @@ func TestRemoveCandidatesMixedResults(t *testing.T) {
 	t.Run("success after failure", func(t *testing.T) {
 		assertCleanedItem(t, items[2], true, true, false)
 	})
+}
+
+func TestRemoveCandidatesPrunableRunsPrune(t *testing.T) {
+	var pruneInvoked, removeInvoked bool
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			cmd := strings.Join(args, " ")
+			switch {
+			case strings.Contains(cmd, "worktree prune"):
+				pruneInvoked = true
+			case strings.Contains(cmd, "worktree remove"):
+				removeInvoked = true
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	candidates := []CleanCandidate{
+		{Path: "/wt/broken", Branch: "feature/broken", Prunable: true},
+	}
+
+	items := RemoveCandidates(context.Background(), r, candidates, false, false, nil)
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(items))
+	}
+	if !items[0].WorktreeRemoved {
+		t.Error("expected WorktreeRemoved = true")
+	}
+	if !pruneInvoked {
+		t.Error("expected 'git worktree prune' to be invoked for a prunable candidate")
+	}
+	if removeInvoked {
+		t.Error("expected 'git worktree remove' NOT to be invoked for a prunable candidate")
+	}
 }
 
 func TestRemoveCandidatesProgressCallbacks(t *testing.T) {

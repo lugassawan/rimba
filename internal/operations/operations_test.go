@@ -55,6 +55,39 @@ func TestListWorktreeInfos(t *testing.T) {
 	}
 }
 
+func TestListWorktreeInfosPrunable(t *testing.T) {
+	porcelain := strings.Join([]string{
+		"worktree /repo",
+		"HEAD abc123",
+		"branch refs/heads/main",
+		"",
+		"worktree /repo-worktrees/feature-login",
+		"HEAD def456",
+		"branch refs/heads/feature/login",
+		"prunable gitdir file points to non-existent location",
+		"",
+	}, "\n")
+
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return porcelain, nil },
+		runInDir: noopRunInDir,
+	}
+
+	infos, err := ListWorktreeInfos(context.Background(), r)
+	if err != nil {
+		t.Fatalf("ListWorktreeInfos: %v", err)
+	}
+	if len(infos) != 2 {
+		t.Fatalf("got %d worktrees, want 2", len(infos))
+	}
+	if infos[0].Prunable {
+		t.Error("infos[0].Prunable = true, want false")
+	}
+	if !infos[1].Prunable {
+		t.Error("infos[1].Prunable = false, want true")
+	}
+}
+
 func TestListWorktreeInfosError(t *testing.T) {
 	r := &mockRunner{
 		run:      func(_ ...string) (string, error) { return "", errGitFailed },

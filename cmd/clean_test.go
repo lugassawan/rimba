@@ -791,6 +791,8 @@ func TestPrintCleanedItemsAllBranches(t *testing.T) {
 		},
 		// Failure: worktree removal failed
 		{Branch: "feature/fail", Path: "/wt/fail", WorktreeRemoved: false, BranchDeleted: false},
+		// Failure: prunable worktree, removal via prune failed
+		{Branch: "feature/prunable-fail", Path: "/wt/prunable-fail", Prunable: true, WorktreeRemoved: false, BranchDeleted: false},
 	}
 	printCleanedItems(cmd, items)
 	out := buf.String()
@@ -801,7 +803,9 @@ func TestPrintCleanedItemsAllBranches(t *testing.T) {
 		"failed to delete branch",
 		"git branch -D feature/partial",
 		"Failed to remove worktree feature/fail",
-		"rimba remove feature/fail",
+		"To remove manually: git worktree remove --force -- /wt/fail",
+		"Failed to remove worktree feature/prunable-fail",
+		"To remove manually: git worktree prune",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in output: %s", want, out)
