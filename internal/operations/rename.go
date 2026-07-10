@@ -51,6 +51,12 @@ func RenameWorktree(ctx context.Context, r git.Runner, p RenameParams) (RenameRe
 		prefix = p.NewPrefix
 	}
 
+	// svc is derived from the already-valid existing branch, so this half of the
+	// check is belt-and-suspenders; p.NewTask is the actual attack surface.
+	if err := ValidateBranchInput(p.NewTask, svc); err != nil {
+		return RenameResult{}, err
+	}
+
 	newBranch := resolver.FullBranchName(svc, prefix, p.NewTask)
 	if newBranch == p.WT.Branch {
 		return RenameResult{}, fmt.Errorf("nothing to change: branch is already %q", p.WT.Branch)

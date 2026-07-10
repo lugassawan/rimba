@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/gitref"
 	"github.com/lugassawan/rimba/internal/resolver"
 )
 
@@ -137,6 +138,38 @@ func TestRenameWorktreeSameName(t *testing.T) {
 	}
 	if calls != 0 {
 		t.Fatalf("expected no git calls for same-name rename, got %d", calls)
+	}
+}
+
+func TestRenameWorktreeRejectsUnsafeNewTask(t *testing.T) {
+	tests := []struct {
+		name    string
+		newTask string
+	}{
+		{name: "leading dash", newTask: "-x"},
+		{name: "dotdot", newTask: "..evil"},
+		{name: "space", newTask: "a b"},
+		{name: "semicolon", newTask: "a;b"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &mockRunner{
+				run: func(args ...string) (string, error) {
+					t.Fatalf("git command should not run before validation, got args: %v", args)
+					return "", nil
+				},
+				runInDir: func(dir string, args ...string) (string, error) {
+					t.Fatalf("git command should not run before validation, got dir: %s args: %v", dir, args)
+					return "", nil
+				},
+			}
+
+			wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
+			_, err := RenameWorktree(context.Background(), r, RenameParams{WT: wt, NewTask: tc.newTask, WtDir: wtDir})
+			if !errors.Is(err, gitref.ErrUnsafeRefName) {
+				t.Errorf("expected ErrUnsafeRefName, got: %v", err)
+			}
+		})
 	}
 }
 
