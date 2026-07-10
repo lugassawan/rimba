@@ -1241,3 +1241,43 @@ func TestAddWorktreeInsertsDashDash(t *testing.T) {
 		t.Errorf("args = %v, want %v", capturedArgs, want)
 	}
 }
+
+func TestMergeInsertsDashDash(t *testing.T) {
+	const branch = "feat/x"
+	var capturedArgs []string
+	r := &mockRunner{
+		runInDir: func(_ string, args ...string) (string, error) {
+			capturedArgs = args
+			return "", nil
+		},
+	}
+
+	if err := Merge(context.Background(), r, fakeDir, branch, false); err != nil {
+		t.Fatalf("Merge: %v", err)
+	}
+
+	want := []string{"merge", "--", branch}
+	if !slices.Equal(capturedArgs, want) {
+		t.Errorf("args = %v, want %v", capturedArgs, want)
+	}
+}
+
+func TestMergeNoFFInsertsDashDash(t *testing.T) {
+	const branch = "feat/x"
+	var capturedArgs []string
+	r := &mockRunner{
+		runInDir: func(_ string, args ...string) (string, error) {
+			capturedArgs = args
+			return "", nil
+		},
+	}
+
+	if err := Merge(context.Background(), r, fakeDir, branch, true); err != nil {
+		t.Fatalf("Merge: %v", err)
+	}
+
+	want := []string{"merge", "--no-ff", "--", branch}
+	if !slices.Equal(capturedArgs, want) {
+		t.Errorf("args = %v, want %v", capturedArgs, want)
+	}
+}

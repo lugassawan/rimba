@@ -26,10 +26,13 @@ func (h *HandlerContext) PrefixSet() *resolver.PrefixSet {
 	return h.Config.PrefixSet()
 }
 
-// requireConfig returns the config or an error if not available.
+// requireConfig returns the config or an error if not available or invalid.
 func (h *HandlerContext) requireConfig() (*config.Config, error) {
 	if h.Config == nil {
 		return nil, errConfigRequired
+	}
+	if err := h.Config.Validate(); err != nil {
+		return nil, err
 	}
 	return h.Config, nil
 }
