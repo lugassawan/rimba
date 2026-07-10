@@ -80,7 +80,11 @@ var removeCmd = &cobra.Command{
 		}
 
 		s.Stop()
-		fmt.Fprintf(cmd.OutOrStdout(), "Removed worktree: %s\n", result.Path)
+		if result.Prunable {
+			fmt.Fprintf(cmd.OutOrStdout(), "Cleared stale worktree registration: %s (directory left on disk — remove manually if unneeded)\n", result.Path)
+		} else {
+			fmt.Fprintf(cmd.OutOrStdout(), "Removed worktree: %s\n", result.Path)
+		}
 
 		if result.BranchDeleted {
 			fmt.Fprintf(cmd.OutOrStdout(), "Deleted branch: %s\n", result.Branch)

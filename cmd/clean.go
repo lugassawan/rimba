@@ -359,7 +359,11 @@ func printCleanedItems(cmd *cobra.Command, items []operations.CleanedItem) {
 			fmt.Fprintf(cmd.OutOrStdout(), "Failed to remove worktree %s\nTo remove manually: %s\n", item.Branch, hint)
 			continue
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "Removed worktree: %s\n", item.Path)
+		if item.Prunable {
+			fmt.Fprintf(cmd.OutOrStdout(), "Cleared stale worktree registration: %s (directory left on disk — remove manually if unneeded)\n", item.Path)
+		} else {
+			fmt.Fprintf(cmd.OutOrStdout(), "Removed worktree: %s\n", item.Path)
+		}
 		if item.BranchDeleted {
 			fmt.Fprintf(cmd.OutOrStdout(), "Deleted branch: %s\n", item.Branch)
 		} else if item.Error != nil {

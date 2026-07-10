@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func mockCommonDirRunner(commonDir string) *mockRunner {
@@ -19,7 +20,22 @@ func mockCommonDirRunner(commonDir string) *mockRunner {
 	}
 }
 
+// writeLockFile creates a lock backdated well past the doctor --fix age
+// gate, matching the common case in these tests: a lock left by a process
+// that's clearly no longer running. Use writeFreshLockFile for the opposite.
 func writeLockFile(t *testing.T, commonDir string) string {
+	t.Helper()
+	return writeLockFileWithAge(t, commonDir, time.Hour)
+}
+
+// writeFreshLockFile creates a lock too young for doctor --fix to touch,
+// simulating one that may still belong to a running git process.
+func writeFreshLockFile(t *testing.T, commonDir string) string {
+	t.Helper()
+	return writeLockFileWithAge(t, commonDir, 0)
+}
+
+func writeLockFileWithAge(t *testing.T, commonDir string, age time.Duration) string {
 	t.Helper()
 	lockDir := filepath.Join(commonDir, "worktrees", "wt-a")
 	if err := os.MkdirAll(lockDir, 0o755); err != nil {
@@ -28,6 +44,12 @@ func writeLockFile(t *testing.T, commonDir string) string {
 	lockPath := filepath.Join(lockDir, "index.lock")
 	if err := os.WriteFile(lockPath, nil, 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
+	}
+	if age > 0 {
+		old := time.Now().Add(-age)
+		if err := os.Chtimes(lockPath, old, old); err != nil {
+			t.Fatalf("Chtimes: %v", err)
+		}
 	}
 	return lockPath
 }
@@ -68,6 +90,35 @@ func TestDoctorReportListsPathAndAge(t *testing.T) {
 	}
 	if _, err := os.Stat(lockPath); err != nil {
 		t.Error("expected lock file to remain (report-only)")
+	}
+}
+
+// TestDoctorFixSkipsFreshLocks guards against --fix --force removing a lock
+// that may still belong to a running git process: a lock younger than the
+// age gate must be skipped even when --force bypasses the confirmation
+// prompt.
+func TestDoctorFixSkipsFreshLocks(t *testing.T) {
+	commonDir := t.TempDir()
+	lockPath := writeFreshLockFile(t, commonDir)
+	restore := overrideNewRunner(mockCommonDirRunner(commonDir))
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().Bool(flagFix, true, "")
+	cmd.Flags().Bool(flagForce, true, "")
+
+	if err := doctorCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("doctorCmd.RunE: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Skipping") {
+		t.Errorf("output = %q, want a skip notice for a too-young lock", out)
+	}
+	if strings.Contains(out, "Removed "+lockPath) {
+		t.Errorf("output = %q, want the fresh lock NOT removed even under --force", out)
+	}
+	if _, err := os.Stat(lockPath); err != nil {
+		t.Error("expected fresh lock file to remain")
 	}
 }
 

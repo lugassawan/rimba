@@ -79,8 +79,11 @@ func TestRemovePrunablePathRunsPrune(t *testing.T) {
 		t.Error("expected 'git worktree remove' NOT to be invoked for a prunable worktree")
 	}
 	out := buf.String()
-	if !strings.Contains(out, "Removed worktree") {
-		t.Errorf("output = %q, want 'Removed worktree'", out)
+	if !strings.Contains(out, "Cleared stale worktree registration") {
+		t.Errorf("output = %q, want a distinct prunable-recovery message, not 'Removed worktree' (git worktree prune leaves the directory on disk)", out)
+	}
+	if strings.Contains(out, "Removed worktree") {
+		t.Errorf("output = %q, want NOT 'Removed worktree' for the prunable-recovery path", out)
 	}
 }
 

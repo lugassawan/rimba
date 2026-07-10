@@ -156,7 +156,7 @@ func TestCleanMergedPrunableRecovers(t *testing.T) {
 	}
 
 	r := rimbaSuccess(t, repo, "clean", flagMergedE2E, flagForceE2E)
-	assertContains(t, r.Stdout, msgRemovedWorktree)
+	assertContains(t, r.Stdout, "Cleared stale worktree registration")
 	assertContains(t, r.Stdout, msgDeletedBranch)
 	assertNotContains(t, r.Stdout, "Failed to remove")
 

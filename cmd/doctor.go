@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
@@ -10,6 +11,12 @@ import (
 )
 
 const flagFix = "fix"
+
+// minLockAge is the minimum age a lock must have before --fix will touch it.
+// A lock younger than this may still belong to a running git process — the
+// confirmation prompt covers everything else, but --force bypasses that, so
+// this gate is the one safety net --force cannot skip.
+const minLockAge = 10 * time.Second
 
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
@@ -68,13 +75,22 @@ func doctorReport(cmd *cobra.Command, locks []operations.LockInfo) error {
 func doctorFix(cmd *cobra.Command, locks []operations.LockInfo) error {
 	fmt.Fprintln(cmd.OutOrStdout(), "Warning: a lock may belong to a running git process; make sure no git command is in flight.")
 
+	removable, skipped := partitionByAge(locks, minLockAge)
+	for _, l := range skipped {
+		fmt.Fprintf(cmd.OutOrStdout(), "Skipping %s: too recent (age %s) to safely assume the owning process has exited.\n", l.Path, resolver.FormatAge(l.ModTime))
+	}
+	if len(removable) == 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), "No locks old enough to remove.")
+		return nil
+	}
+
 	force, _ := cmd.Flags().GetBool(flagForce)
-	if !force && !confirmRemoval(cmd, len(locks), "stale index.lock file(s)") {
+	if !force && !confirmRemoval(cmd, len(removable), "stale index.lock file(s)") {
 		fmt.Fprintln(cmd.OutOrStdout(), "Aborted.")
 		return nil
 	}
 
-	for _, rm := range operations.RemoveStaleLocks(locks) {
+	for _, rm := range operations.RemoveStaleLocks(removable) {
 		if rm.Err != nil {
 			fmt.Fprintf(cmd.OutOrStdout(), "Failed to remove %s: %v\n", rm.Path, rm.Err)
 			continue
@@ -82,4 +98,17 @@ func doctorFix(cmd *cobra.Command, locks []operations.LockInfo) error {
 		fmt.Fprintf(cmd.OutOrStdout(), "Removed %s\n", rm.Path)
 	}
 	return nil
+}
+
+// partitionByAge splits locks into those old enough for --fix to remove and
+// those too young to safely assume abandoned.
+func partitionByAge(locks []operations.LockInfo, minAge time.Duration) (removable, skipped []operations.LockInfo) {
+	for _, l := range locks {
+		if l.Age < minAge {
+			skipped = append(skipped, l)
+			continue
+		}
+		removable = append(removable, l)
+	}
+	return removable, skipped
 }

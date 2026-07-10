@@ -132,7 +132,7 @@ func TestRemovePrunableWorktreeRecovers(t *testing.T) {
 	}
 
 	r := rimbaSuccess(t, repo, "remove", taskPrunableRemove)
-	assertContains(t, r.Stdout, msgRemovedWorktree)
+	assertContains(t, r.Stdout, "Cleared stale worktree registration")
 	assertContains(t, r.Stdout, msgDeletedBranch)
 	assertNotContains(t, r.Stdout, "Failed to remove")
 

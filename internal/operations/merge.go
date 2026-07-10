@@ -71,12 +71,13 @@ func MergeWorktree(ctx context.Context, r git.Runner, params MergeParams, onProg
 	// Concurrent dirty checks (always run — read-only pre-flight)
 	progress.Notify(onProgress, "Checking for uncommitted changes...")
 	if err := checkDirty(ctx, r, dirtyCheckArgs{
-		sourcePath:    source.Path,
-		targetDir:     targetDir,
-		sourceTask:    params.SourceTask,
-		intoTask:      params.IntoTask,
-		targetLabel:   targetLabel,
-		mergingToMain: mergingToMain,
+		sourcePath:     source.Path,
+		targetDir:      targetDir,
+		sourceTask:     params.SourceTask,
+		intoTask:       params.IntoTask,
+		targetLabel:    targetLabel,
+		mergingToMain:  mergingToMain,
+		sourcePrunable: source.Prunable,
 	}); err != nil {
 		return result, err
 	}
@@ -207,6 +208,10 @@ type dirtyCheckArgs struct {
 	sourceTask, intoTask  string
 	targetLabel           string
 	mergingToMain         bool
+	// sourcePrunable skips the source's dirty check: a prunable source has no
+	// live .git, so `git status` against it fails with a raw git error rather
+	// than a meaningful dirty/clean answer — there's no index to be dirty.
+	sourcePrunable bool
 }
 
 // checkDirty checks both source and target for uncommitted changes concurrently.
@@ -217,6 +222,9 @@ func checkDirty(ctx context.Context, r git.Runner, args dirtyCheckArgs) error {
 
 	go func() {
 		defer wg.Done()
+		if args.sourcePrunable {
+			return
+		}
 		srcCheck.dirty, srcCheck.err = git.IsDirty(ctx, r, args.sourcePath)
 	}()
 	go func() {

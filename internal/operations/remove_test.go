@@ -208,6 +208,9 @@ func TestRemoveWorktreePrunablePath(t *testing.T) {
 	if !result.BranchDeleted {
 		t.Error("expected BranchDeleted to be true")
 	}
+	if !result.Prunable {
+		t.Error("expected result.Prunable to be true")
+	}
 	if !pruneInvoked {
 		t.Error("expected 'git worktree prune' to be invoked for a prunable worktree")
 	}

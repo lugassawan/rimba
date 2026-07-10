@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // TestDoctorReportsAndFixesStaleLock guards #380's operational counterpart:
@@ -48,5 +49,13 @@ func plantStaleLock(t *testing.T, repo string) string {
 	if err := os.WriteFile(lockPath, nil, 0o644); err != nil {
 		t.Fatalf("write index.lock: %v", err)
 	}
+
+	// Backdate past doctor --fix's minimum-age gate (a fresh lock may still
+	// belong to a running git process, so --fix skips it even under --force).
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(lockPath, old, old); err != nil {
+		t.Fatalf("Chtimes: %v", err)
+	}
+
 	return lockPath
 }

@@ -13,6 +13,7 @@ type RemoveResult struct {
 	Task            string
 	Branch          string
 	Path            string
+	Prunable        bool // true if the worktree was recovered via git worktree prune (#374) rather than a normal remove — the directory is left on disk
 	WorktreeRemoved bool
 	BranchDeleted   bool
 	BranchError     error // non-nil if worktree removed but branch delete failed
@@ -21,9 +22,10 @@ type RemoveResult struct {
 // RemoveWorktree removes a worktree and optionally deletes its branch.
 func RemoveWorktree(ctx context.Context, r git.Runner, wt resolver.WorktreeInfo, task string, keepBranch, force bool, onProgress progress.Func) (RemoveResult, error) {
 	result := RemoveResult{
-		Task:   task,
-		Branch: wt.Branch,
-		Path:   wt.Path,
+		Task:     task,
+		Branch:   wt.Branch,
+		Path:     wt.Path,
+		Prunable: wt.Prunable,
 	}
 
 	progress.Notify(onProgress, "Removing worktree...")

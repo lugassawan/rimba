@@ -429,6 +429,56 @@ func TestMergeWorktreeCleanupPrunableSurfacesOnResult(t *testing.T) {
 	}
 }
 
+// TestMergeWorktreeSkipsDirtyCheckForPrunableSource guards a follow-up to
+// #374: a prunable source has no live .git, so `git status --porcelain`
+// against its path fails with a raw "not a git repository" error — checkDirty
+// must tolerate that (nothing to check — there's no index to be dirty)
+// rather than aborting the merge with an unhelpful raw git error before ever
+// reaching the prunable-recovery cleanup path.
+func TestMergeWorktreeSkipsDirtyCheckForPrunableSource(t *testing.T) {
+	wt := strings.Join([]string{
+		"worktree /repo",
+		"HEAD abc123",
+		"branch refs/heads/main",
+		"",
+		"worktree /wt/feature-login",
+		"HEAD def456",
+		"branch refs/heads/feature/login",
+		"prunable gitdir file points to non-existent location",
+		"",
+	}, "\n")
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == gitCmdWorktree && args[1] == gitSubcmdList {
+				return wt, nil
+			}
+			return "", nil
+		},
+		runInDir: func(dir string, args ...string) (string, error) {
+			if dir == pathWtFeatureLogin {
+				return "", errors.New("fatal: not a git repository (or any of the parent directories): .git")
+			}
+			if len(args) >= 1 && (args[0] == gitCmdStatus || args[0] == gitCmdMerge) {
+				return "", nil
+			}
+			return "", nil
+		},
+	}
+
+	result, err := MergeWorktree(context.Background(), r, MergeParams{
+		SourceTask: "login",
+		RepoRoot:   "/repo",
+		MainBranch: "main",
+	}, nil)
+	if err != nil {
+		t.Fatalf("expected merge to succeed despite the prunable source having no .git, got: %v", err)
+	}
+	if !result.SourcePrunable {
+		t.Error("expected SourcePrunable to be true")
+	}
+}
+
 func TestMergeWorktreeProgressCallbacks(t *testing.T) {
 	r := mergeRunner(nil)
 
