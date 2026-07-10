@@ -88,6 +88,35 @@ func TestDuplicateWithAs(t *testing.T) {
 	assertFileExists(t, filepath.Join(dupPath, "data.txt"))
 }
 
+func TestDuplicateWithAsRetargetsService(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupMonorepoRepo(t, "login", "payments")
+
+	rimbaSuccess(t, repo, "add", "login/task")
+	r := rimbaSuccess(t, repo, "duplicate", "login/task", "--as", "payments/newname")
+	assertContains(t, r.Stdout, "payments/feature/newname")
+
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch := resolver.FullBranchName("payments", defaultPrefix, "newname")
+	assertFileExists(t, resolver.WorktreePath(wtDir, branch))
+}
+
+func TestDuplicateWithAsUnknownServiceFails(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupMonorepoRepo(t, "login")
+
+	rimbaSuccess(t, repo, "add", "login/task")
+	r := rimbaFail(t, repo, "duplicate", "login/task", "--as", "ghost/newname")
+	assertContains(t, r.Stderr, `service "ghost" not found`)
+}
+
 func TestDuplicateInheritsPrefix(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)

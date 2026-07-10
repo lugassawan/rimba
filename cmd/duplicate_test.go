@@ -157,6 +157,123 @@ func TestDuplicateWithAs(t *testing.T) {
 	}
 }
 
+func TestDuplicateWithAsRetargetService(t *testing.T) {
+	repoDir := t.TempDir()
+	wtDir := filepath.Join(repoDir, "worktrees")
+	_ = os.MkdirAll(wtDir, 0755)
+	if err := os.Mkdir(filepath.Join(repoDir, "payments"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: "worktrees"}
+
+	worktreeOut := strings.Join([]string{
+		wtPrefix + repoDir,
+		headABC123,
+		branchRefMain,
+		"",
+		wtFeatureLogin,
+		headDEF456,
+		branchRefFeatureLogin,
+		"",
+	}, "\n")
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdGitCommonDir {
+				return filepath.Join(repoDir, ".git"), nil
+			}
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return "", errGitFailed // BranchExists returns false
+			}
+			return worktreeOut, nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().String(flagAs, "", "")
+	cmd.Flags().Bool(flagSkipDeps, false, "")
+	cmd.Flags().Bool(flagSkipHooks, false, "")
+	_ = cmd.Flags().Set(flagAs, "payments/newname")
+	_ = cmd.Flags().Set(flagSkipDeps, "true")
+	_ = cmd.Flags().Set(flagSkipHooks, "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	err := duplicateCmd.RunE(cmd, []string{"login"})
+	if err != nil {
+		t.Fatalf("duplicateCmd.RunE: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "payments/feature/newname") {
+		t.Errorf("output = %q, want branch 'payments/feature/newname'", out)
+	}
+}
+
+func TestDuplicateWithAsUnknownServiceErrors(t *testing.T) {
+	repoDir := t.TempDir()
+	wtDir := filepath.Join(repoDir, "worktrees")
+	_ = os.MkdirAll(wtDir, 0755)
+	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: "worktrees"}
+
+	worktreeOut := strings.Join([]string{
+		wtPrefix + repoDir,
+		headABC123,
+		branchRefMain,
+		"",
+		wtFeatureLogin,
+		headDEF456,
+		branchRefFeatureLogin,
+		"",
+	}, "\n")
+
+	addWorktreeCalled := false
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdGitCommonDir {
+				return filepath.Join(repoDir, ".git"), nil
+			}
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoDir, nil
+			}
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return "", errGitFailed // BranchExists returns false
+			}
+			return worktreeOut, nil
+		},
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == gitSubcmdWorktreeAdd {
+				addWorktreeCalled = true
+			}
+			return "", nil
+		},
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, _ := newTestCmd()
+	cmd.Flags().String(flagAs, "", "")
+	cmd.Flags().Bool(flagSkipDeps, false, "")
+	cmd.Flags().Bool(flagSkipHooks, false, "")
+	_ = cmd.Flags().Set(flagAs, "ghost/newname")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	err := duplicateCmd.RunE(cmd, []string{"login"})
+	if err == nil {
+		t.Fatal("expected error for unknown service in --as")
+	}
+	if !strings.Contains(err.Error(), `service "ghost" not found`) {
+		t.Errorf("error = %q, want it to mention `service \"ghost\" not found`", err.Error())
+	}
+	if addWorktreeCalled {
+		t.Error("git worktree add must not be called for unknown service")
+	}
+}
+
 func TestDuplicateRejectsUnsafeAs(t *testing.T) {
 	cases := []struct {
 		name string

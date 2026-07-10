@@ -132,3 +132,65 @@ func TestResolveTaskInputCustomPrefixAlias(t *testing.T) {
 		t.Errorf(`ResolveTaskInput("proj/123") = (%q, %q), want ("", "123")`, service, task)
 	}
 }
+
+func TestClassifyTaskInput(t *testing.T) {
+	repoRoot := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repoRoot, "auth-api"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name        string
+		input       string
+		wantKind    operations.TaskKind
+		wantService string
+		wantTask    string
+	}{
+		{
+			name:        "no slash is standard",
+			input:       "my-task",
+			wantKind:    operations.KindStandard,
+			wantService: "",
+			wantTask:    "my-task",
+		},
+		{
+			name:        "known prefix is standard",
+			input:       "feature/my-task",
+			wantKind:    operations.KindStandard,
+			wantService: "",
+			wantTask:    "my-task",
+		},
+		{
+			name:        "real service directory is KindService",
+			input:       "auth-api/my-task",
+			wantKind:    operations.KindService,
+			wantService: "auth-api",
+			wantTask:    "my-task",
+		},
+		{
+			name:        "known alias is standard",
+			input:       "fix/crash-fix",
+			wantKind:    operations.KindStandard,
+			wantService: "",
+			wantTask:    "crash-fix",
+		},
+		{
+			name:        "unknown candidate is KindUnknownService",
+			input:       "ghost/my-task",
+			wantKind:    operations.KindUnknownService,
+			wantService: "",
+			wantTask:    "ghost-my-task",
+		},
+	}
+
+	ps := resolver.DefaultPrefixSet()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := operations.ClassifyTaskInput(tt.input, repoRoot, ps)
+			if res.Kind != tt.wantKind || res.Service != tt.wantService || res.Task != tt.wantTask {
+				t.Errorf("ClassifyTaskInput(%q) = %+v, want {Kind: %v, Service: %q, Task: %q}",
+					tt.input, res, tt.wantKind, tt.wantService, tt.wantTask)
+			}
+		})
+	}
+}
