@@ -347,6 +347,54 @@ func TestMergeRemoveWorktreePrunablePruneFails(t *testing.T) {
 	}
 }
 
+// TestMergePrunableSourceSuccessMessage guards a follow-up to #374: once a
+// prunable source's dirty check is skipped, a merge with auto-cleanup can
+// actually succeed and reach the success-path print — which must use the
+// same "Cleared stale worktree registration" wording as clean/remove, not
+// the misleading "Removed worktree" (git worktree prune leaves the
+// directory on disk).
+func TestMergePrunableSourceSuccessMessage(t *testing.T) {
+	prunableWorktreeOut := "worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\n" +
+		"worktree /wt/feature-login\nHEAD def456\nbranch refs/heads/feature/login\nprunable gitdir file points to non-existent location\n"
+
+	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: defaultRelativeWtDir}
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoPath, nil
+			}
+			return prunableWorktreeOut, nil
+		},
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && (args[0] == cmdStatus || args[0] == flagSyncMerge) {
+				return "", nil
+			}
+			return "", nil
+		},
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().String(flagInto, "", "")
+	cmd.Flags().Bool(flagNoFF, false, "")
+	cmd.Flags().Bool(flagKeep, false, "")
+	cmd.Flags().Bool(flagDelete, false, "")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	err := mergeCmd.RunE(cmd, []string{"login"})
+	if err != nil {
+		t.Fatalf(fatalMergeRunE, err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Cleared stale worktree registration: /wt/feature-login") {
+		t.Errorf("output = %q, want a distinct prunable-recovery message, not 'Removed worktree'", out)
+	}
+	if strings.Contains(out, "Removed worktree") {
+		t.Errorf("output = %q, want NOT 'Removed worktree' for the prunable-recovery path", out)
+	}
+}
+
 func TestMergeIntoWorktreeWithDelete(t *testing.T) {
 	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: defaultRelativeWtDir}
 	r := &mockRunner{

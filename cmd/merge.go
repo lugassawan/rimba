@@ -109,10 +109,10 @@ var mergeCmd = &cobra.Command{
 
 		// Format cleanup results
 		if result.SourceRemoved {
-			fmt.Fprintf(cmd.OutOrStdout(), "Removed worktree: %s\n", result.SourcePath)
+			printMergeWorktreeRemoved(cmd, result)
 			fmt.Fprintf(cmd.OutOrStdout(), "Deleted branch: %s\n", result.SourceBranch)
 		} else if result.WorktreeRemoved {
-			fmt.Fprintf(cmd.OutOrStdout(), "Removed worktree: %s\n", result.SourcePath)
+			printMergeWorktreeRemoved(cmd, result)
 			fmt.Fprintln(cmd.OutOrStdout(), result.RemoveError)
 		} else if result.RemoveError != nil {
 			hint := "git worktree remove --force -- " + result.SourcePath
@@ -131,6 +131,17 @@ var mergeCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+// printMergeWorktreeRemoved prints the cleanup success line, distinguishing
+// a prunable recovery (git worktree prune — directory left on disk) from a
+// real worktree removal, matching cmd/clean.go and cmd/remove.go.
+func printMergeWorktreeRemoved(cmd *cobra.Command, result operations.MergeResult) {
+	if result.SourcePrunable {
+		fmt.Fprintf(cmd.OutOrStdout(), "Cleared stale worktree registration: %s (directory left on disk — remove manually if unneeded)\n", result.SourcePath)
+		return
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Removed worktree: %s\n", result.SourcePath)
 }
 
 func init() {
