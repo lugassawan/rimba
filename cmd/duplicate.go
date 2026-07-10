@@ -75,11 +75,18 @@ var duplicateCmd = &cobra.Command{
 		asFlag, _ := cmd.Flags().GetString(flagAs)
 		var newTask string
 		if asFlag != "" {
-			dupSvc, resolvedTask := operations.ResolveTaskInput(asFlag, repoRoot, ps)
-			if err := operations.ValidateBranchInput(resolvedTask, dupSvc); err != nil {
+			res := operations.ClassifyTaskInput(asFlag, repoRoot, ps)
+			if res.Kind == operations.KindUnknownService {
+				candidate, _ := resolver.SplitServiceInput(asFlag)
+				return fmt.Errorf("service %q not found; create the service directory first or omit the service prefix", candidate)
+			}
+			if err := operations.ValidateBranchInput(res.Task, res.Service); err != nil {
 				return err
 			}
-			newTask = resolvedTask
+			newTask = res.Task
+			if res.Service != "" {
+				svc = res.Service
+			}
 		} else {
 			// Auto-suffix: try task-1, task-2, etc.
 			for i := 1; i <= maxDuplicateSuffix; i++ {
