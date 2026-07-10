@@ -22,6 +22,7 @@ func CommitCountSince(ctx context.Context, r Runner, branch string, since time.D
 		ctx,
 		"rev-list", "--count",
 		fmt.Sprintf("--since=%d", cutoff),
+		flagEndOfOptions,
 		branch,
 	)
 	if err != nil {

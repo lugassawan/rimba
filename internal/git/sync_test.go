@@ -154,12 +154,11 @@ func TestAbortRebase(t *testing.T) {
 }
 
 func TestMergeBase(t *testing.T) {
+	var captured []string
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
-			if len(args) == 3 && args[0] == CmdMergeBase {
-				return fakeSHA, nil
-			}
-			return "", errors.New("unexpected")
+			captured = args
+			return fakeSHA, nil
 		},
 	}
 
@@ -169,6 +168,10 @@ func TestMergeBase(t *testing.T) {
 	}
 	if sha != fakeSHA {
 		t.Errorf("sha = %q, want %q", sha, fakeSHA)
+	}
+	want := []string{CmdMergeBase, "--", branchMain, branchFeature}
+	if !slices.Equal(captured, want) {
+		t.Errorf("args = %v, want %v", captured, want)
 	}
 }
 
@@ -186,17 +189,20 @@ func TestMergeBaseError(t *testing.T) {
 }
 
 func TestIsMergeBaseAncestor(t *testing.T) {
+	var captured []string
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
-			if slices.Contains(args, "--is-ancestor") {
-				return "", nil
-			}
-			return "", errors.New("unexpected")
+			captured = args
+			return "", nil
 		},
 	}
 
 	if !IsMergeBaseAncestor(context.Background(), r, branchMain, branchFeature) {
 		t.Error("expected true for ancestor check")
+	}
+	want := []string{CmdMergeBase, "--is-ancestor", "--", branchMain, branchFeature}
+	if !slices.Equal(captured, want) {
+		t.Errorf("args = %v, want %v", captured, want)
 	}
 }
 

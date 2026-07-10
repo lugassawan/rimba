@@ -77,10 +77,11 @@ func TestMergePlanOrdering(t *testing.T) {
 			}
 			if args[0] == cmdDiff {
 				// A and B share shared.go, C has no overlaps
-				if strings.Contains(args[2], branchFeatureA) {
+				last := args[len(args)-1]
+				if strings.Contains(last, branchFeatureA) {
 					return "shared.go\na-only.go", nil
 				}
-				if strings.Contains(args[2], branchFeatureB) {
+				if strings.Contains(last, branchFeatureB) {
 					return "shared.go\nb-only.go", nil
 				}
 				return "c-only.go", nil

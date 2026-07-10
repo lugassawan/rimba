@@ -209,9 +209,9 @@ func sharedMergeBaseRunFunc(wt string, logInvocations *int) func(args ...string)
 		case len(args) > 0 && args[0] == git.CmdMergeBase:
 			return "shared-base", nil // both branches share the same merge-base
 		case len(args) > 0 && args[0] == cmdRevParse:
-			return "tip-" + args[2], nil // distinct tip, never equals mergeBase
+			return "tip-" + args[len(args)-1], nil // distinct tip, never equals mergeBase
 		case len(args) > 0 && args[0] == git.CmdDiff:
-			return "diff-" + args[2], nil
+			return "diff-" + args[len(args)-1], nil
 		case len(args) > 0 && args[0] == git.CmdLog:
 			*logInvocations++
 			return "mainline-log", nil
@@ -282,14 +282,14 @@ func distinctMergeBaseRunFunc(wt string, logCallsByRange map[string]int) func(ar
 		case len(args) > 0 && args[0] == gitCmdWorktree:
 			return wt, nil
 		case len(args) > 0 && args[0] == git.CmdMergeBase:
-			if args[2] == "feature/a" {
+			if args[len(args)-1] == "feature/a" {
 				return "base-a", nil
 			}
 			return "base-b", nil
 		case len(args) > 0 && args[0] == cmdRevParse:
-			return "tip-" + args[2], nil
+			return "tip-" + args[len(args)-1], nil
 		case len(args) > 0 && args[0] == git.CmdDiff:
-			return "diff-" + args[2], nil
+			return "diff-" + args[len(args)-1], nil
 		case len(args) > 0 && args[0] == git.CmdLog:
 			rangeArg := args[len(args)-1]
 			logCallsByRange[rangeArg]++

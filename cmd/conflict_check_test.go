@@ -75,7 +75,7 @@ func TestConflictCheckNoOverlaps(t *testing.T) {
 				return worktreeListOutput(branchFeatureA, branchFeatureB), nil
 			}
 			if args[0] == cmdDiff {
-				if strings.Contains(args[2], branchFeatureA) {
+				if strings.Contains(args[len(args)-1], branchFeatureA) {
 					return diffOutputFileA, nil
 				}
 				return "file-b.go", nil
@@ -106,7 +106,7 @@ func TestConflictCheckWithOverlaps(t *testing.T) {
 				return worktreeListOutput(branchFeatureA, branchFeatureB), nil
 			}
 			if args[0] == cmdDiff {
-				if strings.Contains(args[2], branchFeatureA) {
+				if strings.Contains(args[len(args)-1], branchFeatureA) {
 					return diffOutputSharedA, nil
 				}
 				return diffOutputSharedB, nil
@@ -275,7 +275,7 @@ func TestConflictCheckJSONNoOverlaps(t *testing.T) {
 				return worktreeListOutput(branchFeatureA, branchFeatureB), nil
 			}
 			if args[0] == cmdDiff {
-				if strings.Contains(args[2], branchFeatureA) {
+				if strings.Contains(args[len(args)-1], branchFeatureA) {
 					return diffOutputFileA, nil
 				}
 				return "file-b.go", nil
@@ -323,7 +323,7 @@ func TestConflictCheckJSONWithOverlaps(t *testing.T) {
 				return worktreeListOutput(branchFeatureA, branchFeatureB), nil
 			}
 			if args[0] == cmdDiff {
-				if strings.Contains(args[2], branchFeatureA) {
+				if strings.Contains(args[len(args)-1], branchFeatureA) {
 					return diffOutputSharedA, nil
 				}
 				return diffOutputSharedB, nil

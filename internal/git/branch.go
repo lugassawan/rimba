@@ -133,7 +133,7 @@ func AheadBehind(ctx context.Context, r Runner, dir string) (ahead, behind int, 
 // FirstParentChainSHAs returns the set of commit SHAs on mergeRef's mainline
 // (first-parent) history.
 func FirstParentChainSHAs(ctx context.Context, r Runner, mergeRef string) (map[string]bool, error) {
-	out, err := r.Run(ctx, cmdRevList, flagFirstParent, mergeRef)
+	out, err := r.Run(ctx, cmdRevList, flagFirstParent, flagEndOfOptions, mergeRef)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +184,7 @@ func IsSquashMergedWithMainlinePatchIDs(ctx context.Context, r Runner, mergeBase
 // MainlinePatchIDsSince returns the patch-ID set for mergeRef's history since
 // mergeBase (exclusive), so callers can cache it by mergeBase across branches.
 func MainlinePatchIDsSince(ctx context.Context, r Runner, mergeBase, mergeRef string) (map[string]bool, error) {
-	mergeRefDiffs, err := r.Run(ctx, CmdLog, "-p", "--no-merges", mergeBase+".."+mergeRef)
+	mergeRefDiffs, err := r.Run(ctx, CmdLog, "-p", "--no-merges", flagEndOfOptions, mergeBase+".."+mergeRef)
 	if err != nil {
 		return nil, err
 	}
@@ -192,9 +192,9 @@ func MainlinePatchIDsSince(ctx context.Context, r Runner, mergeBase, mergeRef st
 }
 
 // MergedBranches returns branches that have been merged into the given branch.
-// Runs `git branch --merged <branch>` and parses the output.
+// Uses the stuck `--merged=<branch>` form: unlike `--`, it doesn't break refs with a leading dash.
 func MergedBranches(ctx context.Context, r Runner, branch string) ([]string, error) {
-	out, err := r.Run(ctx, "branch", "--merged", branch)
+	out, err := r.Run(ctx, "branch", "--merged="+branch)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +220,7 @@ func LastCommitTime(ctx context.Context, r Runner, branch string) (time.Time, er
 
 // LastCommitInfo returns the time and subject of the last commit on the given branch.
 func LastCommitInfo(ctx context.Context, r Runner, branch string) (time.Time, string, error) {
-	out, err := r.Run(ctx, CmdLog, "-1", "--format=%ct\t%s", branch)
+	out, err := r.Run(ctx, CmdLog, "-1", "--format=%ct\t%s", flagEndOfOptions, branch)
 	if err != nil {
 		return time.Time{}, "", errhint.WithFix(
 			fmt.Errorf("last commit info for %s: %w", branch, err),
@@ -272,7 +272,7 @@ func LocalBranches(ctx context.Context, r Runner) ([]string, error) {
 // branchOwnPatchIDs returns branch's patch-ID set relative to mergeBase, and
 // whether branch has no commits of its own (caller should skip the mainline compare).
 func branchOwnPatchIDs(ctx context.Context, r Runner, mergeBase, branch string) (pids map[string]bool, empty bool, _ error) {
-	tip, err := r.Run(ctx, cmdRevParse, "--verify", branch)
+	tip, err := r.Run(ctx, cmdRevParse, flagVerify, flagEndOfOptions, branch)
 	if err != nil {
 		return nil, false, err
 	}
@@ -280,7 +280,7 @@ func branchOwnPatchIDs(ctx context.Context, r Runner, mergeBase, branch string) 
 		return nil, true, nil
 	}
 
-	branchDiff, err := r.Run(ctx, CmdDiff, mergeBase, branch)
+	branchDiff, err := r.Run(ctx, CmdDiff, flagEndOfOptions, mergeBase, branch)
 	if err != nil {
 		return nil, false, err
 	}

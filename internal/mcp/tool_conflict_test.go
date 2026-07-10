@@ -64,7 +64,7 @@ func TestConflictCheckToolOverlapsDetected(t *testing.T) {
 			}
 			// CollectDiffs: git diff --name-only main...branch
 			if len(args) >= 3 && args[0] == gitDiff && args[1] == diffNameOnly {
-				ref := args[2]
+				ref := args[len(args)-1]
 				if strings.Contains(ref, "feature/task-a") {
 					return "shared.go\nonly-a.go", nil
 				}
@@ -152,7 +152,7 @@ func TestConflictCheckToolNoOverlaps(t *testing.T) {
 				return porcelain, nil
 			}
 			if len(args) >= 3 && args[0] == gitDiff && args[1] == diffNameOnly {
-				ref := args[2]
+				ref := args[len(args)-1]
 				if strings.Contains(ref, "feature/task-a") {
 					return "only-a.go", nil
 				}
@@ -381,7 +381,7 @@ func TestConflictCheckToolMultipleOverlappingFiles(t *testing.T) {
 				return porcelain, nil
 			}
 			if len(args) >= 3 && args[0] == gitDiff && args[1] == diffNameOnly {
-				ref := args[2]
+				ref := args[len(args)-1]
 				if strings.Contains(ref, "feature/task-a") {
 					return "shared1.go\nshared2.go\nonly-a.go", nil
 				}

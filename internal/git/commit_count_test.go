@@ -60,6 +60,25 @@ func TestCommitCountSinceExcludesOldCommits(t *testing.T) {
 	}
 }
 
+func TestCommitCountSinceLeadingDashBranch(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	testutil.GitCmd(t, repo, "update-ref", "refs/heads/-ccs-dash", "HEAD")
+
+	got, err := git.CommitCountSince(context.Background(), r, "-ccs-dash", 24*time.Hour)
+	if err != nil {
+		t.Fatalf("CommitCountSince on leading-dash branch: %v", err)
+	}
+	if got != 1 {
+		t.Errorf("CommitCountSince = %d, want 1 (the initial commit)", got)
+	}
+}
+
 func TestCommitCountSinceUnknownBranch(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipIntegration)
