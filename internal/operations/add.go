@@ -65,7 +65,7 @@ func AddWorktree(ctx context.Context, r git.Runner, params AddParams, onProgress
 	}
 
 	// Validate
-	if err := validateBranchInput(params.Task, params.Service); err != nil {
+	if err := ValidateBranchInput(params.Task, params.Service); err != nil {
 		return result, err
 	}
 	if git.BranchExists(ctx, r, branch) {
@@ -113,9 +113,9 @@ func AddWorktree(ctx context.Context, r git.Runner, params AddParams, onProgress
 	return result, nil
 }
 
-// validateBranchInput rejects task/service names that are unsafe as git refs
+// ValidateBranchInput rejects task/service names that are unsafe as git refs
 // (leading dash, path traversal, control/shell chars) before branch creation.
-func validateBranchInput(task, service string) error {
+func ValidateBranchInput(task, service string) error {
 	const hint = "use only letters, digits, '.', '_', '/', '-'; no leading '-' or '..'"
 	if task == "" {
 		return errhint.WithFix(errors.New("task name is required"), hint)

@@ -157,6 +157,79 @@ func TestDuplicateWithAs(t *testing.T) {
 	}
 }
 
+func TestDuplicateRejectsUnsafeAs(t *testing.T) {
+	cases := []struct {
+		name string
+		as   string
+	}{
+		{name: "leading dash", as: "-x"},
+		{name: "leading double-dot", as: "..branch"},
+		{name: "path traversal", as: "../bad"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			repoDir := t.TempDir()
+			wtDir := filepath.Join(repoDir, "worktrees")
+			_ = os.MkdirAll(wtDir, 0755)
+			cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: "worktrees"}
+
+			worktreeOut := strings.Join([]string{
+				wtPrefix + repoDir,
+				headABC123,
+				branchRefMain,
+				"",
+				wtFeatureLogin,
+				headDEF456,
+				branchRefFeatureLogin,
+				"",
+			}, "\n")
+
+			addWorktreeCalled := false
+			r := &mockRunner{
+				run: func(args ...string) (string, error) {
+					if len(args) >= 2 && args[1] == cmdGitCommonDir {
+						return filepath.Join(repoDir, ".git"), nil
+					}
+					if len(args) >= 2 && args[1] == cmdShowToplevel {
+						return repoDir, nil
+					}
+					if len(args) >= 1 && args[0] == cmdRevParse {
+						return "", errGitFailed // BranchExists returns false
+					}
+					return worktreeOut, nil
+				},
+				runInDir: func(_ string, args ...string) (string, error) {
+					if len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == "add" {
+						addWorktreeCalled = true
+					}
+					return "", nil
+				},
+			}
+			restore := overrideNewRunner(r)
+			defer restore()
+
+			cmd, _ := newTestCmd()
+			cmd.Flags().String(flagAs, "", "")
+			cmd.Flags().Bool(flagSkipDeps, false, "")
+			cmd.Flags().Bool(flagSkipHooks, false, "")
+			_ = cmd.Flags().Set(flagAs, tc.as)
+			cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+			err := duplicateCmd.RunE(cmd, []string{"login"})
+			if err == nil {
+				t.Fatalf("duplicateCmd.RunE(--as %q) = nil error, want rejection", tc.as)
+			}
+			if !strings.Contains(err.Error(), "unsafe git ref name") && !strings.Contains(err.Error(), "invalid") {
+				t.Errorf("error = %q, want it to mention 'unsafe git ref name' or 'invalid'", err.Error())
+			}
+			if addWorktreeCalled {
+				t.Errorf("--as %q: git worktree add must not be called for unsafe input", tc.as)
+			}
+		})
+	}
+}
+
 func TestDuplicateBranchAlreadyExists(t *testing.T) {
 	repoDir := t.TempDir()
 	wtDir := filepath.Join(repoDir, "worktrees")
