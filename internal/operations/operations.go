@@ -35,9 +35,10 @@ func ListWorktreeInfos(ctx context.Context, r git.Runner) ([]resolver.WorktreeIn
 	for i, e := range entries {
 		svc, _, _ := resolver.ServiceFromBranch(e.Branch, prefixes)
 		worktrees[i] = resolver.WorktreeInfo{
-			Path:    e.Path,
-			Branch:  e.Branch,
-			Service: svc,
+			Path:     e.Path,
+			Branch:   e.Branch,
+			Service:  svc,
+			Prunable: e.Prunable,
 		}
 	}
 	return worktrees, nil

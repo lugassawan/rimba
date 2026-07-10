@@ -16,14 +16,16 @@ const (
 	porcelainWorktree = "worktree "
 	porcelainHEAD     = "HEAD "
 	porcelainBranch   = "branch "
+	porcelainPrunable = "prunable"
 )
 
 // WorktreeEntry represents a parsed worktree from `git worktree list --porcelain`.
 type WorktreeEntry struct {
-	Path   string
-	HEAD   string
-	Branch string
-	Bare   bool
+	Path     string
+	HEAD     string
+	Branch   string
+	Bare     bool
+	Prunable bool
 }
 
 // AddWorktree creates a new worktree at the given path with a new branch from source.
@@ -87,6 +89,8 @@ func ListWorktrees(ctx context.Context, r Runner) ([]WorktreeEntry, error) {
 			current.Branch = strings.TrimPrefix(ref, refsHeadsPrefix)
 		case line == "bare":
 			current.Bare = true
+		case line == porcelainPrunable || strings.HasPrefix(line, porcelainPrunable+" "):
+			current.Prunable = true
 		}
 	}
 

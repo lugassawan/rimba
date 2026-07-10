@@ -37,6 +37,7 @@ type MergeResult struct {
 	MergingToMain   bool
 	SourceRemoved   bool  // true only if both worktree removed and branch deleted
 	WorktreeRemoved bool  // true if worktree was removed (branch may still exist)
+	SourcePrunable  bool  // true if the source's admin entry was prunable (#374) — informs the cleanup-failure hint
 	RemoveError     error // non-nil if cleanup failed
 	RemoteDeleted   bool  // true if the remote branch was deleted (parity with clean --merged, #231)
 	RemoteError     error // non-nil if remote-branch deletion was attempted and failed
@@ -59,22 +60,24 @@ func MergeWorktree(ctx context.Context, r git.Runner, params MergeParams, onProg
 
 	plan := &Plan{DryRun: params.DryRun}
 	result := MergeResult{
-		SourceBranch:  source.Branch,
-		SourcePath:    source.Path,
-		TargetLabel:   targetLabel,
-		MergingToMain: mergingToMain,
-		Plan:          plan,
+		SourceBranch:   source.Branch,
+		SourcePath:     source.Path,
+		TargetLabel:    targetLabel,
+		MergingToMain:  mergingToMain,
+		SourcePrunable: source.Prunable,
+		Plan:           plan,
 	}
 
 	// Concurrent dirty checks (always run — read-only pre-flight)
 	progress.Notify(onProgress, "Checking for uncommitted changes...")
 	if err := checkDirty(ctx, r, dirtyCheckArgs{
-		sourcePath:    source.Path,
-		targetDir:     targetDir,
-		sourceTask:    params.SourceTask,
-		intoTask:      params.IntoTask,
-		targetLabel:   targetLabel,
-		mergingToMain: mergingToMain,
+		sourcePath:     source.Path,
+		targetDir:      targetDir,
+		sourceTask:     params.SourceTask,
+		intoTask:       params.IntoTask,
+		targetLabel:    targetLabel,
+		mergingToMain:  mergingToMain,
+		sourcePrunable: source.Prunable,
 	}); err != nil {
 		return result, err
 	}
@@ -95,7 +98,7 @@ func MergeWorktree(ctx context.Context, r git.Runner, params MergeParams, onProg
 		var wtRemoved, brDeleted bool
 		rmErr := plan.Do("remove worktree: "+source.Path, func() error {
 			var err error
-			wtRemoved, brDeleted, err = removeAndCleanup(ctx, r, source.Path, source.Branch, false)
+			wtRemoved, brDeleted, err = removeAndCleanup(ctx, r, source.Path, source.Branch, false, source.Prunable)
 			return err
 		})
 		result.WorktreeRemoved = wtRemoved
@@ -205,6 +208,10 @@ type dirtyCheckArgs struct {
 	sourceTask, intoTask  string
 	targetLabel           string
 	mergingToMain         bool
+	// sourcePrunable skips the source's dirty check: a prunable source has no
+	// live .git, so `git status` against it fails with a raw git error rather
+	// than a meaningful dirty/clean answer — there's no index to be dirty.
+	sourcePrunable bool
 }
 
 // checkDirty checks both source and target for uncommitted changes concurrently.
@@ -215,6 +222,9 @@ func checkDirty(ctx context.Context, r git.Runner, args dirtyCheckArgs) error {
 
 	go func() {
 		defer wg.Done()
+		if args.sourcePrunable {
+			return
+		}
 		srcCheck.dirty, srcCheck.err = git.IsDirty(ctx, r, args.sourcePath)
 	}()
 	go func() {

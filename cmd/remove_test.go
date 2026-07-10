@@ -39,6 +39,54 @@ func TestRemoveSuccess(t *testing.T) {
 	}
 }
 
+func TestRemovePrunablePathRunsPrune(t *testing.T) {
+	prunableWorktreeOut := "worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\n" +
+		"worktree /wt/feature-login\nHEAD def456\nbranch refs/heads/feature/login\nprunable gitdir file points to non-existent location\n"
+
+	var pruneInvoked, removeInvoked bool
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			cmd := strings.Join(args, " ")
+			switch {
+			case strings.Contains(cmd, "worktree prune"):
+				pruneInvoked = true
+			case strings.Contains(cmd, "worktree remove"):
+				removeInvoked = true
+			}
+			if len(args) > 0 && args[0] == "worktree" && args[1] == "list" {
+				return prunableWorktreeOut, nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.SetContext(config.WithConfig(context.Background(), &config.Config{}))
+	cmd.Flags().Bool(flagKeepBranch, false, "")
+	cmd.Flags().Bool(flagForce, false, "")
+
+	err := removeCmd.RunE(cmd, []string{"login"})
+	if err != nil {
+		t.Fatalf("removeCmd.RunE: %v", err)
+	}
+	if !pruneInvoked {
+		t.Error("expected 'git worktree prune' to be invoked for a prunable worktree")
+	}
+	if removeInvoked {
+		t.Error("expected 'git worktree remove' NOT to be invoked for a prunable worktree")
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Cleared stale worktree registration") {
+		t.Errorf("output = %q, want a distinct prunable-recovery message, not 'Removed worktree' (git worktree prune leaves the directory on disk)", out)
+	}
+	if strings.Contains(out, "Removed worktree") {
+		t.Errorf("output = %q, want NOT 'Removed worktree' for the prunable-recovery path", out)
+	}
+}
+
 func TestRemoveKeepBranch(t *testing.T) {
 	r := &mockRunner{
 		run:      func(_ ...string) (string, error) { return removeWorktreeOut, nil },

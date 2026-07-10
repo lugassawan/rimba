@@ -129,6 +129,45 @@ func TestRemoveWorktreeLeadingDashPath(t *testing.T) {
 	}
 }
 
+func TestListWorktreesPrunableEntry(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	wtPath := filepath.Join(filepath.Dir(repo), "wt-prunable")
+	if err := git.AddWorktree(context.Background(), r, wtPath, "feat/prunable", "main"); err != nil {
+		t.Fatalf(fatalAddWorktree, err)
+	}
+
+	// Simulate #374: the worktree's .git file deleted out-of-band, which
+	// makes git mark the admin entry prunable instead of removable.
+	if err := os.Remove(filepath.Join(wtPath, ".git")); err != nil {
+		t.Fatalf("remove .git file: %v", err)
+	}
+
+	entries, err := git.ListWorktrees(context.Background(), r)
+	if err != nil {
+		t.Fatalf("ListWorktrees: %v", err)
+	}
+
+	var found *git.WorktreeEntry
+	for i := range entries {
+		if entries[i].Branch == "feat/prunable" {
+			found = &entries[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("expected feat/prunable entry in %+v", entries)
+	}
+	if !found.Prunable {
+		t.Error("expected Prunable=true for a worktree with a deleted .git file")
+	}
+}
+
 func TestFilterEntries(t *testing.T) {
 	entries := []git.WorktreeEntry{
 		{Path: "/repo", Branch: "main", Bare: false},

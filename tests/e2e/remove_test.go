@@ -1,6 +1,7 @@
 package e2e_test
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -106,6 +107,45 @@ func TestRemoveDeletesUnmergedBranch(t *testing.T) {
 	out := testutil.GitCmd(t, repo, "branch", flagBranchList)
 	if strings.Contains(out, defaultPrefix+taskRmPartial) {
 		t.Errorf("expected branch %s%s to be deleted, but it still exists", defaultPrefix, taskRmPartial)
+	}
+}
+
+// TestRemovePrunableWorktreeRecovers guards #374: when a worktree's .git
+// file is deleted out-of-band, git marks it prunable and refuses a plain
+// `git worktree remove --force`. `rimba remove` must recover it via
+// `git worktree prune` and still delete the branch.
+func TestRemovePrunableWorktreeRecovers(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", taskPrunableRemove)
+
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch := resolver.BranchName(defaultPrefix, taskPrunableRemove)
+	wtPath := resolver.WorktreePath(wtDir, branch)
+
+	if err := os.Remove(filepath.Join(wtPath, ".git")); err != nil {
+		t.Fatalf("remove .git file: %v", err)
+	}
+
+	r := rimbaSuccess(t, repo, "remove", taskPrunableRemove)
+	assertContains(t, r.Stdout, "Cleared stale worktree registration")
+	assertContains(t, r.Stdout, msgDeletedBranch)
+	assertNotContains(t, r.Stdout, "Failed to remove")
+
+	// The stale worktree admin entry must be gone from git's own bookkeeping.
+	out := testutil.GitCmd(t, repo, "worktree", "list")
+	if strings.Contains(out, wtPath) {
+		t.Errorf("expected worktree entry for %s to be pruned, got: %s", wtPath, out)
+	}
+
+	// Branch must still be deleted despite the broken .git file.
+	branches := testutil.GitCmd(t, repo, "branch", flagBranchList)
+	if strings.Contains(branches, branch) {
+		t.Errorf("expected branch %s to be deleted, but it still exists", branch)
 	}
 }
 

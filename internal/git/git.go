@@ -7,8 +7,13 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
 	"time"
 )
+
+// gracefulShutdownDelay bounds how long a cancelled subprocess gets to react
+// to SIGTERM before the backstop SIGKILL fires.
+const gracefulShutdownDelay = 5 * time.Second
 
 // Runner abstracts git command execution for testability.
 type Runner interface {
@@ -25,9 +30,16 @@ type ExecRunner struct {
 	Timeout time.Duration
 }
 
+// isLongRunning reports whether args is a worktree add/remove/move operation,
+// which on large trees can exceed a finite per-command deadline (#380).
+func isLongRunning(args []string) bool {
+	return len(args) >= 2 && args[0] == cmdWorktree &&
+		(args[1] == "add" || args[1] == "remove" || args[1] == "move")
+}
+
 // RunInDir is the single execution primitive: all other methods delegate here.
 func (r *ExecRunner) RunInDir(ctx context.Context, dir string, args ...string) (string, error) {
-	if r.Timeout > 0 {
+	if r.Timeout > 0 && !isLongRunning(args) {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, r.Timeout)
 		defer cancel()
@@ -38,6 +50,11 @@ func (r *ExecRunner) RunInDir(ctx context.Context, dir string, args ...string) (
 	if dir != "" {
 		cmd.Dir = dir
 	}
+	// Send SIGTERM (not the default SIGKILL) on cancellation so git's own
+	// atexit handler can unlink its index.lock; WaitDelay is the backstop if
+	// git ignores the signal. See #380.
+	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
+	cmd.WaitDelay = gracefulShutdownDelay
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
