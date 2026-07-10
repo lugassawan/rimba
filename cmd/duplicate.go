@@ -75,7 +75,11 @@ var duplicateCmd = &cobra.Command{
 		asFlag, _ := cmd.Flags().GetString(flagAs)
 		var newTask string
 		if asFlag != "" {
-			_, newTask = operations.ResolveTaskInput(asFlag, repoRoot, ps)
+			dupSvc, resolvedTask := operations.ResolveTaskInput(asFlag, repoRoot, ps)
+			if err := operations.ValidateBranchInput(resolvedTask, dupSvc); err != nil {
+				return err
+			}
+			newTask = resolvedTask
 		} else {
 			// Auto-suffix: try task-1, task-2, etc.
 			for i := 1; i <= maxDuplicateSuffix; i++ {
