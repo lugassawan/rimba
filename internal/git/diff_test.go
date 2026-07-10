@@ -3,7 +3,10 @@ package git
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
+
+	"github.com/lugassawan/rimba/testutil"
 )
 
 func TestDiffNameOnly(t *testing.T) {
@@ -51,9 +54,9 @@ func TestDiffNameOnly(t *testing.T) {
 				t.Fatalf("DiffNameOnly error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if !tt.wantErr {
-				// Verify three-dot diff syntax
-				if len(captured) < 3 || captured[2] != "main...feature/x" {
-					t.Errorf("expected three-dot diff, got args %v", captured)
+				want := []string{CmdDiff, "--name-only", flagEndOfOptions, "main...feature/x"}
+				if !slices.Equal(captured, want) {
+					t.Errorf("args = %v, want %v", captured, want)
 				}
 				if len(got) != len(tt.want) {
 					t.Fatalf("got %d files, want %d", len(got), len(tt.want))
@@ -65,6 +68,29 @@ func TestDiffNameOnly(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestDiffNameOnlyLeadingDashBranchName(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegrationGit)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &ExecRunner{Dir: repo}
+
+	// -diff-dash must be base, not branch, so the dash leads the combined "base...branch" arg.
+	testutil.GitCmd(t, repo, "update-ref", "refs/heads/-diff-dash", "HEAD")
+	testutil.CreateFile(t, repo, "extra.txt", "content")
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "extra commit")
+
+	files, err := DiffNameOnly(context.Background(), r, "-diff-dash", "main")
+	if err != nil {
+		t.Fatalf("DiffNameOnly with leading-dash branch: %v", err)
+	}
+	if !slices.Contains(files, "extra.txt") {
+		t.Errorf("expected extra.txt in diff, got %v", files)
 	}
 }
 
@@ -123,6 +149,25 @@ func TestMergeTreeError(t *testing.T) {
 	}
 }
 
+func TestMergeTreeLeadingDashBranchName(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegrationGit)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &ExecRunner{Dir: repo}
+
+	testutil.GitCmd(t, repo, "update-ref", "refs/heads/-merge-tree-dash", "HEAD")
+
+	result, err := MergeTree(context.Background(), r, "main", "-merge-tree-dash")
+	if err != nil {
+		t.Fatalf("MergeTree with leading-dash branch: %v", err)
+	}
+	if result.HasConflicts {
+		t.Error("expected clean merge against identical history")
+	}
+}
+
 func TestMergeTreeArgs(t *testing.T) {
 	var captured []string
 	r := &mockRunner{
@@ -133,14 +178,9 @@ func TestMergeTreeArgs(t *testing.T) {
 	}
 
 	_, _ = MergeTree(context.Background(), r, "main", "feature/x")
-	want := []string{"merge-tree", "--write-tree", "main", "feature/x"}
-	if len(captured) != len(want) {
-		t.Fatalf("args = %v, want %v", captured, want)
-	}
-	for i, w := range want {
-		if captured[i] != w {
-			t.Errorf("args[%d] = %q, want %q", i, captured[i], w)
-		}
+	want := []string{"merge-tree", "--write-tree", "--", "main", "feature/x"}
+	if !slices.Equal(captured, want) {
+		t.Errorf("args = %v, want %v", captured, want)
 	}
 }
 

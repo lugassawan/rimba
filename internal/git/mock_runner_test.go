@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 const (
@@ -116,8 +117,10 @@ func TestAheadBehind(t *testing.T) {
 }
 
 func TestMergedBranches(t *testing.T) {
+	var captured []string
 	r := &mockRunner{
-		run: func(_ ...string) (string, error) {
+		run: func(args ...string) (string, error) {
+			captured = args
 			return "  feature/done\n* main\n+ bugfix/old", nil
 		},
 	}
@@ -135,6 +138,11 @@ func TestMergedBranches(t *testing.T) {
 		if branches[i] != w {
 			t.Errorf("branches[%d] = %q, want %q", i, branches[i], w)
 		}
+	}
+
+	wantArgs := []string{"branch", "--merged=" + branchMain}
+	if !slices.Equal(captured, wantArgs) {
+		t.Errorf("args = %v, want %v", captured, wantArgs)
 	}
 }
 
@@ -1173,8 +1181,10 @@ func TestAddWorktreeFromBranchInsertsDashDash(t *testing.T) {
 }
 
 func TestFirstParentChainSHAsParsesLines(t *testing.T) {
+	var captured []string
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
+			captured = args
 			if args[0] == cmdRevList {
 				return "sha1\n" + fakeTip + "\n\nsha2\n", nil
 			}
@@ -1194,6 +1204,104 @@ func TestFirstParentChainSHAsParsesLines(t *testing.T) {
 		if !shas[sha] {
 			t.Errorf("missing %q in %v", sha, shas)
 		}
+	}
+
+	wantArgs := []string{cmdRevList, flagFirstParent, flagEndOfOptions, branchMain}
+	if !slices.Equal(captured, wantArgs) {
+		t.Errorf("args = %v, want %v", captured, wantArgs)
+	}
+}
+
+func TestMainlinePatchIDsSinceArgs(t *testing.T) {
+	var captured []string
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			captured = args
+			return "", nil
+		},
+	}
+
+	if _, err := MainlinePatchIDsSince(context.Background(), r, fakeSHA, branchMain); err != nil {
+		t.Fatalf("MainlinePatchIDsSince: %v", err)
+	}
+
+	want := []string{CmdLog, "-p", "--no-merges", flagEndOfOptions, fakeSHA + ".." + branchMain}
+	if !slices.Equal(captured, want) {
+		t.Errorf("args = %v, want %v", captured, want)
+	}
+}
+
+func TestLastCommitInfoArgs(t *testing.T) {
+	var captured []string
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			captured = args
+			return "123\tsubject", nil
+		},
+	}
+
+	if _, _, err := LastCommitInfo(context.Background(), r, branchFeature); err != nil {
+		t.Fatalf("LastCommitInfo: %v", err)
+	}
+
+	want := []string{CmdLog, "-1", "--format=%ct\t%s", flagEndOfOptions, branchFeature}
+	if !slices.Equal(captured, want) {
+		t.Errorf("args = %v, want %v", captured, want)
+	}
+}
+
+func TestCommitCountSinceArgs(t *testing.T) {
+	var captured []string
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			captured = args
+			return "3", nil
+		},
+	}
+
+	if _, err := CommitCountSince(context.Background(), r, branchFeature, 24*time.Hour); err != nil {
+		t.Fatalf("CommitCountSince: %v", err)
+	}
+
+	if len(captured) != 5 || captured[0] != "rev-list" || captured[1] != "--count" || captured[3] != flagEndOfOptions || captured[4] != branchFeature {
+		t.Errorf("args = %v, want [rev-list --count --since=<ts> %s %s]", captured, flagEndOfOptions, branchFeature)
+	}
+}
+
+func TestBranchOwnPatchIDsArgTerminators(t *testing.T) {
+	defer func(orig func(context.Context, string) (map[string]bool, error)) {
+		ComputePatchIDs = orig
+	}(ComputePatchIDs)
+	ComputePatchIDs = func(_ context.Context, _ string) (map[string]bool, error) {
+		return map[string]bool{fakeSHA: true}, nil
+	}
+
+	var revParseArgs, diffArgs []string
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			switch args[0] {
+			case cmdRevParse:
+				revParseArgs = args
+				return fakeTip, nil
+			case CmdDiff:
+				diffArgs = args
+				return fakeDiffText, nil
+			}
+			return "", errors.New("unexpected call: " + args[0])
+		},
+	}
+
+	if _, _, err := branchOwnPatchIDs(context.Background(), r, fakeSHA, branchFeature); err != nil {
+		t.Fatalf("branchOwnPatchIDs: %v", err)
+	}
+
+	wantRevParse := []string{cmdRevParse, flagVerify, flagEndOfOptions, branchFeature}
+	if !slices.Equal(revParseArgs, wantRevParse) {
+		t.Errorf("rev-parse args = %v, want %v", revParseArgs, wantRevParse)
+	}
+	wantDiff := []string{CmdDiff, flagEndOfOptions, fakeSHA, branchFeature}
+	if !slices.Equal(diffArgs, wantDiff) {
+		t.Errorf("diff args = %v, want %v", diffArgs, wantDiff)
 	}
 }
 

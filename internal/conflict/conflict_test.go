@@ -178,11 +178,12 @@ func TestSeverityLabel(t *testing.T) {
 func TestCollectDiffsSuccess(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
-			// args: diff --name-only main...feature/x
-			if args[0] == "diff" && strings.Contains(args[2], "feature/a") {
+			// args: diff --name-only --end-of-options main...feature/x
+			last := args[len(args)-1]
+			if args[0] == "diff" && strings.Contains(last, "feature/a") {
 				return "file-a.go\nshared.go", nil
 			}
-			if args[0] == "diff" && strings.Contains(args[2], "feature/b") {
+			if args[0] == "diff" && strings.Contains(last, "feature/b") {
 				return "file-b.go\nshared.go", nil
 			}
 			return "", nil

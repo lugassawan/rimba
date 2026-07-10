@@ -39,6 +39,11 @@ const (
 // only the args they declare and letting the remainder fall through harmlessly.
 func mockCmdKey(args []string) string {
 	if len(args) >= 2 {
+		// git branch --merged=<branch> is a stuck-form single arg; normalize
+		// it back to the "branch --merged" key regardless of which branch.
+		if args[0] == gitBranch && strings.HasPrefix(args[1], gitMerged+"=") {
+			return gitBranch + " " + gitMerged
+		}
 		return args[0] + " " + args[1]
 	}
 	if len(args) == 1 {
@@ -338,7 +343,7 @@ func TestCleanToolMergedBranchListError(t *testing.T) {
 			if len(args) > 0 && args[0] == gitFetch {
 				return "", nil
 			}
-			if len(args) >= 2 && args[0] == gitBranch && args[1] == gitMerged {
+			if len(args) >= 2 && args[0] == gitBranch && strings.HasPrefix(args[1], gitMerged+"=") {
 				return "", errors.New("fatal: malformed object name")
 			}
 			if len(args) >= 2 && args[0] == gitWorktree && args[1] == gitList {

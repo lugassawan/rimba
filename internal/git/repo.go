@@ -13,15 +13,16 @@ import (
 const notInRepoHint = "run from inside a git repository, or run: git init"
 
 const (
-	refsHeadsPrefix = "refs/heads/"
-	cmdRevParse     = "rev-parse"
-	cmdRevList      = "rev-list"
-	flagVerify      = "--verify"
-	flagFirstParent = "--first-parent"
-	cmdConfig       = "config"
-	CmdMergeBase    = "merge-base"
-	CmdDiff         = "diff"
-	CmdLog          = "log"
+	refsHeadsPrefix  = "refs/heads/"
+	cmdRevParse      = "rev-parse"
+	cmdRevList       = "rev-list"
+	flagVerify       = "--verify"
+	flagFirstParent  = "--first-parent"
+	cmdConfig        = "config"
+	CmdMergeBase     = "merge-base"
+	CmdDiff          = "diff"
+	CmdLog           = "log"
+	flagEndOfOptions = "--end-of-options"
 )
 
 // RepoRoot returns the absolute path to the repository root.

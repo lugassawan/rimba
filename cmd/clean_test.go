@@ -152,7 +152,7 @@ func TestCleanMergedFetchFails(t *testing.T) {
 				return "", errors.New("no remote")
 			}
 			if args[0] == cmdBranch {
-				mergedRef = args[len(args)-1]
+				mergedRef = strings.TrimPrefix(args[len(args)-1], "--merged=")
 				return "", nil
 			}
 			if args[0] == cmdWorktreeTest {
@@ -196,7 +196,7 @@ func TestCleanMergedFetchSucceeds(t *testing.T) {
 				return "", nil // fetch succeeds
 			}
 			if args[0] == cmdBranch {
-				mergedRef = args[len(args)-1]
+				mergedRef = strings.TrimPrefix(args[len(args)-1], "--merged=")
 				return "", nil
 			}
 			if args[0] == cmdWorktreeTest {

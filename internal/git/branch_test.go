@@ -155,6 +155,25 @@ func TestLastCommitInfoError(t *testing.T) {
 	}
 }
 
+func TestLastCommitInfoLeadingDashBranch(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	testutil.GitCmd(t, repo, "update-ref", "refs/heads/-lci-dash", "HEAD")
+
+	_, subject, err := git.LastCommitInfo(context.Background(), r, "-lci-dash")
+	if err != nil {
+		t.Fatalf("LastCommitInfo on leading-dash branch: %v", err)
+	}
+	if subject == "" {
+		t.Error("expected non-empty commit subject")
+	}
+}
+
 func TestLastCommitTimeError(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipIntegration)
@@ -236,6 +255,53 @@ func TestIsDirty(t *testing.T) {
 	}
 	if !dirty {
 		t.Error("repo with untracked file should be dirty")
+	}
+}
+
+func TestMergedBranchesLeadingDashBranch(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	testutil.GitCmd(t, repo, "update-ref", "refs/heads/-merged-dash", "HEAD")
+
+	branches, err := git.MergedBranches(context.Background(), r, "-merged-dash")
+	if err != nil {
+		t.Fatalf("MergedBranches on leading-dash branch: %v", err)
+	}
+	if !slices.Contains(branches, "main") {
+		t.Errorf("expected main (same commit) to be merged into -merged-dash, got %v", branches)
+	}
+}
+
+func TestIsSquashMergedLeadingDashBranch(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	testutil.GitCmd(t, repo, "checkout", "-b", "feature-tmp")
+	testutil.CreateFile(t, repo, "squash.txt", "squash content")
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "feature commit")
+	tip := strings.TrimSpace(testutil.GitCmd(t, repo, "rev-parse", "feature-tmp"))
+	testutil.GitCmd(t, repo, "update-ref", "refs/heads/-squash-dash", tip)
+
+	testutil.GitCmd(t, repo, "checkout", "main")
+	testutil.GitCmd(t, repo, "merge", "--squash", tip)
+	testutil.GitCmd(t, repo, "commit", "-m", "squash merge feature")
+
+	merged, err := git.IsSquashMerged(context.Background(), r, "main", "-squash-dash")
+	if err != nil {
+		t.Fatalf("IsSquashMerged on leading-dash branch: %v", err)
+	}
+	if !merged {
+		t.Error("expected leading-dash branch to be detected as squash-merged")
 	}
 }
 
@@ -365,6 +431,40 @@ func TestCheckoutError(t *testing.T) {
 	}
 }
 
+func TestMergeBaseLeadingDashRef(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	testutil.GitCmd(t, repo, "update-ref", "refs/heads/-merge-base-dash", "HEAD")
+
+	sha, err := git.MergeBase(context.Background(), r, "main", "-merge-base-dash")
+	if err != nil {
+		t.Fatalf("MergeBase with leading-dash ref: %v", err)
+	}
+	if sha == "" {
+		t.Error("expected non-empty merge-base SHA")
+	}
+}
+
+func TestIsMergeBaseAncestorLeadingDashRef(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	testutil.GitCmd(t, repo, "update-ref", "refs/heads/-ancestor-dash", "HEAD")
+
+	if !git.IsMergeBaseAncestor(context.Background(), r, "-ancestor-dash", "main") {
+		t.Error("expected leading-dash ref to be recognized as an ancestor of main")
+	}
+}
+
 func TestFirstParentChainSHAsFreshBranch(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipIntegration)
@@ -436,6 +536,48 @@ func TestFirstParentChainSHAsFastForward(t *testing.T) {
 	}
 	if !git.IsSHAOnChain(tip, mainline) {
 		t.Error("expected true: fast-forward merge leaves branch tip on mainline")
+	}
+}
+
+func TestFirstParentChainSHAsLeadingDashMergeRef(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	testutil.GitCmd(t, repo, "update-ref", "refs/heads/-fpc-dash", "HEAD")
+
+	mainline, err := git.FirstParentChainSHAs(context.Background(), r, "-fpc-dash")
+	if err != nil {
+		t.Fatalf("FirstParentChainSHAs on leading-dash mergeRef: %v", err)
+	}
+	if len(mainline) == 0 {
+		t.Error("expected at least one SHA on the mainline chain")
+	}
+}
+
+func TestMainlinePatchIDsSinceLeadingDashMergeBase(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	// -mpids-dash must be mergeBase, not mergeRef, so the dash leads the combined range arg.
+	testutil.GitCmd(t, repo, "update-ref", "refs/heads/-mpids-dash", "HEAD")
+	testutil.CreateFile(t, repo, "mp.txt", "content")
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "mainline patch commit")
+
+	pids, err := git.MainlinePatchIDsSince(context.Background(), r, "-mpids-dash", "main")
+	if err != nil {
+		t.Fatalf("MainlinePatchIDsSince with leading-dash mergeBase: %v", err)
+	}
+	if len(pids) == 0 {
+		t.Error("expected at least one patch-id since the leading-dash merge-base")
 	}
 }
 
