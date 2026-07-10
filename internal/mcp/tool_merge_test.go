@@ -43,6 +43,22 @@ func TestMergeToolRequiresConfig(t *testing.T) {
 	}
 }
 
+func TestMergeToolRejectsInvalidConfig(t *testing.T) {
+	hctx := &HandlerContext{
+		Runner:   &mockRunner{},
+		Config:   &config.Config{DefaultSource: "--upload-pack=x"},
+		RepoRoot: "/repo",
+		Version:  "test",
+	}
+	handler := handleMerge(hctx)
+
+	result := callTool(t, handler, map[string]any{"source": "my-task"})
+	errText := resultError(t, result)
+	if !strings.Contains(errText, "default_source") {
+		t.Errorf("expected default_source validation error, got: %s", errText)
+	}
+}
+
 func TestMergeToolSourceNotFound(t *testing.T) {
 	porcelain := worktreePorcelain(
 		struct{ path, branch string }{"/repo", "main"},
