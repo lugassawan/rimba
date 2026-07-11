@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/operations"
+	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/testutil"
 	"github.com/spf13/cobra"
@@ -30,6 +32,10 @@ const (
 	cmdFlagVerify      = "--verify"
 	cmdFlagShort       = "--short"
 	stashListLineCmd   = stashSHACmd + " stash@{0}"
+
+	// wantAddCommand is the expected output.Envelope.Command value for every
+	// add JSON test (avoids repeating the "add" literal per goconst).
+	wantAddCommand = "add"
 )
 
 // makeWorktreeGitRunner builds a mockRunner that simulates a successful worktree creation.
@@ -975,5 +981,191 @@ func TestPrintAliasNoticeFixAliasKeepsLegacyMessage(t *testing.T) {
 	out := buf.String()
 	if !strings.Contains(out, "bugfix") || !strings.Contains(out, "--hotfix") {
 		t.Errorf("printAliasNotice(%q, %q) = %q, want the legacy fix/bugfix/--hotfix message preserved", "fix", "bugfix/", out)
+	}
+}
+
+func decodeAddEnvelope(t *testing.T, buf []byte) (output.Envelope, map[string]any) {
+	t.Helper()
+	var env output.Envelope
+	if err := json.Unmarshal(buf, &env); err != nil {
+		t.Fatalf("invalid JSON envelope: %v\nraw: %s", err, buf)
+	}
+	data, ok := env.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("data type = %T, want map[string]any", env.Data)
+	}
+	return env, data
+}
+
+func TestAddTaskJSON(t *testing.T) {
+	repoDir := t.TempDir()
+	wtDir := filepath.Join(repoDir, "worktrees")
+	_ = os.MkdirAll(wtDir, 0755)
+	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: "worktrees"}
+
+	restore := overrideNewRunner(makeWorktreeGitRunner(repoDir))
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().StringP(flagSource, "s", "", "")
+	cmd.Flags().Bool(flagSkipDeps, false, "")
+	cmd.Flags().Bool(flagSkipHooks, false, "")
+	addPrefixFlags(cmd)
+	_ = cmd.Flags().Set(flagSkipDeps, "true")
+	_ = cmd.Flags().Set(flagSkipHooks, "true")
+	_ = cmd.Flags().Set(flagJSON, "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	if err := addCmd.RunE(cmd, []string{"my-task"}); err != nil {
+		t.Fatalf("addCmd.RunE: %v", err)
+	}
+
+	env, data := decodeAddEnvelope(t, buf.Bytes())
+	if env.Command != wantAddCommand {
+		t.Errorf("command = %q, want %q", env.Command, wantAddCommand)
+	}
+	if data["mode"] != "task" {
+		t.Errorf("mode = %v, want %q", data["mode"], "task")
+	}
+	if data["branch"] == "" || data["branch"] == nil {
+		t.Errorf("branch = %v, want non-empty", data["branch"])
+	}
+	if data["path"] == "" || data["path"] == nil {
+		t.Errorf("path = %v, want non-empty", data["path"])
+	}
+	for _, key := range []string{"copied", "skipped", "skipped_symlinks", "deps", "hooks"} {
+		v, ok := data[key]
+		if !ok {
+			t.Errorf("data missing key %q", key)
+			continue
+		}
+		if _, ok := v.([]any); !ok {
+			t.Errorf("data[%q] = %#v (%T), want an array", key, v, v)
+		}
+	}
+}
+
+func TestAddTaskJSONSuppressesAliasNotice(t *testing.T) {
+	repoDir := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(repoDir, ".worktrees"), 0755)
+	cfg := &config.Config{WorktreeDir: ".worktrees"}
+
+	restore := overrideNewRunner(makeWorktreeGitRunner(repoDir))
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().StringP(flagSource, "s", "", "")
+	cmd.Flags().Bool(flagSkipDeps, false, "")
+	cmd.Flags().Bool(flagSkipHooks, false, "")
+	addPrefixFlags(cmd)
+	_ = cmd.Flags().Set(flagSkipDeps, "true")
+	_ = cmd.Flags().Set(flagSkipHooks, "true")
+	_ = cmd.Flags().Set(flagJSON, "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	if err := addCmd.RunE(cmd, []string{"fix/manual-check-json"}); err != nil {
+		t.Fatalf("addCmd.RunE: %v", err)
+	}
+
+	out := buf.String()
+	env, data := decodeAddEnvelope(t, buf.Bytes())
+	if env.Command != wantAddCommand {
+		t.Errorf("command = %q, want %q", env.Command, wantAddCommand)
+	}
+	if data["mode"] != "task" {
+		t.Errorf("mode = %v, want %q", data["mode"], "task")
+	}
+	if data["branch"] != "bugfix/manual-check-json" {
+		t.Errorf("branch = %v, want %q", data["branch"], "bugfix/manual-check-json")
+	}
+	if strings.Contains(out, "interpreting") {
+		t.Errorf("output %q leaked the alias notice text in JSON mode", out)
+	}
+}
+
+func TestAddPRJSON(t *testing.T) {
+	t.Setenv("RIMBA_TRUST_YES", "1")
+	repoDir := t.TempDir()
+	wtDir := filepath.Join(repoDir, ".worktrees")
+	_ = os.MkdirAll(wtDir, 0755)
+	cfg := &config.Config{
+		WorktreeDir: ".worktrees",
+		Deps:        &config.DepsConfig{Modules: []config.ModuleConfig{{Dir: "frontend", Install: "npm install"}}},
+	}
+
+	fakeGhDir := t.TempDir()
+	fakeGh := filepath.Join(fakeGhDir, "gh")
+	_ = os.WriteFile(fakeGh, []byte("#!/bin/sh\nexit 0\n"), 0o755)
+	t.Setenv("PATH", fakeGhDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	sameRepoPRJSON := testutil.LoadFixture(t, "../internal/gh/testdata/same_repo_pr.json")
+	restoreGH := overrideGHRunner(makeOKGhRunner(sameRepoPRJSON))
+	defer restoreGH()
+	restoreRunner := overrideNewRunner(makeWorktreeGitRunner(repoDir))
+	defer restoreRunner()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().StringP(flagSource, "s", "", "")
+	cmd.Flags().Bool(flagSkipDeps, false, "")
+	cmd.Flags().Bool(flagSkipHooks, false, "")
+	cmd.Flags().String(flagTask, "", "")
+	addPrefixFlags(cmd)
+	_ = cmd.Flags().Set(flagSkipDeps, "true")
+	_ = cmd.Flags().Set(flagSkipHooks, "true")
+	_ = cmd.Flags().Set(flagJSON, "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	if err := addCmd.RunE(cmd, []string{"pr:42"}); err != nil {
+		t.Fatalf("addCmd.RunE pr:42: %v", err)
+	}
+
+	env, data := decodeAddEnvelope(t, buf.Bytes())
+	if env.Command != wantAddCommand {
+		t.Errorf("command = %q, want %q", env.Command, wantAddCommand)
+	}
+	if data["mode"] != "pr" {
+		t.Errorf("mode = %v, want %q", data["mode"], "pr")
+	}
+	prNumber, ok := data["pr_number"].(float64)
+	if !ok || prNumber != 42 {
+		t.Errorf("pr_number = %v, want 42", data["pr_number"])
+	}
+}
+
+func TestAddBranchPromoteJSON(t *testing.T) {
+	repoDir := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(repoDir, "worktrees"), 0755)
+	cfg := &config.Config{WorktreeDir: "worktrees"}
+
+	restore := overrideNewRunner(makeBranchPromoteRunner(repoDir, false))
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	addBranchFlags(cmd)
+	_ = cmd.Flags().Set(flagJSON, "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	if err := addCmd.RunE(cmd, []string{"branch:" + branchFeatureX}); err != nil {
+		t.Fatalf("addCmd.RunE: %v", err)
+	}
+
+	env, data := decodeAddEnvelope(t, buf.Bytes())
+	if env.Command != wantAddCommand {
+		t.Errorf("command = %q, want %q", env.Command, wantAddCommand)
+	}
+	if data["mode"] != "branch-promote" {
+		t.Errorf("mode = %v, want %q", data["mode"], "branch-promote")
+	}
+	if data["branch"] != branchFeatureX {
+		t.Errorf("branch = %v, want %q", data["branch"], branchFeatureX)
+	}
+	for _, key := range []string{"deps", "hooks", "copied", "skipped", "skipped_symlinks"} {
+		v, ok := data[key].([]any)
+		if !ok {
+			t.Fatalf("data[%q] = %#v, want an array", key, data[key])
+		}
+		if len(v) != 0 {
+			t.Errorf("data[%q] = %v, want empty", key, v)
+		}
 	}
 }

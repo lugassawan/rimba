@@ -7,6 +7,7 @@ import (
 	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
+	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
 )
@@ -47,16 +48,28 @@ var removeCmd = &cobra.Command{
 			return err
 		}
 
-		hint.New(cmd, hintPainter(cmd)).
-			Add(flagKeepBranch, hintKeepBranch).
-			Add(flagForce, hintForceRm).
-			Add(flagDryRun, hintDryRun).
-			Show()
+		if !isJSON(cmd) {
+			hint.New(cmd, hintPainter(cmd)).
+				Add(flagKeepBranch, hintKeepBranch).
+				Add(flagForce, hintForceRm).
+				Add(flagDryRun, hintDryRun).
+				Show()
+		}
 
 		keepBranch, _ := cmd.Flags().GetBool(flagKeepBranch)
 		dryRun, _ := cmd.Flags().GetBool(flagDryRun)
 
 		if dryRun {
+			if isJSON(cmd) {
+				return output.WriteJSON(cmd.OutOrStdout(), version, "remove", output.RemoveData{
+					Task:       task,
+					Branch:     wt.Branch,
+					Path:       wt.Path,
+					Prunable:   wt.Prunable,
+					KeepBranch: keepBranch,
+					DryRun:     true,
+				})
+			}
 			out := cmd.OutOrStdout()
 			fmt.Fprintf(out, "[dry-run] would remove worktree: %s\n", wt.Path)
 			if !keepBranch {
@@ -80,6 +93,20 @@ var removeCmd = &cobra.Command{
 		}
 
 		s.Stop()
+		if isJSON(cmd) {
+			return output.WriteJSON(cmd.OutOrStdout(), version, "remove", output.RemoveData{
+				Task:            result.Task,
+				Branch:          result.Branch,
+				Path:            result.Path,
+				Prunable:        result.Prunable,
+				WorktreeRemoved: result.WorktreeRemoved,
+				BranchDeleted:   result.BranchDeleted,
+				KeepBranch:      keepBranch,
+				BranchError:     errStr(result.BranchError),
+				DryRun:          false,
+			})
+		}
+
 		if result.Prunable {
 			fmt.Fprintf(cmd.OutOrStdout(), "Cleared stale worktree registration: %s (directory left on disk — remove manually if unneeded)\n", result.Path)
 		} else {

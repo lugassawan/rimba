@@ -15,6 +15,8 @@ import (
 	"github.com/lugassawan/rimba/testutil"
 )
 
+const wantMergeCommand = "merge"
+
 const (
 	mergeWorktreeOut = "worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /wt/feature-login\nHEAD def456\nbranch refs/heads/feature/login\n\nworktree /wt/feature-dashboard\nHEAD ghi789\nbranch refs/heads/feature/dashboard\n"
 	gitCmdPush       = "push" // first arg of "git push <remote> ..." — distinct from gitSubcmdStashPush which is args[1] of "git stash push"
@@ -779,5 +781,117 @@ func TestMergeRemoteDeleteFailedOutput(t *testing.T) {
 	}
 	if !strings.Contains(out, "git push origin --delete") {
 		t.Errorf("output = %q, want manual hint with 'git push origin --delete'", out)
+	}
+}
+
+func TestMergeJSON(t *testing.T) {
+	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: defaultRelativeWtDir}
+	r := mergeTestRunner(nil)
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().String(flagInto, "", "")
+	cmd.Flags().Bool(flagNoFF, false, "")
+	cmd.Flags().Bool(flagKeep, false, "")
+	cmd.Flags().Bool(flagDelete, false, "")
+	_ = cmd.Flags().Set(flagJSON, "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	if err := mergeCmd.RunE(cmd, []string{"login"}); err != nil {
+		t.Fatalf(fatalMergeRunE, err)
+	}
+
+	env, data := decodeAddEnvelope(t, buf.Bytes())
+	if env.Command != wantMergeCommand {
+		t.Errorf("command = %q, want %q", env.Command, wantMergeCommand)
+	}
+	if data["source_branch"] != "feature/login" {
+		t.Errorf("source_branch = %v, want %q", data["source_branch"], "feature/login")
+	}
+	if data["target_label"] != branchMain {
+		t.Errorf("target_label = %v, want %q", data["target_label"], branchMain)
+	}
+	if data["dry_run"] != false {
+		t.Errorf("dry_run = %v, want false", data["dry_run"])
+	}
+	if data["source_removed"] != true {
+		t.Errorf("source_removed = %v, want true", data["source_removed"])
+	}
+	if data["worktree_removed"] != true {
+		t.Errorf("worktree_removed = %v, want true", data["worktree_removed"])
+	}
+}
+
+func TestMergeDryRunJSON(t *testing.T) {
+	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: defaultRelativeWtDir}
+	r := mergeTestRunner(nil)
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().String(flagInto, "", "")
+	cmd.Flags().Bool(flagNoFF, false, "")
+	cmd.Flags().Bool(flagKeep, false, "")
+	cmd.Flags().Bool(flagDelete, false, "")
+	cmd.Flags().Bool(flagDryRun, false, "")
+	_ = cmd.Flags().Set(flagDryRun, "true")
+	_ = cmd.Flags().Set(flagJSON, "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	if err := mergeCmd.RunE(cmd, []string{"login"}); err != nil {
+		t.Fatalf(fatalMergeRunE, err)
+	}
+
+	env, data := decodeAddEnvelope(t, buf.Bytes())
+	if env.Command != wantMergeCommand {
+		t.Errorf("command = %q, want %q", env.Command, wantMergeCommand)
+	}
+	if data["dry_run"] != true {
+		t.Errorf("dry_run = %v, want true", data["dry_run"])
+	}
+	steps, ok := data["steps"].([]any)
+	if !ok || len(steps) == 0 {
+		t.Errorf("steps = %#v, want a non-empty array", data["steps"])
+	}
+}
+
+func TestMergeRemoveErrorJSON(t *testing.T) {
+	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: defaultRelativeWtDir}
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoPath, nil
+			}
+			if len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == cmdRemove {
+				return "", errors.New("locked")
+			}
+			return mergeWorktreeOut, nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().String(flagInto, "", "")
+	cmd.Flags().Bool(flagNoFF, false, "")
+	cmd.Flags().Bool(flagKeep, false, "")
+	cmd.Flags().Bool(flagDelete, false, "")
+	_ = cmd.Flags().Set(flagJSON, "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	err := mergeCmd.RunE(cmd, []string{"login"})
+	if err != nil {
+		t.Fatalf("expected no error (remove failure is non-fatal), got: %v", err)
+	}
+
+	env, data := decodeAddEnvelope(t, buf.Bytes())
+	if env.Command != wantMergeCommand {
+		t.Errorf("command = %q, want %q", env.Command, wantMergeCommand)
+	}
+	removeErr, ok := data["remove_error"].(string)
+	if !ok || removeErr == "" {
+		t.Errorf("remove_error = %v, want a non-empty string", data["remove_error"])
 	}
 }

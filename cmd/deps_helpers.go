@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/lugassawan/rimba/internal/deps"
+	"github.com/lugassawan/rimba/internal/output"
 )
 
 func printInstallResults(out io.Writer, results []deps.InstallResult) {
@@ -39,4 +40,30 @@ func printHookResultsList(out io.Writer, results []deps.HookResult) {
 			fmt.Fprintf(out, "    %s: ok\n", r.Command)
 		}
 	}
+}
+
+// buildDepResults maps dependency install results to their JSON representation.
+func buildDepResults(results []deps.InstallResult) []output.DepResultJSON {
+	out := make([]output.DepResultJSON, 0, len(results))
+	for _, r := range results {
+		out = append(out, output.DepResultJSON{
+			Module: r.Module.Dir,
+			Source: r.Source,
+			Cloned: r.Cloned,
+			Error:  errStr(r.Error),
+		})
+	}
+	return out
+}
+
+// buildHookResults maps post-create hook results to their JSON representation.
+func buildHookResults(results []deps.HookResult) []output.HookResultJSON {
+	out := make([]output.HookResultJSON, 0, len(results))
+	for _, r := range results {
+		out = append(out, output.HookResultJSON{
+			Command: r.Command,
+			Error:   errStr(r.Error),
+		})
+	}
+	return out
 }

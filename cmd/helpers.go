@@ -50,6 +50,23 @@ func isJSON(cmd *cobra.Command) bool {
 	return output.IsJSON(cmd)
 }
 
+// errStr stringifies a non-fatal sub-error for JSON output, returning "" for nil.
+func errStr(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
+// nonNilStrings guards against nil string slices so they serialize as JSON
+// "[]" rather than "null".
+func nonNilStrings(s []string) []string {
+	if s == nil {
+		return make([]string, 0)
+	}
+	return s
+}
+
 // spinnerOpts returns spinner options derived from the cobra command flags.
 // In JSON mode the spinner is silenced by writing to io.Discard.
 func spinnerOpts(cmd *cobra.Command) spinner.Options {
@@ -77,7 +94,7 @@ func reapConfidentLocks(ctx context.Context, cmd *cobra.Command, r git.Runner) {
 		return
 	}
 	removals := operations.ReapConfidentLocks(commonDir)
-	if len(removals) == 0 {
+	if len(removals) == 0 || isJSON(cmd) {
 		return
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "Recovered %d stale index.lock file(s) left by an interrupted sweep.\n", len(removals))
