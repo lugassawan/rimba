@@ -101,6 +101,7 @@ type DepResultJSON struct {
 	Source string `json:"source,omitempty"`
 	Cloned bool   `json:"cloned"`
 	Error  string `json:"error,omitempty"`
+	Ran    bool   `json:"ran"`
 }
 
 // HookResultJSON mirrors deps.HookResult for JSON output (add/rename).

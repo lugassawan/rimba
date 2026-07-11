@@ -38,6 +38,10 @@ type InstallResult struct {
 	Source string // source worktree path if cloned
 	Cloned bool
 	Error  error
+
+	// Ran is true only if this module's install goroutine actually executed,
+	// distinguishing a cancelled dispatch from a real no-op.
+	Ran bool
 }
 
 // Install clones or installs deps for each module.
@@ -108,6 +112,7 @@ func (m *Manager) install(ctx context.Context, worktreePath, sourceWT string, mo
 	// No per-item timeout here — dependency installation is long-running by design.
 	results = parallel.Collect(ctx, total, concurrency, func(ctx context.Context, i int) InstallResult {
 		res := m.installModule(ctx, worktreePath, hashed[i], existingPaths)
+		res.Ran = true
 		completed := done.Add(1)
 		progress.Notifyf(onProgress, "%d/%d complete", completed, total)
 		return res

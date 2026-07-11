@@ -20,11 +20,23 @@ func TestPrintInstallResults(t *testing.T) {
 	t.Run("no clones no errors", func(t *testing.T) {
 		buf := new(bytes.Buffer)
 		results := []deps.InstallResult{
-			{Module: deps.Module{Dir: "node_modules"}},
+			{Module: deps.Module{Dir: "node_modules"}, Ran: true},
 		}
 		printInstallResults(buf, results)
 		if buf.Len() != 0 {
-			t.Errorf("expected no output for skipped results, got %q", buf.String())
+			t.Errorf("expected no output for no-op results, got %q", buf.String())
+		}
+	})
+
+	t.Run("cancelled module", func(t *testing.T) {
+		buf := new(bytes.Buffer)
+		results := []deps.InstallResult{
+			{Module: deps.Module{Dir: "node_modules"}, Ran: false},
+		}
+		printInstallResults(buf, results)
+		out := buf.String()
+		if !bytes.Contains(buf.Bytes(), []byte("skipped (cancelled)")) {
+			t.Errorf("output missing 'skipped (cancelled)': %q", out)
 		}
 	})
 
@@ -104,19 +116,19 @@ func TestPrintHookResultsList(t *testing.T) {
 
 func TestBuildDepResults(t *testing.T) {
 	results := []deps.InstallResult{
-		{Module: deps.Module{Dir: "node_modules"}, Source: "/other/worktree", Cloned: true},
-		{Module: deps.Module{Dir: "vendor"}, Error: errors.New("install failed")},
+		{Module: deps.Module{Dir: "node_modules"}, Source: "/other/worktree", Cloned: true, Ran: true},
+		{Module: deps.Module{Dir: "vendor"}, Error: errors.New("install failed"), Ran: true},
 	}
 
 	got := buildDepResults(results)
 	if len(got) != 2 {
 		t.Fatalf("buildDepResults() len = %d, want 2", len(got))
 	}
-	if got[0].Module != "node_modules" || !got[0].Cloned || got[0].Error != "" {
-		t.Errorf("got[0] = %+v, want cloned node_modules with no error", got[0])
+	if got[0].Module != "node_modules" || !got[0].Cloned || got[0].Error != "" || !got[0].Ran {
+		t.Errorf("got[0] = %+v, want cloned node_modules with no error, Ran=true", got[0])
 	}
-	if got[1].Module != "vendor" || got[1].Cloned || got[1].Error != "install failed" {
-		t.Errorf("got[1] = %+v, want vendor error 'install failed'", got[1])
+	if got[1].Module != "vendor" || got[1].Cloned || got[1].Error != "install failed" || !got[1].Ran {
+		t.Errorf("got[1] = %+v, want vendor error 'install failed', Ran=true", got[1])
 	}
 
 	if empty := buildDepResults(nil); empty == nil || len(empty) != 0 {

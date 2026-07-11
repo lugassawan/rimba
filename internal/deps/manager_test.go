@@ -97,6 +97,9 @@ func TestManagerInstallClone(t *testing.T) {
 	if r.Error != nil {
 		t.Errorf(fmtExpectedNoError, r.Error)
 	}
+	if !r.Ran {
+		t.Error("expected Ran=true")
+	}
 
 	assertFileContent(t, filepath.Join(newWT, DirNodeModules, "package.json"), "{}")
 }
