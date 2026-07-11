@@ -1,8 +1,10 @@
 package gh
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -29,9 +31,14 @@ func (r *execRunner) Run(ctx context.Context, args ...string) ([]byte, error) {
 		ctx, cancel = context.WithTimeout(ctx, r.timeout)
 		defer cancel()
 	}
-	out, err := exec.CommandContext(ctx, "gh", args...).CombinedOutput()
+	cmd := exec.CommandContext(ctx, "gh", args...)
+	// gh's update-notifier can write to stderr on a zero-exit run; keep it off stdout.
+	cmd.Env = append(os.Environ(), "GH_NO_UPDATE_NOTIFIER=1")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
 	if err != nil {
-		return out, fmt.Errorf("gh %s: %s: %w", strings.Join(args, " "), strings.TrimSpace(string(out)), err)
+		return out, fmt.Errorf("gh %s: %s: %w", strings.Join(args, " "), strings.TrimSpace(stderr.String()), err)
 	}
 	return out, nil
 }
