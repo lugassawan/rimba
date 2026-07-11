@@ -625,8 +625,8 @@ func TestRemoveCandidatesPrunableInputHealsAndRemoves(t *testing.T) {
 	if !items[0].WorktreeRemoved {
 		t.Error("expected WorktreeRemoved = true")
 	}
-	if items[0].Prunable {
-		t.Error("expected Prunable = false — repair+remove fully cleared the directory")
+	if items[0].LeftOnDisk {
+		t.Error("expected LeftOnDisk = false — repair+remove fully cleared the directory")
 	}
 	if !repairInvoked {
 		t.Error("expected 'git worktree repair' to be invoked for a prunable candidate")

@@ -102,8 +102,8 @@ func TestRemoveWorktreeRemovalFails(t *testing.T) {
 	if result.WorktreeRemoved {
 		t.Error("expected WorktreeRemoved to be false")
 	}
-	if result.Prunable {
-		t.Error("expected result.Prunable to be false for a genuine (non-orphaned) removal failure")
+	if result.LeftOnDisk {
+		t.Error("expected result.LeftOnDisk to be false for a genuine (non-orphaned) removal failure")
 	}
 }
 
@@ -225,8 +225,8 @@ func TestRemoveWorktreePrunableInputHealsAndRemoves(t *testing.T) {
 	if !result.BranchDeleted {
 		t.Error("expected BranchDeleted to be true")
 	}
-	if result.Prunable {
-		t.Error("expected result.Prunable to be false — repair+remove fully cleared the directory")
+	if result.LeftOnDisk {
+		t.Error("expected result.LeftOnDisk to be false — repair+remove fully cleared the directory")
 	}
 	if !repairInvoked {
 		t.Error("expected 'git worktree repair' to be invoked for a prunable worktree")
@@ -453,6 +453,49 @@ func TestRemoveAndCleanupOrphanedRepairFailsFallsBackToPrune(t *testing.T) {
 	}
 	if !pruneInvoked {
 		t.Error("expected 'git worktree prune' fallback to be invoked")
+	}
+}
+
+func TestRemoveAndCleanupOrphanedForceFalseDirtySurfacesError(t *testing.T) {
+	dir := t.TempDir() // no .git — orphaned
+
+	var capturedRemoveArgs []string
+	removeCalls := 0
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			cmd := strings.Join(args, " ")
+			switch {
+			case strings.Contains(cmd, "worktree repair"):
+				// Simulate repair actually fixing the .git file, as it does in production.
+				if err := os.WriteFile(filepath.Join(dir, ".git"), []byte("gitdir: /somewhere/.git/worktrees/test\n"), 0o644); err != nil {
+					t.Fatalf("failed to simulate repair: %v", err)
+				}
+				return "", nil
+			case strings.Contains(cmd, "worktree remove"):
+				removeCalls++
+				capturedRemoveArgs = args
+				return "", errors.New("worktree contains modified or untracked files, use --force")
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	wtRemoved, brDeleted, leftOnDisk, err := removeAndCleanup(context.Background(), r, dir, "feature/test", false, false)
+	if err == nil {
+		t.Fatal("expected the genuine dirty-worktree error to surface")
+	}
+	if wtRemoved || brDeleted {
+		t.Errorf("expected (false, false), got (%v, %v)", wtRemoved, brDeleted)
+	}
+	if leftOnDisk {
+		t.Error("expected leftOnDisk to be false — the worktree is still fully valid, not left behind by a prune")
+	}
+	if slices.Contains(capturedRemoveArgs, "--force") {
+		t.Error("expected --force NOT to be passed to the post-repair remove when the caller's force is false")
+	}
+	if removeCalls != 2 {
+		t.Errorf("expected 2 remove attempts (initial fail, post-repair retry), got %d", removeCalls)
 	}
 }
 

@@ -868,9 +868,9 @@ func TestPrintCleanedItemsAllBranches(t *testing.T) {
 		// Failure: worktree removal failed
 		{Branch: "feature/fail", Path: "/wt/fail", WorktreeRemoved: false, BranchDeleted: false},
 		// Failure: prunable worktree, removal via prune failed
-		{Branch: "feature/prunable-fail", Path: "/wt/prunable-fail", Prunable: true, WorktreeRemoved: false, BranchDeleted: false},
+		{Branch: "feature/prunable-fail", Path: "/wt/prunable-fail", LeftOnDisk: true, WorktreeRemoved: false, BranchDeleted: false},
 		// Success: prunable worktree recovered via git worktree prune (directory left on disk)
-		{Branch: "feature/prunable-ok", Path: "/wt/prunable-ok", Prunable: true, WorktreeRemoved: true, BranchDeleted: true},
+		{Branch: "feature/prunable-ok", Path: "/wt/prunable-ok", LeftOnDisk: true, WorktreeRemoved: true, BranchDeleted: true},
 	}
 	printCleanedItems(cmd, items)
 	out := buf.String()

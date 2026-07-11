@@ -391,10 +391,8 @@ func TestMergeWorktreeCleanupPartialFailure(t *testing.T) {
 	}
 }
 
-// TestMergeWorktreeCleanupPrunableSurfacesOnResult guards the merge-side hint
-// fix: when the source worktree is prunable, MergeResult.SourcePrunable must
-// be set so cmd/merge.go can print a prune-based recovery hint instead of the
-// doomed `git worktree remove --force` command (#374).
+// TestMergeWorktreeCleanupPrunableSurfacesOnResult: when cleanup falls back to
+// prune, MergeResult.SourceLeftOnDisk must be set so cmd/merge.go prints the right recovery hint.
 func TestMergeWorktreeCleanupPrunableSurfacesOnResult(t *testing.T) {
 	wt := strings.Join([]string{
 		"worktree /repo",
@@ -434,8 +432,8 @@ func TestMergeWorktreeCleanupPrunableSurfacesOnResult(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no fatal error (cleanup failure is non-fatal), got: %v", err)
 	}
-	if !result.SourcePrunable {
-		t.Error("expected SourcePrunable to be true")
+	if !result.SourceLeftOnDisk {
+		t.Error("expected SourceLeftOnDisk to be true")
 	}
 	if result.RemoveError == nil {
 		t.Error("expected RemoveError to be set when git worktree prune fails")
@@ -488,8 +486,8 @@ func TestMergeWorktreeSkipsDirtyCheckForPrunableSource(t *testing.T) {
 		t.Fatalf("expected merge to succeed despite the prunable source having no .git, got: %v", err)
 	}
 	// Repair+remove succeed in this mock, so the directory is fully cleared — not left on disk.
-	if result.SourcePrunable {
-		t.Error("expected SourcePrunable to be false")
+	if result.SourceLeftOnDisk {
+		t.Error("expected SourceLeftOnDisk to be false")
 	}
 }
 

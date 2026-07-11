@@ -28,7 +28,7 @@ type StaleCandidate struct {
 type CleanedItem struct {
 	Branch          string
 	Path            string
-	Prunable        bool
+	LeftOnDisk      bool
 	WorktreeRemoved bool
 	BranchDeleted   bool
 	RemoteDeleted   bool  // true if the remote branch was successfully deleted
@@ -137,7 +137,7 @@ func RemoveCandidates(ctx context.Context, r git.Runner, candidates []CleanCandi
 		item := CleanedItem{
 			Branch:          c.Branch,
 			Path:            c.Path,
-			Prunable:        leftOnDisk,
+			LeftOnDisk:      leftOnDisk,
 			WorktreeRemoved: wtRemoved,
 			BranchDeleted:   brDeleted,
 			Error:           err,
