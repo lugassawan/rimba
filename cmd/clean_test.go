@@ -1133,7 +1133,7 @@ func TestCleanMergedJSONForceAllFailedCountStaysZero(t *testing.T) {
 	r := cleanMergedTestRunner(t, "  "+branchDone, worktreeOut)
 	baseRun := r.run
 	r.run = func(args ...string) (string, error) {
-		if len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == cmdRemove {
+		if len(args) >= 2 && args[0] == cmdWorktreeTest && (args[1] == cmdRemove || args[1] == cmdPrune) {
 			return "", errGitFailed
 		}
 		return baseRun(args...)

@@ -3,6 +3,7 @@ package operations
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -549,6 +550,12 @@ func assertCleanedItem(t *testing.T, item CleanedItem, wantRemoved, wantDeleted,
 }
 
 func TestRemoveCandidatesMixedResults(t *testing.T) {
+	// .git present == genuine failure, not an orphan the heal path would retry.
+	failingDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(failingDir, ".git"), []byte("gitdir: /somewhere/.git/worktrees/b\n"), 0o644); err != nil {
+		t.Fatalf("failed to create .git fixture: %v", err)
+	}
+
 	callCount := 0
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
@@ -569,7 +576,7 @@ func TestRemoveCandidatesMixedResults(t *testing.T) {
 
 	candidates := []CleanCandidate{
 		{Path: "/wt/a", Branch: "feature/a"},
-		{Path: "/wt/b", Branch: "feature/b"}, // Will fail removal
+		{Path: failingDir, Branch: "feature/b"}, // Will fail removal
 		{Path: "/wt/c", Branch: "feature/c"},
 	}
 
@@ -589,16 +596,18 @@ func TestRemoveCandidatesMixedResults(t *testing.T) {
 	})
 }
 
-func TestRemoveCandidatesPrunableRunsPrune(t *testing.T) {
-	var pruneInvoked, removeInvoked bool
+func TestRemoveCandidatesPrunableInputHealsAndRemoves(t *testing.T) {
+	var repairInvoked, removeInvoked, pruneInvoked bool
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			cmd := strings.Join(args, " ")
 			switch {
-			case strings.Contains(cmd, "worktree prune"):
-				pruneInvoked = true
+			case strings.Contains(cmd, "worktree repair"):
+				repairInvoked = true
 			case strings.Contains(cmd, "worktree remove"):
 				removeInvoked = true
+			case strings.Contains(cmd, "worktree prune"):
+				pruneInvoked = true
 			}
 			return "", nil
 		},
@@ -616,11 +625,17 @@ func TestRemoveCandidatesPrunableRunsPrune(t *testing.T) {
 	if !items[0].WorktreeRemoved {
 		t.Error("expected WorktreeRemoved = true")
 	}
-	if !pruneInvoked {
-		t.Error("expected 'git worktree prune' to be invoked for a prunable candidate")
+	if items[0].Prunable {
+		t.Error("expected Prunable = false — repair+remove fully cleared the directory")
 	}
-	if removeInvoked {
-		t.Error("expected 'git worktree remove' NOT to be invoked for a prunable candidate")
+	if !repairInvoked {
+		t.Error("expected 'git worktree repair' to be invoked for a prunable candidate")
+	}
+	if !removeInvoked {
+		t.Error("expected 'git worktree remove' to be invoked after repair")
+	}
+	if pruneInvoked {
+		t.Error("expected 'git worktree prune' NOT to be invoked when repair+remove succeed")
 	}
 }
 

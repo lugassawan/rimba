@@ -140,9 +140,8 @@ func TestCleanMergedForce(t *testing.T) {
 	}
 }
 
-// TestCleanMergedPrunableRecovers guards #374 through `clean --merged`: a
-// merged worktree whose .git file was deleted out-of-band must still be
-// cleaned up via `git worktree prune`, not the doomed `worktree remove --force`.
+// TestCleanMergedPrunableRecovers guards #405 through `clean --merged`: a
+// merged, orphaned worktree must be healed via repair and fully removed, not just deregistered.
 func TestCleanMergedPrunableRecovers(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
@@ -156,16 +155,18 @@ func TestCleanMergedPrunableRecovers(t *testing.T) {
 	}
 
 	r := rimbaSuccess(t, repo, "clean", flagMergedE2E, flagForceE2E)
-	assertContains(t, r.Stdout, "Cleared stale worktree registration")
+	assertContains(t, r.Stdout, msgRemovedWorktree)
 	assertContains(t, r.Stdout, msgDeletedBranch)
 	assertNotContains(t, r.Stdout, "Failed to remove")
 
-	// git worktree prune clears the stale admin entry but — unlike a normal
-	// worktree remove — doesn't rm -rf the leftover directory; assert on
-	// git's own bookkeeping instead of the filesystem.
 	out := testutil.GitCmd(t, repo, "worktree", "list")
 	if strings.Contains(out, wtPath) {
-		t.Errorf("expected worktree entry for %s to be pruned, got: %s", wtPath, out)
+		t.Errorf("expected worktree entry for %s to be removed, got: %s", wtPath, out)
+	}
+
+	// Unlike the #374 prune-only recovery, a healed orphan leaves nothing on disk.
+	if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+		t.Errorf("expected worktree directory %s to be fully removed, stat err: %v", wtPath, err)
 	}
 
 	branches := testutil.GitCmd(t, repo, "branch", flagBranchList)

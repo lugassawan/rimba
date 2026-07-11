@@ -3,6 +3,7 @@ package operations
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -80,6 +81,12 @@ func TestRemoveWorktreeKeepBranch(t *testing.T) {
 }
 
 func TestRemoveWorktreeRemovalFails(t *testing.T) {
+	// .git present == genuine failure, not an orphan.
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".git"), []byte("gitdir: /somewhere/.git/worktrees/login\n"), 0o644); err != nil {
+		t.Fatalf("failed to create .git fixture: %v", err)
+	}
+
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			return "", errors.New("worktree is dirty")
@@ -87,7 +94,7 @@ func TestRemoveWorktreeRemovalFails(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	wt := resolver.WorktreeInfo{Path: "/wt/feature-login", Branch: "feature/login"}
+	wt := resolver.WorktreeInfo{Path: dir, Branch: "feature/login"}
 	result, err := RemoveWorktree(context.Background(), r, wt, "login", false, false, nil)
 	if err == nil {
 		t.Fatal("expected error")
@@ -95,12 +102,19 @@ func TestRemoveWorktreeRemovalFails(t *testing.T) {
 	if result.WorktreeRemoved {
 		t.Error("expected WorktreeRemoved to be false")
 	}
+	if result.Prunable {
+		t.Error("expected result.Prunable to be false for a genuine (non-orphaned) removal failure")
+	}
 }
 
 func TestRemoveWorktreePrunablePruneFails(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
-			if strings.Contains(strings.Join(args, " "), "worktree prune") {
+			cmd := strings.Join(args, " ")
+			switch {
+			case strings.Contains(cmd, "worktree remove"):
+				return "", errors.New("remove failed")
+			case strings.Contains(cmd, "worktree prune"):
 				return "", errors.New("prune failed")
 			}
 			return "", nil
@@ -111,7 +125,7 @@ func TestRemoveWorktreePrunablePruneFails(t *testing.T) {
 	wt := resolver.WorktreeInfo{Path: "/wt/feature-login", Branch: "feature/login", Prunable: true}
 	result, err := RemoveWorktree(context.Background(), r, wt, "login", false, false, nil)
 	if err == nil {
-		t.Fatal("expected error when git worktree prune fails")
+		t.Fatal("expected error when the post-repair remove and the prune fallback both fail")
 	}
 	if result.WorktreeRemoved {
 		t.Error("expected WorktreeRemoved to be false")
@@ -182,16 +196,18 @@ func TestRemoveWorktreeProgressCallbacks(t *testing.T) {
 	}
 }
 
-func TestRemoveWorktreePrunablePath(t *testing.T) {
-	var pruneInvoked, removeInvoked bool
+func TestRemoveWorktreePrunableInputHealsAndRemoves(t *testing.T) {
+	var repairInvoked, removeInvoked, pruneInvoked bool
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			cmd := strings.Join(args, " ")
 			switch {
-			case strings.Contains(cmd, "worktree prune"):
-				pruneInvoked = true
+			case strings.Contains(cmd, "worktree repair"):
+				repairInvoked = true
 			case strings.Contains(cmd, "worktree remove"):
 				removeInvoked = true
+			case strings.Contains(cmd, "worktree prune"):
+				pruneInvoked = true
 			}
 			return "", nil
 		},
@@ -209,21 +225,28 @@ func TestRemoveWorktreePrunablePath(t *testing.T) {
 	if !result.BranchDeleted {
 		t.Error("expected BranchDeleted to be true")
 	}
-	if !result.Prunable {
-		t.Error("expected result.Prunable to be true")
+	if result.Prunable {
+		t.Error("expected result.Prunable to be false — repair+remove fully cleared the directory")
 	}
-	if !pruneInvoked {
-		t.Error("expected 'git worktree prune' to be invoked for a prunable worktree")
+	if !repairInvoked {
+		t.Error("expected 'git worktree repair' to be invoked for a prunable worktree")
 	}
-	if removeInvoked {
-		t.Error("expected 'git worktree remove' NOT to be invoked for a prunable worktree")
+	if !removeInvoked {
+		t.Error("expected 'git worktree remove' to be invoked after repair")
+	}
+	if pruneInvoked {
+		t.Error("expected 'git worktree prune' NOT to be invoked when repair+remove succeed")
 	}
 }
 
-func TestRemoveAndCleanupPrunablePruneFails(t *testing.T) {
+func TestRemoveAndCleanupPrunableAllStepsFail(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
-			if strings.Contains(strings.Join(args, " "), "worktree prune") {
+			cmd := strings.Join(args, " ")
+			switch {
+			case strings.Contains(cmd, "worktree remove"):
+				return "", errors.New("remove failed")
+			case strings.Contains(cmd, "worktree prune"):
 				return "", errors.New("prune failed")
 			}
 			return "", nil
@@ -231,12 +254,15 @@ func TestRemoveAndCleanupPrunablePruneFails(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	wtRemoved, brDeleted, err := removeAndCleanup(context.Background(), r, "/wt/test", "feature/test", false, true)
+	wtRemoved, brDeleted, leftOnDisk, err := removeAndCleanup(context.Background(), r, "/wt/test", "feature/test", false, true)
 	if err == nil {
-		t.Fatal("expected error when git worktree prune fails")
+		t.Fatal("expected error when the post-repair remove and the prune fallback both fail")
 	}
 	if wtRemoved || brDeleted {
 		t.Errorf("expected (false, false), got (%v, %v)", wtRemoved, brDeleted)
+	}
+	if !leftOnDisk {
+		t.Error("expected leftOnDisk to be true when all recovery steps fail")
 	}
 }
 
@@ -248,7 +274,7 @@ func TestRemoveAndCleanupSuccess(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	wtRemoved, brDeleted, err := removeAndCleanup(context.Background(), r, "/wt/test", "feature/test", false, false)
+	wtRemoved, brDeleted, _, err := removeAndCleanup(context.Background(), r, "/wt/test", "feature/test", false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -258,6 +284,12 @@ func TestRemoveAndCleanupSuccess(t *testing.T) {
 }
 
 func TestRemoveAndCleanupWtRemovalFails(t *testing.T) {
+	// .git present == genuine failure, not an orphan.
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".git"), []byte("gitdir: /somewhere/.git/worktrees/test\n"), 0o644); err != nil {
+		t.Fatalf("failed to create .git fixture: %v", err)
+	}
+
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			return "", errors.New("removal failed")
@@ -265,12 +297,15 @@ func TestRemoveAndCleanupWtRemovalFails(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	wtRemoved, brDeleted, err := removeAndCleanup(context.Background(), r, "/wt/test", "feature/test", false, false)
+	wtRemoved, brDeleted, leftOnDisk, err := removeAndCleanup(context.Background(), r, dir, "feature/test", false, false)
 	if err == nil {
 		t.Fatal("expected error")
 	}
 	if wtRemoved || brDeleted {
 		t.Errorf("expected (false, false), got (%v, %v)", wtRemoved, brDeleted)
+	}
+	if leftOnDisk {
+		t.Error("expected leftOnDisk to be false for a genuine (non-orphaned) removal failure")
 	}
 }
 
@@ -286,7 +321,7 @@ func TestRemoveAndCleanupBranchDeleteFails(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
-	wtRemoved, brDeleted, err := removeAndCleanup(context.Background(), r, "/wt/test", "feature/test", false, false)
+	wtRemoved, brDeleted, _, err := removeAndCleanup(context.Background(), r, "/wt/test", "feature/test", false, false)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -304,34 +339,120 @@ func TestRemoveAndCleanupBranchDeleteFails(t *testing.T) {
 	}
 }
 
-func TestRemoveAndCleanupPrunableRunsPrune(t *testing.T) {
-	var pruneInvoked, removeInvoked bool
+func TestRemoveAndCleanupPrunableInputHealsAndRemoves(t *testing.T) {
+	var repairInvoked, removeInvoked, pruneInvoked bool
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			cmd := strings.Join(args, " ")
 			switch {
-			case strings.Contains(cmd, "worktree prune"):
-				pruneInvoked = true
+			case strings.Contains(cmd, "worktree repair"):
+				repairInvoked = true
 			case strings.Contains(cmd, "worktree remove"):
 				removeInvoked = true
+			case strings.Contains(cmd, "worktree prune"):
+				pruneInvoked = true
 			}
 			return "", nil
 		},
 		runInDir: noopRunInDir,
 	}
 
-	wtRemoved, brDeleted, err := removeAndCleanup(context.Background(), r, "/wt/test", "feature/test", false, true)
+	wtRemoved, brDeleted, leftOnDisk, err := removeAndCleanup(context.Background(), r, "/wt/test", "feature/test", false, true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !wtRemoved || !brDeleted {
 		t.Errorf("expected (true, true), got (%v, %v)", wtRemoved, brDeleted)
 	}
-	if !pruneInvoked {
-		t.Error("expected 'git worktree prune' to be invoked for a prunable worktree")
+	if leftOnDisk {
+		t.Error("expected leftOnDisk to be false — repair+remove fully cleared the directory")
 	}
-	if removeInvoked {
-		t.Error("expected 'git worktree remove' NOT to be invoked for a prunable worktree")
+	if !repairInvoked {
+		t.Error("expected 'git worktree repair' to be invoked for a prunable worktree")
+	}
+	if !removeInvoked {
+		t.Error("expected 'git worktree remove' to be invoked after repair")
+	}
+	if pruneInvoked {
+		t.Error("expected 'git worktree prune' NOT to be invoked when repair+remove succeed")
+	}
+}
+
+func TestRemoveAndCleanupOrphanedRepairsThenRemoves(t *testing.T) {
+	dir := t.TempDir() // no .git — orphaned
+
+	var repairInvoked bool
+	removeCalls := 0
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			cmd := strings.Join(args, " ")
+			switch {
+			case strings.Contains(cmd, "worktree repair"):
+				repairInvoked = true
+				return "", nil
+			case strings.Contains(cmd, "worktree remove"):
+				removeCalls++
+				if removeCalls == 1 {
+					return "", errors.New("validation failed, cannot remove working tree")
+				}
+				return "", nil
+			}
+			return "", nil // branch -D
+		},
+		runInDir: noopRunInDir,
+	}
+
+	wtRemoved, brDeleted, leftOnDisk, err := removeAndCleanup(context.Background(), r, dir, "feature/test", false, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !wtRemoved || !brDeleted {
+		t.Errorf("expected (true, true), got (%v, %v)", wtRemoved, brDeleted)
+	}
+	if leftOnDisk {
+		t.Error("expected leftOnDisk to be false after repair+remove succeed")
+	}
+	if !repairInvoked {
+		t.Error("expected 'git worktree repair' to be invoked to heal the orphaned worktree")
+	}
+	if removeCalls != 2 {
+		t.Errorf("expected 'git worktree remove' to be invoked twice (initial fail, post-repair retry), got %d", removeCalls)
+	}
+}
+
+func TestRemoveAndCleanupOrphanedRepairFailsFallsBackToPrune(t *testing.T) {
+	dir := t.TempDir() // no .git — orphaned
+
+	var pruneInvoked bool
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			cmd := strings.Join(args, " ")
+			switch {
+			case strings.Contains(cmd, "worktree repair"):
+				return "", errors.New("repair failed")
+			case strings.Contains(cmd, "worktree remove"):
+				return "", errors.New("validation failed, cannot remove working tree")
+			case strings.Contains(cmd, "worktree prune"):
+				pruneInvoked = true
+				return "", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	wtRemoved, brDeleted, leftOnDisk, err := removeAndCleanup(context.Background(), r, dir, "feature/test", false, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !wtRemoved || !brDeleted {
+		t.Errorf("expected (true, true) — prune fallback still clears the registration, got (%v, %v)", wtRemoved, brDeleted)
+	}
+	if !leftOnDisk {
+		t.Error("expected leftOnDisk to be true after falling back to prune")
+	}
+	if !pruneInvoked {
+		t.Error("expected 'git worktree prune' fallback to be invoked")
 	}
 }
 
@@ -356,7 +477,7 @@ func TestRemoveAndCleanupForceFlag(t *testing.T) {
 				},
 				runInDir: noopRunInDir,
 			}
-			_, _, err := removeAndCleanup(context.Background(), r, "/wt/test", "feature/test", tt.force, false)
+			_, _, _, err := removeAndCleanup(context.Background(), r, "/wt/test", "feature/test", tt.force, false)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -398,5 +519,29 @@ func TestRemoveWorktreeWritesAndCleansSweepManifest(t *testing.T) {
 	matches, _ := filepath.Glob(filepath.Join(commonDir, sweepManifestDir, "sweep-*.json"))
 	if len(matches) != 0 {
 		t.Errorf("expected manifest cleaned up after RemoveWorktree returns, got %v", matches)
+	}
+}
+
+func TestWorktreeGitMissing(t *testing.T) {
+	tests := []struct {
+		name        string
+		setupGit    bool
+		wantMissing bool
+	}{
+		{name: ".git present", setupGit: true, wantMissing: false},
+		{name: ".git absent", setupGit: false, wantMissing: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if tt.setupGit {
+				if err := os.WriteFile(filepath.Join(dir, ".git"), []byte("gitdir: /x\n"), 0o644); err != nil {
+					t.Fatalf("failed to create .git fixture: %v", err)
+				}
+			}
+			if got := worktreeGitMissing(dir); got != tt.wantMissing {
+				t.Errorf("worktreeGitMissing(%q) = %v, want %v", dir, got, tt.wantMissing)
+			}
+		})
 	}
 }

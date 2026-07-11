@@ -37,7 +37,7 @@ type MergeResult struct {
 	MergingToMain   bool
 	SourceRemoved   bool  // true only if both worktree removed and branch deleted
 	WorktreeRemoved bool  // true if worktree was removed (branch may still exist)
-	SourcePrunable  bool  // true if the source's admin entry was prunable (#374) — informs the cleanup-failure hint
+	SourcePrunable  bool  // true if the source directory was left on disk (prune fallback), not fully removed
 	RemoveError     error // non-nil if cleanup failed
 	RemoteDeleted   bool  // true if the remote branch was deleted (parity with clean --merged, #231)
 	RemoteError     error // non-nil if remote-branch deletion was attempted and failed
@@ -98,14 +98,15 @@ func MergeWorktree(ctx context.Context, r git.Runner, params MergeParams, onProg
 		if !params.DryRun {
 			defer deferSweepManifest(ctx, r, []string{source.Path})()
 		}
-		var wtRemoved, brDeleted bool
+		var wtRemoved, brDeleted, leftOnDisk bool
 		rmErr := plan.Do("remove worktree: "+source.Path, func() error {
 			var err error
-			wtRemoved, brDeleted, err = removeAndCleanup(ctx, r, source.Path, source.Branch, false, source.Prunable)
+			wtRemoved, brDeleted, leftOnDisk, err = removeAndCleanup(ctx, r, source.Path, source.Branch, false, source.Prunable)
 			return err
 		})
 		result.WorktreeRemoved = wtRemoved
 		result.SourceRemoved = wtRemoved && brDeleted
+		result.SourcePrunable = leftOnDisk
 		if rmErr != nil {
 			result.RemoveError = rmErr
 		}
