@@ -18,11 +18,16 @@ See AGENTS.md at the repo root for full documentation.
 4. `rimba open <task>` — print path or run shortcut (--ide, --agent)
 5. `rimba sync [task]` — rebase worktree(s) onto main
 6. `rimba merge <task>` — merge into main and auto-clean up
-7. `rimba remove <task>` — delete worktree + branch
-8. `rimba archive <task>` — remove worktree, keep branch
-9. `rimba exec <cmd>` — run across all worktrees
-10. `rimba clean --merged` — remove merged worktrees
-11. `rimba mcp` — start MCP server for AI tool integration
+7. `rimba rename <task> [new-task]` — rename a worktree's task, branch, and directory
+8. `rimba duplicate <task>` — create a new worktree from an existing one
+9. `rimba remove <task>` — delete worktree + branch
+10. `rimba archive <task>` — remove worktree, keep branch
+11. `rimba restore <task>` — recreate a worktree from an archived branch
+12. `rimba doctor` — diagnose stale git index.lock files
+13. `rimba trust` — approve committed shell commands
+14. `rimba exec <cmd>` — run across all worktrees
+15. `rimba clean --merged` — remove merged worktrees
+16. `rimba mcp` — start MCP server for AI tool integration
 
 ## Workflow Recipes
 
@@ -33,7 +38,7 @@ See AGENTS.md at the repo root for full documentation.
 
 ## JSON Output
 
-Use `--json` with: list, status, exec, conflict-check, deps status.
+Use `--json` with: list, status, exec, conflict-check, deps status, add, merge, remove, rename, sync, clean, log.
 Envelope: `{"version", "command", "data"}` or `{"version", "command", "error", "code"}`.
 
 ## Best Practices
@@ -59,3 +64,8 @@ when no MCP connection is available.
 | `mcp__rimba__clean` | `rimba clean --merged` |
 | `mcp__rimba__exec` | `rimba exec <cmd>` |
 | `mcp__rimba__conflict-check` | `rimba conflict-check` |
+| `mcp__rimba__rename` | `rimba rename <task> [new-task]` |
+| `mcp__rimba__merge-plan` | `rimba merge-plan` |
+| `mcp__rimba__log` | `rimba log` |
+| `mcp__rimba__archive` | `rimba archive <task>` |
+| `mcp__rimba__restore` | `rimba restore <task>` |

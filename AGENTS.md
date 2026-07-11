@@ -20,11 +20,12 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 
 | Concern | Commands |
 |---------|----------|
-| Create & navigate | `rimba add <task>` (or `rimba add service/task` for monorepos), `rimba add pr:<num>` (from a GitHub PR), `rimba open <task>` |
-| Inspect | `rimba list` (`--full` adds PR/CI columns), `rimba status` (`--detail` adds disk/velocity), `rimba log` |
+| Create & navigate | `rimba add <task>` (or `rimba add service/task` for monorepos), `rimba add pr:<num>` (from a GitHub PR), `rimba open <task>`, `rimba rename <task> [new-task]`, `rimba duplicate <task>` |
+| Inspect | `rimba list` (`--full` adds PR/CI columns), `rimba status` (`--detail` adds disk/velocity), `rimba log`, `rimba doctor` |
 | Sync & merge | `rimba sync [task]`, `rimba merge <task>` |
-| Clean up | `rimba clean --merged`, `rimba archive <task>`, `rimba remove <task>` |
+| Clean up | `rimba clean --merged`, `rimba archive <task>`, `rimba restore <task>`, `rimba remove <task>` |
 | Cross-cutting | `rimba exec <cmd>`, `rimba conflict-check`, `rimba deps status` |
+| Security | `rimba trust` (approve committed shell commands) |
 | AI integration | `rimba mcp` (MCP server for AI coding agents) |
 
 ## Workflow Recipes
@@ -64,7 +65,7 @@ MCP tools also accept `service/task` format in the `task` parameter.
 
 ## JSON Output
 
-Commands that support `--json`: list, status, exec, conflict-check, deps status.
+Commands that support `--json`: list, status, exec, conflict-check, deps status, add, merge, remove, rename, sync, clean, log.
 
 Envelope: `{"version": "...", "command": "...", "data": ...}`
 Error: `{"version": "...", "command": "...", "error": "...", "code": "..."}`
@@ -93,5 +94,10 @@ when no MCP connection is available.
 | `mcp__rimba__clean` | `rimba clean --merged` |
 | `mcp__rimba__exec` | `rimba exec <cmd>` |
 | `mcp__rimba__conflict-check` | `rimba conflict-check` |
+| `mcp__rimba__rename` | `rimba rename <task> [new-task]` |
+| `mcp__rimba__merge-plan` | `rimba merge-plan` |
+| `mcp__rimba__log` | `rimba log` |
+| `mcp__rimba__archive` | `rimba archive <task>` |
+| `mcp__rimba__restore` | `rimba restore <task>` |
 
 <!-- END RIMBA -->

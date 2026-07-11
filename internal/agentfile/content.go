@@ -23,6 +23,11 @@ var mcpToolEntries = []mcpToolEntry{
 	{"mcp__rimba__clean", "rimba clean --merged"},
 	{"mcp__rimba__exec", "rimba exec <cmd>"},
 	{"mcp__rimba__conflict-check", "rimba conflict-check"},
+	{"mcp__rimba__rename", "rimba rename <task> [new-task]"},
+	{"mcp__rimba__merge-plan", "rimba merge-plan"},
+	{"mcp__rimba__log", "rimba log"},
+	{"mcp__rimba__archive", "rimba archive <task>"},
+	{"mcp__rimba__restore", "rimba restore <task>"},
 }
 
 // mcpToolsSection returns a markdown block documenting the mcp__rimba__* MCP tools
@@ -69,11 +74,12 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 
 | Concern | Commands |
 |---------|----------|
-| Create & navigate | ` + "`" + `rimba add <task>` + "`" + ` (or ` + "`" + `rimba add service/task` + "`" + ` for monorepos), ` + "`" + `rimba add pr:<num>` + "`" + ` (from a GitHub PR), ` + "`" + `rimba open <task>` + "`" + ` |
-| Inspect | ` + "`" + `rimba list` + "`" + ` (` + "`" + `--full` + "`" + ` adds PR/CI columns), ` + "`" + `rimba status` + "`" + ` (` + "`" + `--detail` + "`" + ` adds disk/velocity), ` + "`" + `rimba log` + "`" + ` |
+| Create & navigate | ` + "`" + `rimba add <task>` + "`" + ` (or ` + "`" + `rimba add service/task` + "`" + ` for monorepos), ` + "`" + `rimba add pr:<num>` + "`" + ` (from a GitHub PR), ` + "`" + `rimba open <task>` + "`" + `, ` + "`" + `rimba rename <task> [new-task]` + "`" + `, ` + "`" + `rimba duplicate <task>` + "`" + ` |
+| Inspect | ` + "`" + `rimba list` + "`" + ` (` + "`" + `--full` + "`" + ` adds PR/CI columns), ` + "`" + `rimba status` + "`" + ` (` + "`" + `--detail` + "`" + ` adds disk/velocity), ` + "`" + `rimba log` + "`" + `, ` + "`" + `rimba doctor` + "`" + ` |
 | Sync & merge | ` + "`" + `rimba sync [task]` + "`" + `, ` + "`" + `rimba merge <task>` + "`" + ` |
-| Clean up | ` + "`" + `rimba clean --merged` + "`" + `, ` + "`" + `rimba archive <task>` + "`" + `, ` + "`" + `rimba remove <task>` + "`" + ` |
+| Clean up | ` + "`" + `rimba clean --merged` + "`" + `, ` + "`" + `rimba archive <task>` + "`" + `, ` + "`" + `rimba restore <task>` + "`" + `, ` + "`" + `rimba remove <task>` + "`" + ` |
 | Cross-cutting | ` + "`" + `rimba exec <cmd>` + "`" + `, ` + "`" + `rimba conflict-check` + "`" + `, ` + "`" + `rimba deps status` + "`" + ` |
+| Security | ` + "`" + `rimba trust` + "`" + ` (approve committed shell commands) |
 | AI integration | ` + "`" + `rimba mcp` + "`" + ` (MCP server for AI coding agents) |
 
 ## Workflow Recipes
@@ -113,7 +119,7 @@ MCP tools also accept ` + "`" + `service/task` + "`" + ` format in the ` + "`" +
 
 ## JSON Output
 
-Commands that support ` + "`" + `--json` + "`" + `: list, status, exec, conflict-check, deps status.
+Commands that support ` + "`" + `--json` + "`" + `: list, status, exec, conflict-check, deps status, add, merge, remove, rename, sync, clean, log.
 
 Envelope: ` + "`" + `{"version": "...", "command": "...", "data": ...}` + "`" + `
 Error: ` + "`" + `{"version": "...", "command": "...", "error": "...", "code": "..."}` + "`" + `
@@ -143,10 +149,15 @@ See AGENTS.md at the repo root for full rimba documentation.
 
 - ` + "`" + `rimba add <task>` + "`" + ` — create worktree (` + "`" + `rimba add service/task` + "`" + ` for monorepos)
 - ` + "`" + `rimba add pr:<num>` + "`" + ` — create worktree from a GitHub PR
+- ` + "`" + `rimba rename <task> [new-task]` + "`" + ` — rename a worktree's task, branch, and directory
+- ` + "`" + `rimba duplicate <task>` + "`" + ` — create a new worktree from an existing one
 - ` + "`" + `rimba list` + "`" + ` (` + "`" + `--full` + "`" + ` adds PR/CI columns) / ` + "`" + `rimba status` + "`" + ` (` + "`" + `--detail` + "`" + ` adds disk/velocity) — inspect worktrees (` + "`" + `--service <svc>` + "`" + ` to filter)
+- ` + "`" + `rimba doctor` + "`" + ` — diagnose stale git index.lock files
 - ` + "`" + `rimba merge <task>` + "`" + ` — merge into main and auto-clean up
 - ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
+- ` + "`" + `rimba archive <task>` + "`" + ` / ` + "`" + `rimba restore <task>` + "`" + ` — remove worktree keeping branch / recreate from an archived branch
 - ` + "`" + `rimba exec <cmd>` + "`" + ` — run command across all worktrees
+- ` + "`" + `rimba trust` + "`" + ` — approve committed shell commands
 - ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
 
 ### Config Shape (` + "`" + `.rimba/settings.toml` + "`" + `)
@@ -189,11 +200,16 @@ See AGENTS.md at the repo root for full documentation.
 4. ` + "`" + `rimba open <task>` + "`" + ` — print path or run shortcut (--ide, --agent)
 5. ` + "`" + `rimba sync [task]` + "`" + ` — rebase worktree(s) onto main
 6. ` + "`" + `rimba merge <task>` + "`" + ` — merge into main and auto-clean up
-7. ` + "`" + `rimba remove <task>` + "`" + ` — delete worktree + branch
-8. ` + "`" + `rimba archive <task>` + "`" + ` — remove worktree, keep branch
-9. ` + "`" + `rimba exec <cmd>` + "`" + ` — run across all worktrees
-10. ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
-11. ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
+7. ` + "`" + `rimba rename <task> [new-task]` + "`" + ` — rename a worktree's task, branch, and directory
+8. ` + "`" + `rimba duplicate <task>` + "`" + ` — create a new worktree from an existing one
+9. ` + "`" + `rimba remove <task>` + "`" + ` — delete worktree + branch
+10. ` + "`" + `rimba archive <task>` + "`" + ` — remove worktree, keep branch
+11. ` + "`" + `rimba restore <task>` + "`" + ` — recreate a worktree from an archived branch
+12. ` + "`" + `rimba doctor` + "`" + ` — diagnose stale git index.lock files
+13. ` + "`" + `rimba trust` + "`" + ` — approve committed shell commands
+14. ` + "`" + `rimba exec <cmd>` + "`" + ` — run across all worktrees
+15. ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
+16. ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
 
 ## Workflow Recipes
 
@@ -204,7 +220,7 @@ See AGENTS.md at the repo root for full documentation.
 
 ## JSON Output
 
-Use ` + "`" + `--json` + "`" + ` with: list, status, exec, conflict-check, deps status.
+Use ` + "`" + `--json` + "`" + ` with: list, status, exec, conflict-check, deps status, add, merge, remove, rename, sync, clean, log.
 Envelope: ` + "`" + `{"version", "command", "data"}` + "`" + ` or ` + "`" + `{"version", "command", "error", "code"}` + "`" + `.
 
 ## Best Practices
@@ -236,11 +252,12 @@ If not found, **ask the user** before installing. Never install automatically.
 
 | Concern | Commands |
 |---------|----------|
-| Create & navigate | ` + "`" + `rimba add <task>` + "`" + `, ` + "`" + `rimba add pr:<num>` + "`" + ` (from a GitHub PR), ` + "`" + `rimba open <task>` + "`" + ` |
-| Inspect | ` + "`" + `rimba list` + "`" + ` (` + "`" + `--full` + "`" + ` adds PR/CI columns), ` + "`" + `rimba status` + "`" + ` (` + "`" + `--detail` + "`" + ` adds disk/velocity) |
+| Create & navigate | ` + "`" + `rimba add <task>` + "`" + `, ` + "`" + `rimba add pr:<num>` + "`" + ` (from a GitHub PR), ` + "`" + `rimba open <task>` + "`" + `, ` + "`" + `rimba rename <task> [new-task]` + "`" + `, ` + "`" + `rimba duplicate <task>` + "`" + ` |
+| Inspect | ` + "`" + `rimba list` + "`" + ` (` + "`" + `--full` + "`" + ` adds PR/CI columns), ` + "`" + `rimba status` + "`" + ` (` + "`" + `--detail` + "`" + ` adds disk/velocity), ` + "`" + `rimba doctor` + "`" + ` |
 | Sync & merge | ` + "`" + `rimba sync [task]` + "`" + `, ` + "`" + `rimba merge <task>` + "`" + ` |
-| Clean up | ` + "`" + `rimba clean --merged` + "`" + `, ` + "`" + `rimba archive <task>` + "`" + `, ` + "`" + `rimba remove <task>` + "`" + ` |
+| Clean up | ` + "`" + `rimba clean --merged` + "`" + `, ` + "`" + `rimba archive <task>` + "`" + `, ` + "`" + `rimba restore <task>` + "`" + `, ` + "`" + `rimba remove <task>` + "`" + ` |
 | Cross-cutting | ` + "`" + `rimba exec <cmd>` + "`" + `, ` + "`" + `rimba conflict-check` + "`" + ` |
+| Security | ` + "`" + `rimba trust` + "`" + ` (approve committed shell commands) |
 | AI integration | ` + "`" + `rimba mcp` + "`" + ` (MCP server for AI coding agents) |
 
 ` + mcpToolsSection("##") + `
@@ -268,7 +285,12 @@ If not found, **ask the user** before installing. Never install automatically.
 4. ` + "`" + `rimba merge <task>` + "`" + ` — merge into main and auto-clean up
 5. ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
 6. ` + "`" + `rimba sync [task]` + "`" + ` — rebase onto main
-7. ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
+7. ` + "`" + `rimba rename <task> [new-task]` + "`" + ` — rename a worktree
+8. ` + "`" + `rimba duplicate <task>` + "`" + ` — duplicate an existing worktree
+9. ` + "`" + `rimba archive <task>` + "`" + ` / ` + "`" + `rimba restore <task>` + "`" + ` — archive and restore worktrees
+10. ` + "`" + `rimba doctor` + "`" + ` — diagnose stale git index.lock files
+11. ` + "`" + `rimba trust` + "`" + ` — approve committed shell commands
+12. ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
 
 ` + mcpToolsSection("##") + `
 `
@@ -294,7 +316,12 @@ If not found, **ask the user** before installing. Never install automatically.
 4. ` + "`" + `rimba merge <task>` + "`" + ` — merge into main and auto-clean up
 5. ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
 6. ` + "`" + `rimba sync [task]` + "`" + ` — rebase onto main
-7. ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
+7. ` + "`" + `rimba rename <task> [new-task]` + "`" + ` — rename a worktree
+8. ` + "`" + `rimba duplicate <task>` + "`" + ` — duplicate an existing worktree
+9. ` + "`" + `rimba archive <task>` + "`" + ` / ` + "`" + `rimba restore <task>` + "`" + ` — archive and restore worktrees
+10. ` + "`" + `rimba doctor` + "`" + ` — diagnose stale git index.lock files
+11. ` + "`" + `rimba trust` + "`" + ` — approve committed shell commands
+12. ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
 
 ` + mcpToolsSection("##") + `
 `
@@ -512,22 +539,27 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 |-------------------|-----|
 | Start a new task | ` + "`" + `rimba add <task>` + "`" + ` |
 | Start a task in a monorepo service | ` + "`" + `rimba add service/task` + "`" + ` (auto-detects service from repo dirs) |
+| Rename a task | ` + "`" + `rimba rename <task> [new-task]` + "`" + ` |
+| Duplicate a worktree | ` + "`" + `rimba duplicate <task>` + "`" + ` |
 | See all worktrees | ` + "`" + `rimba list` + "`" + ` or ` + "`" + `rimba list --json` + "`" + ` |
 | Filter by service (monorepo) | ` + "`" + `rimba list --service <svc>` + "`" + ` |
 | Check worktree health | ` + "`" + `rimba status` + "`" + ` |
+| Diagnose stale worktree locks | ` + "`" + `rimba doctor` + "`" + ` |
 | Navigate to a worktree | ` + "`" + `cd $(rimba open <task>)` + "`" + ` |
 | Update from source branch | ` + "`" + `rimba sync <task>` + "`" + ` or ` + "`" + `rimba sync --all` + "`" + ` |
 | Finish a feature | ` + "`" + `rimba merge <task>` + "`" + ` (auto-removes worktree) |
 | Clean up merged work | ` + "`" + `rimba clean --merged` + "`" + ` |
 | Pause a task | ` + "`" + `rimba archive <task>` + "`" + ` (keeps branch) |
+| Resume a paused task | ` + "`" + `rimba restore <task>` + "`" + ` |
 | Run across worktrees | ` + "`" + `rimba exec "<cmd>"` + "`" + ` |
 | Check for conflicts | ` + "`" + `rimba conflict-check` + "`" + ` |
 | Check dependencies | ` + "`" + `rimba deps status` + "`" + ` |
+| Approve committed shell commands | ` + "`" + `rimba trust` + "`" + ` |
 | Use MCP server | ` + "`" + `rimba mcp` + "`" + ` (stdio transport for AI agents) |
 
 ## JSON Output
 
-Commands supporting ` + "`" + `--json` + "`" + `: ` + "`" + `list` + "`" + `, ` + "`" + `status` + "`" + `, ` + "`" + `exec` + "`" + `, ` + "`" + `conflict-check` + "`" + `, ` + "`" + `deps status` + "`" + `.
+Commands supporting ` + "`" + `--json` + "`" + `: ` + "`" + `list` + "`" + `, ` + "`" + `status` + "`" + `, ` + "`" + `exec` + "`" + `, ` + "`" + `conflict-check` + "`" + `, ` + "`" + `deps status` + "`" + `, ` + "`" + `add` + "`" + `, ` + "`" + `merge` + "`" + `, ` + "`" + `remove` + "`" + `, ` + "`" + `rename` + "`" + `, ` + "`" + `sync` + "`" + `, ` + "`" + `clean` + "`" + `, ` + "`" + `log` + "`" + `.
 
 **Envelope:** ` + "`" + `{"version": "<semver>", "command": "<name>", "data": <payload>}` + "`" + `
 **Error:** ` + "`" + `{"version": "<semver>", "command": "<name>", "error": "<msg>", "code": "<CODE>"}` + "`" + `
