@@ -139,7 +139,10 @@ func TestNewServer(t *testing.T) {
 	s := NewServer(hctx)
 
 	tools := s.ListTools()
-	expectedTools := []string{"list", "add", "remove", "status", "exec", "conflict-check", "merge", "sync", "clean"}
+	expectedTools := []string{
+		"list", "add", "remove", "status", "exec", "conflict-check", "merge", "sync", "clean",
+		"rename", "merge-plan", "log", "archive", "restore",
+	}
 	for _, name := range expectedTools {
 		if _, exists := tools[name]; !exists {
 			t.Errorf("expected tool %q to be registered", name)

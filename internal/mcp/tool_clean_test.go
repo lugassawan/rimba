@@ -791,7 +791,7 @@ func newCleanMergedWithRemoteRunner(porcelain, mergedBranches string, pushErr er
 			if len(args) >= 3 && args[0] == gitRemote && args[1] == "get-url" {
 				return "https://github.com/owner/repo.git", nil
 			}
-			if len(args) >= 3 && args[0] == "push" && args[2] == "--delete" {
+			if len(args) >= 3 && args[0] == pushCmd && args[2] == "--delete" {
 				if pushCalled != nil {
 					*pushCalled++
 				}

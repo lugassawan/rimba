@@ -160,7 +160,7 @@ func TestMergeToolHappyPathMergeToMain(t *testing.T) {
 	if data.Source != branchFeatureMyTask {
 		t.Errorf("expected source 'feature/my-task', got %q", data.Source)
 	}
-	if data.Into != "main" {
+	if data.Into != sourceMain {
 		t.Errorf("expected into 'main', got %q", data.Into)
 	}
 	if !data.SourceRemoved {
@@ -542,7 +542,7 @@ func TestMergeToolServiceScoped(t *testing.T) {
 	if data.Source != branchServiceFeatureMyTask {
 		t.Errorf("expected source 'auth-api/feature/my-task', got %q", data.Source)
 	}
-	if data.Into != "main" {
+	if data.Into != sourceMain {
 		t.Errorf("expected into 'main', got %q", data.Into)
 	}
 	if !data.SourceRemoved {

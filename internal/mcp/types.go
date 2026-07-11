@@ -15,6 +15,7 @@ type (
 	statusAge        = output.StatusAge
 	execData         = output.ExecData
 	execResult       = output.ExecResult
+	logItem          = output.LogItem
 )
 
 // conflictCheckData mirrors the JSON shape from cmd/conflict_check.go.
@@ -99,4 +100,54 @@ type cleanedItem struct {
 	Branch        string `json:"branch"`
 	Path          string `json:"path,omitempty"`
 	RemoteDeleted bool   `json:"remote_deleted,omitempty"`
+}
+
+// renameResult holds the outcome of a worktree rename operation.
+type renameResult struct {
+	OldBranch string `json:"old_branch"`
+	NewBranch string `json:"new_branch"`
+	OldPath   string `json:"old_path"`
+	NewPath   string `json:"new_path"`
+	// Push status (only meaningful when push=true).
+	Published      bool   `json:"published,omitempty"`
+	PublishError   string `json:"publish_error,omitempty"`
+	RemoteDeleted  bool   `json:"remote_deleted,omitempty"`
+	RemoteError    string `json:"remote_error,omitempty"`
+	NoOriginRemote bool   `json:"no_origin_remote,omitempty"`
+}
+
+// mergePlanResult holds the recommended merge order.
+type mergePlanResult struct {
+	Steps []mergePlanStep `json:"steps"`
+}
+
+// mergePlanStep represents one step in the recommended merge order.
+type mergePlanStep struct {
+	Order     int    `json:"order"`
+	Task      string `json:"task"`
+	Branch    string `json:"branch"`
+	Conflicts int    `json:"conflicts"`
+}
+
+// logResult holds the last-commit entries for each worktree.
+type logResult struct {
+	Entries []logItem `json:"entries"`
+}
+
+// archiveResult holds the outcome of an archive operation.
+type archiveResult struct {
+	Path   string   `json:"path"`
+	Branch string   `json:"branch"`
+	DryRun bool     `json:"dry_run"`
+	Steps  []string `json:"steps,omitempty"`
+}
+
+// restoreResult holds the outcome of a worktree restore operation.
+type restoreResult struct {
+	Task            string   `json:"task"`
+	Branch          string   `json:"branch"`
+	Path            string   `json:"path"`
+	Copied          []string `json:"copied,omitempty"`
+	Skipped         []string `json:"skipped,omitempty"`
+	SkippedSymlinks []string `json:"skipped_symlinks,omitempty"`
 }
