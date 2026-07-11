@@ -35,5 +35,9 @@ func checkOne(baseDir string, spec Spec) FileStatus {
 	if err != nil {
 		return FileStatus{RelPath: spec.RelPath, Installed: false}
 	}
-	return FileStatus{RelPath: spec.RelPath, Installed: containsBlock(string(existing))}
+	content := string(existing)
+	if isCorruptBlock(content) {
+		return FileStatus{RelPath: spec.RelPath, Corrupt: true}
+	}
+	return FileStatus{RelPath: spec.RelPath, Installed: containsBlock(content)}
 }

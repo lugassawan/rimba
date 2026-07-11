@@ -132,29 +132,56 @@ func installBlock(path string, spec Spec) (Result, error) {
 	}
 
 	content := string(existing)
-	block := spec.Content()
-	action := actionCreated
-
-	if content != "" {
-		if containsBlock(content) {
-			content = removeBlock(content)
-		}
-		action = actionUpdated
-		// Append block to existing content (with removed old block if any)
-		content = strings.TrimRight(content, "\n")
-		if content != "" {
-			content = content + "\n\n" + block + "\n"
-		} else {
-			content = block + "\n"
-		}
-	} else {
-		content = block + "\n"
+	if isCorruptBlock(content) {
+		return Result{RelPath: spec.RelPath, Corrupt: true}, nil
 	}
 
-	if err := os.WriteFile(path, []byte(content), mode); err != nil {
+	action := actionCreated
+	if content != "" {
+		action = actionUpdated
+	}
+
+	merged, corrupt := mergeBlockContent(content, spec.Content())
+	if corrupt {
+		return Result{RelPath: spec.RelPath, Corrupt: true}, nil
+	}
+
+	if err := os.WriteFile(path, []byte(merged), mode); err != nil {
 		return Result{RelPath: spec.RelPath}, fmt.Errorf("write file: %w", err)
 	}
 	return Result{RelPath: spec.RelPath, Action: action}, nil
+}
+
+// mergeBlockContent combines content with the rimba block, replacing any prior
+// block. corrupt is true only if content changed shape since the caller's isCorruptBlock check.
+func mergeBlockContent(content, block string) (merged string, corrupt bool) {
+	if content == "" {
+		return block + "\n", false
+	}
+
+	if containsBlock(content) {
+		cleaned, ok := removeBlockChecked(content)
+		if !ok {
+			return "", true
+		}
+		content = cleaned
+	}
+
+	content = strings.TrimRight(content, "\n")
+	if content == "" {
+		return block + "\n", false
+	}
+	return content + "\n\n" + block + "\n", false
+}
+
+// removeBlockChecked strips the rimba block, reporting failure via ok instead of
+// an error so corruption flows through Result.Corrupt, never a batch-aborting error.
+func removeBlockChecked(content string) (cleaned string, ok bool) {
+	cleaned, err := removeBlock(content)
+	if err != nil {
+		return "", false
+	}
+	return cleaned, true
 }
 
 func uninstallOne(baseDir string, spec Spec) (Result, error) {
@@ -192,11 +219,17 @@ func uninstallBlock(path string, spec Spec) (Result, error) {
 	}
 
 	content := string(existing)
+	if isCorruptBlock(content) {
+		return Result{RelPath: spec.RelPath, Corrupt: true}, nil
+	}
 	if !containsBlock(content) {
 		return Result{RelPath: spec.RelPath, Action: actionSkipped}, nil
 	}
 
-	cleaned := removeBlock(content)
+	cleaned, ok := removeBlockChecked(content)
+	if !ok {
+		return Result{RelPath: spec.RelPath, Corrupt: true}, nil
+	}
 	if strings.TrimSpace(cleaned) == "" {
 		if err := os.Remove(path); err != nil {
 			return Result{RelPath: spec.RelPath}, fmt.Errorf("remove file: %w", err)
