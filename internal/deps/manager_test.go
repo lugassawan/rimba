@@ -97,6 +97,9 @@ func TestManagerInstallClone(t *testing.T) {
 	if r.Error != nil {
 		t.Errorf(fmtExpectedNoError, r.Error)
 	}
+	if !r.Ran {
+		t.Error("expected Ran=true")
+	}
 
 	assertFileContent(t, filepath.Join(newWT, DirNodeModules, "package.json"), "{}")
 }
@@ -384,6 +387,9 @@ func TestManagerInstallHashError(t *testing.T) {
 	if results[0].Error == nil {
 		t.Error("expected error for unreadable lockfile")
 	}
+	if results[0].Ran {
+		t.Error("expected Ran=false for an undispatched batch")
+	}
 }
 
 func TestManagerInstallModuleNoHash(t *testing.T) {
@@ -630,6 +636,9 @@ func TestInstallListWorktreesError(t *testing.T) {
 	if !errors.Is(results[0].Error, errGitFailed) {
 		t.Errorf("error = %v, want %v", results[0].Error, errGitFailed)
 	}
+	if results[0].Ran {
+		t.Error("expected Ran=false for an undispatched batch")
+	}
 }
 
 func TestInstallPreferSourceListWorktreesError(t *testing.T) {
@@ -651,6 +660,9 @@ func TestInstallPreferSourceListWorktreesError(t *testing.T) {
 	}
 	if !errors.Is(results[0].Error, errGitFailed) {
 		t.Errorf("error = %v, want %v", results[0].Error, errGitFailed)
+	}
+	if results[0].Ran {
+		t.Error("expected Ran=false for an undispatched batch")
 	}
 }
 

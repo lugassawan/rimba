@@ -206,15 +206,7 @@ var depsInstallCmd = &cobra.Command{
 		out := cmd.OutOrStdout()
 		fmt.Fprintf(out, "Dependencies for %q:\n", task)
 		for _, res := range results {
-			if res.Cloned {
-				fmt.Fprintf(out, "  %s: cloned from %s\n", res.Module.Dir, filepath.Base(res.Source))
-			} else if res.Error != nil {
-				fmt.Fprintf(out, "  %s: %v\n", res.Module.Dir, res.Error)
-			} else if res.Module.InstallCmd != "" && !res.Module.CloneOnly {
-				fmt.Fprintf(out, "  %s: installed\n", res.Module.Dir)
-			} else {
-				fmt.Fprintf(out, "  %s: skipped\n", res.Module.Dir)
-			}
+			fmt.Fprintf(out, "  %s\n", formatDepsInstallLine(res))
 		}
 
 		return nil
@@ -225,4 +217,20 @@ func init() {
 	depsCmd.AddCommand(depsStatusCmd)
 	depsCmd.AddCommand(depsInstallCmd)
 	rootCmd.AddCommand(depsCmd)
+}
+
+// formatDepsInstallLine renders one module's install outcome for `rimba deps install`.
+func formatDepsInstallLine(res deps.InstallResult) string {
+	switch {
+	case res.Cloned:
+		return fmt.Sprintf("%s: cloned from %s", res.Module.Dir, filepath.Base(res.Source))
+	case res.Error != nil:
+		return fmt.Sprintf("%s: %v", res.Module.Dir, res.Error)
+	case !res.Ran:
+		return res.Module.Dir + ": skipped (cancelled)"
+	case res.Module.InstallCmd != "" && !res.Module.CloneOnly:
+		return res.Module.Dir + ": installed"
+	default:
+		return res.Module.Dir + ": skipped"
+	}
 }

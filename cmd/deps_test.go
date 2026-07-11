@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -331,5 +332,57 @@ func TestDepsInstallNoModules(t *testing.T) {
 	out := buf.String()
 	if !strings.Contains(out, "No modules detected") {
 		t.Errorf("output missing 'No modules detected', got %q", out)
+	}
+}
+
+func TestFormatDepsInstallLine(t *testing.T) {
+	tests := []struct {
+		name string
+		res  deps.InstallResult
+		want string
+	}{
+		{
+			name: "cloned",
+			res:  deps.InstallResult{Module: deps.Module{Dir: "node_modules"}, Source: "/other/wt", Cloned: true, Ran: true},
+			want: "node_modules: cloned from wt",
+		},
+		{
+			name: "error",
+			res:  deps.InstallResult{Module: deps.Module{Dir: "vendor"}, Error: errors.New("install failed"), Ran: true},
+			want: "vendor: install failed",
+		},
+		{
+			name: "cancelled",
+			res:  deps.InstallResult{Module: deps.Module{Dir: "vendor"}, Ran: false},
+			want: "vendor: skipped (cancelled)",
+		},
+		{
+			name: "installed",
+			res:  deps.InstallResult{Module: deps.Module{Dir: "vendor", InstallCmd: "go mod vendor"}, Ran: true},
+			want: "vendor: installed",
+		},
+		{
+			name: "skipped",
+			res:  deps.InstallResult{Module: deps.Module{Dir: "node_modules"}, Ran: true},
+			want: "node_modules: skipped",
+		},
+		{
+			name: "cancelled takes precedence over install cmd",
+			res:  deps.InstallResult{Module: deps.Module{Dir: "vendor", InstallCmd: "go mod vendor"}, Ran: false},
+			want: "vendor: skipped (cancelled)",
+		},
+		{
+			name: "error takes precedence over cancelled",
+			res:  deps.InstallResult{Module: deps.Module{Dir: "vendor"}, Error: errors.New("install failed"), Ran: false},
+			want: "vendor: install failed",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := formatDepsInstallLine(tc.res); got != tc.want {
+				t.Errorf("formatDepsInstallLine() = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
