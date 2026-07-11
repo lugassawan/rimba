@@ -1049,6 +1049,49 @@ func TestAddTaskJSON(t *testing.T) {
 	}
 }
 
+// TestAddTaskJSONSuppressesAliasNotice proves that when both an alias is
+// detected (aliasUsed == true, e.g. "fix/" -> "bugfix/") AND --json is set,
+// the alias notice (which normally writes to stderr via printAliasNotice)
+// does not leak into the output buffer: the buffer must decode cleanly as
+// JSON and must not contain the notice's "interpreting" text.
+func TestAddTaskJSONSuppressesAliasNotice(t *testing.T) {
+	repoDir := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(repoDir, ".worktrees"), 0755)
+	cfg := &config.Config{WorktreeDir: ".worktrees"}
+
+	restore := overrideNewRunner(makeWorktreeGitRunner(repoDir))
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().StringP(flagSource, "s", "", "")
+	cmd.Flags().Bool(flagSkipDeps, false, "")
+	cmd.Flags().Bool(flagSkipHooks, false, "")
+	addPrefixFlags(cmd)
+	_ = cmd.Flags().Set(flagSkipDeps, "true")
+	_ = cmd.Flags().Set(flagSkipHooks, "true")
+	_ = cmd.Flags().Set(flagJSON, "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	if err := addCmd.RunE(cmd, []string{"fix/manual-check-json"}); err != nil {
+		t.Fatalf("addCmd.RunE: %v", err)
+	}
+
+	out := buf.String()
+	env, data := decodeAddEnvelope(t, buf.Bytes())
+	if env.Command != wantAddCommand {
+		t.Errorf("command = %q, want %q", env.Command, wantAddCommand)
+	}
+	if data["mode"] != "task" {
+		t.Errorf("mode = %v, want %q", data["mode"], "task")
+	}
+	if data["branch"] != "bugfix/manual-check-json" {
+		t.Errorf("branch = %v, want %q", data["branch"], "bugfix/manual-check-json")
+	}
+	if strings.Contains(out, "interpreting") {
+		t.Errorf("output %q leaked the alias notice text in JSON mode", out)
+	}
+}
+
 // TestAddPRJSON proves --json on the pr-mode add path emits mode "pr" with
 // the matching pr_number.
 func TestAddPRJSON(t *testing.T) {
