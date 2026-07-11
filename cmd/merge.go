@@ -67,6 +67,11 @@ var mergeCmd = &cobra.Command{
 		del, _ := cmd.Flags().GetBool(flagDelete)
 		dryRun, _ := cmd.Flags().GetBool(flagDryRun)
 
+		// A confident reap does a real os.Remove, so --dry-run must skip it too.
+		if !dryRun {
+			reapConfidentLocks(cmd.Context(), cmd, r)
+		}
+
 		hint.New(cmd, hintPainter(cmd)).
 			Add(flagNoFF, hintNoFF).
 			Add(flagKeep, hintKeep).

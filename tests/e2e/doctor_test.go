@@ -1,10 +1,13 @@
 package e2e_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/lugassawan/rimba/testutil"
 )
 
 // TestDoctorReportsAndFixesStaleLock guards #380's operational counterpart:
@@ -58,4 +61,89 @@ func plantStaleLock(t *testing.T, repo string) string {
 	}
 
 	return lockPath
+}
+
+// TestDoctorAutoReapsConfidentDeadOwnerSweepLock: a stray index.lock left by
+// a whole-process-killed sweep is recovered automatically, no --fix needed.
+func TestDoctorAutoReapsConfidentDeadOwnerSweepLock(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", taskDoctorLock)
+
+	lockPath := plantStaleLock(t, repo)
+	adminDir := filepath.Dir(lockPath)
+	manifestPath := plantSweepManifest(t, repo, testutil.DeadPID(t), adminDir)
+
+	r := rimbaSuccess(t, repo, "doctor")
+	assertContains(t, r.Stdout, "Recovered 1 stale index.lock file(s)")
+	assertContains(t, r.Stdout, lockPath)
+	assertFileNotExists(t, lockPath)
+	assertFileNotExists(t, manifestPath)
+}
+
+// TestDoctorSkipsConfidentAliveOwnerSweepLock is the counterpart: an alive
+// owner PID leaves the lock untouched, even under `doctor --fix --force`.
+func TestDoctorSkipsConfidentAliveOwnerSweepLock(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", taskDoctorLock)
+
+	lockPath := plantStaleLock(t, repo)
+	adminDir := filepath.Dir(lockPath)
+	plantSweepManifest(t, repo, os.Getpid(), adminDir)
+
+	r := rimbaSuccess(t, repo, "doctor", "--fix", flagForceE2E)
+	assertNotContains(t, r.Stdout, "Recovered")
+	assertContains(t, r.Stdout, "owned by a sweep that is still running")
+	assertFileExists(t, lockPath)
+}
+
+// TestCleanMergedAutoReapsConfidentDeadOwnerSweepLock: a `clean --merged`
+// sweep killed mid-run leaves a lock the next `clean --merged` recovers.
+func TestCleanMergedAutoReapsConfidentDeadOwnerSweepLock(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", taskDoctorLock)
+
+	lockPath := plantStaleLock(t, repo)
+	adminDir := filepath.Dir(lockPath)
+	manifestPath := plantSweepManifest(t, repo, testutil.DeadPID(t), adminDir)
+
+	r := rimbaSuccess(t, repo, "clean", flagMergedE2E)
+	assertContains(t, r.Stdout, "Recovered 1 stale index.lock file(s)")
+	assertFileNotExists(t, lockPath)
+	assertFileNotExists(t, manifestPath)
+}
+
+// plantSweepManifest writes a sweep manifest naming adminDir, resolved to
+// its canonical form first since git does the same (e.g. macOS /var -> /private/var).
+func plantSweepManifest(t *testing.T, repo string, pid int, adminDir string) string {
+	t.Helper()
+
+	realAdminDir, err := filepath.EvalSymlinks(adminDir)
+	if err != nil {
+		t.Fatalf("EvalSymlinks admin dir: %v", err)
+	}
+
+	sweepsDir := filepath.Join(repo, ".git", "rimba", "sweeps")
+	if err := os.MkdirAll(sweepsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll sweeps dir: %v", err)
+	}
+
+	startUnixNano := time.Now().Add(time.Second).UnixNano()
+	body := fmt.Sprintf(`{"pid":%d,"start_unix_nano":%d,"admin_dirs":[{"path":%q}]}`, pid, startUnixNano, realAdminDir)
+	path := filepath.Join(sweepsDir, fmt.Sprintf("sweep-%d.json", pid))
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write sweep manifest: %v", err)
+	}
+	return path
 }

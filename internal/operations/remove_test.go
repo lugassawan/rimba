@@ -3,6 +3,7 @@ package operations
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -364,5 +365,38 @@ func TestRemoveAndCleanupForceFlag(t *testing.T) {
 				t.Errorf("git worktree args %v: --force present=%v, want %v", capturedArgs, hasForce, tt.wantForce)
 			}
 		})
+	}
+}
+
+func TestRemoveWorktreeWritesAndCleansSweepManifest(t *testing.T) {
+	commonDir := t.TempDir()
+	var sawManifestDuringRemoval bool
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			cmd := strings.Join(args, " ")
+			switch {
+			case strings.Contains(cmd, "rev-parse --git-common-dir"):
+				return commonDir, nil
+			case strings.Contains(cmd, "worktree remove"):
+				matches, _ := filepath.Glob(filepath.Join(commonDir, sweepManifestDir, "sweep-*.json"))
+				sawManifestDuringRemoval = len(matches) == 1
+				return "", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	wt := resolver.WorktreeInfo{Path: "/wt/feature-login", Branch: "feature/login"}
+	if _, err := RemoveWorktree(context.Background(), r, wt, "login", false, false, nil); err != nil {
+		t.Fatalf("RemoveWorktree: %v", err)
+	}
+
+	if !sawManifestDuringRemoval {
+		t.Error("expected a sweep manifest to exist while git worktree remove was running")
+	}
+	matches, _ := filepath.Glob(filepath.Join(commonDir, sweepManifestDir, "sweep-*.json"))
+	if len(matches) != 0 {
+		t.Errorf("expected manifest cleaned up after RemoveWorktree returns, got %v", matches)
 	}
 }

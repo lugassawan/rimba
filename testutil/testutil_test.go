@@ -168,3 +168,10 @@ func TestGitCmdFailure(t *testing.T) {
 	}
 	assertFatalContains(t, spy, "git [not-a-real-subcommand]")
 }
+
+func TestDeadPID(t *testing.T) {
+	pid := testutil.DeadPID(t)
+	if pid <= 0 {
+		t.Fatalf("DeadPID = %d, want a positive PID", pid)
+	}
+}

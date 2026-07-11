@@ -3,12 +3,16 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/operations"
+	"github.com/lugassawan/rimba/testutil"
 	"github.com/spf13/cobra"
 )
 
@@ -390,5 +394,81 @@ func TestSpinnerOpts(t *testing.T) {
 	}
 	if opts.Writer != buf {
 		t.Error("expected Writer to be the command's stderr buffer")
+	}
+}
+
+// plantSweepManifest writes a sweep manifest directly, with no recorded
+// inode — the identity guard trusts these by default (untested here).
+func plantSweepManifest(t *testing.T, commonDir string, pid int, adminDirs []string) {
+	t.Helper()
+	plantSweepManifestWithStart(t, commonDir, pid, adminDirs, time.Now().Add(time.Second).UnixNano())
+}
+
+func plantSweepManifestWithStart(t *testing.T, commonDir string, pid int, adminDirs []string, startUnixNano int64) {
+	t.Helper()
+	sweepsDir := filepath.Join(commonDir, "rimba", "sweeps")
+	if err := os.MkdirAll(sweepsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	quoted := make([]string, len(adminDirs))
+	for i, d := range adminDirs {
+		quoted[i] = fmt.Sprintf(`{"path":%q}`, d)
+	}
+	body := fmt.Sprintf(`{"pid":%d,"start_unix_nano":%d,"admin_dirs":[%s]}`, pid, startUnixNano, strings.Join(quoted, ","))
+	path := filepath.Join(sweepsDir, fmt.Sprintf("sweep-%d.json", pid))
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+}
+
+func TestReapConfidentLocksRecoversDeadOwnerLock(t *testing.T) {
+	commonDir := t.TempDir()
+	lockPath := writeLockFileWithAge(t, commonDir, operations.MinLockAge+time.Second)
+	adminDir := filepath.Dir(lockPath)
+	plantSweepManifest(t, commonDir, testutil.DeadPID(t), []string{adminDir})
+
+	restore := overrideNewRunner(mockCommonDirRunner(commonDir))
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	reapConfidentLocks(cmd.Context(), cmd, newRunner(cmd.Context()))
+
+	if !strings.Contains(buf.String(), "Recovered 1 stale index.lock file(s)") {
+		t.Errorf("output = %q, want a recovery notice", buf.String())
+	}
+	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
+		t.Error("expected the dead-owner lock to be removed")
+	}
+}
+
+func TestReapConfidentLocksSkipsAliveOwnerLock(t *testing.T) {
+	commonDir := t.TempDir()
+	lockPath := writeLockFileWithAge(t, commonDir, operations.MinLockAge+time.Second)
+	adminDir := filepath.Dir(lockPath)
+	plantSweepManifest(t, commonDir, os.Getpid(), []string{adminDir})
+
+	restore := overrideNewRunner(mockCommonDirRunner(commonDir))
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	reapConfidentLocks(cmd.Context(), cmd, newRunner(cmd.Context()))
+
+	if strings.Contains(buf.String(), "Recovered") {
+		t.Errorf("output = %q, want no recovery notice (owner still alive)", buf.String())
+	}
+	if _, err := os.Stat(lockPath); err != nil {
+		t.Error("expected lock to remain while owner is alive")
+	}
+}
+
+func TestReapConfidentLocksSkipsOnCommonDirFailure(t *testing.T) {
+	restore := overrideNewRunner(notGitRepoRunner())
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	reapConfidentLocks(cmd.Context(), cmd, newRunner(cmd.Context()))
+
+	if buf.String() != "" {
+		t.Errorf("output = %q, want no output when CommonDir resolution fails", buf.String())
 	}
 }

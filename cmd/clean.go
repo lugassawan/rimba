@@ -170,6 +170,11 @@ func runClean(ctx context.Context, cmd *cobra.Command, r git.Runner, s cleanStra
 	dryRun, _ := cmd.Flags().GetBool(flagDryRun)
 	force, _ := cmd.Flags().GetBool(flagForce)
 
+	// A confident reap does a real os.Remove, so --dry-run must skip it too.
+	if !dryRun {
+		reapConfidentLocks(ctx, cmd, r)
+	}
+
 	sp := spinner.New(spinnerOpts(cmd))
 	defer sp.Stop()
 

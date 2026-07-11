@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/lugassawan/rimba/internal/git"
@@ -12,18 +13,13 @@ import (
 
 const flagFix = "fix"
 
-// minLockAge is the minimum age a lock must have before --fix will touch it.
-// A lock younger than this may still belong to a running git process — the
-// confirmation prompt covers everything else, but --force bypasses that, so
-// this gate is the one safety net --force cannot skip.
-const minLockAge = 10 * time.Second
-
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: "Diagnose stale git index.lock files left by killed worktree operations",
 	Long: "Scans every linked worktree's admin directory for a stale index.lock file — " +
 		"the kind of leftover a killed `git worktree remove` on a very large tree can leave behind. " +
-		"Report-only by default; use --fix to remove them.",
+		"A lock proven to belong to a dead rimba sweep (marker + confirmed-dead owner PID) is " +
+		"recovered automatically; everything else is report-only by default — use --fix to remove it.",
 	Example: `  rimba doctor
   rimba doctor --fix
   rimba doctor --fix --force`,
@@ -35,21 +31,29 @@ var doctorCmd = &cobra.Command{
 			return err
 		}
 
+		confidentRemovals := operations.ReapConfidentLocks(commonDir)
+		reportConfidentReap(cmd, confidentRemovals)
+
 		locks, err := operations.ScanWorktreeLocks(commonDir)
 		if err != nil {
 			return err
 		}
 
-		if len(locks) == 0 {
-			fmt.Fprintln(cmd.OutOrStdout(), "No stale index.lock files found.")
+		markerless, skippedAlive := partitionByAliveMarker(locks, operations.AliveSweepAdminDirs(commonDir))
+		reportSkippedAliveMarker(cmd, skippedAlive)
+
+		if len(markerless) == 0 {
+			if len(confidentRemovals) == 0 && len(skippedAlive) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No stale index.lock files found.")
+			}
 			return nil
 		}
 
 		fix, _ := cmd.Flags().GetBool(flagFix)
 		if !fix {
-			return doctorReport(cmd, locks)
+			return doctorReport(cmd, markerless)
 		}
-		return doctorFix(cmd, locks)
+		return doctorFix(cmd, markerless)
 	},
 }
 
@@ -57,6 +61,43 @@ func init() {
 	doctorCmd.Flags().Bool(flagFix, false, "remove stale index.lock files")
 	doctorCmd.Flags().Bool(flagForce, false, "skip confirmation when used with --fix")
 	rootCmd.AddCommand(doctorCmd)
+}
+
+// partitionByAliveMarker splits locks into markerless and skippedAlive (a
+// manifest claims it and the owner is confirmed alive — never touched).
+func partitionByAliveMarker(locks []operations.LockInfo, aliveAdminDirs map[string]bool) (markerless, skippedAlive []operations.LockInfo) {
+	for _, l := range locks {
+		if aliveAdminDirs[filepath.Dir(l.Path)] {
+			skippedAlive = append(skippedAlive, l)
+			continue
+		}
+		markerless = append(markerless, l)
+	}
+	return markerless, skippedAlive
+}
+
+// reportConfidentReap announces locks recovered via sweep-manifest evidence
+// before the manual, age-based flow below even runs.
+func reportConfidentReap(cmd *cobra.Command, removals []operations.LockRemoval) {
+	if len(removals) == 0 {
+		return
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Recovered %d stale index.lock file(s) left by an interrupted sweep:\n", len(removals))
+	for _, rm := range removals {
+		if rm.Err != nil {
+			fmt.Fprintf(cmd.OutOrStdout(), "  %s (failed to remove: %v)\n", rm.Path, rm.Err)
+			continue
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", rm.Path)
+	}
+}
+
+// reportSkippedAliveMarker announces locks left untouched because a sweep
+// manifest proves a still-running process owns them.
+func reportSkippedAliveMarker(cmd *cobra.Command, locks []operations.LockInfo) {
+	for _, l := range locks {
+		fmt.Fprintf(cmd.OutOrStdout(), "Skipping %s: owned by a sweep that is still running.\n", l.Path)
+	}
 }
 
 // doctorReport lists each stale lock's path and age.
@@ -75,7 +116,7 @@ func doctorReport(cmd *cobra.Command, locks []operations.LockInfo) error {
 func doctorFix(cmd *cobra.Command, locks []operations.LockInfo) error {
 	fmt.Fprintln(cmd.OutOrStdout(), "Warning: a lock may belong to a running git process; make sure no git command is in flight.")
 
-	removable, skipped := partitionByAge(locks, minLockAge)
+	removable, skipped := partitionByAge(locks, operations.MinLockAge)
 	for _, l := range skipped {
 		fmt.Fprintf(cmd.OutOrStdout(), "Skipping %s: too recent (age %s) to safely assume the owning process has exited.\n", l.Path, resolver.FormatAge(l.ModTime))
 	}

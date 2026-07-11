@@ -23,6 +23,10 @@ type LockRemoval struct {
 	Err  error
 }
 
+// MinLockAge is the minimum age before automated recovery touches a lock —
+// younger locks may still belong to a running git process.
+const MinLockAge = 10 * time.Second
+
 // ScanWorktreeLocks finds index.lock files left behind under
 // <commonDir>/worktrees/*/index.lock. These linger when a killed git
 // process is SIGKILLed before it can run its own atexit cleanup (#380).

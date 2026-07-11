@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -13,8 +14,10 @@ import (
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/errhint"
+	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/spinner"
+	"github.com/lugassawan/rimba/testutil"
 	"github.com/spf13/cobra"
 )
 
@@ -450,6 +453,70 @@ func TestCleanMergedDryRun(t *testing.T) {
 	}
 	if strings.Contains(out, "Cleaned") {
 		t.Errorf("dry-run should not show 'Cleaned'")
+	}
+}
+
+// noopCleanStrategy finds zero candidates, isolating runClean's dry-run
+// gate from the rest of the sweep pipeline.
+func noopCleanStrategy() cleanStrategy {
+	return cleanStrategy{
+		label:      "merged",
+		spinnerMsg: "Analyzing...",
+		emptyMsg:   "No merged worktrees found.",
+		summaryFmt: "Cleaned %d merged worktree(s).\n",
+		find: func(git.Runner) ([]operations.CleanCandidate, []string, error) {
+			return nil, nil, nil
+		},
+		printRows: func([]operations.CleanCandidate) {},
+	}
+}
+
+func TestRunCleanDryRunSkipsConfidentReap(t *testing.T) {
+	commonDir := t.TempDir()
+	lockPath := writeLockFileWithAge(t, commonDir, operations.MinLockAge+time.Second)
+	adminDir := filepath.Dir(lockPath)
+	plantSweepManifest(t, commonDir, testutil.DeadPID(t), []string{adminDir})
+
+	r := mockCommonDirRunner(commonDir)
+	cmd, buf := newTestCmd()
+	cmd.Flags().Bool(flagDryRun, false, "")
+	cmd.Flags().Bool(flagForce, false, "")
+	_ = cmd.Flags().Set(flagDryRun, "true")
+
+	if err := runClean(context.Background(), cmd, r, noopCleanStrategy()); err != nil {
+		t.Fatalf("runClean: %v", err)
+	}
+	out := buf.String()
+	if strings.Contains(out, "Recovered") {
+		t.Errorf("output = %q, want no recovery notice under --dry-run", out)
+	}
+	if _, err := os.Stat(lockPath); err != nil {
+		t.Error("expected lock to remain untouched under --dry-run")
+	}
+}
+
+// TestRunCleanNonDryRunPerformsConfidentReap is the counterpart: outside
+// --dry-run, the same confidently-dead-owner lock is recovered.
+func TestRunCleanNonDryRunPerformsConfidentReap(t *testing.T) {
+	commonDir := t.TempDir()
+	lockPath := writeLockFileWithAge(t, commonDir, operations.MinLockAge+time.Second)
+	adminDir := filepath.Dir(lockPath)
+	plantSweepManifest(t, commonDir, testutil.DeadPID(t), []string{adminDir})
+
+	r := mockCommonDirRunner(commonDir)
+	cmd, buf := newTestCmd()
+	cmd.Flags().Bool(flagDryRun, false, "")
+	cmd.Flags().Bool(flagForce, false, "")
+
+	if err := runClean(context.Background(), cmd, r, noopCleanStrategy()); err != nil {
+		t.Fatalf("runClean: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Recovered 1 stale index.lock file(s)") {
+		t.Errorf("output = %q, want a recovery notice", out)
+	}
+	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
+		t.Error("expected the dead-owner lock to be removed")
 	}
 }
 

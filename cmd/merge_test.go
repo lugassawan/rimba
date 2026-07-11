@@ -3,11 +3,16 @@ package cmd
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/operations"
+	"github.com/lugassawan/rimba/testutil"
 )
 
 const (
@@ -565,6 +570,93 @@ func TestMergeDryRun(t *testing.T) {
 	}
 	if strings.Contains(out, "Merged feature/login") {
 		t.Errorf("output = %q, must not contain 'Merged' in dry-run mode", out)
+	}
+}
+
+// mergeTestRunnerWithCommonDir is mergeTestRunner plus a real, controlled
+// --git-common-dir response, so a planted manifest is where the reap looks.
+func mergeTestRunnerWithCommonDir(commonDir string) *mockRunner {
+	return &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdGitCommonDir {
+				return commonDir, nil
+			}
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoPath, nil
+			}
+			return mergeWorktreeOut, nil
+		},
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdStatus {
+				return "", nil
+			}
+			return "", nil
+		},
+	}
+}
+
+func TestMergeDryRunSkipsConfidentReap(t *testing.T) {
+	commonDir := t.TempDir()
+	lockPath := writeLockFileWithAge(t, commonDir, operations.MinLockAge+time.Second)
+	adminDir := filepath.Dir(lockPath)
+	plantSweepManifest(t, commonDir, testutil.DeadPID(t), []string{adminDir})
+
+	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: defaultRelativeWtDir}
+	r := mergeTestRunnerWithCommonDir(commonDir)
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().String(flagInto, "", "")
+	cmd.Flags().Bool(flagNoFF, false, "")
+	cmd.Flags().Bool(flagKeep, false, "")
+	cmd.Flags().Bool(flagDelete, false, "")
+	cmd.Flags().Bool(flagDryRun, false, "")
+	_ = cmd.Flags().Set(flagDryRun, "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	if err := mergeCmd.RunE(cmd, []string{"login"}); err != nil {
+		t.Fatalf(fatalMergeRunE, err)
+	}
+	out := buf.String()
+	if strings.Contains(out, "Recovered") {
+		t.Errorf("output = %q, want no recovery notice under --dry-run", out)
+	}
+	if _, err := os.Stat(lockPath); err != nil {
+		t.Error("expected lock to remain untouched under --dry-run")
+	}
+}
+
+// TestMergeNonDryRunPerformsConfidentReap is the counterpart: outside
+// --dry-run, the same confidently-dead-owner lock is recovered.
+func TestMergeNonDryRunPerformsConfidentReap(t *testing.T) {
+	commonDir := t.TempDir()
+	lockPath := writeLockFileWithAge(t, commonDir, operations.MinLockAge+time.Second)
+	adminDir := filepath.Dir(lockPath)
+	plantSweepManifest(t, commonDir, testutil.DeadPID(t), []string{adminDir})
+
+	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: defaultRelativeWtDir}
+	r := mergeTestRunnerWithCommonDir(commonDir)
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().String(flagInto, "", "")
+	cmd.Flags().Bool(flagNoFF, false, "")
+	cmd.Flags().Bool(flagKeep, true, "") // keep the source worktree — the merge machinery itself is not under test here
+	cmd.Flags().Bool(flagDelete, false, "")
+	cmd.Flags().Bool(flagDryRun, false, "")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	if err := mergeCmd.RunE(cmd, []string{"login"}); err != nil {
+		t.Fatalf(fatalMergeRunE, err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Recovered 1 stale index.lock file(s)") {
+		t.Errorf("output = %q, want a recovery notice", out)
+	}
+	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
+		t.Error("expected the dead-owner lock to be removed")
 	}
 }
 
