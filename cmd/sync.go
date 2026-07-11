@@ -11,6 +11,7 @@ import (
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
+	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
@@ -37,7 +38,9 @@ type syncContext struct {
 	repoRoot string
 	dryRun   bool
 	res      *syncResult // used by syncAll goroutines
-	mu       sync.Mutex  // guards res and output in syncAll
+	mu       sync.Mutex  // guards res, jsonResults, and output in syncAll
+
+	jsonResults []operations.SyncWorktreeResult // JSON mode only; guarded by mu
 }
 
 // syncResult tracks the outcome of syncing multiple worktrees.
@@ -76,20 +79,24 @@ var syncCmd = &cobra.Command{
 			return errors.New("provide a task name or use --all to sync all worktrees")
 		}
 
-		hint.New(cmd, hintPainter(cmd)).
-			Add(flagAll, hintAll).
-			Add(flagSyncMerge, hintSyncMerge).
-			Add(flagIncludeInherited, hintIncludeInherited).
-			Add(flagNoPush, hintNoPush).
-			Add(flagDryRun, hintDryRun).
-			Show()
+		if !isJSON(cmd) {
+			hint.New(cmd, hintPainter(cmd)).
+				Add(flagAll, hintAll).
+				Add(flagSyncMerge, hintSyncMerge).
+				Add(flagIncludeInherited, hintIncludeInherited).
+				Add(flagNoPush, hintNoPush).
+				Add(flagDryRun, hintDryRun).
+				Show()
+		}
 
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
 
 		// Fetch latest from origin (non-fatal if no remote configured)
 		if dryRun {
-			fmt.Fprintln(cmd.OutOrStdout(), "[dry-run] would fetch origin")
+			if !isJSON(cmd) {
+				fmt.Fprintln(cmd.OutOrStdout(), "[dry-run] would fetch origin")
+			}
 		} else {
 			s.Start("Fetching from origin...")
 			if err := git.Fetch(cmd.Context(), r, "origin", git.FetchArgs{}); err != nil {
@@ -97,7 +104,9 @@ var syncCmd = &cobra.Command{
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 					return err
 				}
-				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: fetch failed (no remote?): continuing with local state\n")
+				if !isJSON(cmd) {
+					fmt.Fprintf(cmd.ErrOrStderr(), "Warning: fetch failed (no remote?): continuing with local state\n")
+				}
 			}
 		}
 
@@ -154,6 +163,10 @@ func syncOne(ctx context.Context, sc *syncContext, input string, worktrees []res
 	}
 
 	if sc.dryRun {
+		if isJSON(sc.cmd) {
+			swr := output.SyncWorktreeJSON{Branch: wt.Branch, Planned: true}
+			return writeSyncOneJSON(sc.cmd, sc.cfg.DefaultSource, useMerge, true, swr, output.SyncSummary{})
+		}
 		printSyncDryRun(sc.cmd, wt.Branch, sc.cfg.DefaultSource, useMerge, push)
 		return nil
 	}
@@ -168,28 +181,60 @@ func syncOne(ctx context.Context, sc *syncContext, input string, worktrees []res
 	}
 
 	sc.s.Stop()
-	fmt.Fprintf(sc.cmd.OutOrStdout(), "%s %s onto %s\n", operations.SyncMethodLabel(useMerge), wt.Branch, sc.cfg.DefaultSource)
+	if !isJSON(sc.cmd) {
+		fmt.Fprintf(sc.cmd.OutOrStdout(), "%s %s onto %s\n", operations.SyncMethodLabel(useMerge), wt.Branch, sc.cfg.DefaultSource)
+	}
 
+	swr := output.SyncWorktreeJSON{Branch: wt.Branch, Synced: true}
 	if push {
-		sc.s.Start("Pushing to origin...")
-		pushed, _, pushErr := operations.PushBranch(ctx, sc.r, wt.Path, useMerge)
-		sc.s.Stop()
-		if pushErr != nil {
-			pushHint := fmt.Sprintf("cd %s && git push --force-with-lease", wt.Path)
-			if useMerge {
-				pushHint = fmt.Sprintf("cd %s && git push", wt.Path)
-			}
-			return errhint.WithFix(
-				fmt.Errorf("push failed for %s: %w", wt.Branch, pushErr),
-				pushHint,
-			)
+		pushed, skipped, err := syncOnePush(ctx, sc, wt, useMerge)
+		if err != nil {
+			return err
 		}
-		if pushed {
-			fmt.Fprintf(sc.cmd.OutOrStdout(), "Pushed %s to origin\n", wt.Branch)
-		}
+		swr.Pushed, swr.PushSkipped = pushed, skipped
+	}
+
+	if isJSON(sc.cmd) {
+		summary := output.SyncSummary{Synced: 1, Pushed: boolToInt(swr.Pushed), PushSkipped: boolToInt(swr.PushSkipped)}
+		return writeSyncOneJSON(sc.cmd, sc.cfg.DefaultSource, useMerge, false, swr, summary)
 	}
 
 	return nil
+}
+
+// syncOnePush pushes the current branch after a successful sync, printing the
+// text-mode confirmation and returning (pushed, skipped) for JSON callers.
+func syncOnePush(ctx context.Context, sc *syncContext, wt resolver.WorktreeInfo, useMerge bool) (pushed, skipped bool, err error) {
+	sc.s.Start("Pushing to origin...")
+	pushed, skipped, pushErr := operations.PushBranch(ctx, sc.r, wt.Path, useMerge)
+	sc.s.Stop()
+	if pushErr != nil {
+		pushHint := fmt.Sprintf("cd %s && git push --force-with-lease", wt.Path)
+		if useMerge {
+			pushHint = fmt.Sprintf("cd %s && git push", wt.Path)
+		}
+		return false, false, errhint.WithFix(
+			fmt.Errorf("push failed for %s: %w", wt.Branch, pushErr),
+			pushHint,
+		)
+	}
+	if pushed && !isJSON(sc.cmd) {
+		fmt.Fprintf(sc.cmd.OutOrStdout(), "Pushed %s to origin\n", wt.Branch)
+	}
+	return pushed, skipped, nil
+}
+
+// writeSyncOneJSON writes the single-worktree sync envelope for syncOne's
+// dry-run and normal-path JSON branches.
+func writeSyncOneJSON(cmd *cobra.Command, mainBranch string, useMerge, dryRun bool, swr output.SyncWorktreeJSON, summary output.SyncSummary) error {
+	return output.WriteJSON(cmd.OutOrStdout(), version, "sync", output.SyncData{
+		MainBranch: mainBranch,
+		Method:     syncMethodLabelLower(useMerge),
+		All:        false,
+		DryRun:     dryRun,
+		Summary:    summary,
+		Worktrees:  []output.SyncWorktreeJSON{swr},
+	})
 }
 
 func syncAll(ctx context.Context, sc *syncContext, worktrees []resolver.WorktreeInfo, prefixes []string, useMerge, includeInherited, push bool) error { //nolint:unparam // error return matches RunE contract
@@ -222,6 +267,30 @@ func syncAll(ctx context.Context, sc *syncContext, worktrees []resolver.Worktree
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+
+	if isJSON(sc.cmd) {
+		worktrees := make([]output.SyncWorktreeJSON, 0, len(sc.jsonResults))
+		for _, sr := range sc.jsonResults {
+			worktrees = append(worktrees, output.SyncWorktreeJSON{
+				Branch: sr.Branch, Synced: sr.Synced, Skipped: sr.Skipped, SkipReason: sr.SkipReason,
+				Failed: sr.Failed, FailureHint: sr.FailureHint, Pushed: sr.Pushed,
+				PushSkipped: sr.PushSkipped, PushFailed: sr.PushFailed, PushError: sr.PushError,
+				Planned: sc.dryRun,
+			})
+		}
+		return output.WriteJSON(sc.cmd.OutOrStdout(), version, "sync", output.SyncData{
+			MainBranch: sc.cfg.DefaultSource,
+			Method:     syncMethodLabelLower(useMerge),
+			All:        true,
+			DryRun:     sc.dryRun,
+			Summary: output.SyncSummary{
+				Synced: sc.res.synced, SkippedDirty: sc.res.skippedDirty, Failed: sc.res.failed,
+				Pushed: sc.res.pushed, PushSkipped: sc.res.pushSkipped, PushFailed: sc.res.pushFailed,
+			},
+			Worktrees: worktrees,
+		})
+	}
+
 	if !sc.dryRun {
 		printSyncSummary(sc.cmd, sc.cfg.DefaultSource, useMerge, sc.res)
 	}
@@ -232,7 +301,10 @@ func syncWorktree(ctx context.Context, sc *syncContext, mainBranch string, wt re
 	if sc.dryRun {
 		sc.mu.Lock()
 		defer sc.mu.Unlock()
-		printSyncDryRun(sc.cmd, wt.Branch, mainBranch, useMerge, push)
+		sc.jsonResults = append(sc.jsonResults, operations.SyncWorktreeResult{Branch: wt.Branch})
+		if !isJSON(sc.cmd) {
+			printSyncDryRun(sc.cmd, wt.Branch, mainBranch, useMerge, push)
+		}
 		return
 	}
 
@@ -241,14 +313,12 @@ func syncWorktree(ctx context.Context, sc *syncContext, mainBranch string, wt re
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
+	sc.jsonResults = append(sc.jsonResults, sr)
+
 	switch {
 	case sr.Skipped:
 		sc.res.skippedDirty++
-		if sr.SkipReason == "dirty" {
-			fmt.Fprintf(sc.cmd.OutOrStdout(), "Skipping %s (dirty)\n", sr.Branch)
-		} else {
-			fmt.Fprintf(sc.cmd.ErrOrStderr(), "Warning: %s: %s\n", sr.Branch, sr.SkipReason)
-		}
+		printSyncSkipWarning(sc.cmd, sr)
 	case sr.Failed:
 		sc.res.failed++
 		sc.res.failures = append(sc.res.failures, fmt.Sprintf("  %s: To resolve: %s", sr.Branch, sr.FailureHint))
@@ -268,6 +338,19 @@ func syncWorktree(ctx context.Context, sc *syncContext, mainBranch string, wt re
 			}
 			sc.res.failures = append(sc.res.failures, fmt.Sprintf("  %s: push failed: %s\n    To resolve: %s", sr.Branch, sr.PushError, pushHint))
 		}
+	}
+}
+
+// printSyncSkipWarning prints the text-mode skip notice for a single
+// worktree; it is a no-op in JSON mode, where the skip is reported via sr.
+func printSyncSkipWarning(cmd *cobra.Command, sr operations.SyncWorktreeResult) {
+	if isJSON(cmd) {
+		return
+	}
+	if sr.SkipReason == "dirty" {
+		fmt.Fprintf(cmd.OutOrStdout(), "Skipping %s (dirty)\n", sr.Branch)
+	} else {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: %s: %s\n", sr.Branch, sr.SkipReason)
 	}
 }
 
@@ -301,4 +384,19 @@ func printSyncSummary(cmd *cobra.Command, mainBranch string, useMerge bool, res 
 	for _, f := range res.failures {
 		fmt.Fprintln(cmd.OutOrStdout(), f)
 	}
+}
+
+// syncMethodLabelLower returns the lowercase sync method name for JSON output.
+func syncMethodLabelLower(useMerge bool) string {
+	if useMerge {
+		return "merge"
+	}
+	return "rebase"
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }

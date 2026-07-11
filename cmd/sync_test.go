@@ -16,6 +16,7 @@ import (
 const (
 	cmdRebase       = "rebase"
 	fakeUpstreamRef = "origin/feature/login"
+	wantSyncCommand = "sync"
 )
 
 func testSyncConfig() *config.Config {
@@ -647,6 +648,199 @@ func TestSyncWorktreeSkipWarningOnStderr(t *testing.T) {
 	}
 	if !strings.Contains(errBuf.String(), "Warning") {
 		t.Errorf("stderr = %q, want warning", errBuf.String())
+	}
+}
+
+func TestSyncOneJSON(t *testing.T) {
+	worktrees := testSyncWorktrees()
+	cmd, buf := newTestCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return "", nil },
+		runInDir: noopRunInDir,
+	}
+	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
+
+	err := syncOne(context.Background(), sc, "login", worktrees, testSyncPrefixes(), false, false)
+	if err != nil {
+		t.Fatalf("syncOne: %v", err)
+	}
+
+	env, data := decodeAddEnvelope(t, buf.Bytes())
+	if env.Command != wantSyncCommand {
+		t.Errorf("command = %q, want %q", env.Command, wantSyncCommand)
+	}
+	if data["all"] != false {
+		t.Errorf("all = %v, want false", data["all"])
+	}
+	worktreesJSON, ok := data["worktrees"].([]any)
+	if !ok || len(worktreesJSON) != 1 {
+		t.Fatalf("worktrees = %#v, want 1 element", data["worktrees"])
+	}
+	wt0, ok := worktreesJSON[0].(map[string]any)
+	if !ok {
+		t.Fatalf("worktrees[0] type = %T", worktreesJSON[0])
+	}
+	if wt0["synced"] != true {
+		t.Errorf("worktrees[0].synced = %v, want true", wt0["synced"])
+	}
+	summary, ok := data["summary"].(map[string]any)
+	if !ok {
+		t.Fatalf("summary type = %T", data["summary"])
+	}
+	if summary["synced"] != float64(1) {
+		t.Errorf("summary.synced = %v, want 1", summary["synced"])
+	}
+}
+
+func TestSyncOneDryRunJSON(t *testing.T) {
+	worktrees := testSyncWorktrees()
+	cmd, buf := newTestCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return "", nil },
+		runInDir: noopRunInDir,
+	}
+	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd), dryRun: true}
+
+	err := syncOne(context.Background(), sc, "login", worktrees, testSyncPrefixes(), false, true)
+	if err != nil {
+		t.Fatalf("syncOne: %v", err)
+	}
+
+	_, data := decodeAddEnvelope(t, buf.Bytes())
+	if data["dry_run"] != true {
+		t.Errorf("dry_run = %v, want true", data["dry_run"])
+	}
+	worktreesJSON, ok := data["worktrees"].([]any)
+	if !ok || len(worktreesJSON) != 1 {
+		t.Fatalf("worktrees = %#v, want 1 element", data["worktrees"])
+	}
+	wt0, ok := worktreesJSON[0].(map[string]any)
+	if !ok {
+		t.Fatalf("worktrees[0] type = %T", worktreesJSON[0])
+	}
+	if wt0["planned"] != true {
+		t.Errorf("worktrees[0].planned = %v, want true", wt0["planned"])
+	}
+	if wt0["synced"] != false {
+		t.Errorf("worktrees[0].synced = %v, want false", wt0["synced"])
+	}
+}
+
+func TestSyncAllJSON(t *testing.T) {
+	worktrees := testSyncWorktrees()
+	cmd, buf := newTestCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return "", nil },
+		runInDir: noopRunInDir,
+	}
+	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
+
+	err := syncAll(context.Background(), sc, worktrees, testSyncPrefixes(), false, false, false)
+	if err != nil {
+		t.Fatalf(fatalSyncAll, err)
+	}
+
+	env, data := decodeAddEnvelope(t, buf.Bytes())
+	if env.Command != wantSyncCommand {
+		t.Errorf("command = %q, want %q", env.Command, wantSyncCommand)
+	}
+	if data["all"] != true {
+		t.Errorf("all = %v, want true", data["all"])
+	}
+	worktreesJSON, ok := data["worktrees"].([]any)
+	if !ok || len(worktreesJSON) != 2 {
+		t.Fatalf("worktrees = %#v, want 2 elements", data["worktrees"])
+	}
+	summary, ok := data["summary"].(map[string]any)
+	if !ok {
+		t.Fatalf("summary type = %T", data["summary"])
+	}
+	synced, ok := summary["synced"].(float64)
+	if !ok {
+		t.Fatalf("summary.synced type = %T", summary["synced"])
+	}
+	skippedDirty, ok := summary["skipped_dirty"].(float64)
+	if !ok {
+		t.Fatalf("summary.skipped_dirty type = %T", summary["skipped_dirty"])
+	}
+	failed, ok := summary["failed"].(float64)
+	if !ok {
+		t.Fatalf("summary.failed type = %T", summary["failed"])
+	}
+	if total := synced + skippedDirty + failed; total != float64(len(worktreesJSON)) {
+		t.Errorf("summary counters sum = %v, want %d", total, len(worktreesJSON))
+	}
+}
+
+func TestSyncAllDryRunJSON(t *testing.T) {
+	worktrees := testSyncWorktrees()
+	cmd, buf := newTestCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return "", nil },
+		runInDir: noopRunInDir,
+	}
+	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd), dryRun: true}
+
+	err := syncAll(context.Background(), sc, worktrees, testSyncPrefixes(), false, false, true)
+	if err != nil {
+		t.Fatalf(fatalSyncAll, err)
+	}
+
+	_, data := decodeAddEnvelope(t, buf.Bytes())
+	worktreesJSON, ok := data["worktrees"].([]any)
+	if !ok || len(worktreesJSON) == 0 {
+		t.Fatalf("worktrees = %#v, want non-empty", data["worktrees"])
+	}
+	for i, w := range worktreesJSON {
+		wm, ok := w.(map[string]any)
+		if !ok {
+			t.Fatalf("worktrees[%d] type = %T", i, w)
+		}
+		if wm["planned"] != true {
+			t.Errorf("worktrees[%d].planned = %v, want true", i, wm["planned"])
+		}
+	}
+}
+
+// TestSyncWorktreeJSONSilencesSkipWarning covers the isJSON guard on the
+// per-worktree skip/warning prints inside syncWorktree's switch.
+func TestSyncWorktreeJSONSilencesSkipWarning(t *testing.T) {
+	var outBuf, errBuf bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool(flagNoColor, true, "")
+	cmd.Flags().Bool(flagJSON, true, "")
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&errBuf)
+
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) { return "", nil },
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdStatus {
+				return dirtyOutput, nil
+			}
+			return "", nil
+		},
+	}
+
+	sc := &syncContext{cmd: cmd, r: r, res: &syncResult{}}
+	wt := resolver.WorktreeInfo{Branch: branchFeature, Path: pathWtFeatureLogin}
+	syncWorktree(context.Background(), sc, branchMain, wt, false, false)
+
+	if sc.res.skippedDirty != 1 {
+		t.Errorf("skippedDirty = %d, want 1", sc.res.skippedDirty)
+	}
+	if outBuf.Len() != 0 {
+		t.Errorf("stdout = %q, want empty in JSON mode", outBuf.String())
+	}
+	if errBuf.Len() != 0 {
+		t.Errorf("stderr = %q, want empty in JSON mode", errBuf.String())
+	}
+	if len(sc.jsonResults) != 1 || sc.jsonResults[0].SkipReason != "dirty" {
+		t.Errorf("jsonResults = %#v, want 1 result with SkipReason \"dirty\"", sc.jsonResults)
 	}
 }
 
