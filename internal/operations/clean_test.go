@@ -3,6 +3,7 @@ package operations
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -640,6 +641,44 @@ func TestRemoveCandidatesProgressCallbacks(t *testing.T) {
 	RemoveCandidates(context.Background(), r, candidates, false, false, onProgress)
 	if len(messages) != 2 {
 		t.Fatalf("expected 2 progress messages, got %d", len(messages))
+	}
+}
+
+func TestRemoveCandidatesWritesOneManifestForWholeSweep(t *testing.T) {
+	commonDir := t.TempDir()
+	var manifestSightings int
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			cmd := strings.Join(args, " ")
+			switch {
+			case strings.Contains(cmd, "rev-parse --git-common-dir"):
+				return commonDir, nil
+			case strings.Contains(cmd, "worktree remove"):
+				matches, _ := filepath.Glob(filepath.Join(commonDir, sweepManifestDir, "sweep-*.json"))
+				if len(matches) == 1 {
+					manifestSightings++
+				}
+				return "", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	candidates := []CleanCandidate{
+		{Path: "/wt/a", Branch: "feature/a"},
+		{Path: "/wt/b", Branch: "feature/b"},
+		{Path: "/wt/c", Branch: "feature/c"},
+	}
+
+	RemoveCandidates(context.Background(), r, candidates, false, false, nil)
+
+	if manifestSightings != len(candidates) {
+		t.Errorf("manifest sightings = %d, want %d (one manifest covering the whole sweep, seen at every removal)", manifestSightings, len(candidates))
+	}
+	matches, _ := filepath.Glob(filepath.Join(commonDir, sweepManifestDir, "sweep-*.json"))
+	if len(matches) != 0 {
+		t.Errorf("expected manifest cleaned up after the sweep completes, got %v", matches)
 	}
 }
 

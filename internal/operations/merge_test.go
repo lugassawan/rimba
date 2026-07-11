@@ -3,6 +3,7 @@ package operations
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -1005,5 +1006,50 @@ func TestMergeWorktreeTargetDirtyToWorktree(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "uncommitted changes") {
 		t.Errorf("expected 'uncommitted changes', got: %v", err)
+	}
+}
+
+func TestMergeWorktreeWritesAndCleansSweepManifest(t *testing.T) {
+	commonDir := t.TempDir()
+	wt := mergeWorktreeList()
+	var sawManifestDuringRemoval bool
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			cmd := strings.Join(args, " ")
+			switch {
+			case strings.Contains(cmd, "rev-parse --git-common-dir"):
+				return commonDir, nil
+			case len(args) >= 2 && args[0] == gitCmdWorktree && args[1] == gitSubcmdList:
+				return wt, nil
+			case strings.Contains(cmd, "worktree remove"):
+				matches, _ := filepath.Glob(filepath.Join(commonDir, sweepManifestDir, "sweep-*.json"))
+				sawManifestDuringRemoval = len(matches) == 1
+				return "", nil
+			}
+			return "", nil
+		},
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == gitCmdStatus {
+				return "", nil
+			}
+			return "", nil
+		},
+	}
+
+	_, err := MergeWorktree(context.Background(), r, MergeParams{
+		SourceTask: "login",
+		RepoRoot:   "/repo",
+		MainBranch: branchMain,
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !sawManifestDuringRemoval {
+		t.Error("expected a sweep manifest to exist while the source worktree was being removed")
+	}
+	matches, _ := filepath.Glob(filepath.Join(commonDir, sweepManifestDir, "sweep-*.json"))
+	if len(matches) != 0 {
+		t.Errorf("expected manifest cleaned up after MergeWorktree returns, got %v", matches)
 	}
 }

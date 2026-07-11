@@ -29,6 +29,7 @@ func RemoveWorktree(ctx context.Context, r git.Runner, wt resolver.WorktreeInfo,
 	}
 
 	progress.Notify(onProgress, "Removing worktree...")
+	defer deferSweepManifest(ctx, r, []string{wt.Path})()
 	if err := removeWorktreeEntry(ctx, r, wt.Path, force, wt.Prunable); err != nil {
 		return result, err
 	}

@@ -124,6 +124,12 @@ func FindStaleCandidates(ctx context.Context, r git.Runner, mainBranch string, s
 // ensures the CLI dry-run preview and actual deletion share a single probe result.
 // force is forwarded to git worktree remove to allow discarding untracked files.
 func RemoveCandidates(ctx context.Context, r git.Runner, candidates []CleanCandidate, originPresent bool, force bool, onProgress progress.Func) []CleanedItem {
+	paths := make([]string, len(candidates))
+	for i, c := range candidates {
+		paths[i] = c.Path
+	}
+	defer deferSweepManifest(ctx, r, paths)()
+
 	items := make([]CleanedItem, 0, len(candidates))
 	for _, c := range candidates {
 		progress.Notifyf(onProgress, "Removing %s...", c.Branch)
