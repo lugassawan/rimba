@@ -166,6 +166,10 @@ These flags are available on every command:
     <span class="rimba-feature-title">rimba clean</span>
     <p>Prune stale references or remove merged/stale worktrees</p>
   </a>
+  <a class="rimba-feature" href="{{ '/commands/doctor' | relative_url }}">
+    <span class="rimba-feature-title">rimba doctor</span>
+    <p>Diagnose and remove stale git index.lock files left by killed worktree operations</p>
+  </a>
   <a class="rimba-feature" href="{{ '/commands/trust' | relative_url }}">
     <span class="rimba-feature-title">rimba trust</span>
     <p>Review and approve committed shell commands for this repo</p>
