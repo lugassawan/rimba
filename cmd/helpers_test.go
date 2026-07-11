@@ -472,3 +472,22 @@ func TestReapConfidentLocksSkipsOnCommonDirFailure(t *testing.T) {
 		t.Errorf("output = %q, want no output when CommonDir resolution fails", buf.String())
 	}
 }
+
+func TestErrStr(t *testing.T) {
+	if got := errStr(nil); got != "" {
+		t.Errorf("errStr(nil) = %q, want empty string", got)
+	}
+	if got := errStr(errors.New("boom")); got != "boom" {
+		t.Errorf("errStr(err) = %q, want %q", got, "boom")
+	}
+}
+
+func TestNonNilStrings(t *testing.T) {
+	if got := nonNilStrings(nil); got == nil || len(got) != 0 {
+		t.Errorf("nonNilStrings(nil) = %#v, want empty non-nil slice", got)
+	}
+	in := []string{"a", "b"}
+	if got := nonNilStrings(in); len(got) != 2 || got[0] != "a" || got[1] != "b" {
+		t.Errorf("nonNilStrings(%v) = %v, want unchanged", in, got)
+	}
+}

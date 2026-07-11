@@ -14,6 +14,7 @@ import (
 	"github.com/lugassawan/rimba/internal/gitref"
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
+	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/lugassawan/rimba/internal/termcolor"
@@ -114,6 +115,12 @@ func runAddPR(cmd *cobra.Command, r git.Runner, ghR gh.Runner, prNum int, postOp
 	}
 
 	s.Stop()
+
+	if isJSON(cmd) {
+		n := prNum
+		return writeAddJSON(cmd, "pr", &n, result)
+	}
+
 	printWorktreeResult(cmd, fmt.Sprintf("Created worktree for PR #%d", prNum), result)
 	return nil
 }
@@ -122,7 +129,7 @@ func runAddTask(cmd *cobra.Command, r git.Runner, arg string, cfg *config.Config
 	ps := cfg.PrefixSet()
 	service, task := operations.ResolveTaskInput(arg, repoRoot, ps)
 	prefix, aliasUsed, aliasToken := resolveAddPrefix(cmd, arg, ps)
-	if aliasUsed {
+	if aliasUsed && !isJSON(cmd) {
 		printAliasNotice(cmd, aliasToken, prefix)
 	}
 
@@ -133,11 +140,13 @@ func runAddTask(cmd *cobra.Command, r git.Runner, arg string, cfg *config.Config
 		return fmt.Errorf("--source: %w", err)
 	}
 
-	hint.New(cmd, hintPainter(cmd)).
-		Add(flagSkipDeps, hintSkipDeps).
-		Add(flagSkipHooks, hintSkipHooks).
-		Add(flagSource, hintSource).
-		Show()
+	if !isJSON(cmd) {
+		hint.New(cmd, hintPainter(cmd)).
+			Add(flagSkipDeps, hintSkipDeps).
+			Add(flagSkipHooks, hintSkipHooks).
+			Add(flagSource, hintSource).
+			Show()
+	}
 
 	s.Start("Creating worktree...")
 	result, err := operations.AddWorktree(cmd.Context(), r, operations.AddParams{
@@ -152,6 +161,10 @@ func runAddTask(cmd *cobra.Command, r git.Runner, arg string, cfg *config.Config
 	}
 
 	s.Stop()
+
+	if isJSON(cmd) {
+		return writeAddJSON(cmd, "task", nil, result)
+	}
 
 	header := fmt.Sprintf("Created worktree for task %q", task)
 	if result.Service != "" {
@@ -205,11 +218,44 @@ func runAddBranch(cmd *cobra.Command, r git.Runner, cfg *config.Config, repoRoot
 	}
 	s.Stop()
 
+	if isJSON(cmd) {
+		return output.WriteJSON(cmd.OutOrStdout(), version, "add", output.AddData{
+			Mode:            "branch-promote",
+			Branch:          branch,
+			Path:            wtPath,
+			Copied:          make([]string, 0),
+			Skipped:         make([]string, 0),
+			SkippedSymlinks: make([]string, 0),
+			Deps:            make([]output.DepResultJSON, 0),
+			Hooks:           make([]output.HookResultJSON, 0),
+		})
+	}
+
 	out := cmd.OutOrStdout()
 	fmt.Fprintf(out, "Promoted branch %q to worktree\n", branch)
 	fmt.Fprintf(out, "  Branch: %s\n", branch)
 	fmt.Fprintf(out, "  Path:   %s\n", wtPath)
 	return nil
+}
+
+// writeAddJSON emits the JSON envelope for an add run backed by an
+// operations.AddResult (task and pr modes; branch-promote has no AddResult
+// and builds its own output.AddData directly).
+func writeAddJSON(cmd *cobra.Command, mode string, prNumber *int, result operations.AddResult) error {
+	return output.WriteJSON(cmd.OutOrStdout(), version, "add", output.AddData{
+		Mode:            mode,
+		Task:            result.Task,
+		Service:         result.Service,
+		Branch:          result.Branch,
+		Path:            result.Path,
+		Source:          result.Source,
+		PRNumber:        prNumber,
+		Copied:          nonNilStrings(result.Copied),
+		Skipped:         nonNilStrings(result.Skipped),
+		SkippedSymlinks: nonNilStrings(result.SkippedSymlinks),
+		Deps:            buildDepResults(result.DepsResults),
+		Hooks:           buildHookResults(result.HookResults),
+	})
 }
 
 func printWorktreeResult(cmd *cobra.Command, header string, result operations.AddResult) {
