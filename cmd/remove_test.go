@@ -9,6 +9,8 @@ import (
 	"github.com/lugassawan/rimba/internal/config"
 )
 
+const wantRemoveCommand = "remove"
+
 const (
 	removeWorktreeOut = "worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /wt/feature-login\nHEAD def456\nbranch refs/heads/feature/login\n"
 )
@@ -267,5 +269,104 @@ func TestRemoveBranchDeleteFails(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "failed to delete branch") {
 		t.Errorf("output = %q, want branch delete failure message", buf.String())
+	}
+}
+
+func TestRemoveJSON(t *testing.T) {
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return removeWorktreeOut, nil },
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.SetContext(config.WithConfig(context.Background(), &config.Config{}))
+	cmd.Flags().Bool(flagKeepBranch, false, "")
+	cmd.Flags().Bool(flagForce, false, "")
+	_ = cmd.Flags().Set(flagJSON, "true")
+
+	if err := removeCmd.RunE(cmd, []string{"login"}); err != nil {
+		t.Fatalf("removeCmd.RunE: %v", err)
+	}
+
+	env, data := decodeAddEnvelope(t, buf.Bytes())
+	if env.Command != wantRemoveCommand {
+		t.Errorf("command = %q, want %q", env.Command, wantRemoveCommand)
+	}
+	if data["worktree_removed"] != true {
+		t.Errorf("worktree_removed = %v, want true", data["worktree_removed"])
+	}
+	if data["branch_deleted"] != true {
+		t.Errorf("branch_deleted = %v, want true", data["branch_deleted"])
+	}
+	if data["dry_run"] != false {
+		t.Errorf("dry_run = %v, want false", data["dry_run"])
+	}
+}
+
+func TestRemoveDryRunJSON(t *testing.T) {
+	r := &mockRunner{
+		run:      func(_ ...string) (string, error) { return removeWorktreeOut, nil },
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.SetContext(config.WithConfig(context.Background(), &config.Config{}))
+	cmd.Flags().Bool(flagKeepBranch, false, "")
+	cmd.Flags().Bool(flagForce, false, "")
+	cmd.Flags().Bool(flagDryRun, false, "")
+	_ = cmd.Flags().Set(flagDryRun, "true")
+	_ = cmd.Flags().Set(flagJSON, "true")
+
+	if err := removeCmd.RunE(cmd, []string{"login"}); err != nil {
+		t.Fatalf("removeCmd.RunE: %v", err)
+	}
+
+	env, data := decodeAddEnvelope(t, buf.Bytes())
+	if env.Command != wantRemoveCommand {
+		t.Errorf("command = %q, want %q", env.Command, wantRemoveCommand)
+	}
+	if data["dry_run"] != true {
+		t.Errorf("dry_run = %v, want true", data["dry_run"])
+	}
+	if data["worktree_removed"] != false {
+		t.Errorf("worktree_removed = %v, want false", data["worktree_removed"])
+	}
+	if data["branch_deleted"] != false {
+		t.Errorf("branch_deleted = %v, want false", data["branch_deleted"])
+	}
+}
+
+func TestRemoveBranchErrorJSON(t *testing.T) {
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdBranch {
+				return "", errors.New("branch error")
+			}
+			return removeWorktreeOut, nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.SetContext(config.WithConfig(context.Background(), &config.Config{}))
+	cmd.Flags().Bool(flagKeepBranch, false, "")
+	cmd.Flags().Bool(flagForce, false, "")
+	_ = cmd.Flags().Set(flagJSON, "true")
+
+	err := removeCmd.RunE(cmd, []string{"login"})
+	if err != nil {
+		t.Fatalf("expected no error (branch delete failure is non-fatal), got: %v", err)
+	}
+
+	_, data := decodeAddEnvelope(t, buf.Bytes())
+	branchErr, _ := data["branch_error"].(string)
+	if branchErr == "" {
+		t.Errorf("branch_error = %q, want non-empty", branchErr)
 	}
 }
