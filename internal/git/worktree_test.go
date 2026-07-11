@@ -129,6 +129,34 @@ func TestRemoveWorktreeLeadingDashPath(t *testing.T) {
 	}
 }
 
+func TestRepairWorktree(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	wtPath := filepath.Join(filepath.Dir(repo), "wt-to-repair")
+	if err := git.AddWorktree(context.Background(), r, wtPath, "feat/repair-me", "main"); err != nil {
+		t.Fatalf(fatalAddWorktree, err)
+	}
+
+	gitFile := filepath.Join(wtPath, ".git")
+	if err := os.Remove(gitFile); err != nil {
+		t.Fatalf("remove .git file: %v", err)
+	}
+
+	// RepairWorktree's own error is unreliable (git can exit non-zero here
+	// while still rewriting the .git linkfile), so assert on the actual
+	// effect rather than the returned error.
+	_ = git.RepairWorktree(context.Background(), r, wtPath)
+
+	if _, err := os.Stat(gitFile); err != nil {
+		t.Errorf("expected .git file to be recreated after repair, stat err: %v", err)
+	}
+}
+
 func TestListWorktreesPrunableEntry(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipIntegration)

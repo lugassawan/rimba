@@ -110,10 +110,8 @@ func TestRemoveDeletesUnmergedBranch(t *testing.T) {
 	}
 }
 
-// TestRemovePrunableWorktreeRecovers guards #374: when a worktree's .git
-// file is deleted out-of-band, git marks it prunable and refuses a plain
-// `git worktree remove --force`. `rimba remove` must recover it via
-// `git worktree prune` and still delete the branch.
+// TestRemovePrunableWorktreeRecovers: an orphaned worktree (dir present, .git
+// deleted out-of-band) must be healed via repair and fully removed, not just deregistered.
 func TestRemovePrunableWorktreeRecovers(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
@@ -132,14 +130,19 @@ func TestRemovePrunableWorktreeRecovers(t *testing.T) {
 	}
 
 	r := rimbaSuccess(t, repo, "remove", taskPrunableRemove)
-	assertContains(t, r.Stdout, "Cleared stale worktree registration")
+	assertContains(t, r.Stdout, msgRemovedWorktree)
 	assertContains(t, r.Stdout, msgDeletedBranch)
 	assertNotContains(t, r.Stdout, "Failed to remove")
 
 	// The stale worktree admin entry must be gone from git's own bookkeeping.
 	out := testutil.GitCmd(t, repo, "worktree", "list")
 	if strings.Contains(out, wtPath) {
-		t.Errorf("expected worktree entry for %s to be pruned, got: %s", wtPath, out)
+		t.Errorf("expected worktree entry for %s to be removed, got: %s", wtPath, out)
+	}
+
+	// Unlike a prune-only recovery, a healed orphan leaves nothing on disk.
+	if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+		t.Errorf("expected worktree directory %s to be fully removed, stat err: %v", wtPath, err)
 	}
 
 	// Branch must still be deleted despite the broken .git file.

@@ -63,6 +63,13 @@ func MoveWorktree(ctx context.Context, r Runner, oldPath, newPath string, force 
 	return err
 }
 
+// RepairWorktree recreates a missing .git linkfile from the still-present
+// admin back-pointer, so a subsequent RemoveWorktree can fully remove it.
+func RepairWorktree(ctx context.Context, r Runner, path string) error {
+	_, err := r.Run(ctx, cmdWorktree, "repair", "--", path)
+	return err
+}
+
 // ListWorktrees returns all worktrees by parsing `git worktree list --porcelain`.
 func ListWorktrees(ctx context.Context, r Runner) ([]WorktreeEntry, error) {
 	out, err := r.Run(ctx, cmdWorktree, "list", "--porcelain")

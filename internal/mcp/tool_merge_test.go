@@ -400,9 +400,15 @@ func TestMergeToolMergeFails(t *testing.T) {
 }
 
 func TestMergeToolRemoveWorktreeFails(t *testing.T) {
+	// A real .git file makes this a genuine (non-orphaned) failure, so it
+	// short-circuits instead of routing through the heal-and-retry path.
+	sourceDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(sourceDir, ".git"), []byte("gitdir: /somewhere/.git/worktrees/my-task\n"), 0o644); err != nil {
+		t.Fatalf("failed to create .git fixture: %v", err)
+	}
 	porcelain := worktreePorcelain(
 		struct{ path, branch string }{"/repo", "main"},
-		struct{ path, branch string }{"/repo/.worktrees/feature-my-task", branchFeatureMyTask},
+		struct{ path, branch string }{sourceDir, branchFeatureMyTask},
 	)
 
 	r := &mockRunner{

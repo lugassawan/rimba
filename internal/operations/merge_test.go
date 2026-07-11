@@ -17,6 +17,7 @@ const (
 	gitCmdStatus       = "status"
 	gitCmdMerge        = "merge"
 	gitCmdAbort        = "--abort"
+	gitCmdRemove       = "remove"
 	branchFeatureLogin = "feature/login"
 	statusDirtyOutput  = "M dirty.go"
 )
@@ -342,13 +343,23 @@ func TestMergeWorktreeMergeConflict(t *testing.T) {
 }
 
 func TestMergeWorktreeCleanupPartialFailure(t *testing.T) {
-	wt := mergeWorktreeList()
+	// A real .git file makes this a genuine (non-orphaned) failure, so it
+	// short-circuits instead of routing through the heal-and-retry path.
+	sourceDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(sourceDir, ".git"), []byte("gitdir: /somewhere/.git/worktrees/login\n"), 0o644); err != nil {
+		t.Fatalf("failed to create .git fixture: %v", err)
+	}
+	wt := porcelainEntries(
+		struct{ path, branch string }{"/repo", "main"},
+		struct{ path, branch string }{sourceDir, branchFeatureLogin},
+		struct{ path, branch string }{"/wt/feature-dashboard", "feature/dashboard"},
+	)
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			if len(args) >= 2 && args[0] == gitCmdWorktree && args[1] == "list" {
 				return wt, nil
 			}
-			if len(args) >= 2 && args[0] == gitCmdWorktree && args[1] == "remove" {
+			if len(args) >= 2 && args[0] == gitCmdWorktree && args[1] == gitCmdRemove {
 				return "", errors.New("worktree locked")
 			}
 			return "", nil
@@ -380,10 +391,8 @@ func TestMergeWorktreeCleanupPartialFailure(t *testing.T) {
 	}
 }
 
-// TestMergeWorktreeCleanupPrunableSurfacesOnResult guards the merge-side hint
-// fix: when the source worktree is prunable, MergeResult.SourcePrunable must
-// be set so cmd/merge.go can print a prune-based recovery hint instead of the
-// doomed `git worktree remove --force` command (#374).
+// TestMergeWorktreeCleanupPrunableSurfacesOnResult: when cleanup falls back to
+// prune, MergeResult.SourceLeftOnDisk must be set so cmd/merge.go prints the right recovery hint.
 func TestMergeWorktreeCleanupPrunableSurfacesOnResult(t *testing.T) {
 	wt := strings.Join([]string{
 		"worktree /repo",
@@ -402,7 +411,7 @@ func TestMergeWorktreeCleanupPrunableSurfacesOnResult(t *testing.T) {
 			if len(args) >= 2 && args[0] == gitCmdWorktree && args[1] == "list" {
 				return wt, nil
 			}
-			if len(args) >= 2 && args[0] == gitCmdWorktree && args[1] == "prune" {
+			if len(args) >= 2 && args[0] == gitCmdWorktree && (args[1] == gitCmdRemove || args[1] == "prune") {
 				return "", errors.New("prune failed")
 			}
 			return "", nil
@@ -423,8 +432,8 @@ func TestMergeWorktreeCleanupPrunableSurfacesOnResult(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no fatal error (cleanup failure is non-fatal), got: %v", err)
 	}
-	if !result.SourcePrunable {
-		t.Error("expected SourcePrunable to be true")
+	if !result.SourceLeftOnDisk {
+		t.Error("expected SourceLeftOnDisk to be true")
 	}
 	if result.RemoveError == nil {
 		t.Error("expected RemoveError to be set when git worktree prune fails")
@@ -476,8 +485,9 @@ func TestMergeWorktreeSkipsDirtyCheckForPrunableSource(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected merge to succeed despite the prunable source having no .git, got: %v", err)
 	}
-	if !result.SourcePrunable {
-		t.Error("expected SourcePrunable to be true")
+	// Repair+remove succeed in this mock, so the directory is fully cleared — not left on disk.
+	if result.SourceLeftOnDisk {
+		t.Error("expected SourceLeftOnDisk to be false")
 	}
 }
 
@@ -704,7 +714,7 @@ func mergeCleanupBranchDeleteFailsRunner(wt string) *mockRunner {
 			if len(args) >= 2 && args[0] == gitCmdWorktree && args[1] == gitSubcmdList {
 				return wt, nil
 			}
-			if len(args) >= 2 && args[0] == gitCmdWorktree && args[1] == "remove" {
+			if len(args) >= 2 && args[0] == gitCmdWorktree && args[1] == gitCmdRemove {
 				return "", nil
 			}
 			if len(args) >= 2 && args[0] == cmdBranch && args[1] == "-D" {

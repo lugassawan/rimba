@@ -131,7 +131,7 @@ var mergeCmd = &cobra.Command{
 				MergingToMain:   result.MergingToMain,
 				SourceRemoved:   result.SourceRemoved,
 				WorktreeRemoved: result.WorktreeRemoved,
-				SourcePrunable:  result.SourcePrunable,
+				SourcePrunable:  result.SourceLeftOnDisk,
 				RemoveError:     errStr(result.RemoveError),
 				RemoteDeleted:   result.RemoteDeleted,
 				RemoteError:     errStr(result.RemoteError),
@@ -151,7 +151,7 @@ var mergeCmd = &cobra.Command{
 			fmt.Fprintln(cmd.OutOrStdout(), result.RemoveError)
 		} else if result.RemoveError != nil {
 			hint := "git worktree remove --force -- " + result.SourcePath
-			if result.SourcePrunable {
+			if result.SourceLeftOnDisk {
 				hint = "git worktree prune"
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Merged successfully but failed to remove worktree: %v\nTo remove manually: %s\n", result.RemoveError, hint)
@@ -172,7 +172,7 @@ var mergeCmd = &cobra.Command{
 // a prunable recovery (git worktree prune — directory left on disk) from a
 // real worktree removal, matching cmd/clean.go and cmd/remove.go.
 func printMergeWorktreeRemoved(cmd *cobra.Command, result operations.MergeResult) {
-	if result.SourcePrunable {
+	if result.SourceLeftOnDisk {
 		fmt.Fprintf(cmd.OutOrStdout(), "Cleared stale worktree registration: %s (directory left on disk — remove manually if unneeded)\n", result.SourcePath)
 		return
 	}

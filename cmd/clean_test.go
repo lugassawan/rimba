@@ -868,9 +868,9 @@ func TestPrintCleanedItemsAllBranches(t *testing.T) {
 		// Failure: worktree removal failed
 		{Branch: "feature/fail", Path: "/wt/fail", WorktreeRemoved: false, BranchDeleted: false},
 		// Failure: prunable worktree, removal via prune failed
-		{Branch: "feature/prunable-fail", Path: "/wt/prunable-fail", Prunable: true, WorktreeRemoved: false, BranchDeleted: false},
+		{Branch: "feature/prunable-fail", Path: "/wt/prunable-fail", LeftOnDisk: true, WorktreeRemoved: false, BranchDeleted: false},
 		// Success: prunable worktree recovered via git worktree prune (directory left on disk)
-		{Branch: "feature/prunable-ok", Path: "/wt/prunable-ok", Prunable: true, WorktreeRemoved: true, BranchDeleted: true},
+		{Branch: "feature/prunable-ok", Path: "/wt/prunable-ok", LeftOnDisk: true, WorktreeRemoved: true, BranchDeleted: true},
 	}
 	printCleanedItems(cmd, items)
 	out := buf.String()
@@ -1133,7 +1133,7 @@ func TestCleanMergedJSONForceAllFailedCountStaysZero(t *testing.T) {
 	r := cleanMergedTestRunner(t, "  "+branchDone, worktreeOut)
 	baseRun := r.run
 	r.run = func(args ...string) (string, error) {
-		if len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == cmdRemove {
+		if len(args) >= 2 && args[0] == cmdWorktreeTest && (args[1] == cmdRemove || args[1] == cmdPrune) {
 			return "", errGitFailed
 		}
 		return baseRun(args...)

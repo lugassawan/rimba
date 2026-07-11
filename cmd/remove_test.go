@@ -3,6 +3,8 @@ package cmd
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -41,21 +43,23 @@ func TestRemoveSuccess(t *testing.T) {
 	}
 }
 
-func TestRemovePrunablePathRunsPrune(t *testing.T) {
+func TestRemovePrunablePathHealsAndRemoves(t *testing.T) {
 	prunableWorktreeOut := "worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\n" +
 		"worktree /wt/feature-login\nHEAD def456\nbranch refs/heads/feature/login\nprunable gitdir file points to non-existent location\n"
 
-	var pruneInvoked, removeInvoked bool
+	var repairInvoked, removeInvoked, pruneInvoked bool
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			cmd := strings.Join(args, " ")
 			switch {
-			case strings.Contains(cmd, "worktree prune"):
-				pruneInvoked = true
+			case strings.Contains(cmd, "worktree repair"):
+				repairInvoked = true
 			case strings.Contains(cmd, "worktree remove"):
 				removeInvoked = true
+			case strings.Contains(cmd, "worktree prune"):
+				pruneInvoked = true
 			}
-			if len(args) > 0 && args[0] == "worktree" && args[1] == "list" {
+			if len(args) > 0 && args[0] == cmdWorktreeTest && args[1] == cmdList {
 				return prunableWorktreeOut, nil
 			}
 			return "", nil
@@ -74,11 +78,51 @@ func TestRemovePrunablePathRunsPrune(t *testing.T) {
 	if err != nil {
 		t.Fatalf("removeCmd.RunE: %v", err)
 	}
-	if !pruneInvoked {
-		t.Error("expected 'git worktree prune' to be invoked for a prunable worktree")
+	if !repairInvoked {
+		t.Error("expected 'git worktree repair' to be invoked for a prunable worktree")
 	}
-	if removeInvoked {
-		t.Error("expected 'git worktree remove' NOT to be invoked for a prunable worktree")
+	if !removeInvoked {
+		t.Error("expected 'git worktree remove' to be invoked after repair")
+	}
+	if pruneInvoked {
+		t.Error("expected 'git worktree prune' NOT to be invoked when repair+remove succeed")
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Removed worktree") {
+		t.Errorf("output = %q, want 'Removed worktree' — repair+remove fully cleared the directory", out)
+	}
+	if strings.Contains(out, "Cleared stale worktree registration") {
+		t.Errorf("output = %q, want NOT 'Cleared stale worktree registration' once repair+remove succeed", out)
+	}
+}
+
+func TestRemovePrunablePathFallbackMessage(t *testing.T) {
+	prunableWorktreeOut := "worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\n" +
+		"worktree /wt/feature-login\nHEAD def456\nbranch refs/heads/feature/login\nprunable gitdir file points to non-existent location\n"
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == cmdWorktreeTest && args[1] == cmdList {
+				return prunableWorktreeOut, nil
+			}
+			if len(args) > 1 && args[0] == "worktree" && args[1] == "remove" {
+				return "", errors.New("remove failed")
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.SetContext(config.WithConfig(context.Background(), &config.Config{}))
+	cmd.Flags().Bool(flagKeepBranch, false, "")
+	cmd.Flags().Bool(flagForce, false, "")
+
+	err := removeCmd.RunE(cmd, []string{"login"})
+	if err != nil {
+		t.Fatalf("removeCmd.RunE: %v", err)
 	}
 	out := buf.String()
 	if !strings.Contains(out, "Cleared stale worktree registration") {
@@ -195,12 +239,20 @@ func TestRemoveWorktreeNotFound(t *testing.T) {
 }
 
 func TestRemoveWorktreeFails(t *testing.T) {
+	// A real .git file makes this a genuine (non-orphaned) failure, so it
+	// short-circuits instead of routing through the heal-and-retry path.
+	wtPath := t.TempDir()
+	if err := os.WriteFile(filepath.Join(wtPath, ".git"), []byte("gitdir: /somewhere/.git/worktrees/login\n"), 0o644); err != nil {
+		t.Fatalf("failed to create .git fixture: %v", err)
+	}
+	worktreeOut := "worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree " + wtPath + "\nHEAD def456\nbranch refs/heads/feature/login\n"
+
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			if len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == "remove" {
 				return "", errors.New("locked")
 			}
-			return removeWorktreeOut, nil
+			return worktreeOut, nil
 		},
 		runInDir: noopRunInDir,
 	}

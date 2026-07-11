@@ -274,6 +274,15 @@ func TestMergeSourceNotFound(t *testing.T) {
 }
 
 func TestMergeRemoveWorktreeFails(t *testing.T) {
+	// A real .git file makes this a genuine (non-orphaned) failure, so it
+	// short-circuits instead of routing through the heal-and-retry path.
+	sourceDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(sourceDir, ".git"), []byte("gitdir: /somewhere/.git/worktrees/login\n"), 0o644); err != nil {
+		t.Fatalf("failed to create .git fixture: %v", err)
+	}
+	worktreeOut := "worktree " + repoPath + "\nHEAD abc123\nbranch refs/heads/main\n\n" +
+		"worktree " + sourceDir + "\nHEAD def456\nbranch refs/heads/feature/login\n"
+
 	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: defaultRelativeWtDir}
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
@@ -283,7 +292,7 @@ func TestMergeRemoveWorktreeFails(t *testing.T) {
 			if len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == cmdRemove {
 				return "", errors.New("locked")
 			}
-			return mergeWorktreeOut, nil
+			return worktreeOut, nil
 		},
 		runInDir: noopRunInDir,
 	}
@@ -305,7 +314,7 @@ func TestMergeRemoveWorktreeFails(t *testing.T) {
 	if !strings.Contains(out, "failed to remove worktree") {
 		t.Errorf("output = %q, want 'failed to remove worktree'", out)
 	}
-	if !strings.Contains(out, "To remove manually: git worktree remove --force -- /wt/feature-login") {
+	if !strings.Contains(out, "To remove manually: git worktree remove --force -- "+sourceDir) {
 		t.Errorf("output = %q, want a path-based 'git worktree remove --force --' hint", out)
 	}
 }
@@ -324,7 +333,7 @@ func TestMergeRemoveWorktreePrunablePruneFails(t *testing.T) {
 			if len(args) >= 2 && args[1] == cmdShowToplevel {
 				return repoPath, nil
 			}
-			if len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == cmdPrune {
+			if len(args) >= 2 && args[0] == cmdWorktreeTest && (args[1] == cmdRemove || args[1] == cmdPrune) {
 				return "", errors.New("prune failed")
 			}
 			return prunableWorktreeOut, nil
@@ -354,13 +363,9 @@ func TestMergeRemoveWorktreePrunablePruneFails(t *testing.T) {
 	}
 }
 
-// TestMergePrunableSourceSuccessMessage guards a follow-up to #374: once a
-// prunable source's dirty check is skipped, a merge with auto-cleanup can
-// actually succeed and reach the success-path print — which must use the
-// same "Cleared stale worktree registration" wording as clean/remove, not
-// the misleading "Removed worktree" (git worktree prune leaves the
-// directory on disk).
-func TestMergePrunableSourceSuccessMessage(t *testing.T) {
+// TestMergePrunableSourceHealsAndRemoves: repair+remove now heal a prunable
+// source fully, so the message must say "Removed worktree", not "Cleared stale worktree registration".
+func TestMergePrunableSourceHealsAndRemoves(t *testing.T) {
 	prunableWorktreeOut := "worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\n" +
 		"worktree /wt/feature-login\nHEAD def456\nbranch refs/heads/feature/login\nprunable gitdir file points to non-existent location\n"
 
@@ -369,6 +374,53 @@ func TestMergePrunableSourceSuccessMessage(t *testing.T) {
 		run: func(args ...string) (string, error) {
 			if len(args) >= 2 && args[1] == cmdShowToplevel {
 				return repoPath, nil
+			}
+			return prunableWorktreeOut, nil
+		},
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && (args[0] == cmdStatus || args[0] == flagSyncMerge) {
+				return "", nil
+			}
+			return "", nil
+		},
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().String(flagInto, "", "")
+	cmd.Flags().Bool(flagNoFF, false, "")
+	cmd.Flags().Bool(flagKeep, false, "")
+	cmd.Flags().Bool(flagDelete, false, "")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	err := mergeCmd.RunE(cmd, []string{"login"})
+	if err != nil {
+		t.Fatalf(fatalMergeRunE, err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Removed worktree: /wt/feature-login") {
+		t.Errorf("output = %q, want 'Removed worktree' — repair+remove fully cleared the directory", out)
+	}
+	if strings.Contains(out, "Cleared stale worktree registration") {
+		t.Errorf("output = %q, want NOT 'Cleared stale worktree registration' once repair+remove succeed", out)
+	}
+}
+
+// TestMergePrunableSourceFallbackMessage: when repair+remove both still fail,
+// the prune-only fallback leaves the dir on disk, so "Cleared stale worktree registration" still applies.
+func TestMergePrunableSourceFallbackMessage(t *testing.T) {
+	prunableWorktreeOut := "worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\n" +
+		"worktree /wt/feature-login\nHEAD def456\nbranch refs/heads/feature/login\nprunable gitdir file points to non-existent location\n"
+
+	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: defaultRelativeWtDir}
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return repoPath, nil
+			}
+			if len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == cmdRemove {
+				return "", errors.New("remove failed")
 			}
 			return prunableWorktreeOut, nil
 		},
@@ -857,6 +909,15 @@ func TestMergeDryRunJSON(t *testing.T) {
 }
 
 func TestMergeRemoveErrorJSON(t *testing.T) {
+	// A real .git file makes this a genuine (non-orphaned) failure, so it
+	// short-circuits instead of routing through the heal-and-retry path.
+	sourceDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(sourceDir, ".git"), []byte("gitdir: /somewhere/.git/worktrees/login\n"), 0o644); err != nil {
+		t.Fatalf("failed to create .git fixture: %v", err)
+	}
+	worktreeOut := "worktree " + repoPath + "\nHEAD abc123\nbranch refs/heads/main\n\n" +
+		"worktree " + sourceDir + "\nHEAD def456\nbranch refs/heads/feature/login\n"
+
 	cfg := &config.Config{DefaultSource: branchMain, WorktreeDir: defaultRelativeWtDir}
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
@@ -866,7 +927,7 @@ func TestMergeRemoveErrorJSON(t *testing.T) {
 			if len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == cmdRemove {
 				return "", errors.New("locked")
 			}
-			return mergeWorktreeOut, nil
+			return worktreeOut, nil
 		},
 		runInDir: noopRunInDir,
 	}

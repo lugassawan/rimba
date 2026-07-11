@@ -299,7 +299,7 @@ func runCleanJSON(ctx context.Context, cmd *cobra.Command, r git.Runner, sp *spi
 	cleaned := make([]output.CleanedItemJSON, 0, len(items))
 	for _, it := range items {
 		cleaned = append(cleaned, output.CleanedItemJSON{
-			Branch: it.Branch, Path: it.Path, Prunable: it.Prunable,
+			Branch: it.Branch, Path: it.Path, Prunable: it.LeftOnDisk,
 			WorktreeRemoved: it.WorktreeRemoved, BranchDeleted: it.BranchDeleted,
 			RemoteDeleted: it.RemoteDeleted, RemoteError: errStr(it.RemoteError),
 			Error: errStr(it.Error),
@@ -494,13 +494,13 @@ func printCleanedItems(cmd *cobra.Command, items []operations.CleanedItem) {
 	for _, item := range items {
 		if !item.WorktreeRemoved {
 			hint := "git worktree remove --force -- " + item.Path
-			if item.Prunable {
+			if item.LeftOnDisk {
 				hint = "git worktree prune"
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Failed to remove worktree %s\nTo remove manually: %s\n", item.Branch, hint)
 			continue
 		}
-		if item.Prunable {
+		if item.LeftOnDisk {
 			fmt.Fprintf(cmd.OutOrStdout(), "Cleared stale worktree registration: %s (directory left on disk — remove manually if unneeded)\n", item.Path)
 		} else {
 			fmt.Fprintf(cmd.OutOrStdout(), "Removed worktree: %s\n", item.Path)

@@ -31,17 +31,17 @@ type MergeParams struct {
 
 // MergeResult holds the outcome of a merge operation.
 type MergeResult struct {
-	SourceBranch    string
-	SourcePath      string
-	TargetLabel     string
-	MergingToMain   bool
-	SourceRemoved   bool  // true only if both worktree removed and branch deleted
-	WorktreeRemoved bool  // true if worktree was removed (branch may still exist)
-	SourcePrunable  bool  // true if the source's admin entry was prunable (#374) — informs the cleanup-failure hint
-	RemoveError     error // non-nil if cleanup failed
-	RemoteDeleted   bool  // true if the remote branch was deleted (parity with clean --merged, #231)
-	RemoteError     error // non-nil if remote-branch deletion was attempted and failed
-	Plan            *Plan // always non-nil on a successful return; records steps that were (or would be) executed
+	SourceBranch     string
+	SourcePath       string
+	TargetLabel      string
+	MergingToMain    bool
+	SourceRemoved    bool  // true only if both worktree removed and branch deleted
+	WorktreeRemoved  bool  // true if worktree was removed (branch may still exist)
+	SourceLeftOnDisk bool  // true if the source directory was left on disk (prune fallback), not fully removed
+	RemoveError      error // non-nil if cleanup failed
+	RemoteDeleted    bool  // true if the remote branch was deleted (parity with clean --merged, #231)
+	RemoteError      error // non-nil if remote-branch deletion was attempted and failed
+	Plan             *Plan // always non-nil on a successful return; records steps that were (or would be) executed
 }
 
 // dirtyResult holds the outcome of an IsDirty check.
@@ -60,12 +60,12 @@ func MergeWorktree(ctx context.Context, r git.Runner, params MergeParams, onProg
 
 	plan := &Plan{DryRun: params.DryRun}
 	result := MergeResult{
-		SourceBranch:   source.Branch,
-		SourcePath:     source.Path,
-		TargetLabel:    targetLabel,
-		MergingToMain:  mergingToMain,
-		SourcePrunable: source.Prunable,
-		Plan:           plan,
+		SourceBranch:     source.Branch,
+		SourcePath:       source.Path,
+		TargetLabel:      targetLabel,
+		MergingToMain:    mergingToMain,
+		SourceLeftOnDisk: source.Prunable,
+		Plan:             plan,
 	}
 
 	// Concurrent dirty checks (always run — read-only pre-flight)
@@ -98,14 +98,15 @@ func MergeWorktree(ctx context.Context, r git.Runner, params MergeParams, onProg
 		if !params.DryRun {
 			defer deferSweepManifest(ctx, r, []string{source.Path})()
 		}
-		var wtRemoved, brDeleted bool
+		var wtRemoved, brDeleted, leftOnDisk bool
 		rmErr := plan.Do("remove worktree: "+source.Path, func() error {
 			var err error
-			wtRemoved, brDeleted, err = removeAndCleanup(ctx, r, source.Path, source.Branch, false, source.Prunable)
+			wtRemoved, brDeleted, leftOnDisk, err = removeAndCleanup(ctx, r, source.Path, source.Branch, false, source.Prunable)
 			return err
 		})
 		result.WorktreeRemoved = wtRemoved
 		result.SourceRemoved = wtRemoved && brDeleted
+		result.SourceLeftOnDisk = leftOnDisk
 		if rmErr != nil {
 			result.RemoveError = rmErr
 		}

@@ -236,9 +236,15 @@ func TestRemoveToolForce(t *testing.T) {
 }
 
 func TestRemoveToolRemoveWorktreeFails(t *testing.T) {
+	// A real .git file makes this a genuine (non-orphaned) failure, so it
+	// short-circuits instead of routing through the heal-and-retry path.
+	wtPath := t.TempDir()
+	if err := os.WriteFile(filepath.Join(wtPath, ".git"), []byte("gitdir: /somewhere/.git/worktrees/login\n"), 0o644); err != nil {
+		t.Fatalf("failed to create .git fixture: %v", err)
+	}
 	porcelain := worktreePorcelain(
 		struct{ path, branch string }{"/repo", "main"},
-		struct{ path, branch string }{"/wt/feature-login", "feature/login"},
+		struct{ path, branch string }{wtPath, "feature/login"},
 	)
 
 	r := &mockRunner{
