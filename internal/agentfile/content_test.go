@@ -200,6 +200,94 @@ func TestMcpToolsSection(t *testing.T) {
 	}
 }
 
+func TestMcpToolEntriesIncludesAllRegisteredTools(t *testing.T) {
+	want := []string{
+		"mcp__rimba__add",
+		"mcp__rimba__list",
+		"mcp__rimba__status",
+		"mcp__rimba__sync",
+		"mcp__rimba__merge",
+		"mcp__rimba__remove",
+		"mcp__rimba__clean",
+		"mcp__rimba__exec",
+		"mcp__rimba__conflict-check",
+		"mcp__rimba__rename",
+		"mcp__rimba__merge-plan",
+		"mcp__rimba__log",
+		"mcp__rimba__archive",
+		"mcp__rimba__restore",
+	}
+
+	got := make(map[string]bool, len(mcpToolEntries))
+	for _, e := range mcpToolEntries {
+		got[e.mcp] = true
+	}
+
+	if len(mcpToolEntries) != len(want) {
+		t.Errorf("mcpToolEntries has %d entries, want %d", len(mcpToolEntries), len(want))
+	}
+	for _, mcp := range want {
+		if !got[mcp] {
+			t.Errorf("mcpToolEntries missing %s", mcp)
+		}
+	}
+}
+
+func TestProjectGeneratorsMentionCurrentCommands(t *testing.T) {
+	cases := []struct {
+		name    string
+		content func() string
+	}{
+		{"agentsBlock", agentsBlock},
+		{"copilotBlock", copilotBlock},
+		{"cursorContent", cursorContent},
+		{"geminiBlock", geminiBlock},
+		{"windsurfContent", windsurfContent},
+		{"rooContent", rooContent},
+		{"claudeSkillContent", claudeSkillContent},
+	}
+
+	commands := []string{"doctor", "rename", "restore", "duplicate", "trust"}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			content := c.content()
+			for _, cmd := range commands {
+				if !strings.Contains(content, cmd) {
+					t.Errorf("%s should mention %q command", c.name, cmd)
+				}
+			}
+		})
+	}
+}
+
+func TestProjectJSONCommandListsAreCurrent(t *testing.T) {
+	wantCommands := []string{
+		"list", "status", "exec", "conflict-check", "deps status",
+		"add", "merge", "remove", "rename", "sync", "clean", "log",
+	}
+
+	cases := []struct {
+		name    string
+		content func() string
+	}{
+		{"agentsBlock", agentsBlock},
+		{"cursorContent", cursorContent},
+		{"claudeSkillContent", claudeSkillContent},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			content := c.content()
+			for _, cmd := range wantCommands {
+				if !strings.Contains(content, cmd) {
+					t.Errorf("%s --json list should mention %q", c.name, cmd)
+				}
+			}
+		})
+	}
+}
+
 func TestAllSpecsIncludeMcpToolsSection(t *testing.T) {
 	projectSpecs := ProjectSpecs()
 	globalSpecs := GlobalSpecs()

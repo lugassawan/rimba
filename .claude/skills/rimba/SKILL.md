@@ -20,22 +20,27 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 |-------------------|-----|
 | Start a new task | `rimba add <task>` |
 | Start a task in a monorepo service | `rimba add service/task` (auto-detects service from repo dirs) |
+| Rename a task | `rimba rename <task> [new-task]` |
+| Duplicate a worktree | `rimba duplicate <task>` |
 | See all worktrees | `rimba list` or `rimba list --json` |
 | Filter by service (monorepo) | `rimba list --service <svc>` |
 | Check worktree health | `rimba status` |
+| Diagnose stale worktree locks | `rimba doctor` |
 | Navigate to a worktree | `cd $(rimba open <task>)` |
 | Update from source branch | `rimba sync <task>` or `rimba sync --all` |
 | Finish a feature | `rimba merge <task>` (auto-removes worktree) |
 | Clean up merged work | `rimba clean --merged` |
 | Pause a task | `rimba archive <task>` (keeps branch) |
+| Resume a paused task | `rimba restore <task>` |
 | Run across worktrees | `rimba exec "<cmd>"` |
 | Check for conflicts | `rimba conflict-check` |
 | Check dependencies | `rimba deps status` |
+| Approve committed shell commands | `rimba trust` |
 | Use MCP server | `rimba mcp` (stdio transport for AI agents) |
 
 ## JSON Output
 
-Commands supporting `--json`: `list`, `status`, `exec`, `conflict-check`, `deps status`.
+Commands supporting `--json`: `list`, `status`, `exec`, `conflict-check`, `deps status`, `add`, `merge`, `remove`, `rename`, `sync`, `clean`, `log`.
 
 **Envelope:** `{"version": "<semver>", "command": "<name>", "data": <payload>}`
 **Error:** `{"version": "<semver>", "command": "<name>", "error": "<msg>", "code": "<CODE>"}`
@@ -83,3 +88,8 @@ when no MCP connection is available.
 | `mcp__rimba__clean` | `rimba clean --merged` |
 | `mcp__rimba__exec` | `rimba exec <cmd>` |
 | `mcp__rimba__conflict-check` | `rimba conflict-check` |
+| `mcp__rimba__rename` | `rimba rename <task> [new-task]` |
+| `mcp__rimba__merge-plan` | `rimba merge-plan` |
+| `mcp__rimba__log` | `rimba log` |
+| `mcp__rimba__archive` | `rimba archive <task>` |
+| `mcp__rimba__restore` | `rimba restore <task>` |

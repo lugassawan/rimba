@@ -16,7 +16,12 @@ If not found, **ask the user** before installing. Never install automatically.
 4. `rimba merge <task>` — merge into main and auto-clean up
 5. `rimba clean --merged` — remove merged worktrees
 6. `rimba sync [task]` — rebase onto main
-7. `rimba mcp` — start MCP server for AI tool integration
+7. `rimba rename <task> [new-task]` — rename a worktree
+8. `rimba duplicate <task>` — duplicate an existing worktree
+9. `rimba archive <task>` / `rimba restore <task>` — archive and restore worktrees
+10. `rimba doctor` — diagnose stale git index.lock files
+11. `rimba trust` — approve committed shell commands
+12. `rimba mcp` — start MCP server for AI tool integration
 
 ## MCP Tools
 
@@ -35,3 +40,8 @@ when no MCP connection is available.
 | `mcp__rimba__clean` | `rimba clean --merged` |
 | `mcp__rimba__exec` | `rimba exec <cmd>` |
 | `mcp__rimba__conflict-check` | `rimba conflict-check` |
+| `mcp__rimba__rename` | `rimba rename <task> [new-task]` |
+| `mcp__rimba__merge-plan` | `rimba merge-plan` |
+| `mcp__rimba__log` | `rimba log` |
+| `mcp__rimba__archive` | `rimba archive <task>` |
+| `mcp__rimba__restore` | `rimba restore <task>` |

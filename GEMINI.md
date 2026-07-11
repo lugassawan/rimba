@@ -15,11 +15,12 @@ If not found, **ask the user** before installing. Never install automatically.
 
 | Concern | Commands |
 |---------|----------|
-| Create & navigate | `rimba add <task>`, `rimba add pr:<num>` (from a GitHub PR), `rimba open <task>` |
-| Inspect | `rimba list` (`--full` adds PR/CI columns), `rimba status` (`--detail` adds disk/velocity) |
+| Create & navigate | `rimba add <task>`, `rimba add pr:<num>` (from a GitHub PR), `rimba open <task>`, `rimba rename <task> [new-task]`, `rimba duplicate <task>` |
+| Inspect | `rimba list` (`--full` adds PR/CI columns), `rimba status` (`--detail` adds disk/velocity), `rimba doctor` |
 | Sync & merge | `rimba sync [task]`, `rimba merge <task>` |
-| Clean up | `rimba clean --merged`, `rimba archive <task>`, `rimba remove <task>` |
+| Clean up | `rimba clean --merged`, `rimba archive <task>`, `rimba restore <task>`, `rimba remove <task>` |
 | Cross-cutting | `rimba exec <cmd>`, `rimba conflict-check` |
+| Security | `rimba trust` (approve committed shell commands) |
 | AI integration | `rimba mcp` (MCP server for AI coding agents) |
 
 ## MCP Tools
@@ -39,5 +40,10 @@ when no MCP connection is available.
 | `mcp__rimba__clean` | `rimba clean --merged` |
 | `mcp__rimba__exec` | `rimba exec <cmd>` |
 | `mcp__rimba__conflict-check` | `rimba conflict-check` |
+| `mcp__rimba__rename` | `rimba rename <task> [new-task]` |
+| `mcp__rimba__merge-plan` | `rimba merge-plan` |
+| `mcp__rimba__log` | `rimba log` |
+| `mcp__rimba__archive` | `rimba archive <task>` |
+| `mcp__rimba__restore` | `rimba restore <task>` |
 
 <!-- END RIMBA -->
