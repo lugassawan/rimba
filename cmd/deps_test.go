@@ -371,6 +371,11 @@ func TestFormatDepsInstallLine(t *testing.T) {
 			res:  deps.InstallResult{Module: deps.Module{Dir: "vendor", InstallCmd: "go mod vendor"}, Ran: false},
 			want: "vendor: skipped (cancelled)",
 		},
+		{
+			name: "error takes precedence over cancelled",
+			res:  deps.InstallResult{Module: deps.Module{Dir: "vendor"}, Error: errors.New("install failed"), Ran: false},
+			want: "vendor: install failed",
+		},
 	}
 
 	for _, tc := range tests {
