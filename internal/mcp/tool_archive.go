@@ -41,11 +41,8 @@ func handleArchive(hctx *HandlerContext) server.ToolHandlerFunc {
 			return errorResult(cfgErr), nil
 		}
 
-		// operations.FindWorktree resolves prefixes via
-		// config.PrefixSetFromContext(ctx), which falls back to built-in defaults
-		// when config is absent from ctx. Inject cfg so repos with custom
-		// [[resolver.prefix]] entries resolve correctly (mirrors tool_rename.go
-		// and tool_restore.go).
+		// Inject cfg: FindWorktree reads prefixes from ctx and otherwise falls
+		// back to built-ins, breaking custom prefixes (mirrors tool_rename.go).
 		ctx = config.WithConfig(ctx, cfg)
 
 		ps := hctx.PrefixSet()

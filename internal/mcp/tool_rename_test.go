@@ -103,9 +103,7 @@ func TestRenameToolOrphanedHardErrors(t *testing.T) {
 	}
 }
 
-// renameHappyPathRunner builds a mock runner for a plain rename with no push,
-// no deps, and no hooks: worktree list, branch-exists check (false), worktree
-// move, and branch rename all succeed.
+// renameHappyPathRunner builds a mock runner for a plain rename (no push/deps/hooks).
 func renameHappyPathRunner(porcelain string) *mockRunner {
 	return &mockRunner{
 		run: func(args ...string) (string, error) {
@@ -400,11 +398,8 @@ func TestRenameToolPostRenameSetupFails(t *testing.T) {
 	}
 }
 
-// TestRenameToolCustomPrefixCtxInjection locks in the fix for #388: without
-// injecting cfg into ctx, RenameWorktree's config.PrefixSetFromContext(ctx)
-// falls back to built-in prefixes, "custom/" would go unrecognized, and the
-// renamed branch would silently fall back to "feature/" instead of keeping
-// its configured "custom/" prefix.
+// TestRenameToolCustomPrefixCtxInjection locks in #388: without ctx injection,
+// "custom/" is unrecognized and the rename silently falls back to "feature/".
 func TestRenameToolCustomPrefixCtxInjection(t *testing.T) {
 	porcelain := worktreePorcelain(
 		struct{ path, branch string }{"/repo", "main"},

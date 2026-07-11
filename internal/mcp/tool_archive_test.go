@@ -241,10 +241,8 @@ func TestArchiveToolServiceScoped(t *testing.T) {
 	}
 }
 
-// TestArchiveToolCustomPrefixCtxInjection locks in the fix for #388:
-// without injecting cfg into ctx, operations.FindWorktree's
-// config.PrefixSetFromContext(ctx) falls back to built-in prefixes and a
-// "custom/my-task" worktree would never be found for task "my-task".
+// TestArchiveToolCustomPrefixCtxInjection locks in #388: without ctx injection,
+// a "custom/my-task" worktree would never be found for task "my-task".
 func TestArchiveToolCustomPrefixCtxInjection(t *testing.T) {
 	porcelain := worktreePorcelain(
 		struct{ path, branch string }{"/repo", "main"},

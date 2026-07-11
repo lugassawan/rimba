@@ -14,8 +14,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// mcpLogEntry mirrors cmd/log.go's unexported logEntry; MCP cannot import
-// package cmd, so the collect-and-sort logic is reimplemented here.
+// mcpLogEntry mirrors cmd/log.go's logEntry — MCP can't import package cmd.
 type mcpLogEntry struct {
 	branch     string
 	task       string
@@ -40,9 +39,8 @@ func registerLogTool(s *server.MCPServer, hctx *HandlerContext) {
 	s.AddTool(tool, handleLog(hctx))
 }
 
-// handleLog intentionally skips hctx.requireConfig(): log mirrors the CLI's
-// skipConfig annotation and falls back to hctx.PrefixSet()'s built-in
-// defaults so it still works in an uninitialized repo.
+// handleLog intentionally skips requireConfig(): mirrors the CLI's skipConfig
+// annotation so log still works in an uninitialized repo.
 func handleLog(hctx *HandlerContext) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		r := hctx.Runner
@@ -77,8 +75,7 @@ func handleLog(hctx *HandlerContext) server.ToolHandlerFunc {
 	}
 }
 
-// filterLogEntriesSince drops entries older than sinceStr (e.g. "7d"); an
-// empty sinceStr is a no-op.
+// filterLogEntriesSince drops entries older than sinceStr (e.g. "7d"); empty is a no-op.
 func filterLogEntriesSince(valid []mcpLogEntry, sinceStr string) ([]mcpLogEntry, error) {
 	if sinceStr == "" {
 		return valid, nil
@@ -97,8 +94,7 @@ func filterLogEntriesSince(valid []mcpLogEntry, sinceStr string) ([]mcpLogEntry,
 	return filtered, nil
 }
 
-// collectMCPLogEntries gathers commit info for each candidate in parallel,
-// returning only valid entries sorted by commit time descending.
+// collectMCPLogEntries gathers commit info per candidate in parallel, sorted by recency.
 func collectMCPLogEntries(ctx context.Context, r git.Runner, candidates []git.WorktreeEntry, prefixes []string) []mcpLogEntry {
 	results := parallel.Collect(ctx, len(candidates), 8, func(ctx context.Context, i int) mcpLogEntry {
 		itemCtx, cancel := git.WithItemTimeout(ctx)
@@ -137,7 +133,6 @@ func collectMCPLogEntries(ctx context.Context, r git.Runner, candidates []git.Wo
 	return valid
 }
 
-// toLogItems converts mcpLogEntry values to JSON-ready logItem values.
 func toLogItems(entries []mcpLogEntry) []logItem {
 	items := make([]logItem, 0, len(entries))
 	for _, e := range entries {

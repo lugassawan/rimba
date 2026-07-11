@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 
+	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/conflict"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/resolver"
@@ -25,6 +26,10 @@ func handleMergePlan(hctx *HandlerContext) server.ToolHandlerFunc {
 		}
 
 		r := hctx.Runner
+
+		// Inject cfg: ListWorktreeInfos reads prefixes from ctx and otherwise
+		// falls back to built-ins, breaking custom prefixes.
+		ctx = config.WithConfig(ctx, cfg)
 
 		worktrees, err := operations.ListWorktreeInfos(ctx, r)
 		if err != nil {
@@ -57,7 +62,6 @@ func handleMergePlan(hctx *HandlerContext) server.ToolHandlerFunc {
 	}
 }
 
-// toMergePlanSteps converts conflict.MergeStep values to JSON-ready mergePlanStep values.
 func toMergePlanSteps(steps []conflict.MergeStep, prefixes []string) []mergePlanStep {
 	result := make([]mergePlanStep, len(steps))
 	for i, step := range steps {

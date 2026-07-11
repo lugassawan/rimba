@@ -78,9 +78,7 @@ func TestRestoreToolNotFound(t *testing.T) {
 	}
 }
 
-// restoreHappyPathRunner builds a mock runner for a plain restore: one
-// archived branch ("feature/restored-task") not attached to any active
-// worktree (only "main" is active).
+// restoreHappyPathRunner builds a mock runner for a plain restore (one archived branch).
 func restoreHappyPathRunner() *mockRunner {
 	return &mockRunner{
 		run: func(args ...string) (string, error) {
@@ -288,10 +286,8 @@ func TestRestoreToolPostCreateSetupFails(t *testing.T) {
 	}
 }
 
-// TestRestoreToolCustomPrefixCtxInjection locks in the fix for #388: without
-// injecting cfg into ctx, FindArchivedBranch's config.PrefixSetFromContext(ctx)
-// falls back to built-in prefixes and "custom/archived-task" would never be
-// recognized as an archived branch for task "archived-task".
+// TestRestoreToolCustomPrefixCtxInjection locks in #388: without ctx injection,
+// "custom/archived-task" would never be recognized as an archived branch.
 func TestRestoreToolCustomPrefixCtxInjection(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {

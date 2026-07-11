@@ -56,12 +56,8 @@ func handleRename(hctx *HandlerContext) server.ToolHandlerFunc {
 			return errorResult(cfgErr), nil
 		}
 
-		// operations.FindWorktree, RenameWorktree, and PostRenameSetup all resolve
-		// prefixes via config.PrefixSetFromContext(ctx), which falls back to
-		// built-in defaults when config is absent from ctx. The CLI injects config
-		// in PersistentPreRunE; MCP handlers must do so explicitly here or repos
-		// with custom [[resolver.prefix]] entries get the wrong prefix resolution
-		// for the rest of this handler.
+		// Inject cfg: FindWorktree/RenameWorktree/PostRenameSetup read prefixes from
+		// ctx and otherwise fall back to built-ins, breaking custom prefixes.
 		ctx = config.WithConfig(ctx, cfg)
 
 		ps := hctx.PrefixSet()
@@ -106,8 +102,7 @@ func handleRename(hctx *HandlerContext) server.ToolHandlerFunc {
 	}
 }
 
-// findRenameTarget resolves rawTask to a worktree and guards against renaming
-// a worktree whose branch uses a prefix no longer present in configuration.
+// findRenameTarget resolves rawTask to a worktree and guards its prefix is still configured.
 func findRenameTarget(ctx context.Context, hctx *HandlerContext, cfg *config.Config, ps *resolver.PrefixSet, rawTask string, force bool) (resolver.WorktreeInfo, *mcp.CallToolResult) {
 	service, task := operations.ResolveTaskInput(rawTask, hctx.RepoRoot, ps)
 
@@ -123,8 +118,7 @@ func findRenameTarget(ctx context.Context, hctx *HandlerContext, cfg *config.Con
 	return wt, nil
 }
 
-// resolveRenameNewTask resolves the optional "new_task" argument, defaulting
-// to rawTask for retype-only renames.
+// resolveRenameNewTask defaults new_task to rawTask for retype-only renames.
 func resolveRenameNewTask(req mcp.CallToolRequest, hctx *HandlerContext, ps *resolver.PrefixSet, rawTask string) string {
 	rawNewTask := req.GetString("new_task", "")
 	if rawNewTask == "" {
@@ -134,8 +128,7 @@ func resolveRenameNewTask(req mcp.CallToolRequest, hctx *HandlerContext, ps *res
 	return newTask
 }
 
-// renameTarget bundles the worktree being renamed with the resolved
-// destination task, prefix, and force flag.
+// renameTarget bundles the resolved rename destination and options.
 type renameTarget struct {
 	WT        resolver.WorktreeInfo
 	NewTask   string
@@ -143,8 +136,7 @@ type renameTarget struct {
 	Force     bool
 }
 
-// performRename renames the worktree and runs post-rename setup (dependency
-// refresh and hooks) for the result.
+// performRename renames the worktree and runs post-rename setup.
 func performRename(ctx context.Context, hctx *HandlerContext, cfg *config.Config, req mcp.CallToolRequest, ps *resolver.PrefixSet, target renameTarget) (operations.RenameResult, *mcp.CallToolResult) {
 	wtDir := filepath.Join(hctx.RepoRoot, cfg.WorktreeDir)
 
@@ -167,8 +159,7 @@ func performRename(ctx context.Context, hctx *HandlerContext, cfg *config.Config
 	return result, nil
 }
 
-// resolveRenamePrefix resolves the optional "type" argument to a new branch
-// prefix. An empty return means "inherit the worktree's current prefix".
+// resolveRenamePrefix maps the optional "type" arg to a prefix; empty means inherit.
 func resolveRenamePrefix(req mcp.CallToolRequest, ps *resolver.PrefixSet) (string, *mcp.CallToolResult) {
 	typeName := req.GetString("type", "")
 	if typeName == "" {
@@ -181,8 +172,7 @@ func resolveRenamePrefix(req mcp.CallToolRequest, ps *resolver.PrefixSet) (strin
 	return newPrefix, nil
 }
 
-// runPostRenameSetup refreshes dependencies and runs post-rename hooks for
-// the newly renamed worktree.
+// runPostRenameSetup refreshes dependencies and runs post-rename hooks.
 func runPostRenameSetup(ctx context.Context, hctx *HandlerContext, cfg *config.Config, req mcp.CallToolRequest, ps *resolver.PrefixSet, result operations.RenameResult) error {
 	svc, _, _ := resolver.ServiceFromBranch(result.NewBranch, ps.Strip())
 	var configModules []config.ModuleConfig

@@ -48,11 +48,8 @@ func handleRestore(hctx *HandlerContext) server.ToolHandlerFunc {
 		ps := hctx.PrefixSet()
 		service, task := operations.ResolveTaskInput(rawTask, hctx.RepoRoot, ps)
 
-		// FindArchivedBranch resolves prefixes via config.PrefixSetFromContext(ctx),
-		// which falls back to built-in defaults when config is absent from ctx.
-		// The CLI injects config in PersistentPreRunE; MCP handlers must do so
-		// explicitly or repos with custom [[resolver.prefix]] entries get the
-		// wrong prefix resolution.
+		// Inject cfg: FindArchivedBranch reads prefixes from ctx and otherwise
+		// falls back to built-ins, breaking custom prefixes.
 		ctx = config.WithConfig(ctx, cfg)
 
 		branch, findErr := operations.FindArchivedBranch(ctx, hctx.Runner, service, task)

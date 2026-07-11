@@ -71,8 +71,7 @@ func TestLogToolHappyPath(t *testing.T) {
 }
 
 // TestLogToolWorksWithoutConfig locks in the CLI's skipConfig behavior: log
-// must still return entries in an uninitialized repo (Config == nil), falling
-// back to hctx.PrefixSet()'s built-in defaults.
+// must still return entries when Config == nil.
 func TestLogToolWorksWithoutConfig(t *testing.T) {
 	ts := strconv.FormatInt(time.Now().Add(-1*time.Hour).Unix(), 10)
 	worktreeOut := worktreePorcelain(
