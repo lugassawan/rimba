@@ -28,8 +28,7 @@ rimba commands with structured parameters and typed responses.`,
 			return err
 		}
 
-		// Config is optional — some tools work without it. A genuinely-absent
-		// config is tolerated; a malformed or unreadable one surfaces its real error.
+		// Config is optional — absence is tolerated, real load errors are not.
 		cfg, err := config.Resolve(repoRoot)
 		if err != nil && !errors.Is(err, config.ErrConfigAbsent) {
 			return err

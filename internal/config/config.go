@@ -29,10 +29,8 @@ const (
 // DefaultCommandTimeout is the subprocess deadline used when command_timeout is unset.
 const DefaultCommandTimeout = 120 * time.Second
 
-// ErrConfigAbsent indicates no config file exists (as opposed to one that is
-// present but malformed or unreadable). Callers that treat config as optional
-// can check errors.Is(err, ErrConfigAbsent) to distinguish absence from a
-// real load failure.
+// ErrConfigAbsent means no config file exists — check via errors.Is to
+// distinguish absence from a malformed or unreadable config.
 var ErrConfigAbsent = errors.New("config not found")
 
 type Config struct {
@@ -207,8 +205,7 @@ func Merge(team, local *Config) *Config {
 }
 
 // LoadDir loads the team config (required) and optional local override from a
-// .rimba/ directory and merges them. Validation is the caller's responsibility
-// (see Config.Validate).
+// .rimba/ directory and merges them. Validation is the caller's responsibility.
 func LoadDir(dirPath string) (*Config, error) {
 	team, err := loadRaw(filepath.Join(dirPath, TeamFile))
 	if err != nil {
