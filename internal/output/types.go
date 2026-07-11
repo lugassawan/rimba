@@ -203,14 +203,16 @@ type CleanData struct {
 	// prune mode
 	PruneOutput       string   `json:"prune_output,omitempty"`
 	NoRemotes         bool     `json:"no_remotes,omitempty"`
-	RemotePruned      []string `json:"remote_pruned,omitempty"`
-	RemotePruneErrors []string `json:"remote_prune_errors,omitempty"`
+	RemotePruned      []string `json:"remote_pruned"`
+	RemotePruneErrors []string `json:"remote_prune_errors"`
 
-	// merged/stale (list) mode
-	Candidates   []CleanCandidateJSON `json:"candidates,omitempty"`
-	Cleaned      []CleanedItemJSON    `json:"cleaned,omitempty"`
+	// merged/stale (list) mode. Candidates/Cleaned/Warnings must serialize as
+	// [] (never null) when empty, so they intentionally lack omitempty —
+	// unlike the scalar fields above, a zero-length slice here is meaningful.
+	Candidates   []CleanCandidateJSON `json:"candidates"`
+	Cleaned      []CleanedItemJSON    `json:"cleaned"`
 	CleanedCount int                  `json:"cleaned_count,omitempty"`
-	Warnings     []string             `json:"warnings,omitempty"`
+	Warnings     []string             `json:"warnings"`
 }
 
 // SyncSummary holds aggregate counters for the sync command.

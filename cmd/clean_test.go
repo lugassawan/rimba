@@ -21,6 +21,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const wantCleanCommand = "clean"
+
+// panicReader panics on Read, proving a caller never reaches confirmRemoval's
+// stdin prompt — used by TestCleanMergedJSONNoForceErrors to verify the force
+// gate short-circuits before any stdin read.
+type panicReader struct{}
+
+func (panicReader) Read(_ []byte) (int, error) {
+	panic("stdin must not be read in JSON mode without --force")
+}
+
 func TestCleanRemotePruneMultiRemote(t *testing.T) {
 	cmd, buf := newCleanPruneCmd()
 	var calls []string
@@ -304,7 +315,7 @@ func TestCleanPruneSuccess(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
 			if len(args) >= 1 && args[0] == cmdWorktreeTest {
-				return "Removing worktrees/stale", nil
+				return pruneOutStale, nil
 			}
 			return "", nil
 		},
@@ -315,7 +326,7 @@ func TestCleanPruneSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fatalCleanPrune, err)
 	}
-	if !strings.Contains(buf.String(), "Removing worktrees/stale") {
+	if !strings.Contains(buf.String(), pruneOutStale) {
 		t.Errorf("output = %q, want prune output", buf.String())
 	}
 }
@@ -927,5 +938,227 @@ func TestCleanFetchMergeRefPassesPrune(t *testing.T) {
 	}
 	if !slices.Contains(fetchArgs, "--prune") {
 		t.Errorf("fetch args %v missing --prune: merged cleanup must prune stale remote-tracking refs", fetchArgs)
+	}
+}
+
+func TestCleanPruneJSON(t *testing.T) {
+	cmd, buf := newCleanPruneCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdWorktreeTest {
+				return pruneOutStale, nil
+			}
+			if len(args) == 1 && args[0] == cmdRemote {
+				return twoRemotesList, nil
+			}
+			if len(args) >= 3 && args[0] == cmdRemote && args[1] == cmdPrune {
+				remote := args[len(args)-1]
+				return " * [pruned] " + remote + "/gone\n", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	if err := cleanPrune(context.Background(), cmd, r); err != nil {
+		t.Fatalf(fatalCleanPrune, err)
+	}
+
+	env, data := decodeAddEnvelope(t, buf.Bytes())
+	if env.Command != wantCleanCommand {
+		t.Errorf("command = %q, want %q", env.Command, wantCleanCommand)
+	}
+	if data["mode"] != "prune" {
+		t.Errorf("mode = %v, want %q", data["mode"], "prune")
+	}
+	if data["prune_output"] != pruneOutStale {
+		t.Errorf("prune_output = %v, want %q", data["prune_output"], pruneOutStale)
+	}
+	pruned, ok := data["remote_pruned"].([]any)
+	if !ok || len(pruned) != 2 {
+		t.Errorf("remote_pruned = %v, want 2 entries", data["remote_pruned"])
+	}
+}
+
+func TestCleanPruneJSONNoRemotes(t *testing.T) {
+	cmd, buf := newCleanPruneCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) == 1 && args[0] == cmdRemote {
+				return "", nil // no remotes
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	if err := cleanPrune(context.Background(), cmd, r); err != nil {
+		t.Fatalf(fatalCleanPrune, err)
+	}
+
+	_, data := decodeAddEnvelope(t, buf.Bytes())
+	if data["no_remotes"] != true {
+		t.Errorf("no_remotes = %v, want true", data["no_remotes"])
+	}
+	if data["mode"] != "prune" {
+		t.Errorf("mode = %v, want %q", data["mode"], "prune")
+	}
+}
+
+func TestCleanMergedJSONEmpty(t *testing.T) {
+	worktreeOut := cleanMergedWorktreeOut()
+	cmd, buf := newCleanMergedCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	r := cleanMergedTestRunner(t, "", worktreeOut)
+
+	err := cleanMerged(context.Background(), cmd, r)
+	if err != nil {
+		t.Fatalf(fatalCleanMerged, err)
+	}
+
+	_, data := decodeAddEnvelope(t, buf.Bytes())
+	candidates, ok := data["candidates"].([]any)
+	if !ok || len(candidates) != 0 {
+		t.Errorf("candidates = %v, want empty array (not null)", data["candidates"])
+	}
+	cleaned, ok := data["cleaned"].([]any)
+	if !ok || len(cleaned) != 0 {
+		t.Errorf("cleaned = %v, want empty array (not null)", data["cleaned"])
+	}
+}
+
+func TestCleanMergedJSONDryRun(t *testing.T) {
+	worktreeOut := cleanMergedWorktreeOut()
+	cmd, buf := newCleanMergedCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	_ = cmd.Flags().Set(flagDryRun, "true")
+	r := cleanMergedTestRunner(t, "  "+branchDone, worktreeOut)
+
+	err := cleanMerged(context.Background(), cmd, r)
+	if err != nil {
+		t.Fatalf(fatalCleanMerged, err)
+	}
+
+	_, data := decodeAddEnvelope(t, buf.Bytes())
+	if data["dry_run"] != true {
+		t.Errorf("dry_run = %v, want true", data["dry_run"])
+	}
+	candidates, ok := data["candidates"].([]any)
+	if !ok || len(candidates) == 0 {
+		t.Errorf("candidates = %v, want non-empty", data["candidates"])
+	}
+	cleaned, ok := data["cleaned"].([]any)
+	if !ok || len(cleaned) != 0 {
+		t.Errorf("cleaned = %v, want empty array", data["cleaned"])
+	}
+}
+
+// TestCleanMergedJSONNoForceErrors verifies the force gate returns its error
+// before confirmRemoval ever reads stdin: panicReader would panic if read.
+func TestCleanMergedJSONNoForceErrors(t *testing.T) {
+	worktreeOut := cleanMergedWorktreeOut()
+	cmd, _ := newCleanMergedCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	cmd.SetIn(panicReader{})
+	r := cleanMergedTestRunner(t, "  "+branchDone, worktreeOut)
+
+	err := cleanMerged(context.Background(), cmd, r)
+	if err == nil {
+		t.Fatal("expected error requiring --force in JSON mode")
+	}
+	if !strings.Contains(err.Error(), "interactive confirmation required in JSON mode") {
+		t.Errorf("err = %q, want mention of JSON mode confirmation requirement", err.Error())
+	}
+}
+
+func TestCleanMergedJSONForce(t *testing.T) {
+	worktreeOut := cleanMergedWorktreeOut()
+	cmd, buf := newCleanMergedCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	_ = cmd.Flags().Set(flagForce, "true")
+	r := cleanMergedTestRunner(t, "  "+branchDone, worktreeOut)
+
+	err := cleanMerged(context.Background(), cmd, r)
+	if err != nil {
+		t.Fatalf(fatalCleanMerged, err)
+	}
+
+	_, data := decodeAddEnvelope(t, buf.Bytes())
+	if data["cleaned_count"] != float64(1) {
+		t.Errorf("cleaned_count = %v, want 1", data["cleaned_count"])
+	}
+	cleaned, ok := data["cleaned"].([]any)
+	if !ok || len(cleaned) != 1 {
+		t.Fatalf("cleaned = %v, want 1 entry", data["cleaned"])
+	}
+	item, ok := cleaned[0].(map[string]any)
+	if !ok {
+		t.Fatalf("cleaned[0] type = %T, want map[string]any", cleaned[0])
+	}
+	if item["branch"] != branchDone {
+		t.Errorf("branch = %v, want %q", item["branch"], branchDone)
+	}
+	if item["worktree_removed"] != true {
+		t.Errorf("worktree_removed = %v, want true", item["worktree_removed"])
+	}
+	if item["branch_deleted"] != true {
+		t.Errorf("branch_deleted = %v, want true", item["branch_deleted"])
+	}
+}
+
+func TestCleanStaleJSON(t *testing.T) {
+	oldTimestamp := strconv.FormatInt(time.Now().Add(-30*24*time.Hour).Unix(), 10)
+	cmd, buf := newCleanStaleCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	_ = cmd.Flags().Set(flagForce, "true")
+
+	dir := t.TempDir()
+	cfg := &config.Config{DefaultSource: branchMain}
+	_ = config.Save(filepath.Join(dir, config.FileName), cfg)
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdShowToplevel {
+				return dir, nil
+			}
+			if args[0] == cmdSymbolicRef {
+				return refsRemotesOriginMain, nil
+			}
+			if args[0] == cmdWorktreeTest && args[1] == cmdList {
+				return strings.Join([]string{
+					wtRepo, headABC123, branchRefMain, "",
+					wtFeatureLogin, headDEF456, branchRefFeatureLogin, "",
+				}, "\n"), nil
+			}
+			if args[0] == cmdLog {
+				return oldTimestamp + "\tcommit", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	err := cleanStale(context.Background(), cmd, r)
+	if err != nil {
+		t.Fatalf("cleanStale: %v", err)
+	}
+
+	_, data := decodeAddEnvelope(t, buf.Bytes())
+	candidates, ok := data["candidates"].([]any)
+	if !ok || len(candidates) != 1 {
+		t.Fatalf("candidates = %v, want 1 entry", data["candidates"])
+	}
+	c, ok := candidates[0].(map[string]any)
+	if !ok {
+		t.Fatalf("candidates[0] type = %T, want map[string]any", candidates[0])
+	}
+	lastCommit, ok := c["last_commit"].(string)
+	if !ok {
+		t.Fatalf("last_commit type = %T, want string", c["last_commit"])
+	}
+	if _, err := time.Parse(time.RFC3339, lastCommit); err != nil {
+		t.Errorf("last_commit = %q, not valid RFC3339: %v", lastCommit, err)
 	}
 }
