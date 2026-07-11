@@ -1,6 +1,14 @@
 // Package agentfile manages agent instruction files for rimba.
 package agentfile
 
+import "errors"
+
+// errCorruptBlock is returned internally when a rimba block is malformed
+// (orphaned BEGIN or duplicate BEGIN). It is unexported: callers never see
+// it as an error — corruption surfaces via Result.Corrupt / FileStatus.Corrupt
+// instead, so a corrupt spec never aborts a batch.
+var errCorruptBlock = errors.New("corrupt or duplicated rimba block; resolve manually")
+
 const (
 	// Markers delimit the rimba-managed block within shared Markdown files.
 	BeginMarker = "<!-- BEGIN RIMBA -->"
@@ -37,10 +45,12 @@ type Spec struct {
 type Result struct {
 	RelPath string
 	Action  string // "created", "updated", "removed", "skipped"
+	Corrupt bool   // true if the file had a corrupt rimba block and was left untouched
 }
 
 // FileStatus reports the installation state of a single agent file.
 type FileStatus struct {
 	RelPath   string
 	Installed bool
+	Corrupt   bool // true if the file has a corrupt rimba block (orphaned or duplicate BEGIN)
 }

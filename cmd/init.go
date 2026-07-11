@@ -309,7 +309,11 @@ func printSection(cmd *cobra.Command, title string, tier installTier, results []
 		if tier == tierUser {
 			p = "~/" + p
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "    %s (%s)\n", p, r.Action)
+		action := r.Action
+		if r.Corrupt {
+			action = "corrupt — resolve manually"
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "    %s (%s)\n", p, action)
 	}
 }
 

@@ -11,6 +11,7 @@ const (
 	fatalInstall   = "Install: %v"
 	fatalUninstall = "Uninstall: %v"
 	fatalRead      = "read file: %v"
+	agentsMDPath   = "AGENTS.md"
 )
 
 func TestInstallCreatesAllFiles(t *testing.T) {
@@ -77,7 +78,7 @@ func TestInstallAppendToExisting(t *testing.T) {
 
 	// AGENTS.md should be "updated" not "created"
 	for _, r := range results {
-		if r.RelPath == "AGENTS.md" && r.Action != actionUpdated {
+		if r.RelPath == agentsMDPath && r.Action != actionUpdated {
 			t.Errorf("AGENTS.md action = %q, want %q", r.Action, actionUpdated)
 		}
 	}
@@ -676,6 +677,123 @@ func TestUninstallBlockRemoveError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "remove file") {
 		t.Errorf("error = %q, want to contain 'remove file'", err.Error())
+	}
+}
+
+func TestInstallSkipsCorruptFile(t *testing.T) {
+	dir := t.TempDir()
+
+	corrupt := "# My Agents\n\n" + BeginMarker + "\norphaned, no end marker\n\n# my own notes\n"
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte(corrupt), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	results, err := InstallProject(dir)
+	if err != nil {
+		t.Fatalf(fatalInstall, err)
+	}
+
+	var agentsResult Result
+	found := false
+	otherInstalled := false
+	for _, r := range results {
+		if r.RelPath == agentsMDPath {
+			agentsResult = r
+			found = true
+			continue
+		}
+		if r.Action == actionCreated {
+			otherInstalled = true
+		}
+	}
+	if !found {
+		t.Fatal("AGENTS.md not found in results")
+	}
+	if !agentsResult.Corrupt {
+		t.Error("AGENTS.md result should have Corrupt = true")
+	}
+	if !otherInstalled {
+		t.Error("other specs should still install when one file is corrupt")
+	}
+
+	after, err := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+	if err != nil {
+		t.Fatalf(fatalRead, err)
+	}
+	if string(after) != corrupt {
+		t.Errorf("AGENTS.md should be byte-for-byte unchanged, got %q, want %q", after, corrupt)
+	}
+}
+
+func TestUninstallSkipsCorruptFile(t *testing.T) {
+	dir := t.TempDir()
+
+	corrupt := "# My Agents\n\n" + BeginMarker + "\norphaned, no end marker\n\n# my own notes\n"
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte(corrupt), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	results, err := UninstallProject(dir)
+	if err != nil {
+		t.Fatalf(fatalUninstall, err)
+	}
+
+	var agentsResult Result
+	found := false
+	for _, r := range results {
+		if r.RelPath == agentsMDPath {
+			agentsResult = r
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("AGENTS.md not found in results")
+	}
+	if !agentsResult.Corrupt {
+		t.Error("AGENTS.md result should have Corrupt = true")
+	}
+
+	after, err := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+	if err != nil {
+		t.Fatalf(fatalRead, err)
+	}
+	if string(after) != corrupt {
+		t.Errorf("AGENTS.md should be byte-for-byte unchanged, got %q, want %q", after, corrupt)
+	}
+}
+
+func TestInstallSkipsDuplicateBeginFile(t *testing.T) {
+	dir := t.TempDir()
+
+	corrupt := BeginMarker + "\nfirst\n" + EndMarker + "\n" + BeginMarker + "\nsecond, orphaned\n"
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte(corrupt), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	results, err := InstallProject(dir)
+	if err != nil {
+		t.Fatalf(fatalInstall, err)
+	}
+
+	found := false
+	for _, r := range results {
+		if r.RelPath == agentsMDPath {
+			found = true
+			if !r.Corrupt {
+				t.Error("AGENTS.md result should have Corrupt = true")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("AGENTS.md not found in results")
+	}
+
+	after, err := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+	if err != nil {
+		t.Fatalf(fatalRead, err)
+	}
+	if string(after) != corrupt {
+		t.Errorf("AGENTS.md should be byte-for-byte unchanged, got %q, want %q", after, corrupt)
 	}
 }
 

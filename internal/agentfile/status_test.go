@@ -48,7 +48,7 @@ func TestStatusPartialInstall(t *testing.T) {
 	statuses := StatusProject(dir)
 	foundAgents := false
 	for _, s := range statuses {
-		if s.RelPath == "AGENTS.md" {
+		if s.RelPath == agentsMDPath {
 			foundAgents = true
 			if !s.Installed {
 				t.Error("AGENTS.md should be Installed = true")
@@ -59,6 +59,32 @@ func TestStatusPartialInstall(t *testing.T) {
 	}
 	if !foundAgents {
 		t.Error("AGENTS.md not found in status results")
+	}
+}
+
+func TestStatusReportsCorrupt(t *testing.T) {
+	dir := t.TempDir()
+
+	corrupt := BeginMarker + "\norphaned, no end marker\n"
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte(corrupt), 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	statuses := StatusProject(dir)
+	found := false
+	for _, s := range statuses {
+		if s.RelPath == agentsMDPath {
+			found = true
+			if !s.Corrupt {
+				t.Error("AGENTS.md should have Corrupt = true")
+			}
+			if s.Installed {
+				t.Error("AGENTS.md should have Installed = false when corrupt")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("AGENTS.md not found in status results")
 	}
 }
 

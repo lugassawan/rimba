@@ -285,3 +285,35 @@ func TestInitAgentsLocalUninstall(t *testing.T) {
 		t.Error("AGENTS.md should be removed after local uninstall")
 	}
 }
+
+func TestInitAgentsCorruptFileReportedAndUntouched(t *testing.T) {
+	repoDir := t.TempDir()
+
+	agentsPath := filepath.Join(repoDir, "AGENTS.md")
+	corrupt := "# My Agents\n\n<!-- BEGIN RIMBA -->\norphaned, no end marker\n\n# my own notes\n"
+	if err := os.WriteFile(agentsPath, []byte(corrupt), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd, buf := newTestCmd()
+	if err := runInitAgents(cmd, repoDir, false, false); err != nil {
+		t.Fatalf("runInitAgents: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "AGENTS.md (corrupt — resolve manually)") {
+		t.Errorf("output missing corrupt render for AGENTS.md, got:\n%s", out)
+	}
+	// Other specs should still install.
+	if !strings.Contains(out, "created") && !strings.Contains(out, "updated") {
+		t.Errorf("other agent files should still install alongside a corrupt one, got:\n%s", out)
+	}
+
+	after, err := os.ReadFile(agentsPath)
+	if err != nil {
+		t.Fatalf("read AGENTS.md: %v", err)
+	}
+	if string(after) != corrupt {
+		t.Errorf("AGENTS.md should be byte-for-byte unchanged, got %q, want %q", after, corrupt)
+	}
+}

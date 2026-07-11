@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/lugassawan/rimba/internal/agentfile"
@@ -11,24 +12,44 @@ import (
 )
 
 // printAgentRefreshTips emits one tip per tier that has rimba-installed files on
-// disk, suggesting the rimba init incantation to refresh them after a binary update.
-// Silent when RIMBA_QUIET is set, no files are installed, or a path is empty.
+// disk, suggesting the rimba init incantation to refresh them after a binary update,
+// plus a distinct tip per tier that has a corrupt rimba block needing manual resolution.
+// Silent when RIMBA_QUIET is set, no files are installed/corrupt, or a path is empty.
 func printAgentRefreshTips(cmd *cobra.Command, home string, repoRoot string) {
 	if _, ok := os.LookupEnv("RIMBA_QUIET"); ok {
 		return
 	}
 	w := cmd.ErrOrStderr()
-	if home != "" && anyInstalled(agentfile.StatusGlobal(home)) {
-		fmt.Fprintln(w, "  Tip: agent files installed at user level — run `rimba init -g` to refresh for this version.")
+	if home != "" {
+		printTierTips(w, agentfile.StatusGlobal(home), "at user level", "rimba init -g")
 	}
-	if repoRoot != "" && anyInstalled(agentfile.StatusProject(repoRoot)) {
-		fmt.Fprintln(w, "  Tip: agent files installed in this repo — run `rimba init --agents` to refresh for this version.")
+	if repoRoot != "" {
+		printTierTips(w, agentfile.StatusProject(repoRoot), "in this repo", "rimba init --agents")
+	}
+}
+
+// printTierTips emits the refresh tip and/or corrupt tip for a single tier's statuses.
+func printTierTips(w io.Writer, statuses []agentfile.FileStatus, tierLabel, refreshCmd string) {
+	if anyInstalled(statuses) {
+		fmt.Fprintf(w, "  Tip: agent files installed %s — run `%s` to refresh for this version.\n", tierLabel, refreshCmd)
+	}
+	if anyCorrupt(statuses) {
+		fmt.Fprintf(w, "  Tip: an agent file %s has a corrupt rimba block — resolve manually.\n", tierLabel)
 	}
 }
 
 func anyInstalled(statuses []agentfile.FileStatus) bool {
 	for _, fs := range statuses {
 		if fs.Installed {
+			return true
+		}
+	}
+	return false
+}
+
+func anyCorrupt(statuses []agentfile.FileStatus) bool {
+	for _, fs := range statuses {
+		if fs.Corrupt {
 			return true
 		}
 	}
