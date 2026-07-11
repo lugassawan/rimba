@@ -187,41 +187,65 @@ func syncOne(ctx context.Context, sc *syncContext, input string, worktrees []res
 
 	swr := output.SyncWorktreeJSON{Branch: wt.Branch, Synced: true}
 	if push {
-		pushed, skipped, err := syncOnePush(ctx, sc, wt, useMerge)
+		pushResult, err := syncOneHandlePush(ctx, sc, wt, useMerge)
 		if err != nil {
 			return err
 		}
-		swr.Pushed, swr.PushSkipped = pushed, skipped
+		swr.Pushed, swr.PushSkipped, swr.PushFailed, swr.PushError =
+			pushResult.Pushed, pushResult.PushSkipped, pushResult.PushFailed, pushResult.PushError
 	}
 
 	if isJSON(sc.cmd) {
-		summary := output.SyncSummary{Synced: 1, Pushed: boolToInt(swr.Pushed), PushSkipped: boolToInt(swr.PushSkipped)}
+		summary := output.SyncSummary{
+			Synced: 1, Pushed: boolToInt(swr.Pushed),
+			PushSkipped: boolToInt(swr.PushSkipped), PushFailed: boolToInt(swr.PushFailed),
+		}
 		return writeSyncOneJSON(sc.cmd, sc.cfg.DefaultSource, useMerge, false, swr, summary)
 	}
 
 	return nil
 }
 
+// syncOneHandlePush runs the push step and folds its outcome into partial
+// SyncWorktreeJSON fields. Returns a non-nil error only in text mode, where a
+// push failure still aborts the command; JSON mode reports it via the result instead.
+func syncOneHandlePush(ctx context.Context, sc *syncContext, wt resolver.WorktreeInfo, useMerge bool) (output.SyncWorktreeJSON, error) {
+	var swr output.SyncWorktreeJSON
+	pushed, skipped, pushErr := syncOnePush(ctx, sc, wt, useMerge)
+	if pushErr != nil {
+		if !isJSON(sc.cmd) {
+			return swr, wrapPushError(wt, useMerge, pushErr)
+		}
+		swr.PushFailed, swr.PushError = true, pushErr.Error()
+		return swr, nil
+	}
+	swr.Pushed, swr.PushSkipped = pushed, skipped
+	return swr, nil
+}
+
+// wrapPushError builds the text-mode "To fix" hint for a failed push.
+func wrapPushError(wt resolver.WorktreeInfo, useMerge bool, pushErr error) error {
+	pushHint := fmt.Sprintf("cd %s && git push --force-with-lease", wt.Path)
+	if useMerge {
+		pushHint = fmt.Sprintf("cd %s && git push", wt.Path)
+	}
+	return errhint.WithFix(
+		fmt.Errorf("push failed for %s: %w", wt.Branch, pushErr),
+		pushHint,
+	)
+}
+
 // syncOnePush pushes the current branch after a successful sync, printing the
-// text-mode confirmation and returning (pushed, skipped) for JSON callers.
+// text-mode confirmation and returning (pushed, skipped, rawErr) — the raw,
+// unwrapped error so JSON mode can surface it without the text-only hint.
 func syncOnePush(ctx context.Context, sc *syncContext, wt resolver.WorktreeInfo, useMerge bool) (pushed, skipped bool, err error) {
 	sc.s.Start("Pushing to origin...")
 	pushed, skipped, pushErr := operations.PushBranch(ctx, sc.r, wt.Path, useMerge)
 	sc.s.Stop()
-	if pushErr != nil {
-		pushHint := fmt.Sprintf("cd %s && git push --force-with-lease", wt.Path)
-		if useMerge {
-			pushHint = fmt.Sprintf("cd %s && git push", wt.Path)
-		}
-		return false, false, errhint.WithFix(
-			fmt.Errorf("push failed for %s: %w", wt.Branch, pushErr),
-			pushHint,
-		)
-	}
-	if pushed && !isJSON(sc.cmd) {
+	if pushed && pushErr == nil && !isJSON(sc.cmd) {
 		fmt.Fprintf(sc.cmd.OutOrStdout(), "Pushed %s to origin\n", wt.Branch)
 	}
-	return pushed, skipped, nil
+	return pushed, skipped, pushErr
 }
 
 // writeSyncOneJSON writes the single-worktree sync envelope for syncOne's

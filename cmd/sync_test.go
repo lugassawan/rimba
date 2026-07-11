@@ -267,7 +267,7 @@ func TestSyncOnePushFailure(t *testing.T) {
 			if len(args) >= 1 && args[0] == cmdRevParse {
 				return fakeUpstreamRef, nil
 			}
-			if len(args) >= 1 && args[0] == "push" {
+			if len(args) >= 1 && args[0] == flagPush {
 				return "", errors.New("rejected")
 			}
 			return "", nil
@@ -284,6 +284,56 @@ func TestSyncOnePushFailure(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "force-with-lease") {
 		t.Errorf("error = %q, want recovery hint with force-with-lease", err.Error())
+	}
+}
+
+// TestSyncOnePushFailureJSON proves a push failure in JSON mode still emits a
+// success envelope (the rebase/merge already succeeded) with push_failed and
+// push_error set, instead of collapsing into a bare error envelope.
+func TestSyncOnePushFailureJSON(t *testing.T) {
+	worktrees := testSyncWorktrees()
+	cmd, buf := newTestCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) { return "", nil },
+		runInDir: func(_ string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return fakeUpstreamRef, nil
+			}
+			if len(args) >= 1 && args[0] == flagPush {
+				return "", errors.New("rejected")
+			}
+			return "", nil
+		},
+	}
+	sc := &syncContext{cmd: cmd, r: r, cfg: testSyncConfig(), s: testSyncSpinner(cmd)}
+
+	err := syncOne(context.Background(), sc, "login", worktrees, testSyncPrefixes(), false, true)
+	if err != nil {
+		t.Fatalf("syncOne: %v, want a success envelope reporting the push failure instead", err)
+	}
+
+	_, data := decodeAddEnvelope(t, buf.Bytes())
+	worktreesData, ok := data["worktrees"].([]any)
+	if !ok || len(worktreesData) != 1 {
+		t.Fatalf("worktrees = %v, want 1 entry", data["worktrees"])
+	}
+	wt, ok := worktreesData[0].(map[string]any)
+	if !ok {
+		t.Fatalf("worktrees[0] type = %T, want map[string]any", worktreesData[0])
+	}
+	if wt["synced"] != true {
+		t.Errorf("synced = %v, want true (the sync itself succeeded)", wt["synced"])
+	}
+	if wt["push_failed"] != true {
+		t.Errorf("push_failed = %v, want true", wt["push_failed"])
+	}
+	pushErr, _ := wt["push_error"].(string)
+	if !strings.Contains(pushErr, "rejected") {
+		t.Errorf("push_error = %q, want it to mention the underlying failure", pushErr)
+	}
+	if strings.Contains(pushErr, "To fix:") {
+		t.Errorf("push_error = %q, should be the raw error without the text-mode hint", pushErr)
 	}
 }
 
@@ -379,7 +429,7 @@ func TestSyncAllPushFailure(t *testing.T) {
 			if len(args) >= 1 && args[0] == cmdRevParse {
 				return fakeUpstreamRef, nil
 			}
-			if len(args) >= 1 && args[0] == "push" {
+			if len(args) >= 1 && args[0] == flagPush {
 				return "", errors.New("rejected")
 			}
 			return "", nil

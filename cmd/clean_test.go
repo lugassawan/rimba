@@ -977,6 +977,18 @@ func TestCleanPruneJSON(t *testing.T) {
 	if !ok || len(pruned) != 2 {
 		t.Errorf("remote_pruned = %v, want 2 entries", data["remote_pruned"])
 	}
+	assertCleanArrayFields(t, data)
+}
+
+// assertCleanArrayFields asserts every CleanData slice field is a non-nil
+// array (never null), regardless of which mode populated the payload.
+func assertCleanArrayFields(t *testing.T, data map[string]any) {
+	t.Helper()
+	for _, key := range []string{"remote_pruned", "remote_prune_errors", "candidates", "cleaned", "warnings"} {
+		if _, ok := data[key].([]any); !ok {
+			t.Errorf("data[%q] = %#v (%T), want a non-null array", key, data[key], data[key])
+		}
+	}
 }
 
 func TestCleanPruneJSONNoRemotes(t *testing.T) {
@@ -1003,6 +1015,7 @@ func TestCleanPruneJSONNoRemotes(t *testing.T) {
 	if data["mode"] != "prune" {
 		t.Errorf("mode = %v, want %q", data["mode"], "prune")
 	}
+	assertCleanArrayFields(t, data)
 }
 
 func TestCleanMergedJSONEmpty(t *testing.T) {
@@ -1025,6 +1038,7 @@ func TestCleanMergedJSONEmpty(t *testing.T) {
 	if !ok || len(cleaned) != 0 {
 		t.Errorf("cleaned = %v, want empty array (not null)", data["cleaned"])
 	}
+	assertCleanArrayFields(t, data)
 }
 
 func TestCleanMergedJSONDryRun(t *testing.T) {
@@ -1051,6 +1065,7 @@ func TestCleanMergedJSONDryRun(t *testing.T) {
 	if !ok || len(cleaned) != 0 {
 		t.Errorf("cleaned = %v, want empty array", data["cleaned"])
 	}
+	assertCleanArrayFields(t, data)
 }
 
 // TestCleanMergedJSONNoForceErrors verifies the force gate returns its error
@@ -1103,6 +1118,39 @@ func TestCleanMergedJSONForce(t *testing.T) {
 	}
 	if item["branch_deleted"] != true {
 		t.Errorf("branch_deleted = %v, want true", item["branch_deleted"])
+	}
+	assertCleanArrayFields(t, data)
+}
+
+// TestCleanMergedJSONForceAllFailedCountStaysZero proves cleaned_count
+// serializes as 0 (not absent) when every removal fails — omitempty on an
+// int field would otherwise drop the key, indistinguishable from "missing".
+func TestCleanMergedJSONForceAllFailedCountStaysZero(t *testing.T) {
+	worktreeOut := cleanMergedWorktreeOut()
+	cmd, buf := newCleanMergedCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	_ = cmd.Flags().Set(flagForce, "true")
+	r := cleanMergedTestRunner(t, "  "+branchDone, worktreeOut)
+	baseRun := r.run
+	r.run = func(args ...string) (string, error) {
+		if len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == cmdRemove {
+			return "", errGitFailed
+		}
+		return baseRun(args...)
+	}
+
+	err := cleanMerged(context.Background(), cmd, r)
+	if err != nil {
+		t.Fatalf(fatalCleanMerged, err)
+	}
+
+	_, data := decodeAddEnvelope(t, buf.Bytes())
+	count, ok := data["cleaned_count"].(float64)
+	if !ok {
+		t.Fatalf("cleaned_count missing/wrong type = %#v (%T), want present int", data["cleaned_count"], data["cleaned_count"])
+	}
+	if count != 0 {
+		t.Errorf("cleaned_count = %v, want 0", count)
 	}
 }
 

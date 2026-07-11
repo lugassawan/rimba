@@ -206,11 +206,11 @@ type CleanData struct {
 	RemotePruned      []string `json:"remote_pruned"`
 	RemotePruneErrors []string `json:"remote_prune_errors"`
 
-	// merged/stale (list) mode; Candidates/Cleaned/Warnings intentionally lack
-	// omitempty so an empty result serializes as [], not null.
+	// merged/stale (list) mode. Every slice field above and below is always
+	// set (never nil) in every mode, so all six serialize as [], never null.
 	Candidates   []CleanCandidateJSON `json:"candidates"`
 	Cleaned      []CleanedItemJSON    `json:"cleaned"`
-	CleanedCount int                  `json:"cleaned_count,omitempty"`
+	CleanedCount int                  `json:"cleaned_count"`
 	Warnings     []string             `json:"warnings"`
 }
 

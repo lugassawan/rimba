@@ -113,10 +113,15 @@ func cleanRemotePrune(ctx context.Context, cmd *cobra.Command, r git.Runner, s *
 		s.Stop()
 		if isJSON(cmd) {
 			return output.WriteJSON(cmd.OutOrStdout(), version, "clean", output.CleanData{
-				Mode:        "prune",
-				DryRun:      dryRun,
-				PruneOutput: pruneOut,
-				NoRemotes:   true,
+				Mode:              "prune",
+				DryRun:            dryRun,
+				PruneOutput:       pruneOut,
+				NoRemotes:         true,
+				RemotePruned:      make([]string, 0),
+				RemotePruneErrors: make([]string, 0),
+				Candidates:        make([]output.CleanCandidateJSON, 0),
+				Cleaned:           make([]output.CleanedItemJSON, 0),
+				Warnings:          make([]string, 0),
 			})
 		}
 		fmt.Fprintln(cmd.OutOrStdout(), "No remotes; skipped remote-ref prune.")
@@ -136,6 +141,9 @@ func cleanRemotePrune(ctx context.Context, cmd *cobra.Command, r git.Runner, s *
 			PruneOutput:       pruneOut,
 			RemotePruned:      nonNilStrings(pruned),
 			RemotePruneErrors: failureMsgs,
+			Candidates:        make([]output.CleanCandidateJSON, 0),
+			Cleaned:           make([]output.CleanedItemJSON, 0),
+			Warnings:          make([]string, 0),
 		})
 	}
 
@@ -263,9 +271,11 @@ func runCleanJSON(ctx context.Context, cmd *cobra.Command, r git.Runner, sp *spi
 	if len(res.candidates) == 0 {
 		return output.WriteJSON(cmd.OutOrStdout(), version, "clean", output.CleanData{
 			Mode: s.mode, DryRun: res.dryRun,
-			Candidates: make([]output.CleanCandidateJSON, 0),
-			Cleaned:    make([]output.CleanedItemJSON, 0),
-			Warnings:   nonNilStrings(res.warnings),
+			Candidates:        make([]output.CleanCandidateJSON, 0),
+			Cleaned:           make([]output.CleanedItemJSON, 0),
+			Warnings:          nonNilStrings(res.warnings),
+			RemotePruned:      make([]string, 0),
+			RemotePruneErrors: make([]string, 0),
 		})
 	}
 
@@ -273,9 +283,11 @@ func runCleanJSON(ctx context.Context, cmd *cobra.Command, r git.Runner, sp *spi
 	if res.dryRun {
 		return output.WriteJSON(cmd.OutOrStdout(), version, "clean", output.CleanData{
 			Mode: s.mode, DryRun: true,
-			Candidates: rows,
-			Cleaned:    make([]output.CleanedItemJSON, 0),
-			Warnings:   nonNilStrings(res.warnings),
+			Candidates:        rows,
+			Cleaned:           make([]output.CleanedItemJSON, 0),
+			Warnings:          nonNilStrings(res.warnings),
+			RemotePruned:      make([]string, 0),
+			RemotePruneErrors: make([]string, 0),
 		})
 	}
 
@@ -295,10 +307,12 @@ func runCleanJSON(ctx context.Context, cmd *cobra.Command, r git.Runner, sp *spi
 	}
 	return output.WriteJSON(cmd.OutOrStdout(), version, "clean", output.CleanData{
 		Mode: s.mode, DryRun: false,
-		Candidates:   rows,
-		Cleaned:      cleaned,
-		CleanedCount: removed,
-		Warnings:     nonNilStrings(res.warnings),
+		Candidates:        rows,
+		Cleaned:           cleaned,
+		CleanedCount:      removed,
+		Warnings:          nonNilStrings(res.warnings),
+		RemotePruned:      make([]string, 0),
+		RemotePruneErrors: make([]string, 0),
 	})
 }
 
