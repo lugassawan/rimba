@@ -3,10 +3,14 @@ package mcp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/lugassawan/rimba/internal/executor"
 	"github.com/lugassawan/rimba/internal/resolver"
@@ -265,6 +269,62 @@ func TestFilterDirtyErrorIncludedAndWarned(t *testing.T) {
 	}
 	if !strings.Contains(stderrBuf.String(), "Warning: cannot check dirty status") {
 		t.Errorf("stderr = %q, want warning", stderrBuf.String())
+	}
+}
+
+// blockUntilCancelRunner blocks each RunInDir call on ctx.Done(), closing
+// barrierCh once barrierN calls are in flight so a test can cancel deterministically.
+type blockUntilCancelRunner struct {
+	started     atomic.Int32
+	barrierN    int32
+	barrierCh   chan struct{}
+	barrierOnce sync.Once
+}
+
+func (r *blockUntilCancelRunner) Run(_ context.Context, _ ...string) (string, error) {
+	return "", nil
+}
+
+func (r *blockUntilCancelRunner) RunInDir(ctx context.Context, _ string, _ ...string) (string, error) {
+	if r.started.Add(1) == r.barrierN {
+		r.barrierOnce.Do(func() { close(r.barrierCh) })
+	}
+	<-ctx.Done()
+	return "", ctx.Err()
+}
+
+// TestFilterDirtyIncludesUncheckedWorktreesOnCancel proves that queued
+// worktrees a whole-context cancel prevents from ever running are fail-safe
+// included, not silently dropped as "clean" via dirtyCheckResult's zero value.
+func TestFilterDirtyIncludesUncheckedWorktreesOnCancel(t *testing.T) {
+	const n = 10 // > 8: filterDirty's concurrency is hard-coded to 8
+	worktrees := make([]resolver.WorktreeInfo, n)
+	for i := range worktrees {
+		worktrees[i] = resolver.WorktreeInfo{Path: fmt.Sprintf("/wt/%d", i)}
+	}
+
+	r := &blockUntilCancelRunner{barrierN: 8, barrierCh: make(chan struct{})}
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan []resolver.WorktreeInfo, 1)
+	go func() { done <- filterDirty(ctx, r, worktrees) }()
+
+	select {
+	case <-r.barrierCh:
+	case <-time.After(5 * time.Second):
+		t.Fatal("first 8 workers never started")
+	}
+	cancel()
+
+	var result []resolver.WorktreeInfo
+	select {
+	case result = <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("filterDirty did not return after cancel")
+	}
+
+	if len(result) != n {
+		t.Fatalf("expected all %d worktrees included as a cancellation fail-safe, got %d", n, len(result))
 	}
 }
 
