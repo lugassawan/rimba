@@ -38,7 +38,16 @@ func (r *execRunner) Run(ctx context.Context, args ...string) ([]byte, error) {
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
-		return out, fmt.Errorf("gh %s: %s: %w", strings.Join(args, " "), strings.TrimSpace(stderr.String()), err)
+		msg := errMsg(strings.TrimSpace(stderr.String()), strings.TrimSpace(string(out)))
+		return out, fmt.Errorf("gh %s: %s: %w", strings.Join(args, " "), msg, err)
 	}
 	return out, nil
+}
+
+// errMsg prefers stderr, falling back to stdout when gh reports errors there instead.
+func errMsg(stderr, stdout string) string {
+	if stderr != "" {
+		return stderr
+	}
+	return stdout
 }

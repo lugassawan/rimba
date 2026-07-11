@@ -3,21 +3,9 @@ package gh
 import (
 	"context"
 	"encoding/json"
-	"os"
-	"path/filepath"
+	"strings"
 	"testing"
 )
-
-// writeFakeGh installs a `gh` script on PATH for the test's lifetime.
-func writeFakeGh(t *testing.T, script string) {
-	t.Helper()
-	dir := t.TempDir()
-	fake := filepath.Join(dir, "gh")
-	if err := os.WriteFile(fake, []byte("#!/bin/sh\n"+script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-}
 
 func TestExecRunnerRunStdoutOnlyIgnoresStderrNoise(t *testing.T) {
 	writeFakeGh(t, `echo '{"number":42}'
@@ -46,4 +34,27 @@ exit 1
 
 	_, err := Default(0).Run(context.Background(), "pr", "list")
 	assertContains(t, err, "authentication required")
+}
+
+func TestExecRunnerRunFailureFallsBackToStdoutWhenStderrEmpty(t *testing.T) {
+	writeFakeGh(t, `echo "rate limit exceeded"
+exit 1
+`)
+
+	_, err := Default(0).Run(context.Background(), "pr", "list")
+	assertContains(t, err, "rate limit exceeded")
+}
+
+func TestExecRunnerRunSetsNoUpdateNotifierEnv(t *testing.T) {
+	writeFakeGh(t, `echo "{\"notifier\":\"$GH_NO_UPDATE_NOTIFIER\"}"
+exit 0
+`)
+
+	out, err := Default(0).Run(context.Background(), "pr", "list")
+	if err != nil {
+		t.Fatalf("Run() err = %v, want nil", err)
+	}
+	if want := `"notifier":"1"`; !strings.Contains(string(out), want) {
+		t.Errorf("out = %q, want it to contain %q", out, want)
+	}
 }
