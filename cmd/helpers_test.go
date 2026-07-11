@@ -49,24 +49,35 @@ func repoRootRunner(dir string, extra func(args ...string) (string, error)) *moc
 	}
 }
 
-func TestResolveMainBranchFromConfig(t *testing.T) {
+// TestResolveMainBranchIgnoresConfigDefaultSource is a regression test for
+// issue #389: default_source is internal-only (toml:"-") and never round-trips
+// through Save/Resolve, so a saved config can no longer short-circuit git-based
+// branch detection.
+func TestResolveMainBranchIgnoresConfigDefaultSource(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &config.Config{WorktreeDir: "../worktrees", DefaultSource: "develop"}
 	if err := config.Save(filepath.Join(dir, config.FileName), cfg); err != nil {
 		t.Fatalf("Save config: %v", err)
 	}
 
-	r := repoRootRunner(dir, nil)
+	r := repoRootRunner(dir, func(args ...string) (string, error) {
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", errors.New("unexpected")
+	})
 	branch, err := resolveMainBranch(context.Background(), r)
 	if err != nil {
 		t.Fatalf("resolveMainBranch: %v", err)
 	}
-	if branch != "develop" {
-		t.Errorf("branch = %q, want %q", branch, "develop")
+	if branch != branchMain {
+		t.Errorf("branch = %q, want %q (config default_source must be ignored)", branch, branchMain)
 	}
 }
 
-func TestResolveMainBranchFromDirConfig(t *testing.T) {
+// TestResolveMainBranchIgnoresDirConfigDefaultSource is the .rimba/settings.toml
+// variant of TestResolveMainBranchIgnoresConfigDefaultSource.
+func TestResolveMainBranchIgnoresDirConfigDefaultSource(t *testing.T) {
 	dir := t.TempDir()
 	rimbaDir := filepath.Join(dir, config.DirName)
 	if err := os.MkdirAll(rimbaDir, 0755); err != nil {
@@ -77,13 +88,18 @@ func TestResolveMainBranchFromDirConfig(t *testing.T) {
 		t.Fatalf("Save config: %v", err)
 	}
 
-	r := repoRootRunner(dir, nil)
+	r := repoRootRunner(dir, func(args ...string) (string, error) {
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", errors.New("unexpected")
+	})
 	branch, err := resolveMainBranch(context.Background(), r)
 	if err != nil {
 		t.Fatalf("resolveMainBranch: %v", err)
 	}
-	if branch != "develop" {
-		t.Errorf("branch = %q, want %q", branch, "develop")
+	if branch != branchMain {
+		t.Errorf("branch = %q, want %q (config default_source must be ignored)", branch, branchMain)
 	}
 }
 
@@ -234,8 +250,7 @@ func TestWithBestEffortConfigNilContext(t *testing.T) {
 func TestWithBestEffortConfigValidCustomPrefix(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &config.Config{
-		WorktreeDir:   "../worktrees",
-		DefaultSource: "main",
+		WorktreeDir: "../worktrees",
 		Resolver: &config.ResolverConfig{
 			Prefix: []config.PrefixEntry{{Prefix: "PROJ-"}},
 		},
@@ -244,7 +259,13 @@ func TestWithBestEffortConfigValidCustomPrefix(t *testing.T) {
 		t.Fatalf("Save config: %v", err)
 	}
 
-	r := repoRootRunner(dir, nil)
+	// default_source is internal-only (toml:"-") and is always re-derived from git.
+	r := repoRootRunner(dir, func(args ...string) (string, error) {
+		if len(args) >= 1 && args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", errors.New("unexpected")
+	})
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -312,8 +333,7 @@ func TestWithBestEffortConfigInvalidConfigSwallowed(t *testing.T) {
 	dir := t.TempDir()
 	// An invalid config: a resolver entry with an empty prefix fails Validate().
 	cfg := &config.Config{
-		WorktreeDir:   "../worktrees",
-		DefaultSource: "main",
+		WorktreeDir: "../worktrees",
 		Resolver: &config.ResolverConfig{
 			Prefix: []config.PrefixEntry{{Prefix: ""}},
 		},
@@ -322,7 +342,15 @@ func TestWithBestEffortConfigInvalidConfigSwallowed(t *testing.T) {
 		t.Fatalf("Save config: %v", err)
 	}
 
-	r := repoRootRunner(dir, nil)
+	// default_source is internal-only (toml:"-") and is always re-derived from
+	// git, so branch detection must succeed here to exercise the Validate()
+	// failure path (rather than short-circuiting earlier on git detection).
+	r := repoRootRunner(dir, func(args ...string) (string, error) {
+		if len(args) >= 1 && args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", errors.New("unexpected")
+	})
 	restore := overrideNewRunner(r)
 	defer restore()
 

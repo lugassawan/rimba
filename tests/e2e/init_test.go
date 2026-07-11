@@ -197,11 +197,13 @@ func TestInitMigratesLegacyConfig(t *testing.T) {
 	assertFileExists(t, filepath.Join(repo, configDir, teamFile))
 	assertFileExists(t, filepath.Join(repo, configDir, localFile))
 
-	// Verify config is loadable
+	// Verify config is loadable; default_source is internal-only (toml:"-") and
+	// is re-derived by FillDefaults rather than round-tripped through TOML.
 	cfg, err := config.Resolve(repo)
 	if err != nil {
 		t.Fatalf("Resolve after migration: %v", err)
 	}
+	cfg.FillDefaults(filepath.Base(repo), branchMain)
 	if cfg.DefaultSource != branchMain {
 		t.Errorf("DefaultSource = %q, want %q", cfg.DefaultSource, branchMain)
 	}
@@ -399,10 +401,13 @@ func TestInitPersonalMigration(t *testing.T) {
 	assertFileExists(t, filepath.Join(repo, configDir, teamFile))
 	assertFileNotExists(t, filepath.Join(repo, configDir, localFile))
 
+	// default_source is internal-only (toml:"-") and is re-derived by FillDefaults
+	// rather than round-tripped through TOML.
 	cfg, err := config.Resolve(repo)
 	if err != nil {
 		t.Fatalf("Resolve after migration: %v", err)
 	}
+	cfg.FillDefaults(filepath.Base(repo), branchMain)
 	if cfg.DefaultSource != branchMain {
 		t.Errorf("DefaultSource = %q, want %q", cfg.DefaultSource, branchMain)
 	}

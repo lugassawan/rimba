@@ -79,14 +79,11 @@ Persistent flags (available on every command):
 			return err
 		}
 
-		// Auto-derive missing fields
+		// Auto-derive missing fields.
 		repoName := filepath.Base(repoRoot)
-		var defaultBranch string
-		if cfg.DefaultSource == "" {
-			defaultBranch, err = git.DefaultBranch(cmd.Context(), r)
-			if err != nil {
-				return err
-			}
+		defaultBranch, err := git.DefaultBranch(cmd.Context(), r)
+		if err != nil {
+			return err
 		}
 		cfg.FillDefaults(repoName, defaultBranch)
 

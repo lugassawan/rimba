@@ -105,6 +105,8 @@ func TestSaveAndLoad(t *testing.T) {
 		t.Fatalf(fatalLoad, err)
 	}
 
+	// default_source is internal-only (toml:"-") and is never persisted.
+	original.DefaultSource = ""
 	if !reflect.DeepEqual(original, loaded) {
 		t.Errorf("loaded config differs:\n  got:  %+v\n  want: %+v", loaded, original)
 	}
@@ -216,6 +218,8 @@ func TestSaveAndLoadWithOpen(t *testing.T) {
 		t.Fatalf(fatalLoad, err)
 	}
 
+	// default_source is internal-only (toml:"-") and is never persisted.
+	original.DefaultSource = ""
 	if !reflect.DeepEqual(original, loaded) {
 		t.Errorf("loaded config differs:\n  got:  %+v\n  want: %+v", loaded, original)
 	}
@@ -243,15 +247,12 @@ func TestLoadWithoutOpenSection(t *testing.T) {
 // --- Merge tests ---
 
 func TestMergeScalarOverrides(t *testing.T) {
-	team := &config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch}
-	local := &config.Config{WorktreeDir: "../local-wt", DefaultSource: testDevelopBranch}
+	team := &config.Config{WorktreeDir: "../wt"}
+	local := &config.Config{WorktreeDir: "../local-wt"}
 
 	merged := config.Merge(team, local)
 	if merged.WorktreeDir != "../local-wt" {
 		t.Errorf("WorktreeDir = %q, want %q", merged.WorktreeDir, "../local-wt")
-	}
-	if merged.DefaultSource != testDevelopBranch {
-		t.Errorf("DefaultSource = %q, want %q", merged.DefaultSource, testDevelopBranch)
 	}
 }
 
@@ -358,15 +359,14 @@ func TestMergeEmptyLocal(t *testing.T) {
 
 func TestMergeInputsNotMutated(t *testing.T) {
 	team := &config.Config{
-		WorktreeDir:   "../wt",
-		DefaultSource: testDefaultBranch,
+		WorktreeDir: "../wt",
 	}
 	local := &config.Config{
-		DefaultSource: testDevelopBranch,
+		WorktreeDir: "../local-wt",
 	}
 
 	_ = config.Merge(team, local)
-	if team.DefaultSource != testDefaultBranch {
+	if team.WorktreeDir != "../wt" {
 		t.Error("team config was mutated by Merge")
 	}
 }
@@ -389,8 +389,9 @@ func TestLoadDirTeamOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadDir: %v", err)
 	}
-	if cfg.DefaultSource != testDefaultBranch {
-		t.Errorf("DefaultSource = %q, want %q", cfg.DefaultSource, testDefaultBranch)
+	// default_source is internal-only (toml:"-") — never round-trips through Save/Load.
+	if cfg.DefaultSource != "" {
+		t.Errorf("DefaultSource = %q, want empty", cfg.DefaultSource)
 	}
 }
 
@@ -406,7 +407,7 @@ func TestLoadDirTeamAndLocal(t *testing.T) {
 		t.Fatalf(fatalSave, err)
 	}
 
-	local := &config.Config{DefaultSource: testDevelopBranch}
+	local := &config.Config{WorktreeDir: "../local-wt"}
 	if err := config.Save(filepath.Join(rimbaDir, config.LocalFile), local); err != nil {
 		t.Fatalf(fatalSave, err)
 	}
@@ -415,11 +416,13 @@ func TestLoadDirTeamAndLocal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadDir: %v", err)
 	}
-	if cfg.DefaultSource != testDevelopBranch {
-		t.Errorf("DefaultSource = %q, want %q", cfg.DefaultSource, testDevelopBranch)
+	// default_source is internal-only (toml:"-") — never round-trips through Save/Load,
+	// regardless of team or local config content.
+	if cfg.DefaultSource != "" {
+		t.Errorf("DefaultSource = %q, want empty", cfg.DefaultSource)
 	}
-	if cfg.WorktreeDir != team.WorktreeDir {
-		t.Errorf("WorktreeDir = %q, want %q", cfg.WorktreeDir, team.WorktreeDir)
+	if cfg.WorktreeDir != local.WorktreeDir {
+		t.Errorf("WorktreeDir = %q, want %q", cfg.WorktreeDir, local.WorktreeDir)
 	}
 }
 
@@ -508,6 +511,60 @@ func TestLoadDirInvalidLocalTOML(t *testing.T) {
 	}
 }
 
+// TestLoadDirIgnoresUserDefaultSource is the acceptance test for issue #389:
+// a user-supplied default_source key in raw TOML must be silently dropped on
+// parse, and FillDefaults must still derive it from the repo's default branch.
+func TestLoadDirIgnoresUserDefaultSource(t *testing.T) {
+	dir := t.TempDir()
+	rimbaDir := filepath.Join(dir, config.DirName)
+	if err := os.MkdirAll(rimbaDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	raw := "worktree_dir = \"../wt\"\ndefault_source = \"" + testDevelopBranch + "\"\n"
+	if err := os.WriteFile(filepath.Join(rimbaDir, config.TeamFile), []byte(raw), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := config.LoadDir(rimbaDir)
+	if err != nil {
+		t.Fatalf("LoadDir: %v", err)
+	}
+	if cfg.DefaultSource != "" {
+		t.Errorf("DefaultSource = %q, want empty (ignored on parse)", cfg.DefaultSource)
+	}
+
+	cfg.FillDefaults(testRepoName, testDefaultBranch)
+	if cfg.DefaultSource != testDefaultBranch {
+		t.Errorf("DefaultSource after FillDefaults = %q, want %q", cfg.DefaultSource, testDefaultBranch)
+	}
+}
+
+// TestLoadIgnoresUserDefaultSource covers the same acceptance criteria for the
+// legacy .rimba.toml load path.
+func TestLoadIgnoresUserDefaultSource(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, config.FileName)
+
+	raw := "worktree_dir = \"../wt\"\ndefault_source = \"" + testDevelopBranch + "\"\n"
+	if err := os.WriteFile(path, []byte(raw), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf(fatalLoad, err)
+	}
+	if cfg.DefaultSource != "" {
+		t.Errorf("DefaultSource = %q, want empty (ignored on parse)", cfg.DefaultSource)
+	}
+
+	cfg.FillDefaults(testRepoName, testDefaultBranch)
+	if cfg.DefaultSource != testDefaultBranch {
+		t.Errorf("DefaultSource after FillDefaults = %q, want %q", cfg.DefaultSource, testDefaultBranch)
+	}
+}
+
 // --- Resolve tests ---
 
 func TestResolveNewDirConfig(t *testing.T) {
@@ -526,8 +583,9 @@ func TestResolveNewDirConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
-	if cfg.DefaultSource != testDefaultBranch {
-		t.Errorf("DefaultSource = %q, want %q", cfg.DefaultSource, testDefaultBranch)
+	// default_source is internal-only (toml:"-") — never round-trips through Save/Load.
+	if cfg.DefaultSource != "" {
+		t.Errorf("DefaultSource = %q, want empty", cfg.DefaultSource)
 	}
 }
 
@@ -543,8 +601,9 @@ func TestResolveLegacyFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
-	if loaded.DefaultSource != testDefaultBranch {
-		t.Errorf("DefaultSource = %q, want %q", loaded.DefaultSource, testDefaultBranch)
+	// default_source is internal-only (toml:"-") — never round-trips through Save/Load.
+	if loaded.DefaultSource != "" {
+		t.Errorf("DefaultSource = %q, want empty", loaded.DefaultSource)
 	}
 }
 
@@ -698,32 +757,6 @@ func TestConfigValidate(t *testing.T) {
 			name:    "empty config passes",
 			cfg:     &config.Config{},
 			wantErr: false,
-		},
-		{
-			name: "valid default_source",
-			cfg: &config.Config{
-				WorktreeDir:   "../wt",
-				DefaultSource: "develop",
-			},
-			wantErr: false,
-		},
-		{
-			name: "default_source with leading dash rejected",
-			cfg: &config.Config{
-				WorktreeDir:   "../wt",
-				DefaultSource: "-foo",
-			},
-			wantErr:    true,
-			wantSubstr: []string{"default_source", "leading dash"},
-		},
-		{
-			name: "default_source with dotdot rejected",
-			cfg: &config.Config{
-				WorktreeDir:   "../wt",
-				DefaultSource: "../x",
-			},
-			wantErr:    true,
-			wantSubstr: []string{"default_source", "contains .."},
 		},
 	}
 

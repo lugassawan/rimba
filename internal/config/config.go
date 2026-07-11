@@ -12,7 +12,6 @@ import (
 	toml "github.com/pelletier/go-toml/v2"
 
 	"github.com/lugassawan/rimba/internal/errhint"
-	"github.com/lugassawan/rimba/internal/gitref"
 )
 
 // FileName is the legacy config file name used by rimba.
@@ -31,8 +30,10 @@ const (
 const DefaultCommandTimeout = 120 * time.Second
 
 type Config struct {
-	WorktreeDir    string   `toml:"worktree_dir,omitempty"`
-	DefaultSource  string   `toml:"default_source,omitempty"`
+	WorktreeDir string `toml:"worktree_dir,omitempty"`
+	// DefaultSource is internal-only: always derived from the repo's default
+	// branch, never read from or written to TOML.
+	DefaultSource  string   `toml:"-"`
 	CommandTimeout string   `toml:"command_timeout,omitempty"`
 	CopyFiles      []string `toml:"copy_files"`
 	PostCreate     []string `toml:"post_create,omitempty"`
@@ -117,7 +118,6 @@ func (c *Config) FillDefaults(repoName, defaultBranch string) {
 func (c *Config) Validate() error {
 	var errs []error
 	errs = appendIf(errs, validateWorktreeDir(c.WorktreeDir)...)
-	errs = appendIf(errs, validateDefaultSource(c.DefaultSource)...)
 	errs = appendIf(errs, validateCommandTimeout(c.CommandTimeout)...)
 	errs = appendIf(errs, validateDeps(c.Deps)...)
 	errs = appendIf(errs, validateOpen(c.Open)...)
@@ -171,9 +171,6 @@ func Merge(team, local *Config) *Config {
 
 	if local.WorktreeDir != "" {
 		merged.WorktreeDir = local.WorktreeDir
-	}
-	if local.DefaultSource != "" {
-		merged.DefaultSource = local.DefaultSource
 	}
 	if local.CommandTimeout != "" {
 		merged.CommandTimeout = local.CommandTimeout
@@ -347,18 +344,6 @@ func validateOpen(open map[string]string) []error {
 		}
 	}
 	return errs
-}
-
-// validateDefaultSource rejects default_source values that could inject options
-// into git commands. Empty is allowed — FillDefaults supplies the git default branch.
-func validateDefaultSource(src string) []error {
-	if src == "" {
-		return nil
-	}
-	if err := gitref.Validate(src); err != nil {
-		return []error{fmt.Errorf("default_source: %w", err)}
-	}
-	return nil
 }
 
 // validateCommandTimeout rejects non-empty durations that are unparseable or non-positive.

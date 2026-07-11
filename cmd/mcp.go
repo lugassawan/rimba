@@ -31,10 +31,7 @@ rimba commands with structured parameters and typed responses.`,
 		cfg, _ := config.Resolve(repoRoot)
 		if cfg != nil {
 			repoName := filepath.Base(repoRoot)
-			var defaultBranch string
-			if cfg.DefaultSource == "" {
-				defaultBranch, _ = git.DefaultBranch(cmd.Context(), r)
-			}
+			defaultBranch, _ := git.DefaultBranch(cmd.Context(), r)
 			cfg.FillDefaults(repoName, defaultBranch)
 		}
 
