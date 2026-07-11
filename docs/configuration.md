@@ -52,6 +52,11 @@ dir = 'api/vendor'
 lockfile = 'api/go.sum'
 install = 'go mod vendor'
 work_dir = 'api'
+
+# Custom branch prefixes (optional — supplements the built-in feature/bugfix/hotfix/docs/test/chore)
+[[resolver.prefix]]
+prefix = 'spike/'
+aliases = ['experiment']
 ```
 
 ### Local overrides (`.rimba/settings.local.toml`)
@@ -82,14 +87,20 @@ rimba init
 
 | Field | Description | Default |
 |-------|-------------|---------|
+| `worktree_dir` | Directory (relative to repo root) where worktrees are created | `../<repo-name>-worktrees` |
 | `copy_files` | Files or directories to copy from repo root into new worktrees | auto-detected on `rimba init` from gitignored local files; falls back to `.env`, `.env.local`, `.envrc`, `.tool-versions` |
 | `post_create` | Shell commands to run in new worktrees after creation | (none) |
+| `post_rename` | Shell commands to run after `rimba rename` | (none) |
+| `command_timeout` | Deadline for internal git/gh subprocess calls, as a Go duration (e.g. `90s`, `2m`) — does not bound `post_create`/`post_rename` hooks or `deps.modules[].install`, which are unbounded | `120s` |
 | `open.<name>` | Named shortcut command for `rimba open --with <name>` | (none) |
 | `deps.auto_detect` | Auto-detect dependency modules from lockfiles | `true` |
 | `deps.modules[].dir` | Dependency directory to clone (e.g. `node_modules`) | — |
 | `deps.modules[].lockfile` | Lockfile used to match worktrees (e.g. `pnpm-lock.yaml`) | — |
 | `deps.modules[].install` | Install command to run if no matching worktree is found | — |
 | `deps.modules[].work_dir` | Subdirectory to run the install command in | (repo root) |
+| `deps.concurrency` | Max parallel dependency-module installs | `auto (0)` |
+| `resolver.prefix[].prefix` | Custom branch prefix to register, added to the built-ins (e.g. `spike/`) | — |
+| `resolver.prefix[].aliases` | Alternative creation tokens for the prefix (e.g. `experiment` → `spike/`) | (none) |
 
 ## Auto-Detected Ecosystems
 
