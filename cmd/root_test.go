@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -92,12 +93,18 @@ func TestPersistentPreRunEConfigLoadError(t *testing.T) {
 
 func TestPersistentPreRunESuccess(t *testing.T) {
 	dir := t.TempDir()
-	cfg := &config.Config{WorktreeDir: "../worktrees", DefaultSource: "main"}
+	cfg := &config.Config{WorktreeDir: "../worktrees"}
 	if err := config.Save(filepath.Join(dir, config.FileName), cfg); err != nil {
 		t.Fatalf("Save config: %v", err)
 	}
 
-	r := repoRootRunner(dir, nil)
+	// default_source is internal-only (toml:"-") and is always re-derived from git.
+	r := repoRootRunner(dir, func(args ...string) (string, error) {
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", errors.New("unexpected")
+	})
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -125,12 +132,18 @@ func TestPersistentPreRunESuccessWithDirConfig(t *testing.T) {
 	if err := os.MkdirAll(rimbaDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	cfg := &config.Config{WorktreeDir: "../worktrees", DefaultSource: "main"}
+	cfg := &config.Config{WorktreeDir: "../worktrees"}
 	if err := config.Save(filepath.Join(rimbaDir, config.TeamFile), cfg); err != nil {
 		t.Fatalf("Save config: %v", err)
 	}
 
-	r := repoRootRunner(dir, nil)
+	// default_source is internal-only (toml:"-") and is always re-derived from git.
+	r := repoRootRunner(dir, func(args ...string) (string, error) {
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", errors.New("unexpected")
+	})
 	restore := overrideNewRunner(r)
 	defer restore()
 

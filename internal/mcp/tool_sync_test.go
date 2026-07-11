@@ -50,7 +50,7 @@ func TestSyncToolRequiresConfig(t *testing.T) {
 func TestSyncToolRejectsInvalidConfig(t *testing.T) {
 	hctx := &HandlerContext{
 		Runner:   &mockRunner{},
-		Config:   &config.Config{DefaultSource: "--upload-pack=x"},
+		Config:   &config.Config{CommandTimeout: "notaduration"},
 		RepoRoot: "/repo",
 		Version:  "test",
 	}
@@ -58,8 +58,8 @@ func TestSyncToolRejectsInvalidConfig(t *testing.T) {
 
 	result := callTool(t, handler, map[string]any{"all": true})
 	errText := resultError(t, result)
-	if !strings.Contains(errText, "default_source") {
-		t.Errorf("expected default_source validation error, got: %s", errText)
+	if !strings.Contains(errText, "command_timeout") {
+		t.Errorf("expected command_timeout validation error, got: %s", errText)
 	}
 }
 

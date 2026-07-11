@@ -60,19 +60,13 @@ func spinnerOpts(cmd *cobra.Command) spinner.Options {
 	return spinner.Options{Writer: w, NoColor: noColor}
 }
 
-// resolveMainBranch tries to get the main branch from config, falling back to DefaultBranch.
+// resolveMainBranch returns the repo's default branch, always derived from git
+// (default_source is internal-only and never a user-configurable override).
 func resolveMainBranch(ctx context.Context, r git.Runner) (string, error) {
-	repoRoot, err := git.MainRepoRoot(ctx, r)
-	if err != nil {
+	if _, err := git.MainRepoRoot(ctx, r); err != nil {
 		return "", err
 	}
-
-	var configDefault string
-	if cfg, err := config.Resolve(repoRoot); err == nil {
-		configDefault = cfg.DefaultSource
-	}
-
-	return operations.ResolveMainBranch(ctx, r, configDefault)
+	return git.DefaultBranch(ctx, r)
 }
 
 // listWorktreeInfos converts git worktree entries to resolver-compatible WorktreeInfo slice.
@@ -110,12 +104,11 @@ func withBestEffortConfig(cmd *cobra.Command) context.Context {
 	if err != nil {
 		return ctx
 	}
-	var defaultBranch string
-	if cfg.DefaultSource == "" {
-		defaultBranch, err = git.DefaultBranch(ctx, r)
-		if err != nil {
-			return ctx
-		}
+	// default_source is internal-only and never round-trips from config, so the
+	// default branch is always derived from git here.
+	defaultBranch, err := git.DefaultBranch(ctx, r)
+	if err != nil {
+		return ctx
 	}
 	cfg.FillDefaults(filepath.Base(repoRoot), defaultBranch)
 	if err := cfg.Validate(); err != nil {
