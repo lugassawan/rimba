@@ -110,8 +110,8 @@ func TestRemoveDeletesUnmergedBranch(t *testing.T) {
 	}
 }
 
-// TestRemovePrunableWorktreeRecovers guards #405: an orphaned worktree (dir
-// present, .git deleted out-of-band) must be healed via repair and fully removed, not just deregistered.
+// TestRemovePrunableWorktreeRecovers: an orphaned worktree (dir present, .git
+// deleted out-of-band) must be healed via repair and fully removed, not just deregistered.
 func TestRemovePrunableWorktreeRecovers(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
@@ -140,7 +140,7 @@ func TestRemovePrunableWorktreeRecovers(t *testing.T) {
 		t.Errorf("expected worktree entry for %s to be removed, got: %s", wtPath, out)
 	}
 
-	// Unlike the #374 prune-only recovery, a healed orphan leaves nothing on disk.
+	// Unlike a prune-only recovery, a healed orphan leaves nothing on disk.
 	if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
 		t.Errorf("expected worktree directory %s to be fully removed, stat err: %v", wtPath, err)
 	}

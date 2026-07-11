@@ -363,8 +363,8 @@ func TestMergeRemoveWorktreePrunablePruneFails(t *testing.T) {
 	}
 }
 
-// TestMergePrunableSourceHealsAndRemoves guards #405: repair+remove now heal
-// a prunable source fully, so the message must say "Removed worktree", not the #374-era "Cleared stale worktree registration".
+// TestMergePrunableSourceHealsAndRemoves: repair+remove now heal a prunable
+// source fully, so the message must say "Removed worktree", not "Cleared stale worktree registration".
 func TestMergePrunableSourceHealsAndRemoves(t *testing.T) {
 	prunableWorktreeOut := "worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\n" +
 		"worktree /wt/feature-login\nHEAD def456\nbranch refs/heads/feature/login\nprunable gitdir file points to non-existent location\n"
@@ -408,7 +408,7 @@ func TestMergePrunableSourceHealsAndRemoves(t *testing.T) {
 }
 
 // TestMergePrunableSourceFallbackMessage: when repair+remove both still fail,
-// the prune-only fallback leaves the dir on disk, so the #374-era "Cleared stale worktree registration" wording still applies.
+// the prune-only fallback leaves the dir on disk, so "Cleared stale worktree registration" still applies.
 func TestMergePrunableSourceFallbackMessage(t *testing.T) {
 	prunableWorktreeOut := "worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\n" +
 		"worktree /wt/feature-login\nHEAD def456\nbranch refs/heads/feature/login\nprunable gitdir file points to non-existent location\n"

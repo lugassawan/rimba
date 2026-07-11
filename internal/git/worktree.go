@@ -64,7 +64,7 @@ func MoveWorktree(ctx context.Context, r Runner, oldPath, newPath string, force 
 }
 
 // RepairWorktree recreates a missing .git linkfile from the still-present
-// admin back-pointer, so a subsequent RemoveWorktree can fully remove it (#405).
+// admin back-pointer, so a subsequent RemoveWorktree can fully remove it.
 func RepairWorktree(ctx context.Context, r Runner, path string) error {
 	_, err := r.Run(ctx, cmdWorktree, "repair", "--", path)
 	return err

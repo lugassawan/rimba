@@ -140,8 +140,8 @@ func TestCleanMergedForce(t *testing.T) {
 	}
 }
 
-// TestCleanMergedPrunableRecovers guards #405 through `clean --merged`: a
-// merged, orphaned worktree must be healed via repair and fully removed, not just deregistered.
+// TestCleanMergedPrunableRecovers: through `clean --merged`, a merged,
+// orphaned worktree must be healed via repair and fully removed, not just deregistered.
 func TestCleanMergedPrunableRecovers(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
@@ -164,7 +164,7 @@ func TestCleanMergedPrunableRecovers(t *testing.T) {
 		t.Errorf("expected worktree entry for %s to be removed, got: %s", wtPath, out)
 	}
 
-	// Unlike the #374 prune-only recovery, a healed orphan leaves nothing on disk.
+	// Unlike a prune-only recovery, a healed orphan leaves nothing on disk.
 	if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
 		t.Errorf("expected worktree directory %s to be fully removed, stat err: %v", wtPath, err)
 	}
