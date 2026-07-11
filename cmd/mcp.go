@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"path/filepath"
 
 	"github.com/lugassawan/rimba/internal/config"
@@ -27,8 +28,11 @@ rimba commands with structured parameters and typed responses.`,
 			return err
 		}
 
-		// Config is optional — some tools work without it.
-		cfg, _ := config.Resolve(repoRoot)
+		// Config is optional — absence is tolerated, real load errors are not.
+		cfg, err := config.Resolve(repoRoot)
+		if err != nil && !errors.Is(err, config.ErrConfigAbsent) {
+			return err
+		}
 		if cfg != nil {
 			repoName := filepath.Base(repoRoot)
 			defaultBranch, _ := git.DefaultBranch(cmd.Context(), r)
