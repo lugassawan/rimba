@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/lugassawan/rimba/internal/config"
 )
 
 func TestListToolEmpty(t *testing.T) {
@@ -215,25 +217,9 @@ func TestListToolBehindFilter(t *testing.T) {
 	}
 }
 
-func TestListToolArchivedNoConfig(t *testing.T) {
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) > 0 && args[0] == gitSymbolicRef {
-				return refsOriginMain, nil
-			}
-			if len(args) > 0 && args[0] == gitWorktree {
-				return worktreePorcelain(
-					struct{ path, branch string }{"/repo", "main"},
-				), nil
-			}
-			if len(args) > 0 && args[0] == gitBranch {
-				return "  feature/old-task\n", nil
-			}
-			return "", nil
-		},
-	}
+func TestListToolArchivedRequiresConfig(t *testing.T) {
 	hctx := &HandlerContext{
-		Runner:   r,
+		Runner:   &mockRunner{},
 		Config:   nil,
 		RepoRoot: "/repo",
 		Version:  "test",
@@ -241,8 +227,9 @@ func TestListToolArchivedNoConfig(t *testing.T) {
 	handler := handleList(hctx)
 
 	result := callTool(t, handler, map[string]any{"archived": true})
-	if result.IsError {
-		t.Fatalf("expected success, got error: %s", resultError(t, result))
+	errText := resultError(t, result)
+	if !strings.Contains(errText, "not initialized") {
+		t.Errorf("expected 'not initialized' error, got: %s", errText)
 	}
 }
 
@@ -298,7 +285,7 @@ func TestListToolArchivedResolveMainBranchError(t *testing.T) {
 	}
 	hctx := &HandlerContext{
 		Runner:   r,
-		Config:   nil, // no config
+		Config:   &config.Config{WorktreeDir: ".worktrees"}, // valid; empty DefaultSource → git.DefaultBranch runs
 		RepoRoot: "/repo",
 		Version:  "test",
 	}

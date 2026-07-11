@@ -41,13 +41,13 @@ func handleList(hctx *HandlerContext) server.ToolHandlerFunc {
 
 		r := hctx.Runner
 
-		if archived {
-			return handleListArchived(ctx, r, hctx)
-		}
-
 		cfg, err := hctx.requireConfig()
 		if err != nil {
 			return errorResult(err), nil
+		}
+
+		if archived {
+			return handleListArchived(ctx, r, hctx)
 		}
 
 		ps := cfg.PrefixSet()
