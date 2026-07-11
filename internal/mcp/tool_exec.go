@@ -190,22 +190,22 @@ func buildExecData(command string, results []executor.Result) execData {
 }
 
 type dirtyCheckResult struct {
+	ran     bool
 	dirty   bool
 	warning string
 }
 
-// filterDirty filters worktrees to only those with uncommitted changes.
-// If IsDirty returns an error, the worktree is treated as dirty (included)
-// and a warning is written to os.Stderr so the operator can investigate.
+// filterDirty filters worktrees to only those with uncommitted changes; a
+// check that errors, or never runs due to cancellation, is fail-safe included.
 func filterDirty(ctx context.Context, r git.Runner, worktrees []resolver.WorktreeInfo) []resolver.WorktreeInfo {
 	results := parallel.Collect(ctx, len(worktrees), 8, func(ctx context.Context, i int) dirtyCheckResult {
 		itemCtx, cancel := git.WithItemTimeout(ctx)
 		defer cancel()
 		d, err := git.IsDirty(itemCtx, r, worktrees[i].Path)
 		if err != nil {
-			return dirtyCheckResult{dirty: true, warning: fmt.Sprintf("Warning: cannot check dirty status for %s: %v", worktrees[i].Path, err)}
+			return dirtyCheckResult{ran: true, dirty: true, warning: fmt.Sprintf("Warning: cannot check dirty status for %s: %v", worktrees[i].Path, err)}
 		}
-		return dirtyCheckResult{dirty: d}
+		return dirtyCheckResult{ran: true, dirty: d}
 	})
 
 	for _, res := range results {
@@ -216,7 +216,7 @@ func filterDirty(ctx context.Context, r git.Runner, worktrees []resolver.Worktre
 
 	var out []resolver.WorktreeInfo
 	for i, res := range results {
-		if res.dirty {
+		if !res.ran || res.dirty {
 			out = append(out, worktrees[i])
 		}
 	}

@@ -5,7 +5,12 @@ import (
 	"errors"
 	"os/exec"
 	"sync"
+	"time"
 )
+
+// terminationGracePeriod bounds SIGTERM-to-SIGKILL escalation for a cancelled
+// ShellRunner subprocess tree; kept separate from git's gracefulShutdownDelay.
+const terminationGracePeriod = 5 * time.Second
 
 // RunFunc executes a shell command in a directory and returns its output.
 // Non-zero exit codes are reported via exitCode (not err).
@@ -102,6 +107,9 @@ func ShellRunner() RunFunc {
 		var stdout, stderr safeBuffer
 		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
+
+		cleanup := configureProcessGroup(cmd, terminationGracePeriod)
+		defer cleanup()
 
 		err := cmd.Run()
 		if err != nil {

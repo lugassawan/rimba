@@ -129,6 +129,7 @@ type execOpts struct {
 }
 
 type dirtyResult struct {
+	ran     bool
 	dirty   bool
 	warning string
 }
@@ -273,9 +274,8 @@ func excludeOrphaned(cmd *cobra.Command, worktrees []resolver.WorktreeInfo, ps *
 	return kept
 }
 
-// filterDirtyWorktrees filters worktrees to only those with uncommitted changes.
-// If IsDirty returns an error for a worktree, it is treated as dirty (included)
-// and a warning is emitted to cmd.ErrOrStderr() so the error is visible.
+// filterDirtyWorktrees filters worktrees to only those with uncommitted changes; a
+// check that errors, or never runs due to cancellation, is fail-safe included.
 func filterDirtyWorktrees(ctx context.Context, cmd *cobra.Command, r git.Runner, s *spinner.Spinner, worktrees []resolver.WorktreeInfo) []resolver.WorktreeInfo {
 	n := len(worktrees)
 	var done atomic.Int32
@@ -288,9 +288,9 @@ func filterDirtyWorktrees(ctx context.Context, cmd *cobra.Command, r git.Runner,
 		count := done.Add(1)
 		s.Update(fmt.Sprintf("Checking dirty status... (%d/%d)", count, n))
 		if err != nil {
-			return dirtyResult{dirty: true, warning: fmt.Sprintf("Warning: cannot check dirty status for %s: %v", path, err)}
+			return dirtyResult{ran: true, dirty: true, warning: fmt.Sprintf("Warning: cannot check dirty status for %s: %v", path, err)}
 		}
-		return dirtyResult{dirty: dirty}
+		return dirtyResult{ran: true, dirty: dirty}
 	})
 
 	for _, res := range results {
@@ -301,7 +301,7 @@ func filterDirtyWorktrees(ctx context.Context, cmd *cobra.Command, r git.Runner,
 
 	var out []resolver.WorktreeInfo
 	for i, res := range results {
-		if res.dirty {
+		if !res.ran || res.dirty {
 			out = append(out, worktrees[i])
 		}
 	}
