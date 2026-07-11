@@ -12,18 +12,29 @@ import (
 func printInstallResults(out io.Writer, results []deps.InstallResult) {
 	var printed bool
 	for _, r := range results {
-		if !r.Cloned && r.Error == nil {
+		line := installResultLine(r)
+		if line == "" {
 			continue
 		}
 		if !printed {
 			fmt.Fprintf(out, "  Dependencies:\n")
 			printed = true
 		}
-		if r.Cloned {
-			fmt.Fprintf(out, "    %s: cloned from %s\n", r.Module.Dir, filepath.Base(r.Source))
-		} else if r.Error != nil {
-			fmt.Fprintf(out, "    %s: %v\n", r.Module.Dir, r.Error)
-		}
+		fmt.Fprintf(out, "    %s\n", line)
+	}
+}
+
+// installResultLine formats one dependency's status, or "" for a ran no-op.
+func installResultLine(r deps.InstallResult) string {
+	switch {
+	case r.Cloned:
+		return fmt.Sprintf("%s: cloned from %s", r.Module.Dir, filepath.Base(r.Source))
+	case r.Error != nil:
+		return fmt.Sprintf("%s: %v", r.Module.Dir, r.Error)
+	case !r.Ran:
+		return r.Module.Dir + ": skipped (cancelled)"
+	default:
+		return ""
 	}
 }
 
@@ -51,6 +62,7 @@ func buildDepResults(results []deps.InstallResult) []output.DepResultJSON {
 			Source: r.Source,
 			Cloned: r.Cloned,
 			Error:  errStr(r.Error),
+			Ran:    r.Ran,
 		})
 	}
 	return out
