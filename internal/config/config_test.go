@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -113,9 +114,16 @@ func TestSaveAndLoad(t *testing.T) {
 }
 
 func TestLoadMissing(t *testing.T) {
-	_, err := config.Load(filepath.Join("/nonexistent", config.FileName))
+	path := filepath.Join("/nonexistent", config.FileName)
+	_, err := config.Load(path)
 	if err == nil {
 		t.Fatal("expected error for missing config")
+	}
+	if !errors.Is(err, config.ErrConfigAbsent) {
+		t.Errorf("err = %v, want errors.Is(err, config.ErrConfigAbsent)", err)
+	}
+	if !strings.Contains(err.Error(), path) {
+		t.Errorf("err = %q, want it to contain the checked path %q", err.Error(), path)
 	}
 }
 
@@ -130,6 +138,34 @@ func TestLoadInvalid(t *testing.T) {
 	_, err := config.Load(path)
 	if err == nil {
 		t.Fatal("expected error for invalid TOML")
+	}
+	if errors.Is(err, config.ErrConfigAbsent) {
+		t.Errorf("err = %v, want NOT errors.Is(err, config.ErrConfigAbsent)", err)
+	}
+}
+
+func TestLoadPermissionErrorNotAbsent(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root; chmod 000 has no effect")
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, config.FileName)
+
+	if err := os.WriteFile(path, []byte("worktree_dir = \"../wt\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0644) })
+
+	_, err := config.Load(path)
+	if err == nil {
+		t.Fatal("expected error for unreadable config")
+	}
+	if errors.Is(err, config.ErrConfigAbsent) {
+		t.Errorf("err = %v, want NOT errors.Is(err, config.ErrConfigAbsent) — permission errors are not absence", err)
 	}
 }
 
@@ -466,6 +502,9 @@ func TestLoadDirMissingTeamFile(t *testing.T) {
 	if !strings.Contains(err.Error(), "does not exist") {
 		t.Errorf("error = %q, want substring 'does not exist'", err.Error())
 	}
+	if !errors.Is(err, config.ErrConfigAbsent) {
+		t.Errorf("err = %v, want errors.Is(err, config.ErrConfigAbsent)", err)
+	}
 }
 
 func TestLoadDirMinimalConfig(t *testing.T) {
@@ -641,6 +680,9 @@ func TestResolveNeitherExists(t *testing.T) {
 	_, err := config.Resolve(dir)
 	if err == nil {
 		t.Fatal("expected error when neither config exists")
+	}
+	if !errors.Is(err, config.ErrConfigAbsent) {
+		t.Errorf("err = %v, want errors.Is(err, config.ErrConfigAbsent)", err)
 	}
 }
 

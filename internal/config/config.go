@@ -29,6 +29,12 @@ const (
 // DefaultCommandTimeout is the subprocess deadline used when command_timeout is unset.
 const DefaultCommandTimeout = 120 * time.Second
 
+// ErrConfigAbsent indicates no config file exists (as opposed to one that is
+// present but malformed or unreadable). Callers that treat config as optional
+// can check errors.Is(err, ErrConfigAbsent) to distinguish absence from a
+// real load failure.
+var ErrConfigAbsent = errors.New("config not found")
+
 type Config struct {
 	WorktreeDir string `toml:"worktree_dir,omitempty"`
 	// DefaultSource is internal-only: always derived from the repo's default
@@ -136,10 +142,13 @@ func DefaultConfig(repoName, defaultBranch string) *Config {
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, errhint.WithFix(
-			fmt.Errorf("config not found: %w", err),
-			"run 'rimba init' to create a default .rimba/settings.toml",
-		)
+		if os.IsNotExist(err) {
+			return nil, errhint.WithFix(
+				fmt.Errorf("%w: %s", ErrConfigAbsent, path),
+				"run 'rimba init' to create a default .rimba/settings.toml",
+			)
+		}
+		return nil, fmt.Errorf("failed to read config %s: %w", path, err)
 	}
 
 	var cfg Config
@@ -197,8 +206,9 @@ func Merge(team, local *Config) *Config {
 	return &merged
 }
 
-// LoadDir loads the team config (required) and optional local override from
-// a .rimba/ directory, merges them, and validates the result.
+// LoadDir loads the team config (required) and optional local override from a
+// .rimba/ directory and merges them. Validation is the caller's responsibility
+// (see Config.Validate).
 func LoadDir(dirPath string) (*Config, error) {
 	team, err := loadRaw(filepath.Join(dirPath, TeamFile))
 	if err != nil {
@@ -206,7 +216,7 @@ func LoadDir(dirPath string) (*Config, error) {
 	}
 	if team == nil {
 		return nil, errhint.WithFix(
-			fmt.Errorf("config not found: %s does not exist", filepath.Join(dirPath, TeamFile)),
+			fmt.Errorf("%s does not exist: %w", filepath.Join(dirPath, TeamFile), ErrConfigAbsent),
 			"run 'rimba init' to create a default .rimba/settings.toml",
 		)
 	}
