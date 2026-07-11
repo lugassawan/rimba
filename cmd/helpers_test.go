@@ -461,6 +461,27 @@ func TestReapConfidentLocksSkipsAliveOwnerLock(t *testing.T) {
 	}
 }
 
+func TestReapConfidentLocksSuppressesOutputInJSONMode(t *testing.T) {
+	commonDir := t.TempDir()
+	lockPath := writeLockFileWithAge(t, commonDir, operations.MinLockAge+time.Second)
+	adminDir := filepath.Dir(lockPath)
+	plantSweepManifest(t, commonDir, testutil.DeadPID(t), []string{adminDir})
+
+	restore := overrideNewRunner(mockCommonDirRunner(commonDir))
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	_ = cmd.Flags().Set(flagJSON, "true")
+	reapConfidentLocks(cmd.Context(), cmd, newRunner(cmd.Context()))
+
+	if buf.String() != "" {
+		t.Errorf("output = %q, want no output in JSON mode even when a lock is recovered", buf.String())
+	}
+	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
+		t.Error("expected the dead-owner lock to still be removed in JSON mode")
+	}
+}
+
 func TestReapConfidentLocksSkipsOnCommonDirFailure(t *testing.T) {
 	restore := overrideNewRunner(notGitRepoRunner())
 	defer restore()

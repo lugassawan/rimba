@@ -23,9 +23,7 @@ import (
 
 const wantCleanCommand = "clean"
 
-// panicReader panics on Read, proving a caller never reaches confirmRemoval's
-// stdin prompt — used by TestCleanMergedJSONNoForceErrors to verify the force
-// gate short-circuits before any stdin read.
+// panicReader panics on Read, proving a caller never reaches confirmRemoval's stdin prompt.
 type panicReader struct{}
 
 func (panicReader) Read(_ []byte) (int, error) {

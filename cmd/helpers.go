@@ -94,7 +94,7 @@ func reapConfidentLocks(ctx context.Context, cmd *cobra.Command, r git.Runner) {
 		return
 	}
 	removals := operations.ReapConfidentLocks(commonDir)
-	if len(removals) == 0 {
+	if len(removals) == 0 || isJSON(cmd) {
 		return
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "Recovered %d stale index.lock file(s) left by an interrupted sweep.\n", len(removals))

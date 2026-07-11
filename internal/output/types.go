@@ -206,9 +206,8 @@ type CleanData struct {
 	RemotePruned      []string `json:"remote_pruned"`
 	RemotePruneErrors []string `json:"remote_prune_errors"`
 
-	// merged/stale (list) mode. Candidates/Cleaned/Warnings must serialize as
-	// [] (never null) when empty, so they intentionally lack omitempty —
-	// unlike the scalar fields above, a zero-length slice here is meaningful.
+	// merged/stale (list) mode; Candidates/Cleaned/Warnings intentionally lack
+	// omitempty so an empty result serializes as [], not null.
 	Candidates   []CleanCandidateJSON `json:"candidates"`
 	Cleaned      []CleanedItemJSON    `json:"cleaned"`
 	CleanedCount int                  `json:"cleaned_count,omitempty"`
