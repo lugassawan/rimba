@@ -456,9 +456,8 @@ func TestCleanMergedDryRun(t *testing.T) {
 	}
 }
 
-// noopCleanStrategy is a minimal cleanStrategy that finds zero candidates,
-// isolating runClean's dry-run gate on reapConfidentLocks from the rest of
-// the sweep pipeline.
+// noopCleanStrategy finds zero candidates, isolating runClean's dry-run
+// gate from the rest of the sweep pipeline.
 func noopCleanStrategy() cleanStrategy {
 	return cleanStrategy{
 		label:      "merged",
@@ -472,10 +471,6 @@ func noopCleanStrategy() cleanStrategy {
 	}
 }
 
-// TestRunCleanDryRunSkipsConfidentReap guards against a confident reap (a
-// real os.Remove) running as a side effect of a documented no-op preview:
-// --dry-run must not touch a lock even when its sweep manifest proves the
-// owner is dead.
 func TestRunCleanDryRunSkipsConfidentReap(t *testing.T) {
 	commonDir := t.TempDir()
 	lockPath := writeLockFileWithAge(t, commonDir, operations.MinLockAge+time.Second)

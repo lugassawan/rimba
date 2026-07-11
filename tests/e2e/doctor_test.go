@@ -63,10 +63,8 @@ func plantStaleLock(t *testing.T, repo string) string {
 	return lockPath
 }
 
-// TestDoctorAutoReapsConfidentDeadOwnerSweepLock guards #383: a stray
-// index.lock left by a sweep whose whole rimba process was killed (not just
-// its git subprocess, #380's scenario) is recovered automatically — no
-// --fix needed — because the sweep manifest proves the owning PID is dead.
+// TestDoctorAutoReapsConfidentDeadOwnerSweepLock: a stray index.lock left by
+// a whole-process-killed sweep is recovered automatically, no --fix needed.
 func TestDoctorAutoReapsConfidentDeadOwnerSweepLock(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
@@ -86,10 +84,8 @@ func TestDoctorAutoReapsConfidentDeadOwnerSweepLock(t *testing.T) {
 	assertFileNotExists(t, manifestPath)
 }
 
-// TestDoctorSkipsConfidentAliveOwnerSweepLock is the counterpart: when the
-// sweep manifest's owner PID is still alive, the lock is left completely
-// untouched — not even under `doctor --fix --force` — because it may still
-// belong to an in-flight sweep.
+// TestDoctorSkipsConfidentAliveOwnerSweepLock is the counterpart: an alive
+// owner PID leaves the lock untouched, even under `doctor --fix --force`.
 func TestDoctorSkipsConfidentAliveOwnerSweepLock(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
@@ -108,11 +104,8 @@ func TestDoctorSkipsConfidentAliveOwnerSweepLock(t *testing.T) {
 	assertFileExists(t, lockPath)
 }
 
-// TestCleanMergedAutoReapsConfidentDeadOwnerSweepLock guards #383's primary
-// reported scenario directly: a `rimba clean --merged` sweep whose whole
-// process was killed (not just its git subprocess) leaves stale
-// index.lock files that the next `clean --merged` run recovers on its own,
-// with no `doctor --fix` needed.
+// TestCleanMergedAutoReapsConfidentDeadOwnerSweepLock: a `clean --merged`
+// sweep killed mid-run leaves a lock the next `clean --merged` recovers.
 func TestCleanMergedAutoReapsConfidentDeadOwnerSweepLock(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
@@ -131,13 +124,8 @@ func TestCleanMergedAutoReapsConfidentDeadOwnerSweepLock(t *testing.T) {
 	assertFileNotExists(t, manifestPath)
 }
 
-// plantSweepManifest writes a sweep manifest at
-// <repo>/.git/rimba/sweeps/sweep-<pid>.json naming adminDir as pid's sole
-// candidate, mirroring what writeSweepManifest produces in production.
-// adminDir is resolved to its canonical form first: git itself canonicalizes
-// symlinked paths (e.g. macOS's /var -> /private/var) when it reports
-// --git-common-dir, so the manifest must record the same canonical string
-// ReapConfidentLocks will compare against, not the raw t.TempDir() path.
+// plantSweepManifest writes a sweep manifest naming adminDir, resolved to
+// its canonical form first since git does the same (e.g. macOS /var -> /private/var).
 func plantSweepManifest(t *testing.T, repo string, pid int, adminDir string) string {
 	t.Helper()
 
@@ -151,11 +139,8 @@ func plantSweepManifest(t *testing.T, repo string, pid int, adminDir string) str
 		t.Fatalf("MkdirAll sweeps dir: %v", err)
 	}
 
-	// StartUnixNano must be at or after the admin dir's own mtime (already
-	// created by rimba add) and within aliveMarkerCeiling, or
-	// classifySweepManifests' recreation/ceiling guards will reject it.
 	startUnixNano := time.Now().Add(time.Second).UnixNano()
-	body := fmt.Sprintf(`{"pid":%d,"start_unix_nano":%d,"admin_dirs":[%q]}`, pid, startUnixNano, realAdminDir)
+	body := fmt.Sprintf(`{"pid":%d,"start_unix_nano":%d,"admin_dirs":[{"path":%q}]}`, pid, startUnixNano, realAdminDir)
 	path := filepath.Join(sweepsDir, fmt.Sprintf("sweep-%d.json", pid))
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatalf("write sweep manifest: %v", err)

@@ -12,8 +12,7 @@ import (
 )
 
 // setupWorktree creates a fake worktree at <root>/wt-<name> whose `.git`
-// pointer file resolves to a real admin dir at <commonDir>/worktrees/<name>,
-// mirroring what `git worktree add` produces.
+// pointer file resolves to a real admin dir, mirroring `git worktree add`.
 func setupWorktree(t *testing.T, root, commonDir, name string) (worktreePath, adminDir string) {
 	t.Helper()
 	worktreePath = filepath.Join(root, "wt-"+name)
@@ -69,8 +68,8 @@ func TestWriteSweepManifestResolvesAdminDirs(t *testing.T) {
 	if m.PID != os.Getpid() {
 		t.Errorf("PID = %d, want %d", m.PID, os.Getpid())
 	}
-	if len(m.AdminDirs) != 1 || m.AdminDirs[0] != adminDir {
-		t.Errorf("AdminDirs = %v, want [%s]", m.AdminDirs, adminDir)
+	if len(m.AdminDirs) != 1 || m.AdminDirs[0].Path != adminDir {
+		t.Errorf("AdminDirs = %+v, want [{Path: %s}]", m.AdminDirs, adminDir)
 	}
 }
 
@@ -78,7 +77,7 @@ func TestWriteSweepManifestSkipsUnreadableGit(t *testing.T) {
 	root := t.TempDir()
 	commonDir := filepath.Join(root, "common")
 	// A worktree candidate with no .git pointer file at all, e.g. a
-	// prunable worktree (#374) whose .git has already been removed.
+	// prunable worktree whose .git has already been removed.
 	prunablePath := filepath.Join(root, "wt-gone")
 	if err := os.MkdirAll(prunablePath, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
@@ -139,9 +138,6 @@ func TestWriteSweepManifestBestEffortOnUnwritableDir(t *testing.T) {
 	cleanup()
 }
 
-// TestWriteSweepManifestBestEffortWhenAtomicWriteFails covers the
-// atomicWriteFile-failure branch specifically: sweepsDir already exists (so
-// MkdirAll is a trivial success) but isn't writable, so os.CreateTemp fails.
 func TestWriteSweepManifestBestEffortWhenAtomicWriteFails(t *testing.T) {
 	commonDir := t.TempDir()
 	sweepsDir := filepath.Join(commonDir, sweepManifestDir)
@@ -249,14 +245,8 @@ func TestReapConfidentLocksNoManifestsIsNoop(t *testing.T) {
 	}
 }
 
-// writeManifestFixture writes a sweep manifest directly, bypassing
-// writeSweepManifest, so tests can plant an arbitrary PID (e.g. one
-// confirmed dead) without needing a real worktree candidate list.
-// StartUnixNano defaults to just after "now" — at or after the admin dir's
-// own mtime (the caller already created it via setupWorktree) and within
-// aliveMarkerCeiling — since classifySweepManifests' recreation/ceiling
-// guards would otherwise reject it. Use writeManifestFixtureWithStart to
-// exercise those guards directly.
+// writeManifestFixture plants a manifest for an arbitrary PID, capturing
+// each admin dir's real inode to match production behavior.
 func writeManifestFixture(t *testing.T, commonDir string, pid int, adminDirs []string) {
 	t.Helper()
 	writeManifestFixtureWithStart(t, commonDir, pid, adminDirs, time.Now().Add(time.Second).UnixNano())
@@ -264,11 +254,29 @@ func writeManifestFixture(t *testing.T, commonDir string, pid int, adminDirs []s
 
 func writeManifestFixtureWithStart(t *testing.T, commonDir string, pid int, adminDirs []string, startUnixNano int64) {
 	t.Helper()
+	records := make([]adminDirRecord, len(adminDirs))
+	for i, dir := range adminDirs {
+		ino, hasIno := dirIno(dir)
+		records[i] = adminDirRecord{Path: dir, Ino: ino, HasIno: hasIno}
+	}
+	writeManifestFixtureWithRecords(t, commonDir, pid, records, startUnixNano)
+}
+
+// writeManifestFixtureWithStaleIno plants a manifest with a deliberately
+// wrong inode for adminDir, simulating a since-reused worktree basename.
+func writeManifestFixtureWithStaleIno(t *testing.T, commonDir string, pid int, adminDir string) {
+	t.Helper()
+	records := []adminDirRecord{{Path: adminDir, Ino: 999999999, HasIno: true}}
+	writeManifestFixtureWithRecords(t, commonDir, pid, records, time.Now().Add(time.Second).UnixNano())
+}
+
+func writeManifestFixtureWithRecords(t *testing.T, commonDir string, pid int, records []adminDirRecord, startUnixNano int64) {
+	t.Helper()
 	sweepsDir := filepath.Join(commonDir, sweepManifestDir)
 	if err := os.MkdirAll(sweepsDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	m := sweepManifest{PID: pid, StartUnixNano: startUnixNano, AdminDirs: adminDirs}
+	m := sweepManifest{PID: pid, StartUnixNano: startUnixNano, AdminDirs: records}
 	data, err := json.Marshal(m)
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)
@@ -313,10 +321,7 @@ func TestAliveSweepAdminDirsNoManifests(t *testing.T) {
 }
 
 // TestAliveSweepAdminDirsIgnoresManifestPastCeiling guards the Windows/
-// PID-reuse case: proc.Alive always reports true on Windows, and a PID can
-// be reused by an unrelated process, so an "alive" manifest older than
-// aliveMarkerCeiling must be dropped rather than permanently vetoing
-// doctor --fix for its locks.
+// PID-reuse case: an "alive" manifest older than the ceiling must be dropped.
 func TestAliveSweepAdminDirsIgnoresManifestPastCeiling(t *testing.T) {
 	root := t.TempDir()
 	commonDir := filepath.Join(root, "common")
@@ -331,36 +336,45 @@ func TestAliveSweepAdminDirsIgnoresManifestPastCeiling(t *testing.T) {
 	}
 }
 
-// TestReapConfidentLocksSkipsAdminDirRecreatedSinceManifest guards against
-// worktree-basename reuse: if adminDir was recreated (e.g. a new, unrelated
-// worktree reusing the same path) after the dead-owner manifest's sweep
-// started, that manifest's PID no longer attests to whatever now lives at
-// adminDir, so its lock must not be reaped.
-func TestReapConfidentLocksSkipsAdminDirRecreatedSinceManifest(t *testing.T) {
+// TestReapConfidentLocksSkipsAdminDirWithChangedIdentity guards against
+// worktree-basename reuse: a manifest's recorded inode no longer matching wins.
+func TestReapConfidentLocksSkipsAdminDirWithChangedIdentity(t *testing.T) {
 	root := t.TempDir()
 	commonDir := filepath.Join(root, "common")
 	_, adminDir := setupWorktree(t, root, commonDir, "wt-a")
 
-	// Manifest claims to predate adminDir's creation — simulating a dead
-	// sweep whose manifest still names a path that was later reused by a
-	// fresh, unrelated worktree.
-	staleStart := time.Now().Add(-time.Hour).UnixNano()
-	writeManifestFixtureWithStart(t, commonDir, testutil.DeadPID(t), []string{adminDir}, staleStart)
+	writeManifestFixtureWithStaleIno(t, commonDir, testutil.DeadPID(t), adminDir)
 
 	lockPath := writeIndexLock(t, adminDir, MinLockAge+time.Second)
 
 	removals := ReapConfidentLocks(commonDir)
 	if len(removals) != 0 {
-		t.Errorf("removals = %+v, want none (admin dir recreated after manifest was written)", removals)
+		t.Errorf("removals = %+v, want none (admin dir's inode no longer matches the manifest)", removals)
 	}
 	if _, err := os.Stat(lockPath); err != nil {
-		t.Error("expected lock to remain; admin dir postdates the dead manifest")
+		t.Error("expected lock to remain; admin dir identity changed since the manifest was written")
 	}
 }
 
-// TestClassifySweepManifestsGlobError covers the malformed-pattern branch:
-// an unmatched '[' in commonDir makes filepath.Glob itself error, and that
-// error must fail soft (no panic, no matches) rather than propagate.
+// TestReapConfidentLocksReapsDespiteInternalMtimeBump is a regression test:
+// a lock created inside adminDir bumps its mtime but must not read as recreated.
+func TestReapConfidentLocksReapsDespiteInternalMtimeBump(t *testing.T) {
+	root := t.TempDir()
+	commonDir := filepath.Join(root, "common")
+	_, adminDir := setupWorktree(t, root, commonDir, "wt-a")
+
+	writeManifestFixture(t, commonDir, testutil.DeadPID(t), []string{adminDir})
+
+	// Written after the manifest, exactly like a real sweep's git
+	// subprocess creating index.lock inside its own admin dir.
+	lockPath := writeIndexLock(t, adminDir, MinLockAge+time.Second)
+
+	removals := ReapConfidentLocks(commonDir)
+	if len(removals) != 1 || removals[0].Path != lockPath {
+		t.Fatalf("removals = %+v, want exactly [%s] (same dir, only its mtime changed)", removals, lockPath)
+	}
+}
+
 func TestClassifySweepManifestsGlobError(t *testing.T) {
 	commonDir := filepath.Join(t.TempDir(), "unmatched[bracket")
 	deadDirs, aliveDirs, deadManifests := classifySweepManifests(commonDir)
@@ -369,10 +383,8 @@ func TestClassifySweepManifestsGlobError(t *testing.T) {
 	}
 }
 
-// TestReapConfidentLocksHandlesMissingAdminDir covers
-// adminDirRecreatedSince's os.Stat-error branch: a dead-owner manifest
-// naming an admin dir that no longer exists (already removed) must not
-// crash and simply finds nothing to reap there.
+// TestReapConfidentLocksHandlesMissingAdminDir covers a dead-owner manifest
+// naming an admin dir that no longer exists — must not crash.
 func TestReapConfidentLocksHandlesMissingAdminDir(t *testing.T) {
 	commonDir := t.TempDir()
 	missingAdminDir := filepath.Join(commonDir, "worktrees", "wt-gone")
@@ -385,10 +397,8 @@ func TestReapConfidentLocksHandlesMissingAdminDir(t *testing.T) {
 	assertManifestsGone(t, commonDir)
 }
 
-// TestReadSweepManifestReadError covers readSweepManifest's os.ReadFile
-// error branch (distinct from the JSON-unmarshal-error path already
-// covered by TestReapConfidentLocksIgnoresTornManifest): a manifest "file"
-// that's actually a directory fails to read, not to parse.
+// TestReadSweepManifestReadError covers a read error distinct from the
+// JSON-parse error already covered by TestReapConfidentLocksIgnoresTornManifest.
 func TestReadSweepManifestReadError(t *testing.T) {
 	commonDir := t.TempDir()
 	sweepsDir := filepath.Join(commonDir, sweepManifestDir)
@@ -403,9 +413,6 @@ func TestReadSweepManifestReadError(t *testing.T) {
 	}
 }
 
-// TestReadWorktreeAdminDirMalformedGitFile covers the CutPrefix-not-found
-// branch: a .git file whose content doesn't start with "gitdir:" (corrupt
-// or unexpected format) is treated the same as unreadable — ok=false.
 func TestReadWorktreeAdminDirMalformedGitFile(t *testing.T) {
 	worktreePath := t.TempDir()
 	if err := os.WriteFile(filepath.Join(worktreePath, ".git"), []byte("not a gitdir pointer\n"), 0o644); err != nil {

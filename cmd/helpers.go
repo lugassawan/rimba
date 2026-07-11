@@ -70,9 +70,7 @@ func resolveMainBranch(ctx context.Context, r git.Runner) (string, error) {
 }
 
 // reapConfidentLocks best-effort recovers stale index.lock files left by a
-// sweep whose owning process can be proven dead (#383). A CommonDir
-// resolution failure skips the reap silently rather than blocking the
-// caller's own work; this runs as an auto-preflight before clean/merge.
+// sweep whose owner is proven dead; a CommonDir failure skips it silently.
 func reapConfidentLocks(ctx context.Context, cmd *cobra.Command, r git.Runner) {
 	commonDir, err := git.CommonDir(ctx, r)
 	if err != nil {

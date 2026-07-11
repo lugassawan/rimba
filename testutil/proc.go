@@ -5,10 +5,8 @@ import (
 	"testing"
 )
 
-// DeadPID spawns and reaps a trivial child process, returning a PID that is
-// confirmed dead for the rest of the test process's lifetime — useful for
-// exercising liveness-probe code paths without depending on OS-specific
-// process table quirks.
+// DeadPID spawns and reaps a trivial child, returning a PID confirmed dead
+// for the rest of the test process's lifetime.
 func DeadPID(t *testing.T) int {
 	t.Helper()
 	cmd := exec.Command("true")

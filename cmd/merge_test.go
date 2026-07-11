@@ -574,8 +574,7 @@ func TestMergeDryRun(t *testing.T) {
 }
 
 // mergeTestRunnerWithCommonDir is mergeTestRunner plus a real, controlled
-// --git-common-dir response, so a planted sweep manifest + lock under
-// commonDir is where reapConfidentLocks will actually look.
+// --git-common-dir response, so a planted manifest is where the reap looks.
 func mergeTestRunnerWithCommonDir(commonDir string) *mockRunner {
 	return &mockRunner{
 		run: func(args ...string) (string, error) {
@@ -596,9 +595,6 @@ func mergeTestRunnerWithCommonDir(commonDir string) *mockRunner {
 	}
 }
 
-// TestMergeDryRunSkipsConfidentReap guards against a confident reap (a real
-// os.Remove) running as a side effect of a documented no-op preview: --dry-run
-// must not touch a lock even when its sweep manifest proves the owner is dead.
 func TestMergeDryRunSkipsConfidentReap(t *testing.T) {
 	commonDir := t.TempDir()
 	lockPath := writeLockFileWithAge(t, commonDir, operations.MinLockAge+time.Second)

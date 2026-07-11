@@ -235,10 +235,8 @@ func TestDoctorCommonDirError(t *testing.T) {
 	}
 }
 
-// TestDoctorThreeWaySplit exercises all three buckets in one run: a lock
-// whose manifest owner is confirmed dead (auto-recovered), a lock whose
-// manifest owner is still alive (skipped even under --fix --force), and a
-// markerless lock (falls through to the existing age-based --fix flow).
+// TestDoctorThreeWaySplit exercises all three buckets in one run: dead
+// owner (auto-recovered), alive owner (skipped), and markerless (age-based).
 func TestDoctorThreeWaySplit(t *testing.T) {
 	commonDir := t.TempDir()
 
@@ -305,18 +303,12 @@ func TestDoctorThreeWaySplit(t *testing.T) {
 }
 
 // TestDoctorFixRecoversAliveMarkerPastCeiling guards the Windows/PID-reuse
-// escape hatch: proc.Alive always reports true on Windows (no signal-0
-// probe there), and a PID can be reused by an unrelated process, so an
-// "alive" manifest older than operations' aliveMarkerCeiling must not
-// permanently block `doctor --fix --force` — it falls back to the normal
-// age-based flow instead.
+// escape hatch: an "alive" manifest past the ceiling falls back to --fix.
 func TestDoctorFixRecoversAliveMarkerPastCeiling(t *testing.T) {
 	commonDir := t.TempDir()
 	lockPath := writeLockFileWithAge(t, commonDir, operations.MinLockAge+time.Second)
 	adminDir := filepath.Dir(lockPath)
-	// Comfortably past operations.aliveMarkerCeiling (5 minutes); the exact
-	// value is unexported, so this uses a generous margin instead of the
-	// constant itself.
+	// Comfortably past operations.aliveMarkerCeiling (unexported, so a generous margin).
 	ancientStart := time.Now().Add(-time.Hour).UnixNano()
 	plantSweepManifestWithStart(t, commonDir, os.Getpid(), []string{adminDir}, ancientStart)
 
@@ -342,9 +334,6 @@ func TestDoctorFixRecoversAliveMarkerPastCeiling(t *testing.T) {
 	}
 }
 
-// TestDoctorReportsConfidentReapRemovalFailure guards reportConfidentReap's
-// failure branch: a confidently-dead-owner lock that fails to actually be
-// removed (e.g. a permissions issue) is reported instead of silently dropped.
 func TestDoctorReportsConfidentReapRemovalFailure(t *testing.T) {
 	commonDir := t.TempDir()
 	lockPath := writeLockFileWithAge(t, commonDir, operations.MinLockAge+time.Second)

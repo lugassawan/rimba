@@ -63,10 +63,8 @@ func init() {
 	rootCmd.AddCommand(doctorCmd)
 }
 
-// partitionByAliveMarker splits locks into markerless (no manifest claims
-// this admin dir, or its owner's liveness is unconfirmed) and skippedAlive
-// (a manifest claims it and the owner is confirmed alive — never touched by
-// either the confident reap or the age-based --fix flow).
+// partitionByAliveMarker splits locks into markerless and skippedAlive (a
+// manifest claims it and the owner is confirmed alive — never touched).
 func partitionByAliveMarker(locks []operations.LockInfo, aliveAdminDirs map[string]bool) (markerless, skippedAlive []operations.LockInfo) {
 	for _, l := range locks {
 		if aliveAdminDirs[filepath.Dir(l.Path)] {
@@ -78,9 +76,8 @@ func partitionByAliveMarker(locks []operations.LockInfo, aliveAdminDirs map[stri
 	return markerless, skippedAlive
 }
 
-// reportConfidentReap announces any locks recovered via sweep-manifest
-// evidence (marker present, owner PID confirmed dead) before the manual,
-// age-based flow below even runs.
+// reportConfidentReap announces locks recovered via sweep-manifest evidence
+// before the manual, age-based flow below even runs.
 func reportConfidentReap(cmd *cobra.Command, removals []operations.LockRemoval) {
 	if len(removals) == 0 {
 		return

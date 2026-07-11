@@ -95,7 +95,9 @@ func MergeWorktree(ctx context.Context, r git.Runner, params MergeParams, onProg
 	shouldDelete := (mergingToMain && !params.Keep) || (!mergingToMain && params.Delete)
 	if shouldDelete {
 		progress.Notify(onProgress, "Removing worktree...")
-		defer deferSweepManifest(ctx, r, []string{source.Path})()
+		if !params.DryRun {
+			defer deferSweepManifest(ctx, r, []string{source.Path})()
+		}
 		var wtRemoved, brDeleted bool
 		rmErr := plan.Do("remove worktree: "+source.Path, func() error {
 			var err error

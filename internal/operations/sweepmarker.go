@@ -16,30 +16,28 @@ import (
 // sweepManifestDir is where sweep manifests live, relative to commonDir.
 const sweepManifestDir = "rimba/sweeps"
 
-// aliveMarkerCeiling bounds how long an "alive" classification is trusted,
-// mirroring internal/fileutil/gitignore.go's gitignoreStaleLockAge. proc.Alive
-// always reports true on Windows (no signal-0 probe there), and a PID can be
-// reused by an unrelated process, so a manifest still "alive" past this
-// ceiling is downgraded to markerless (neither confidently alive nor dead)
-// instead of permanently vetoing the manual, age-based doctor --fix path.
+// aliveMarkerCeiling caps how long an "alive" classification is trusted —
+// proc.Alive is always true on Windows, so a stale manifest can't permanently block doctor --fix.
 const aliveMarkerCeiling = 5 * time.Minute
 
-// sweepManifest records enough about an in-flight clean/remove/merge sweep
-// to let a later run prove — rather than guess — that a stale index.lock
-// belongs to a sweep whose owning process is confirmed dead (#383).
+// sweepManifest records a sweep's PID, start time, and admin dirs — enough
+// for a later run to prove (not guess) that its owner is dead.
 type sweepManifest struct {
-	PID           int      `json:"pid"`
-	StartUnixNano int64    `json:"start_unix_nano"`
-	AdminDirs     []string `json:"admin_dirs"`
+	PID           int              `json:"pid"`
+	StartUnixNano int64            `json:"start_unix_nano"`
+	AdminDirs     []adminDirRecord `json:"admin_dirs"`
 }
 
-// ReapConfidentLocks removes index.lock files that can be attributed to a
-// dead sweep with confidence: the lock's worktree admin dir appears in a
-// sweep manifest whose owning PID is confirmed dead, and the lock is at
-// least MinLockAge old (guards against a fresh sweep racing this scan).
-// Manifests with a markerless lock, an alive owner, or a torn/unparseable
-// body are left untouched — they stay on the manual, age-based `doctor
-// --fix` path instead.
+// adminDirRecord pairs an admin dir path with its inode at manifest-write
+// time, so a later run can tell it apart from a same-path recreated dir.
+type adminDirRecord struct {
+	Path   string `json:"path"`
+	Ino    uint64 `json:"ino"`
+	HasIno bool   `json:"has_ino"`
+}
+
+// ReapConfidentLocks removes locks whose admin dir is in a manifest with a
+// confirmed-dead owner and an age past MinLockAge; everything else stays on doctor --fix.
 func ReapConfidentLocks(commonDir string) []LockRemoval {
 	deadAdminDirs, _, deadManifests := classifySweepManifests(commonDir)
 	defer removeManifests(deadManifests)
@@ -63,30 +61,26 @@ func ReapConfidentLocks(commonDir string) []LockRemoval {
 	return RemoveStaleLocks(confident)
 }
 
-// AliveSweepAdminDirs returns the admin dirs claimed by sweep manifests
-// whose owning PID is confirmed alive. `rimba doctor` uses this to
-// distinguish a marker+alive lock (still owned by a running sweep, so it
-// must never be touched even under --force) from a markerless one that
-// falls back to the age-based removal flow.
+// AliveSweepAdminDirs returns admin dirs claimed by a confirmed-alive owner,
+// so doctor skips them (even under --force) instead of the age-based flow.
 func AliveSweepAdminDirs(commonDir string) map[string]bool {
 	_, aliveAdminDirs, _ := classifySweepManifests(commonDir)
 	return aliveAdminDirs
 }
 
-// writeSweepManifest records this process's PID, start time, and the admin
-// dirs of worktreePaths, so a later confident reap can attribute an
-// orphaned lock back to this sweep. Candidates whose `.git` pointer file
-// can't be read (e.g. a prunable worktree, #374) are skipped — there's no
-// admin dir to resolve. The returned cleanup is always safe to call and
-// best-effort: a write failure here must never abort the actual removal.
+// writeSweepManifest records this sweep's PID/start/admin dirs so a later
+// reap can attribute an orphaned lock to it; best-effort, never aborts the caller.
 func writeSweepManifest(commonDir string, worktreePaths []string) (cleanup func()) {
 	noop := func() {}
 
-	adminDirs := make([]string, 0, len(worktreePaths))
+	adminDirs := make([]adminDirRecord, 0, len(worktreePaths))
 	for _, p := range worktreePaths {
-		if dir, ok := readWorktreeAdminDir(p); ok {
-			adminDirs = append(adminDirs, dir)
+		dir, ok := readWorktreeAdminDir(p)
+		if !ok {
+			continue
 		}
+		ino, hasIno := dirIno(dir)
+		adminDirs = append(adminDirs, adminDirRecord{Path: dir, Ino: ino, HasIno: hasIno})
 	}
 
 	sweepsDir := filepath.Join(commonDir, sweepManifestDir)
@@ -112,12 +106,8 @@ func writeSweepManifest(commonDir string, worktreePaths []string) (cleanup func(
 	return func() { _ = os.Remove(path) }
 }
 
-// deferSweepManifest resolves commonDir and writes a sweep manifest for
-// paths, in one call so the result can be deferred at the call site:
-// defer deferSweepManifest(ctx, r, paths)(). Best-effort: a CommonDir
-// failure, or a non-absolute result (seen in loosely-stubbed test runners,
-// which must never resolve to the process's real working directory),
-// skips the manifest rather than aborting the caller.
+// deferSweepManifest writes a manifest for paths so its cleanup can be
+// deferred at the call site; best-effort no-op on a CommonDir failure.
 func deferSweepManifest(ctx context.Context, r git.Runner, paths []string) func() {
 	commonDir, err := git.CommonDir(ctx, r)
 	if err != nil || !filepath.IsAbs(commonDir) {
@@ -126,17 +116,8 @@ func deferSweepManifest(ctx context.Context, r git.Runner, paths []string) func(
 	return writeSweepManifest(commonDir, paths)
 }
 
-// classifySweepManifests scans every sweep manifest under commonDir and
-// splits their recorded admin dirs by whether the owning PID is confirmed
-// dead or alive; deadManifests collects the paths of dead-owner manifests
-// so a caller can remove them once locks have been matched against
-// deadDirs. Torn/unparseable manifests are skipped (fail-soft); an
-// alive-owner manifest is left in place for a later run to re-check, unless
-// it's past aliveMarkerCeiling, in which case it's dropped from both sets
-// (neither confidently alive nor dead) rather than trusted indefinitely. A
-// dead-owner admin dir is excluded if the directory itself was recreated
-// after the manifest was written — a worktree basename reused by a later,
-// unrelated worktree, whose own lock must not be attributed to this manifest.
+// classifySweepManifests splits manifests' admin dirs into confirmed-dead
+// vs confirmed-alive; torn manifests are skipped (fail-soft).
 func classifySweepManifests(commonDir string) (deadDirs, aliveDirs map[string]bool, deadManifests []string) {
 	matches, err := filepath.Glob(filepath.Join(commonDir, sweepManifestDir, "sweep-*.json"))
 	if err != nil {
@@ -157,24 +138,21 @@ func classifySweepManifests(commonDir string) (deadDirs, aliveDirs map[string]bo
 	return deadDirs, aliveDirs, deadManifests
 }
 
-// classifyManifest routes one manifest's admin dirs into deadDirs or
-// aliveDirs based on proc.Alive, the alive-marker ceiling (Windows/PID-reuse
-// guard), and — for a dead owner — the admin-dir-recreation guard
-// (worktree-basename-reuse guard). Reports whether the owner is confidently
-// dead, so the caller can queue this manifest for removal.
+// classifyManifest routes one manifest's admin dirs into deadDirs/aliveDirs
+// via proc.Alive plus the ceiling and identity guards, and reports dead.
 func classifyManifest(manifest sweepManifest, deadDirs, aliveDirs map[string]bool) (dead bool) {
 	if proc.Alive(manifest.PID) {
 		if !manifestPastCeiling(manifest) {
-			for _, dir := range manifest.AdminDirs {
-				aliveDirs[dir] = true
+			for _, entry := range manifest.AdminDirs {
+				aliveDirs[entry.Path] = true
 			}
 		}
 		return false
 	}
 
-	for _, dir := range manifest.AdminDirs {
-		if !adminDirRecreatedSince(dir, manifest.StartUnixNano) {
-			deadDirs[dir] = true
+	for _, entry := range manifest.AdminDirs {
+		if !adminDirIdentityChanged(entry) {
+			deadDirs[entry.Path] = true
 		}
 	}
 	return true
@@ -186,17 +164,14 @@ func manifestPastCeiling(manifest sweepManifest) bool {
 	return time.Since(time.Unix(0, manifest.StartUnixNano)) > aliveMarkerCeiling
 }
 
-// adminDirRecreatedSince reports whether adminDir's directory entry was
-// (re)created after manifestStart — i.e. a worktree basename was reused
-// after the manifest's sweep started, so its recorded PID no longer
-// attests to whatever now lives at that path. A missing adminDir is not a
-// match (there's no lock to reap there either way).
-func adminDirRecreatedSince(adminDir string, manifestStart int64) bool {
-	info, err := os.Stat(adminDir)
-	if err != nil {
+// adminDirIdentityChanged reports whether entry's dir was removed and a new,
+// unrelated one created at the same path (an internal mtime bump doesn't count).
+func adminDirIdentityChanged(entry adminDirRecord) bool {
+	if !entry.HasIno {
 		return false
 	}
-	return info.ModTime().UnixNano() > manifestStart
+	ino, ok := dirIno(entry.Path)
+	return ok && ino != entry.Ino
 }
 
 // readSweepManifest parses the manifest at path, reporting ok=false for any
@@ -220,10 +195,8 @@ func removeManifests(paths []string) {
 	}
 }
 
-// readWorktreeAdminDir resolves a worktree's admin dir by reading its `.git`
-// pointer file (`gitdir: <commonDir>/worktrees/<id>`) — a plain file read,
-// no git subprocess. Returns ok=false when the file is missing or malformed
-// (e.g. a prunable worktree whose `.git` is already gone, #374).
+// readWorktreeAdminDir resolves a worktree's admin dir from its `.git`
+// pointer file (no git subprocess); ok=false when missing or malformed.
 func readWorktreeAdminDir(worktreePath string) (adminDir string, ok bool) {
 	data, err := os.ReadFile(filepath.Join(worktreePath, ".git"))
 	if err != nil {

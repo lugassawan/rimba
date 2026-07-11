@@ -397,12 +397,8 @@ func TestSpinnerOpts(t *testing.T) {
 	}
 }
 
-// plantSweepManifest writes a sweep manifest directly (bypassing rimba's own
-// writer) so tests can name an arbitrary owner PID and admin dir set.
-// StartUnixNano defaults to just after "now" — at or after each admin dir's
-// own mtime (already created by the caller) and within aliveMarkerCeiling —
-// since classifySweepManifests' recreation/ceiling guards would otherwise
-// reject it. Use plantSweepManifestWithStart to exercise those guards.
+// plantSweepManifest writes a sweep manifest directly, with no recorded
+// inode — the identity guard trusts these by default (untested here).
 func plantSweepManifest(t *testing.T, commonDir string, pid int, adminDirs []string) {
 	t.Helper()
 	plantSweepManifestWithStart(t, commonDir, pid, adminDirs, time.Now().Add(time.Second).UnixNano())
@@ -416,7 +412,7 @@ func plantSweepManifestWithStart(t *testing.T, commonDir string, pid int, adminD
 	}
 	quoted := make([]string, len(adminDirs))
 	for i, d := range adminDirs {
-		quoted[i] = fmt.Sprintf("%q", d)
+		quoted[i] = fmt.Sprintf(`{"path":%q}`, d)
 	}
 	body := fmt.Sprintf(`{"pid":%d,"start_unix_nano":%d,"admin_dirs":[%s]}`, pid, startUnixNano, strings.Join(quoted, ","))
 	path := filepath.Join(sweepsDir, fmt.Sprintf("sweep-%d.json", pid))

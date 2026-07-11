@@ -9,8 +9,7 @@ import (
 )
 
 // Alive reports whether pid is still running, using a signal-0 probe.
-// Only ESRCH or Go's ErrProcessDone count as confirmed-dead; other errors
-// (e.g. EPERM across UIDs) are treated as alive — conservative by design.
+// Only ESRCH/ErrProcessDone count as dead; other errors are treated as alive.
 func Alive(pid int) bool {
 	p, err := os.FindProcess(pid)
 	if err != nil {
