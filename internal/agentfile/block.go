@@ -10,9 +10,8 @@ func containsBlock(content string) bool {
 	return strings.Contains(content, BeginMarker) && strings.Contains(content, EndMarker)
 }
 
-// removeBlock strips the rimba marker block from content. It refuses to guess at
-// content boundaries when BEGIN has no matching END, returning errCorruptBlock
-// instead of silently truncating user prose.
+// removeBlock strips the rimba marker block from content, refusing an orphaned
+// BEGIN (errCorruptBlock) instead of silently truncating user prose.
 func removeBlock(content string) (string, error) {
 	before, afterBegin, found := strings.Cut(content, BeginMarker)
 	if !found {

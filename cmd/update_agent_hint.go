@@ -11,10 +11,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// printAgentRefreshTips emits one tip per tier that has rimba-installed files on
-// disk, suggesting the rimba init incantation to refresh them after a binary update,
-// plus a distinct tip per tier that has a corrupt rimba block needing manual resolution.
-// Silent when RIMBA_QUIET is set, no files are installed/corrupt, or a path is empty.
+// printAgentRefreshTips prints a per-tier refresh tip and/or corrupt-block tip.
+// Silent when RIMBA_QUIET is set, nothing applies, or a path is empty.
 func printAgentRefreshTips(cmd *cobra.Command, home string, repoRoot string) {
 	if _, ok := os.LookupEnv("RIMBA_QUIET"); ok {
 		return

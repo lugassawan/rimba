@@ -3,10 +3,8 @@ package agentfile
 
 import "errors"
 
-// errCorruptBlock is returned internally when a rimba block is malformed
-// (orphaned BEGIN or duplicate BEGIN). It is unexported: callers never see
-// it as an error — corruption surfaces via Result.Corrupt / FileStatus.Corrupt
-// instead, so a corrupt spec never aborts a batch.
+// errCorruptBlock is unexported: corruption surfaces via Result.Corrupt /
+// FileStatus.Corrupt, never as an error, so a corrupt spec never aborts a batch.
 var errCorruptBlock = errors.New("corrupt or duplicated rimba block; resolve manually")
 
 const (

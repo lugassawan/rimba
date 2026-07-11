@@ -296,15 +296,18 @@ func TestInitAgentsCorruptFileReportedAndUntouched(t *testing.T) {
 	}
 
 	cmd, buf := newTestCmd()
-	if err := runInitAgents(cmd, repoDir, false, false); err != nil {
-		t.Fatalf("runInitAgents: %v", err)
+	err := runInitAgents(cmd, repoDir, false, false)
+	if err == nil {
+		t.Fatal("expected a non-nil error when a corrupt rimba block is found")
+	}
+	if !strings.Contains(err.Error(), "corrupt rimba block") {
+		t.Errorf("error = %q, want to contain 'corrupt rimba block'", err.Error())
 	}
 
 	out := buf.String()
 	if !strings.Contains(out, "AGENTS.md (corrupt — resolve manually)") {
 		t.Errorf("output missing corrupt render for AGENTS.md, got:\n%s", out)
 	}
-	// Other specs should still install.
 	if !strings.Contains(out, "created") && !strings.Contains(out, "updated") {
 		t.Errorf("other agent files should still install alongside a corrupt one, got:\n%s", out)
 	}

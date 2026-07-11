@@ -152,11 +152,8 @@ func installBlock(path string, spec Spec) (Result, error) {
 	return Result{RelPath: spec.RelPath, Action: action}, nil
 }
 
-// mergeBlockContent combines existing file content with the rimba block,
-// replacing any prior block. corrupt is true only if content changed shape
-// between the isCorruptBlock pre-check and this call (removeBlock has no
-// error case in normal operation since the caller already ruled out an
-// orphaned BEGIN).
+// mergeBlockContent combines content with the rimba block, replacing any prior
+// block. corrupt is true only if content changed shape since the caller's isCorruptBlock check.
 func mergeBlockContent(content, block string) (merged string, corrupt bool) {
 	if content == "" {
 		return block + "\n", false
@@ -177,9 +174,8 @@ func mergeBlockContent(content, block string) (merged string, corrupt bool) {
 	return content + "\n\n" + block + "\n", false
 }
 
-// removeBlockChecked strips the rimba block, reporting failure via ok rather
-// than an error — a corrupt block is signaled through Result.Corrupt, never
-// as a batch-aborting error.
+// removeBlockChecked strips the rimba block, reporting failure via ok instead of
+// an error so corruption flows through Result.Corrupt, never a batch-aborting error.
 func removeBlockChecked(content string) (cleaned string, ok bool) {
 	cleaned, err := removeBlock(content)
 	if err != nil {
