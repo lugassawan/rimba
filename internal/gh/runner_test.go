@@ -45,6 +45,17 @@ exit 1
 	assertContains(t, err, "rate limit exceeded")
 }
 
+func TestExecRunnerRunFailureConcatenatesStderrAndStdout(t *testing.T) {
+	writeFakeGh(t, `echo "partial output before the crash"
+echo "error: unexpected EOF" >&2
+exit 1
+`)
+
+	_, err := Default(0).Run(context.Background(), "pr", "list")
+	assertContains(t, err, "error: unexpected EOF")
+	assertContains(t, err, "partial output before the crash")
+}
+
 func TestExecRunnerRunSetsNoUpdateNotifierEnv(t *testing.T) {
 	writeFakeGh(t, `echo "{\"notifier\":\"$GH_NO_UPDATE_NOTIFIER\"}"
 exit 0

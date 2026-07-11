@@ -44,10 +44,15 @@ func (r *execRunner) Run(ctx context.Context, args ...string) ([]byte, error) {
 	return out, nil
 }
 
-// errMsg prefers stderr, falling back to stdout when gh reports errors there instead.
+// errMsg builds the error text from stderr and stdout: both when both are
+// present, otherwise whichever one is non-empty.
 func errMsg(stderr, stdout string) string {
-	if stderr != "" {
+	switch {
+	case stderr != "" && stdout != "":
+		return stderr + "\n" + stdout
+	case stderr != "":
 		return stderr
+	default:
+		return stdout
 	}
-	return stdout
 }
