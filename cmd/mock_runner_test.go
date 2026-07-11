@@ -65,6 +65,7 @@ const (
 	// shared across orphan-guard tests where "PROJ-" isn't configured.
 	orphanedProjWorktreeOut = "worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /wt/proj-123\nHEAD def456\nbranch refs/heads/PROJ-123\n"
 
+	pruneOutStale    = "Removing worktrees/stale"
 	branchDevelop    = "develop"
 	taskLogin        = "login"
 	taskWantFmt      = "task = %q, want %q"

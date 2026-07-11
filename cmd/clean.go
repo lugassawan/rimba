@@ -6,11 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
+	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
@@ -67,10 +69,12 @@ func init() {
 func cleanPrune(ctx context.Context, cmd *cobra.Command, r git.Runner) error {
 	dryRun, _ := cmd.Flags().GetBool(flagDryRun)
 
-	hint.New(cmd, hintPainter(cmd)).
-		Add(flagMerged, hintMerged).
-		Add(flagDryRun, hintDryRunPrune).
-		Show()
+	if !isJSON(cmd) {
+		hint.New(cmd, hintPainter(cmd)).
+			Add(flagMerged, hintMerged).
+			Add(flagDryRun, hintDryRunPrune).
+			Show()
+	}
 
 	s := spinner.New(spinnerOpts(cmd))
 	defer s.Stop()
@@ -82,21 +86,23 @@ func cleanPrune(ctx context.Context, cmd *cobra.Command, r git.Runner) error {
 	}
 	s.Stop()
 
-	switch {
-	case out != "":
-		fmt.Fprintln(cmd.OutOrStdout(), out)
-	case dryRun:
-		fmt.Fprintln(cmd.OutOrStdout(), "Nothing to prune.")
-	default:
-		fmt.Fprintln(cmd.OutOrStdout(), "Pruned stale worktree references.")
+	if !isJSON(cmd) {
+		switch {
+		case out != "":
+			fmt.Fprintln(cmd.OutOrStdout(), out)
+		case dryRun:
+			fmt.Fprintln(cmd.OutOrStdout(), "Nothing to prune.")
+		default:
+			fmt.Fprintln(cmd.OutOrStdout(), "Pruned stale worktree references.")
+		}
 	}
 
-	return cleanRemotePrune(ctx, cmd, r, s, dryRun)
+	return cleanRemotePrune(ctx, cmd, r, s, dryRun, out)
 }
 
 // cleanRemotePrune prunes stale remote-tracking refs across all configured remotes.
 // Skips gracefully when there are no remotes; warns and continues on per-remote failure.
-func cleanRemotePrune(ctx context.Context, cmd *cobra.Command, r git.Runner, s *spinner.Spinner, dryRun bool) error {
+func cleanRemotePrune(ctx context.Context, cmd *cobra.Command, r git.Runner, s *spinner.Spinner, dryRun bool, pruneOut string) error {
 	s.Start("Pruning remote-tracking refs...")
 	remotes, err := git.ListRemotes(ctx, r)
 	if err != nil {
@@ -105,6 +111,19 @@ func cleanRemotePrune(ctx context.Context, cmd *cobra.Command, r git.Runner, s *
 	}
 	if len(remotes) == 0 {
 		s.Stop()
+		if isJSON(cmd) {
+			return output.WriteJSON(cmd.OutOrStdout(), version, "clean", output.CleanData{
+				Mode:              "prune",
+				DryRun:            dryRun,
+				PruneOutput:       pruneOut,
+				NoRemotes:         true,
+				RemotePruned:      make([]string, 0),
+				RemotePruneErrors: make([]string, 0),
+				Candidates:        make([]output.CleanCandidateJSON, 0),
+				Cleaned:           make([]output.CleanedItemJSON, 0),
+				Warnings:          make([]string, 0),
+			})
+		}
 		fmt.Fprintln(cmd.OutOrStdout(), "No remotes; skipped remote-ref prune.")
 		return nil
 	}
@@ -114,6 +133,20 @@ func cleanRemotePrune(ctx context.Context, cmd *cobra.Command, r git.Runner, s *
 	for i, f := range failures {
 		failureMsgs[i] = fmt.Sprintf("failed to prune %s: %v", f.Remote, f.Err)
 	}
+
+	if isJSON(cmd) {
+		return output.WriteJSON(cmd.OutOrStdout(), version, "clean", output.CleanData{
+			Mode:              "prune",
+			DryRun:            dryRun,
+			PruneOutput:       pruneOut,
+			RemotePruned:      nonNilStrings(pruned),
+			RemotePruneErrors: failureMsgs,
+			Candidates:        make([]output.CleanCandidateJSON, 0),
+			Cleaned:           make([]output.CleanedItemJSON, 0),
+			Warnings:          make([]string, 0),
+		})
+	}
+
 	printWarnings(cmd, failureMsgs)
 	switch {
 	case len(pruned) == 0 && len(failures) > 0:
@@ -141,11 +174,13 @@ func cleanResolveAndHint(ctx context.Context, cmd *cobra.Command, r git.Runner, 
 		return "", err
 	}
 
-	h := hint.New(cmd, hintPainter(cmd))
-	for _, e := range entries {
-		h.Add(e.flag, e.msg)
+	if !isJSON(cmd) {
+		h := hint.New(cmd, hintPainter(cmd))
+		for _, e := range entries {
+			h.Add(e.flag, e.msg)
+		}
+		h.Show()
 	}
-	h.Show()
 
 	return mainBranch, nil
 }
@@ -156,13 +191,17 @@ type cleanStrategy struct {
 	spinnerMsg    string
 	emptyMsg      string
 	summaryFmt    string
-	originPresent bool // pre-resolved: origin exists AND remote deletion is wanted
+	mode          string // "merged" or "stale" — JSON discriminator
+	originPresent bool   // pre-resolved: origin exists AND remote deletion is wanted
 	// preFind runs before find and owns the spinner; nil means runClean starts it.
 	preFind func(*cobra.Command, git.Runner, *spinner.Spinner) error
 	find    func(git.Runner) ([]operations.CleanCandidate, []string, error)
 	// printRows may ignore the passed slice and use a captured typed one
 	// (stale needs []StaleCandidate for age rendering).
 	printRows func([]operations.CleanCandidate)
+	// jsonRows builds the JSON candidate view in parallel with printRows —
+	// stale needs []StaleCandidate for LastCommit, same reason printRows does.
+	jsonRows func([]operations.CleanCandidate) []output.CleanCandidateJSON
 }
 
 // runClean runs the shared clean pipeline using the given strategy.
@@ -193,6 +232,10 @@ func runClean(ctx context.Context, cmd *cobra.Command, r git.Runner, s cleanStra
 	}
 	sp.Stop()
 
+	if isJSON(cmd) {
+		return runCleanJSON(ctx, cmd, r, sp, s, cleanFindResult{candidates, warnings, dryRun, force})
+	}
+
 	printWarnings(cmd, warnings)
 	if len(candidates) == 0 {
 		fmt.Fprintln(cmd.OutOrStdout(), s.emptyMsg)
@@ -213,6 +256,66 @@ func runClean(ctx context.Context, cmd *cobra.Command, r git.Runner, s cleanStra
 	return nil
 }
 
+// cleanFindResult bundles s.find's output with the flags runCleanJSON needs,
+// keeping runCleanJSON's parameter count under the linter's maxparams limit.
+type cleanFindResult struct {
+	candidates []operations.CleanCandidate
+	warnings   []string
+	dryRun     bool
+	force      bool
+}
+
+// runCleanJSON handles the --json branch of runClean: no candidates, dry-run,
+// the force gate, and the force-confirmed removal path.
+func runCleanJSON(ctx context.Context, cmd *cobra.Command, r git.Runner, sp *spinner.Spinner, s cleanStrategy, res cleanFindResult) error {
+	if len(res.candidates) == 0 {
+		return output.WriteJSON(cmd.OutOrStdout(), version, "clean", output.CleanData{
+			Mode: s.mode, DryRun: res.dryRun,
+			Candidates:        make([]output.CleanCandidateJSON, 0),
+			Cleaned:           make([]output.CleanedItemJSON, 0),
+			Warnings:          nonNilStrings(res.warnings),
+			RemotePruned:      make([]string, 0),
+			RemotePruneErrors: make([]string, 0),
+		})
+	}
+
+	rows := s.jsonRows(res.candidates)
+	if res.dryRun {
+		return output.WriteJSON(cmd.OutOrStdout(), version, "clean", output.CleanData{
+			Mode: s.mode, DryRun: true,
+			Candidates:        rows,
+			Cleaned:           make([]output.CleanedItemJSON, 0),
+			Warnings:          nonNilStrings(res.warnings),
+			RemotePruned:      make([]string, 0),
+			RemotePruneErrors: make([]string, 0),
+		})
+	}
+
+	if !res.force {
+		return errors.New("interactive confirmation required in JSON mode; pass --force")
+	}
+
+	items, removed := cleanRemoveCandidatesData(ctx, r, sp, res.candidates, s.originPresent, res.force)
+	cleaned := make([]output.CleanedItemJSON, 0, len(items))
+	for _, it := range items {
+		cleaned = append(cleaned, output.CleanedItemJSON{
+			Branch: it.Branch, Path: it.Path, Prunable: it.Prunable,
+			WorktreeRemoved: it.WorktreeRemoved, BranchDeleted: it.BranchDeleted,
+			RemoteDeleted: it.RemoteDeleted, RemoteError: errStr(it.RemoteError),
+			Error: errStr(it.Error),
+		})
+	}
+	return output.WriteJSON(cmd.OutOrStdout(), version, "clean", output.CleanData{
+		Mode: s.mode, DryRun: false,
+		Candidates:        rows,
+		Cleaned:           cleaned,
+		CleanedCount:      removed,
+		Warnings:          nonNilStrings(res.warnings),
+		RemotePruned:      make([]string, 0),
+		RemotePruneErrors: make([]string, 0),
+	})
+}
+
 func cleanMerged(ctx context.Context, cmd *cobra.Command, r git.Runner) error {
 	mainBranch, err := cleanResolveAndHint(ctx, cmd, r, []hintEntry{
 		{flagDryRun, hintDryRunClean},
@@ -229,6 +332,7 @@ func cleanMerged(ctx context.Context, cmd *cobra.Command, r git.Runner) error {
 		spinnerMsg:    "Analyzing branches...",
 		emptyMsg:      "No merged worktrees found.",
 		summaryFmt:    "Cleaned %d merged worktree(s).\n",
+		mode:          "merged",
 		originPresent: remotePresent, // shared with printMergedCandidates — single probe
 		preFind: func(c *cobra.Command, rr git.Runner, sp *spinner.Spinner) error {
 			var err error
@@ -244,6 +348,18 @@ func cleanMerged(ctx context.Context, cmd *cobra.Command, r git.Runner) error {
 		},
 		printRows: func(candidates []operations.CleanCandidate) {
 			printMergedCandidates(cmd, candidates, remotePresent)
+		},
+		jsonRows: func(candidates []operations.CleanCandidate) []output.CleanCandidateJSON {
+			prefixes := config.PrefixSetFromContext(cmd.Context()).Strip()
+			rows := make([]output.CleanCandidateJSON, 0, len(candidates))
+			for _, c := range candidates {
+				task, _ := resolver.PureTaskFromBranch(c.Branch, prefixes)
+				rows = append(rows, output.CleanCandidateJSON{
+					Task: task, Branch: c.Branch, Path: c.Path, Prunable: c.Prunable,
+					WillDeleteRemote: remotePresent,
+				})
+			}
+			return rows
 		},
 	})
 }
@@ -265,6 +381,7 @@ func cleanStale(ctx context.Context, cmd *cobra.Command, r git.Runner) error {
 		spinnerMsg:    "Analyzing worktree activity...",
 		emptyMsg:      "No stale worktrees found.",
 		summaryFmt:    "Cleaned %d stale worktree(s).\n",
+		mode:          "stale",
 		originPresent: false, // stale mode is local-only
 		find: func(rr git.Runner) ([]operations.CleanCandidate, []string, error) {
 			result, err := operations.FindStaleCandidates(ctx, rr, mainBranch, staleDays)
@@ -276,6 +393,18 @@ func cleanStale(ctx context.Context, cmd *cobra.Command, r git.Runner) error {
 		},
 		printRows: func(_ []operations.CleanCandidate) {
 			printStaleCandidates(cmd, staleCandidates)
+		},
+		jsonRows: func(_ []operations.CleanCandidate) []output.CleanCandidateJSON {
+			prefixes := config.PrefixSetFromContext(cmd.Context()).Strip()
+			rows := make([]output.CleanCandidateJSON, 0, len(staleCandidates))
+			for _, c := range staleCandidates {
+				task, _ := resolver.PureTaskFromBranch(c.Branch, prefixes)
+				rows = append(rows, output.CleanCandidateJSON{
+					Task: task, Branch: c.Branch, Path: c.Path, Prunable: c.Prunable,
+					LastCommit: c.LastCommit.UTC().Format(time.RFC3339),
+				})
+			}
+			return rows
 		},
 	})
 }
@@ -290,20 +419,27 @@ func cleanFetchMergeRef(ctx context.Context, cmd *cobra.Command, r git.Runner, s
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return "", err
 		}
-		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: fetch failed (no remote?): continuing with local state\n")
+		if !isJSON(cmd) {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Warning: fetch failed (no remote?): continuing with local state\n")
+		}
 		return mainBranch, nil
 	}
 	return git.DefaultRemote + "/" + mainBranch, nil
 }
 
-func cleanRemoveCandidates(ctx context.Context, cmd *cobra.Command, r git.Runner, s *spinner.Spinner, candidates []operations.CleanCandidate, originPresent bool, force bool) int {
+func cleanRemoveCandidatesData(ctx context.Context, r git.Runner, s *spinner.Spinner, candidates []operations.CleanCandidate, originPresent bool, force bool) ([]operations.CleanedItem, int) {
 	s.Start("Removing worktrees...")
 	items := operations.RemoveCandidates(ctx, r, candidates, originPresent, force, func(msg string) {
 		s.Update(msg)
 	})
 	s.Stop()
+	return items, countRemoved(items)
+}
+
+func cleanRemoveCandidates(ctx context.Context, cmd *cobra.Command, r git.Runner, s *spinner.Spinner, candidates []operations.CleanCandidate, originPresent bool, force bool) int {
+	items, removed := cleanRemoveCandidatesData(ctx, r, s, candidates, originPresent, force)
 	printCleanedItems(cmd, items)
-	return countRemoved(items)
+	return removed
 }
 
 func flattenStaleCandidates(candidates []operations.StaleCandidate) []operations.CleanCandidate {

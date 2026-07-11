@@ -8,6 +8,7 @@ import (
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
+	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
@@ -70,10 +71,12 @@ var renameCmd = &cobra.Command{
 		skipDeps, _ := cmd.Flags().GetBool(flagSkipDeps)
 		skipHooks, _ := cmd.Flags().GetBool(flagSkipHooks)
 
-		hint.New(cmd, hintPainter(cmd)).
-			Add(flagSkipDeps, hintSkipDeps).
-			Add(flagSkipHooks, hintSkipHooksRename).
-			Show()
+		if !isJSON(cmd) {
+			hint.New(cmd, hintPainter(cmd)).
+				Add(flagSkipDeps, hintSkipDeps).
+				Add(flagSkipHooks, hintSkipHooksRename).
+				Show()
+		}
 
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
@@ -98,9 +101,11 @@ var renameCmd = &cobra.Command{
 		}
 
 		s.Stop()
-		fmt.Fprintf(cmd.OutOrStdout(), "Renamed worktree: %s -> %s\n", result.OldBranch, result.NewBranch)
-		if push {
-			reportRenamePush(cmd, result)
+		if !isJSON(cmd) {
+			fmt.Fprintf(cmd.OutOrStdout(), "Renamed worktree: %s -> %s\n", result.OldBranch, result.NewBranch)
+			if push {
+				reportRenamePush(cmd, result)
+			}
 		}
 
 		prefixes := cfg.PrefixSet().Strip()
@@ -110,7 +115,7 @@ var renameCmd = &cobra.Command{
 			configModules = cfg.Deps.Modules
 		}
 		s.Start("Running post-rename setup...")
-		if _, err := operations.PostRenameSetup(cmd.Context(), r, operations.PostRenameParams{
+		postResult, err := operations.PostRenameSetup(cmd.Context(), r, operations.PostRenameParams{
 			WtPath:        result.NewPath,
 			Service:       svc,
 			SkipDeps:      skipDeps,
@@ -119,11 +124,28 @@ var renameCmd = &cobra.Command{
 			SkipHooks:     skipHooks,
 			PostRename:    cfg.PostRename,
 			Concurrency:   cfg.DepsConcurrency(),
-		}, func(msg string) { s.Update(msg) }); err != nil {
+		}, func(msg string) { s.Update(msg) })
+		if err != nil {
 			return err
 		}
 
 		s.Stop()
+		if isJSON(cmd) {
+			return output.WriteJSON(cmd.OutOrStdout(), version, "rename", output.RenameData{
+				OldBranch:      result.OldBranch,
+				NewBranch:      result.NewBranch,
+				OldPath:        result.OldPath,
+				NewPath:        result.NewPath,
+				Published:      result.Published,
+				PublishError:   errStr(result.PublishError),
+				RemoteDeleted:  result.RemoteDeleted,
+				RemoteError:    errStr(result.RemoteError),
+				RemoteSkipped:  result.RemoteSkipped,
+				NoOriginRemote: result.NoOriginRemote,
+				Deps:           buildDepResults(postResult.DepsResults),
+				Hooks:          buildHookResults(postResult.HookResults),
+			})
+		}
 		return nil
 	},
 }

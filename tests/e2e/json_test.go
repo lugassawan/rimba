@@ -424,6 +424,194 @@ func TestDepsStatusJSON(t *testing.T) {
 	assertNotContains(t, r.Stdout, "\033[")
 }
 
+func TestAddJSONE2E(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+
+	r := rimbaSuccess(t, repo, "add", "add-json-task", "--json")
+	env := parseEnvelope(t, r.Stdout)
+
+	data, ok := env["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("data type = %T, want map[string]any", env["data"])
+	}
+	if data["mode"] != "task" {
+		t.Errorf("mode = %v, want 'task'", data["mode"])
+	}
+	if branch, _ := data["branch"].(string); branch == "" {
+		t.Error("expected non-empty branch")
+	}
+
+	assertNotContains(t, r.Stdout, "\033[")
+	if r.Stderr != "" {
+		t.Errorf("expected empty stderr in JSON mode, got: %s", r.Stderr)
+	}
+}
+
+func TestMergeJSONE2E(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupCleanInitializedRepo(t)
+	mergeSetup(t, repo, "merge-json-task")
+
+	r := rimbaSuccess(t, repo, "merge", "merge-json-task", "--json")
+	env := parseEnvelope(t, r.Stdout)
+
+	data, ok := env["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("data type = %T, want map[string]any", env["data"])
+	}
+	if data["source_removed"] != true {
+		t.Errorf("source_removed = %v, want true", data["source_removed"])
+	}
+
+	assertNotContains(t, r.Stdout, "\033[")
+	if r.Stderr != "" {
+		t.Errorf("expected empty stderr in JSON mode, got: %s", r.Stderr)
+	}
+}
+
+func TestRemoveJSONE2E(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", "remove-json-task")
+
+	r := rimbaSuccess(t, repo, "remove", "remove-json-task", "--json")
+	env := parseEnvelope(t, r.Stdout)
+
+	data, ok := env["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("data type = %T, want map[string]any", env["data"])
+	}
+	if data["worktree_removed"] != true {
+		t.Errorf("worktree_removed = %v, want true", data["worktree_removed"])
+	}
+
+	assertNotContains(t, r.Stdout, "\033[")
+	if r.Stderr != "" {
+		t.Errorf("expected empty stderr in JSON mode, got: %s", r.Stderr)
+	}
+}
+
+func TestRenameJSONE2E(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", "rename-json-old")
+
+	r := rimbaSuccess(t, repo, "rename", "rename-json-old", "rename-json-new", "--json")
+	env := parseEnvelope(t, r.Stdout)
+
+	data, ok := env["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("data type = %T, want map[string]any", env["data"])
+	}
+	newBranch, _ := data["new_branch"].(string)
+	if !strings.Contains(newBranch, "rename-json-new") {
+		t.Errorf("new_branch = %v, want to contain 'rename-json-new'", newBranch)
+	}
+
+	assertNotContains(t, r.Stdout, "\033[")
+	if r.Stderr != "" {
+		t.Errorf("expected empty stderr in JSON mode, got: %s", r.Stderr)
+	}
+}
+
+func TestCleanMergedJSONE2E(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupCleanInitializedRepo(t)
+	cleanMergeSetup(t, repo, "clean-json-task")
+
+	r := rimbaSuccess(t, repo, "clean", flagMergedE2E, flagForceE2E, "--json")
+	env := parseEnvelope(t, r.Stdout)
+
+	data, ok := env["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("data type = %T, want map[string]any", env["data"])
+	}
+	if data["mode"] != "merged" {
+		t.Errorf("mode = %v, want 'merged'", data["mode"])
+	}
+	if cleanedCount, _ := data["cleaned_count"].(float64); cleanedCount != 1 {
+		t.Errorf("cleaned_count = %v, want 1", data["cleaned_count"])
+	}
+
+	assertNotContains(t, r.Stdout, "\033[")
+	if r.Stderr != "" {
+		t.Errorf("expected empty stderr in JSON mode, got: %s", r.Stderr)
+	}
+}
+
+func TestCleanMergedJSONNoForceE2E(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupCleanInitializedRepo(t)
+	cleanMergeSetup(t, repo, "clean-json-noforce")
+
+	r := rimbaFail(t, repo, "clean", flagMergedE2E, "--json")
+
+	var env map[string]any
+	if err := json.Unmarshal([]byte(r.Stdout), &env); err != nil {
+		t.Fatalf("invalid JSON error output: %v\nstdout: %s", err, r.Stdout)
+	}
+	if _, ok := env["error"]; !ok {
+		t.Error("error envelope missing 'error' field")
+	}
+	if _, ok := env["code"]; !ok {
+		t.Error("error envelope missing 'code' field")
+	}
+
+	assertNotContains(t, r.Stdout, "\033[")
+	if r.Stderr != "" {
+		t.Errorf("expected empty stderr for JSON error, got: %s", r.Stderr)
+	}
+}
+
+func TestSyncJSONE2E(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupCleanInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", "sync-json-task")
+	commitOnMain(t, repo)
+
+	r := rimbaSuccess(t, repo, "sync", "sync-json-task", "--json")
+	env := parseEnvelope(t, r.Stdout)
+
+	data, ok := env["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("data type = %T, want map[string]any", env["data"])
+	}
+	summary, ok := data["summary"].(map[string]any)
+	if !ok {
+		t.Fatalf("summary type = %T, want map[string]any", data["summary"])
+	}
+	if summary["synced"] != float64(1) {
+		t.Errorf("summary.synced = %v, want 1", summary["synced"])
+	}
+
+	assertNotContains(t, r.Stdout, "\033[")
+	if r.Stderr != "" {
+		t.Errorf("expected empty stderr in JSON mode, got: %s", r.Stderr)
+	}
+}
+
 func TestJSONErrorOutput(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)

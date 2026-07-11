@@ -7,6 +7,7 @@ import (
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
+	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
 )
@@ -72,12 +73,14 @@ var mergeCmd = &cobra.Command{
 			reapConfidentLocks(cmd.Context(), cmd, r)
 		}
 
-		hint.New(cmd, hintPainter(cmd)).
-			Add(flagNoFF, hintNoFF).
-			Add(flagKeep, hintKeep).
-			Add(flagInto, hintInto).
-			Add(flagDryRun, hintDryRun).
-			Show()
+		if !isJSON(cmd) {
+			hint.New(cmd, hintPainter(cmd)).
+				Add(flagNoFF, hintNoFF).
+				Add(flagKeep, hintKeep).
+				Add(flagInto, hintInto).
+				Add(flagDryRun, hintDryRun).
+				Show()
+		}
 
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
@@ -103,11 +106,38 @@ var mergeCmd = &cobra.Command{
 		s.Stop()
 
 		if dryRun {
+			if isJSON(cmd) {
+				return output.WriteJSON(cmd.OutOrStdout(), version, "merge", output.MergeData{
+					SourceBranch:  result.SourceBranch,
+					SourcePath:    result.SourcePath,
+					TargetLabel:   result.TargetLabel,
+					MergingToMain: result.MergingToMain,
+					DryRun:        true,
+					Steps:         result.Plan.Steps,
+				})
+			}
 			out := cmd.OutOrStdout()
 			for _, step := range result.Plan.Steps {
 				fmt.Fprintf(out, "[dry-run] %s\n", step)
 			}
 			return nil
+		}
+
+		if isJSON(cmd) {
+			return output.WriteJSON(cmd.OutOrStdout(), version, "merge", output.MergeData{
+				SourceBranch:    result.SourceBranch,
+				SourcePath:      result.SourcePath,
+				TargetLabel:     result.TargetLabel,
+				MergingToMain:   result.MergingToMain,
+				SourceRemoved:   result.SourceRemoved,
+				WorktreeRemoved: result.WorktreeRemoved,
+				SourcePrunable:  result.SourcePrunable,
+				RemoveError:     errStr(result.RemoveError),
+				RemoteDeleted:   result.RemoteDeleted,
+				RemoteError:     errStr(result.RemoteError),
+				DryRun:          false,
+				Steps:           result.Plan.Steps,
+			})
 		}
 
 		fmt.Fprintf(cmd.OutOrStdout(), "Merged %s into %s\n", result.SourceBranch, result.TargetLabel)

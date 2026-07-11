@@ -14,6 +14,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const wantRenameCommand = "rename"
+
 const remoteURLStub = "https://example.com/repo.git"
 
 func TestRenameSuccess(t *testing.T) {
@@ -681,5 +683,106 @@ func TestRenamePushReportsOutcomeBeforePostRenameSetupFailure(t *testing.T) {
 	out := buf.String()
 	if !strings.Contains(out, "Published branch: origin/feature/auth") {
 		t.Errorf("output = %q, want the push outcome reported despite the later PostRenameSetup failure", out)
+	}
+}
+
+func TestRenameJSON(t *testing.T) {
+	repoDir := t.TempDir()
+	cfg := &config.Config{WorktreeDir: defaultRelativeWtDir, DefaultSource: branchMain}
+	worktreeOut := makeRenameWorktreeOut(repoDir)
+	restore := overrideNewRunner(makeRenameRunner(repoDir, worktreeOut))
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().BoolP(flagForce, "f", false, "")
+	cmd.Flags().Bool(flagSkipDeps, false, "")
+	cmd.Flags().Bool(flagSkipHooks, false, "")
+	cmd.Flags().Bool(flagPush, false, "")
+	_ = cmd.Flags().Set(flagSkipDeps, "true")
+	_ = cmd.Flags().Set(flagJSON, "true")
+	cmd.SetContext(config.WithConfig(context.Background(), cfg))
+
+	if err := renameCmd.RunE(cmd, []string{"login", "auth"}); err != nil {
+		t.Fatalf("renameCmd.RunE: %v", err)
+	}
+
+	env, data := decodeAddEnvelope(t, buf.Bytes())
+	if env.Command != wantRenameCommand {
+		t.Errorf("command = %q, want %q", env.Command, wantRenameCommand)
+	}
+	if data["old_branch"] != branchFeature {
+		t.Errorf("old_branch = %v, want %q", data["old_branch"], branchFeature)
+	}
+	if data["new_branch"] != "feature/auth" {
+		t.Errorf("new_branch = %v, want %q", data["new_branch"], "feature/auth")
+	}
+	if data["old_path"] == "" || data["new_path"] == "" {
+		t.Errorf("old_path/new_path = %v/%v, want non-empty", data["old_path"], data["new_path"])
+	}
+	for _, field := range []string{"published", "remote_deleted", "remote_skipped", "no_origin_remote"} {
+		if data[field] != false {
+			t.Errorf("%s = %v, want false (push not requested)", field, data[field])
+		}
+	}
+	if _, ok := data["deps"].([]any); !ok {
+		t.Errorf("deps = %v (%T), want a JSON array", data["deps"], data["deps"])
+	}
+	if _, ok := data["hooks"].([]any); !ok {
+		t.Errorf("hooks = %v (%T), want a JSON array", data["hooks"], data["hooks"])
+	}
+}
+
+func TestRenamePushJSON(t *testing.T) {
+	repoDir := t.TempDir()
+	cfg := &config.Config{WorktreeDir: defaultRelativeWtDir, DefaultSource: branchMain}
+	worktreeOut := makeRenameWorktreeOut(repoDir)
+	opts := renamePushMockOpts{remoteExists: true, hasUpstream: true}
+	restore := overrideNewRunner(makeRenamePushRunner(repoDir, worktreeOut, opts))
+	defer restore()
+
+	cmd, buf := newRenamePushTestCmd(cfg)
+	_ = cmd.Flags().Set(flagJSON, "true")
+
+	if err := renameCmd.RunE(cmd, []string{"login", "auth"}); err != nil {
+		t.Fatalf("renameCmd.RunE: %v", err)
+	}
+
+	env, data := decodeAddEnvelope(t, buf.Bytes())
+	if env.Command != wantRenameCommand {
+		t.Errorf("command = %q, want %q", env.Command, wantRenameCommand)
+	}
+	if data["published"] != true {
+		t.Errorf("published = %v, want true", data["published"])
+	}
+	if data["remote_deleted"] != true {
+		t.Errorf("remote_deleted = %v, want true", data["remote_deleted"])
+	}
+}
+
+func TestRenamePublishErrorJSON(t *testing.T) {
+	repoDir := t.TempDir()
+	cfg := &config.Config{WorktreeDir: defaultRelativeWtDir, DefaultSource: branchMain}
+	worktreeOut := makeRenameWorktreeOut(repoDir)
+	opts := renamePushMockOpts{remoteExists: true, hasUpstream: true, pushErr: errors.New("connection refused")}
+	restore := overrideNewRunner(makeRenamePushRunner(repoDir, worktreeOut, opts))
+	defer restore()
+
+	cmd, buf := newRenamePushTestCmd(cfg)
+	_ = cmd.Flags().Set(flagJSON, "true")
+
+	if err := renameCmd.RunE(cmd, []string{"login", "auth"}); err != nil {
+		t.Fatalf("renameCmd.RunE: %v", err)
+	}
+
+	env, data := decodeAddEnvelope(t, buf.Bytes())
+	if env.Command != wantRenameCommand {
+		t.Errorf("command = %q, want %q", env.Command, wantRenameCommand)
+	}
+	publishErr, ok := data["publish_error"].(string)
+	if !ok || publishErr == "" {
+		t.Errorf("publish_error = %v, want a non-empty string", data["publish_error"])
+	}
+	if data["published"] != false {
+		t.Errorf("published = %v, want false", data["published"])
 	}
 }
