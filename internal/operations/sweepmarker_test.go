@@ -356,6 +356,23 @@ func TestReapConfidentLocksSkipsAdminDirWithChangedIdentity(t *testing.T) {
 	}
 }
 
+// TestAliveSweepAdminDirsSkipsAdminDirWithChangedIdentity mirrors the
+// dead-owner identity guard: a live sweep's manifest naming an admin dir
+// whose identity has since changed must not report that path as alive,
+// or a reused worktree basename would be wrongly shielded from doctor --fix.
+func TestAliveSweepAdminDirsSkipsAdminDirWithChangedIdentity(t *testing.T) {
+	root := t.TempDir()
+	commonDir := filepath.Join(root, "common")
+	_, adminDir := setupWorktree(t, root, commonDir, "wt-a")
+
+	writeManifestFixtureWithStaleIno(t, commonDir, os.Getpid(), adminDir)
+
+	alive := AliveSweepAdminDirs(commonDir)
+	if alive[adminDir] {
+		t.Errorf("alive = %v, want %s absent (admin dir's inode no longer matches the manifest)", alive, adminDir)
+	}
+}
+
 // TestReapConfidentLocksReapsDespiteInternalMtimeBump is a regression test:
 // a lock created inside adminDir bumps its mtime but must not read as recreated.
 func TestReapConfidentLocksReapsDespiteInternalMtimeBump(t *testing.T) {

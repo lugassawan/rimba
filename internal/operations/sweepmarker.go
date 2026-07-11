@@ -144,7 +144,9 @@ func classifyManifest(manifest sweepManifest, deadDirs, aliveDirs map[string]boo
 	if proc.Alive(manifest.PID) {
 		if !manifestPastCeiling(manifest) {
 			for _, entry := range manifest.AdminDirs {
-				aliveDirs[entry.Path] = true
+				if !adminDirIdentityChanged(entry) {
+					aliveDirs[entry.Path] = true
+				}
 			}
 		}
 		return false
