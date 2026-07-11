@@ -23,6 +23,11 @@ func NewServer(hctx *HandlerContext) *server.MCPServer {
 	registerMergeTool(s, hctx)
 	registerSyncTool(s, hctx)
 	registerCleanTool(s, hctx)
+	registerRenameTool(s, hctx)
+	registerMergePlanTool(s, hctx)
+	registerLogTool(s, hctx)
+	registerArchiveTool(s, hctx)
+	registerRestoreTool(s, hctx)
 
 	return s
 }

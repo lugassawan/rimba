@@ -741,6 +741,40 @@ func TestMCPDispatchUnknownTool(t *testing.T) {
 	}
 }
 
+func TestMCPFailsWithMalformedConfig(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	settingsPath := filepath.Join(repo, ".rimba", "settings.toml")
+	if err := os.WriteFile(settingsPath, []byte("invalid = [[["), 0644); err != nil {
+		t.Fatalf("failed to write malformed config: %v", err)
+	}
+
+	r := rimbaFail(t, repo, "mcp")
+	assertContains(t, r.Stderr, "invalid config")
+	assertNotContains(t, r.Stderr, "not initialized")
+}
+
+func TestMCPStartsWithMissingConfig(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupRepo(t)
+
+	responses := mcpSession(t, repo,
+		mcpInitRequest(),
+		mcpNotification(),
+		mcpToolsListRequest(2),
+	)
+
+	if len(responses) < 2 {
+		t.Fatalf("expected at least 2 responses, got %d", len(responses))
+	}
+}
+
 func TestMCPToolCallStatusCustomStaleDays(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
