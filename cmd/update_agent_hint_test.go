@@ -53,6 +53,37 @@ func createProjectTierFile(t *testing.T, repoRoot string) {
 	}
 }
 
+// createCorruptProjectTierFile creates an AGENTS.md with an orphaned BEGIN marker
+// (no matching END), which StatusProject reports as Corrupt.
+func createCorruptProjectTierFile(t *testing.T, repoRoot string) {
+	t.Helper()
+	path := filepath.Join(repoRoot, "AGENTS.md")
+	content := agentfile.BeginMarker + "\norphaned, no end marker\n"
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+func TestAnyCorrupt(t *testing.T) {
+	tests := []struct {
+		name     string
+		statuses []agentfile.FileStatus
+		want     bool
+	}{
+		{"empty slice", nil, false},
+		{"none corrupt", []agentfile.FileStatus{{RelPath: "a", Corrupt: false}}, false},
+		{"one corrupt", []agentfile.FileStatus{{RelPath: "a", Corrupt: true}}, true},
+		{"mixed, last corrupt", []agentfile.FileStatus{{RelPath: "a", Corrupt: false}, {RelPath: "b", Corrupt: true}}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := anyCorrupt(tt.statuses); got != tt.want {
+				t.Errorf("anyCorrupt(%v) = %v, want %v", tt.statuses, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestAgentRefreshTipsUserInstalled(t *testing.T) {
 	home := t.TempDir()
 	createUserTierFile(t, home)
@@ -106,6 +137,48 @@ func TestAgentRefreshTipsBothInstalled(t *testing.T) {
 	}
 	if !strings.Contains(out, "in this repo") {
 		t.Errorf("output missing 'in this repo': %q", out)
+	}
+}
+
+func TestAgentRefreshTipsCorruptProject(t *testing.T) {
+	repo := t.TempDir()
+	createCorruptProjectTierFile(t, repo)
+	cmd, buf := newTestCmd()
+
+	printAgentRefreshTips(cmd, "", repo)
+
+	out := buf.String()
+	if !strings.Contains(out, "corrupt rimba block") {
+		t.Errorf("output missing corrupt tip: %q", out)
+	}
+	if !strings.Contains(out, "in this repo") {
+		t.Errorf("output missing 'in this repo': %q", out)
+	}
+	if strings.Contains(out, "run `rimba init --agents` to refresh") {
+		t.Errorf("corrupt-only file should not also emit the refresh tip: %q", out)
+	}
+}
+
+func TestAgentRefreshTipsCorruptUser(t *testing.T) {
+	home := t.TempDir()
+	agentsDir := filepath.Join(home, ".codex")
+	if err := os.MkdirAll(agentsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	corrupt := agentfile.BeginMarker + "\norphaned, no end marker\n"
+	if err := os.WriteFile(filepath.Join(agentsDir, "AGENTS.md"), []byte(corrupt), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cmd, buf := newTestCmd()
+
+	printAgentRefreshTips(cmd, home, "")
+
+	out := buf.String()
+	if !strings.Contains(out, "corrupt rimba block") {
+		t.Errorf("output missing corrupt tip: %q", out)
+	}
+	if !strings.Contains(out, "at user level") {
+		t.Errorf("output missing 'at user level': %q", out)
 	}
 }
 

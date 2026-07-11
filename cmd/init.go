@@ -299,7 +299,21 @@ func runInstall(
 	if len(mcps) > 0 {
 		printSection(cmd, "MCP server", tier, mcps)
 	}
+	if n := countCorrupt(files) + countCorrupt(mcps); n > 0 {
+		return fmt.Errorf("%d file(s) have a corrupt rimba block — resolve manually", n)
+	}
 	return nil
+}
+
+// countCorrupt reports how many results have a corrupt rimba block.
+func countCorrupt(results []agentfile.Result) int {
+	n := 0
+	for _, r := range results {
+		if r.Corrupt {
+			n++
+		}
+	}
+	return n
 }
 
 func printSection(cmd *cobra.Command, title string, tier installTier, results []agentfile.Result) {
@@ -309,7 +323,11 @@ func printSection(cmd *cobra.Command, title string, tier installTier, results []
 		if tier == tierUser {
 			p = "~/" + p
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "    %s (%s)\n", p, r.Action)
+		action := r.Action
+		if r.Corrupt {
+			action = "corrupt — resolve manually"
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "    %s (%s)\n", p, action)
 	}
 }
 
