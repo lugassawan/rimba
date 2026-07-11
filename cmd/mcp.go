@@ -27,9 +27,7 @@ rimba commands with structured parameters and typed responses.`,
 			return err
 		}
 
-		// Config is optional — some tools work without it. default_source is
-		// internal-only and never round-trips from config, so the default
-		// branch is always derived from git.
+		// Config is optional — some tools work without it.
 		cfg, _ := config.Resolve(repoRoot)
 		if cfg != nil {
 			repoName := filepath.Base(repoRoot)

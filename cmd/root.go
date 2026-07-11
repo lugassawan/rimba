@@ -79,8 +79,7 @@ Persistent flags (available on every command):
 			return err
 		}
 
-		// Auto-derive missing fields. default_source is internal-only and never
-		// round-trips from config, so the default branch is always derived from git.
+		// Auto-derive missing fields.
 		repoName := filepath.Base(repoRoot)
 		defaultBranch, err := git.DefaultBranch(cmd.Context(), r)
 		if err != nil {

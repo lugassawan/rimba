@@ -60,8 +60,7 @@ func spinnerOpts(cmd *cobra.Command) spinner.Options {
 	return spinner.Options{Writer: w, NoColor: noColor}
 }
 
-// resolveMainBranch returns the repo's default branch, always derived from git
-// (default_source is internal-only and never a user-configurable override).
+// resolveMainBranch returns the repo's default branch, always derived from git.
 func resolveMainBranch(ctx context.Context, r git.Runner) (string, error) {
 	if _, err := git.MainRepoRoot(ctx, r); err != nil {
 		return "", err
@@ -104,8 +103,6 @@ func withBestEffortConfig(cmd *cobra.Command) context.Context {
 	if err != nil {
 		return ctx
 	}
-	// default_source is internal-only and never round-trips from config, so the
-	// default branch is always derived from git here.
 	defaultBranch, err := git.DefaultBranch(ctx, r)
 	if err != nil {
 		return ctx
