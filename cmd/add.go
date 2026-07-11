@@ -238,9 +238,7 @@ func runAddBranch(cmd *cobra.Command, r git.Runner, cfg *config.Config, repoRoot
 	return nil
 }
 
-// writeAddJSON emits the JSON envelope for an add run backed by an
-// operations.AddResult (task and pr modes; branch-promote has no AddResult
-// and builds its own output.AddData directly).
+// writeAddJSON handles task/pr modes; branch-promote has no AddResult and builds its own AddData.
 func writeAddJSON(cmd *cobra.Command, mode string, prNumber *int, result operations.AddResult) error {
 	return output.WriteJSON(cmd.OutOrStdout(), version, "add", output.AddData{
 		Mode:            mode,

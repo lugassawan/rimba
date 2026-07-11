@@ -984,8 +984,6 @@ func TestPrintAliasNoticeFixAliasKeepsLegacyMessage(t *testing.T) {
 	}
 }
 
-// decodeAddEnvelope unmarshals buf into an output.Envelope and its
-// AddData payload, failing the test on any decode error.
 func decodeAddEnvelope(t *testing.T, buf []byte) (output.Envelope, map[string]any) {
 	t.Helper()
 	var env output.Envelope
@@ -999,8 +997,6 @@ func decodeAddEnvelope(t *testing.T, buf []byte) (output.Envelope, map[string]an
 	return env, data
 }
 
-// TestAddTaskJSON proves --json on the task-mode add path emits a well-formed
-// envelope with mode "task" and non-null collection fields.
 func TestAddTaskJSON(t *testing.T) {
 	repoDir := t.TempDir()
 	wtDir := filepath.Join(repoDir, "worktrees")
@@ -1049,11 +1045,6 @@ func TestAddTaskJSON(t *testing.T) {
 	}
 }
 
-// TestAddTaskJSONSuppressesAliasNotice proves that when both an alias is
-// detected (aliasUsed == true, e.g. "fix/" -> "bugfix/") AND --json is set,
-// the alias notice (which normally writes to stderr via printAliasNotice)
-// does not leak into the output buffer: the buffer must decode cleanly as
-// JSON and must not contain the notice's "interpreting" text.
 func TestAddTaskJSONSuppressesAliasNotice(t *testing.T) {
 	repoDir := t.TempDir()
 	_ = os.MkdirAll(filepath.Join(repoDir, ".worktrees"), 0755)
@@ -1092,8 +1083,6 @@ func TestAddTaskJSONSuppressesAliasNotice(t *testing.T) {
 	}
 }
 
-// TestAddPRJSON proves --json on the pr-mode add path emits mode "pr" with
-// the matching pr_number.
 func TestAddPRJSON(t *testing.T) {
 	t.Setenv("RIMBA_TRUST_YES", "1")
 	repoDir := t.TempDir()
@@ -1143,9 +1132,6 @@ func TestAddPRJSON(t *testing.T) {
 	}
 }
 
-// TestAddBranchPromoteJSON proves --json on the branch-promote add path
-// emits mode "branch-promote" with empty (not null) deps/hooks arrays,
-// since PromoteBranch never runs deps/hooks.
 func TestAddBranchPromoteJSON(t *testing.T) {
 	repoDir := t.TempDir()
 	_ = os.MkdirAll(filepath.Join(repoDir, "worktrees"), 0755)

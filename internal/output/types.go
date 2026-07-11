@@ -110,8 +110,7 @@ type HookResultJSON struct {
 }
 
 // AddData is the top-level JSON output for the add command.
-// Mode discriminates the three add paths: "task" (rimba add <task>),
-// "pr" (rimba add pr:<num>), "branch-promote" (rimba add branch:<branch>).
+// Mode discriminates "task", "pr", and "branch-promote".
 type AddData struct {
 	Mode            string           `json:"mode"`
 	Task            string           `json:"task,omitempty"`
@@ -196,9 +195,7 @@ type CleanedItemJSON struct {
 }
 
 // CleanData is the top-level JSON output for the clean command.
-// Mode discriminates the three clean paths: "prune" (bare `rimba clean`),
-// "merged" (--merged), "stale" (--stale). Prune-mode fields and
-// list-mode fields are mutually exclusive and both omitempty.
+// Mode discriminates "prune", "merged", "stale"; the two field groups below are mutually exclusive.
 type CleanData struct {
 	Mode   string `json:"mode"`
 	DryRun bool   `json:"dry_run"`
