@@ -34,12 +34,13 @@ A plain `rimba doctor` run may report stale locks, interrupted worktrees, or bot
 
 ```
 No stale index.lock files found.
-
 Interrupted worktree removals:
   /path/to/worktree [task/my-branch] (128 deleted file(s))
 
 Run 'rimba remove <task> --force' to finish removing an affected worktree, or 'rimba doctor --fix' to finish them all.
 ```
+
+Detection requires *every* change in the worktree to be a tracked-file deletion — if any untracked file remains (e.g. leftover build artifacts from a killed removal), the worktree won't be reported as interrupted, since git can't tell a regenerable artifact from precious untracked work.
 
 ## Common workflows
 
