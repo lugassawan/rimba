@@ -6,148 +6,93 @@ import (
 	"testing"
 )
 
-func TestClassifyPorcelainDeletionsMultipleDeletions(t *testing.T) {
-	r := &mockRunner{
-		runInDir: func(_ string, _ ...string) (string, error) {
-			return " D file1.txt\n D file2.txt\n D file3.txt\n", nil
+func TestClassifyPorcelainDeletions(t *testing.T) {
+	tests := []struct {
+		name        string
+		out         string
+		err         error
+		wantDeleted int
+		wantOther   int
+		wantAll     bool
+		wantErr     bool
+	}{
+		{
+			name:        "all_unstaged_deletions",
+			out:         " D file1.txt\n D file2.txt\n D file3.txt\n",
+			wantDeleted: 3,
+			wantOther:   0,
+			wantAll:     true,
+		},
+		{
+			name:        "mixed_deletion_and_modification",
+			out:         " D deleted.txt\n M modified.txt\n",
+			wantDeleted: 1,
+			wantOther:   1,
+			wantAll:     false,
+		},
+		{
+			name:        "staged_deletion",
+			out:         "D  staged-deletion.txt\n",
+			wantDeleted: 0,
+			wantOther:   1,
+			wantAll:     false,
+		},
+		{
+			name:        "untracked_file",
+			out:         "?? untracked.txt\n",
+			wantDeleted: 0,
+			wantOther:   1,
+			wantAll:     false,
+		},
+		{
+			name:        "conflict",
+			out:         "DU conflict.txt\n",
+			wantDeleted: 0,
+			wantOther:   1,
+			wantAll:     false,
+		},
+		{
+			name:        "empty_status",
+			out:         "",
+			wantDeleted: 0,
+			wantOther:   0,
+			wantAll:     false,
+		},
+		{
+			name:    "run_in_dir_error_propagated",
+			err:     errors.New(errNotARepo),
+			wantErr: true,
 		},
 	}
 
-	status, err := ClassifyPorcelainDeletions(context.Background(), r, fakeDir)
-	if err != nil {
-		t.Fatalf("ClassifyPorcelainDeletions: %v", err)
-	}
-	if !status.AllDeletions() {
-		t.Error("expected AllDeletions() to return true for only deletions")
-	}
-	if status.Deleted != 3 {
-		t.Errorf("deleted = %d, want 3", status.Deleted)
-	}
-	if status.Other != 0 {
-		t.Errorf("other = %d, want 0", status.Other)
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &mockRunner{
+				runInDir: func(_ string, _ ...string) (string, error) {
+					return tt.out, tt.err
+				},
+			}
 
-func TestClassifyPorcelainDeletionsMixedChanges(t *testing.T) {
-	r := &mockRunner{
-		runInDir: func(_ string, _ ...string) (string, error) {
-			return " D deleted.txt\n M modified.txt\n", nil
-		},
+			status, err := ClassifyPorcelainDeletions(context.Background(), r, fakeDir)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error from RunInDir failure")
+				}
+				assertContains(t, err, errNotARepo)
+				return
+			}
+			if err != nil {
+				t.Fatalf("ClassifyPorcelainDeletions: %v", err)
+			}
+			if status.Deleted != tt.wantDeleted {
+				t.Errorf("Deleted = %d, want %d", status.Deleted, tt.wantDeleted)
+			}
+			if status.Other != tt.wantOther {
+				t.Errorf("Other = %d, want %d", status.Other, tt.wantOther)
+			}
+			if status.AllDeletions() != tt.wantAll {
+				t.Errorf("AllDeletions() = %v, want %v", status.AllDeletions(), tt.wantAll)
+			}
+		})
 	}
-
-	status, err := ClassifyPorcelainDeletions(context.Background(), r, fakeDir)
-	if err != nil {
-		t.Fatalf("ClassifyPorcelainDeletions: %v", err)
-	}
-	if status.AllDeletions() {
-		t.Error("expected AllDeletions() to return false with mixed changes")
-	}
-	if status.Deleted != 1 {
-		t.Errorf("deleted = %d, want 1", status.Deleted)
-	}
-	if status.Other != 1 {
-		t.Errorf("other = %d, want 1", status.Other)
-	}
-}
-
-func TestClassifyPorcelainDeletionsStagedDeletion(t *testing.T) {
-	r := &mockRunner{
-		runInDir: func(_ string, _ ...string) (string, error) {
-			return "D  staged-deletion.txt\n", nil
-		},
-	}
-
-	status, err := ClassifyPorcelainDeletions(context.Background(), r, fakeDir)
-	if err != nil {
-		t.Fatalf("ClassifyPorcelainDeletions: %v", err)
-	}
-	if status.AllDeletions() {
-		t.Error("expected AllDeletions() to return false for staged deletion (D in column 0)")
-	}
-	if status.Deleted != 0 {
-		t.Errorf("deleted = %d, want 0", status.Deleted)
-	}
-	if status.Other != 1 {
-		t.Errorf("other = %d, want 1", status.Other)
-	}
-}
-
-func TestClassifyPorcelainDeletionsUntrackedFiles(t *testing.T) {
-	r := &mockRunner{
-		runInDir: func(_ string, _ ...string) (string, error) {
-			return "?? untracked.txt\n", nil
-		},
-	}
-
-	status, err := ClassifyPorcelainDeletions(context.Background(), r, fakeDir)
-	if err != nil {
-		t.Fatalf("ClassifyPorcelainDeletions: %v", err)
-	}
-	if status.AllDeletions() {
-		t.Error("expected AllDeletions() to return false for untracked files")
-	}
-	if status.Deleted != 0 {
-		t.Errorf("deleted = %d, want 0", status.Deleted)
-	}
-	if status.Other != 1 {
-		t.Errorf("other = %d, want 1", status.Other)
-	}
-}
-
-func TestClassifyPorcelainDeletionsConflict(t *testing.T) {
-	r := &mockRunner{
-		runInDir: func(_ string, _ ...string) (string, error) {
-			return "DU conflict.txt\n", nil
-		},
-	}
-
-	status, err := ClassifyPorcelainDeletions(context.Background(), r, fakeDir)
-	if err != nil {
-		t.Fatalf("ClassifyPorcelainDeletions: %v", err)
-	}
-	if status.AllDeletions() {
-		t.Error("expected AllDeletions() to return false for conflict")
-	}
-	if status.Deleted != 0 {
-		t.Errorf("deleted = %d, want 0", status.Deleted)
-	}
-	if status.Other != 1 {
-		t.Errorf("other = %d, want 1", status.Other)
-	}
-}
-
-func TestClassifyPorcelainDeletionsEmpty(t *testing.T) {
-	r := &mockRunner{
-		runInDir: func(_ string, _ ...string) (string, error) {
-			return "", nil
-		},
-	}
-
-	status, err := ClassifyPorcelainDeletions(context.Background(), r, fakeDir)
-	if err != nil {
-		t.Fatalf("ClassifyPorcelainDeletions: %v", err)
-	}
-	if status.AllDeletions() {
-		t.Error("expected AllDeletions() to return false for empty status")
-	}
-	if status.Deleted != 0 {
-		t.Errorf("deleted = %d, want 0", status.Deleted)
-	}
-	if status.Other != 0 {
-		t.Errorf("other = %d, want 0", status.Other)
-	}
-}
-
-func TestClassifyPorcelainDeletionsRunInDirError(t *testing.T) {
-	r := &mockRunner{
-		runInDir: func(_ string, _ ...string) (string, error) {
-			return "", errors.New(errNotARepo)
-		},
-	}
-
-	_, err := ClassifyPorcelainDeletions(context.Background(), r, fakeDir)
-	if err == nil {
-		t.Fatal("expected error from RunInDir failure")
-	}
-	assertContains(t, err, errNotARepo)
 }
