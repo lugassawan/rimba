@@ -31,30 +31,90 @@ var doctorCmd = &cobra.Command{
 			return err
 		}
 
-		confidentRemovals := operations.ReapConfidentLocks(commonDir)
-		reportConfidentReap(cmd, confidentRemovals)
-
-		locks, err := operations.ScanWorktreeLocks(commonDir)
-		if err != nil {
+		if err := runLockCheck(cmd, commonDir); err != nil {
 			return err
 		}
-
-		markerless, skippedAlive := partitionByAliveMarker(locks, operations.AliveSweepAdminDirs(commonDir))
-		reportSkippedAliveMarker(cmd, skippedAlive)
-
-		if len(markerless) == 0 {
-			if len(confidentRemovals) == 0 && len(skippedAlive) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No stale index.lock files found.")
-			}
-			return nil
-		}
-
-		fix, _ := cmd.Flags().GetBool(flagFix)
-		if !fix {
-			return doctorReport(cmd, markerless)
-		}
-		return doctorFix(cmd, markerless)
+		return runInterruptedCheck(cmd, r)
 	},
+}
+
+// runLockCheck runs the stale index.lock scan/reap/report flow: sweep-manifest-confident
+// removals first, then the age-based markerless flow (report-only, or --fix to remove).
+func runLockCheck(cmd *cobra.Command, commonDir string) error {
+	confidentRemovals := operations.ReapConfidentLocks(commonDir)
+	reportConfidentReap(cmd, confidentRemovals)
+
+	locks, err := operations.ScanWorktreeLocks(commonDir)
+	if err != nil {
+		return err
+	}
+
+	markerless, skippedAlive := partitionByAliveMarker(locks, operations.AliveSweepAdminDirs(commonDir))
+	reportSkippedAliveMarker(cmd, skippedAlive)
+
+	if len(markerless) == 0 {
+		if len(confidentRemovals) == 0 && len(skippedAlive) == 0 {
+			fmt.Fprintln(cmd.OutOrStdout(), "No stale index.lock files found.")
+		}
+		return nil
+	}
+
+	fix, _ := cmd.Flags().GetBool(flagFix)
+	if !fix {
+		return doctorReport(cmd, markerless)
+	}
+	return doctorFix(cmd, markerless)
+}
+
+// runInterruptedCheck scans for worktrees left in an "interrupted clean"
+// state (a killed `git worktree remove` deleted every tracked file but never
+// deregistered the worktree) and reports or removes them depending on --fix.
+func runInterruptedCheck(cmd *cobra.Command, r git.Runner) error {
+	interrupted, err := operations.ScanInterruptedWorktrees(cmd.Context(), r)
+	if err != nil {
+		return err
+	}
+	if len(interrupted) == 0 {
+		return nil
+	}
+
+	fix, _ := cmd.Flags().GetBool(flagFix)
+	if !fix {
+		return reportInterrupted(cmd, interrupted)
+	}
+	return fixInterrupted(cmd, r, interrupted)
+}
+
+// reportInterrupted lists each interrupted worktree's path, branch, and
+// deleted-file count, then hints at the fix commands.
+func reportInterrupted(cmd *cobra.Command, worktrees []operations.InterruptedWorktree) error {
+	fmt.Fprintln(cmd.OutOrStdout(), "Interrupted worktree removals:")
+	for _, w := range worktrees {
+		fmt.Fprintf(cmd.OutOrStdout(), "  %s [%s] (%d deleted file(s))\n", w.Path, w.Branch, w.DeletedCount)
+	}
+	fmt.Fprintln(cmd.OutOrStdout(), "\nRun 'rimba remove <task> --force' to finish removing an affected worktree, "+
+		"or 'rimba doctor --fix' to finish them all.")
+	return nil
+}
+
+// fixInterrupted confirms (unless --force) and finishes removing each
+// interrupted worktree. Only the worktree itself is removed — branch
+// deletion stays out of scope for doctor (`rimba remove --force` does that).
+func fixInterrupted(cmd *cobra.Command, r git.Runner, worktrees []operations.InterruptedWorktree) error {
+	force, _ := cmd.Flags().GetBool(flagForce)
+	if !force && !confirmRemoval(cmd, len(worktrees), "interrupted worktree(s)") {
+		fmt.Fprintln(cmd.OutOrStdout(), "Aborted.")
+		return nil
+	}
+
+	for _, w := range worktrees {
+		if err := git.RemoveWorktree(cmd.Context(), r, w.Path, true); err != nil {
+			fmt.Fprintf(cmd.OutOrStdout(), "Failed to remove %s: %v\n", w.Path, err)
+			continue
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Removed %s\n", w.Path)
+	}
+	return nil
 }
 
 func init() {
