@@ -103,7 +103,7 @@ func IsDirty(ctx context.Context, r Runner, dir string) (bool, error) {
 	return strings.TrimSpace(out) != "", nil
 }
 
-// PorcelainDeletionStatus holds the classification of unstaged deletions from git status --porcelain.
+// PorcelainDeletionStatus holds the classification of unstaged deletions from git status --porcelain=v2.
 type PorcelainDeletionStatus struct {
 	Deleted int
 	Other   int
@@ -336,8 +336,8 @@ func parseCount(s string, v *int) {
 	*v = n
 }
 
-// classifyPorcelain parses git status --porcelain output and counts unstaged deletions vs other changes.
-// A line is an unstaged deletion if it starts with a space followed by 'D'.
+// classifyPorcelain parses git status --porcelain=v2 output and counts unstaged deletions vs other
+// changes. A line is an unstaged deletion if it is an ordinary changed entry ("1 ...") with XY code ".D".
 func classifyPorcelain(out string) PorcelainDeletionStatus {
 	var status PorcelainDeletionStatus
 	for line := range strings.SplitSeq(out, "\n") {
