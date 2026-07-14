@@ -152,6 +152,33 @@ func TestRemovePrunableWorktreeRecovers(t *testing.T) {
 	}
 }
 
+// TestRemoveInterruptedWorktreeHint guards `rimba remove`'s tailored errhint
+// for the same interrupted-clean signature TestDoctorReportsAndFixesInterruptedWorktree
+// covers for `rimba doctor`: a killed `git worktree remove` left every tracked
+// file unstaged-deleted. Without --force, `git worktree remove` itself refuses
+// (dirty worktree) and the hint must point at --force instead of the generic
+// commit-or-stash advice; with --force it must finish the removal.
+func TestRemoveInterruptedWorktreeHint(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	wtPath := plantInterruptedWorktree(t, repo, taskRemoveInterrupted)
+
+	r := rimbaFail(t, repo, "remove", taskRemoveInterrupted)
+	assertContains(t, r.Stderr, "interrupted cleanup")
+	assertContains(t, r.Stderr, "--force")
+
+	rimbaSuccess(t, repo, "remove", taskRemoveInterrupted, flagForceE2E)
+	assertFileNotExists(t, wtPath)
+
+	out := testutil.GitCmd(t, repo, "worktree", "list")
+	if strings.Contains(out, wtPath) {
+		t.Errorf("expected worktree entry for %s to be removed, got: %s", wtPath, out)
+	}
+}
+
 func TestRemoveFailsNonexistent(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)

@@ -49,9 +49,11 @@ const (
 	taskDirtyOne   = "dirty-one"
 
 	// #374/#380/doctor recovery test constants.
-	taskPrunableRemove = "prunable-remove-task"
-	taskPrunableClean  = "prunable-clean-task"
-	taskDoctorLock     = "doctor-lock-task"
+	taskPrunableRemove    = "prunable-remove-task"
+	taskPrunableClean     = "prunable-clean-task"
+	taskDoctorLock        = "doctor-lock-task"
+	taskDoctorInterrupted = "doctor-interrupted-task"
+	taskRemoveInterrupted = "remove-interrupted-task"
 
 	// Duplicate test constants.
 	taskDupA      = "task-a"
