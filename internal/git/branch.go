@@ -103,6 +103,27 @@ func IsDirty(ctx context.Context, r Runner, dir string) (bool, error) {
 	return strings.TrimSpace(out) != "", nil
 }
 
+// PorcelainDeletionStatus holds the classification of unstaged deletions from git status --porcelain.
+type PorcelainDeletionStatus struct {
+	Deleted int
+	Other   int
+}
+
+// AllDeletions returns true if all porcelain entries are unstaged deletions (and at least one exists).
+func (s PorcelainDeletionStatus) AllDeletions() bool {
+	return s.Deleted > 0 && s.Other == 0
+}
+
+// ClassifyPorcelainDeletions runs git status --porcelain in the given directory and classifies
+// the output into unstaged deletions (` D`) vs other changes.
+func ClassifyPorcelainDeletions(ctx context.Context, r Runner, dir string) (PorcelainDeletionStatus, error) {
+	out, err := r.RunInDir(ctx, dir, "status", "--porcelain")
+	if err != nil {
+		return PorcelainDeletionStatus{}, err
+	}
+	return classifyPorcelain(out), nil
+}
+
 // AheadBehind returns the ahead/behind counts of the current branch vs its upstream.
 // Returns (0, 0, nil) if there's no upstream configured.
 // Returns ctx.Err() on context cancellation so callers can distinguish a
@@ -309,4 +330,27 @@ func parseCount(s string, v *int) {
 		n = n*10 + int(c-'0')
 	}
 	*v = n
+}
+
+// classifyPorcelain parses git status --porcelain output and counts unstaged deletions vs other changes.
+// A line is an unstaged deletion if it starts with a space followed by 'D'.
+func classifyPorcelain(out string) PorcelainDeletionStatus {
+	var status PorcelainDeletionStatus
+	for line := range strings.SplitSeq(out, "\n") {
+		if line == "" {
+			continue
+		}
+		if isUnstagedDeletion(line) {
+			status.Deleted++
+		} else {
+			status.Other++
+		}
+	}
+	return status
+}
+
+// isUnstagedDeletion checks if a porcelain line represents an unstaged deletion.
+// The line must have at least 2 characters: first char is space, second char is 'D'.
+func isUnstagedDeletion(line string) bool {
+	return len(line) >= 2 && line[0] == ' ' && line[1] == 'D'
 }
