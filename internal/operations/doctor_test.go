@@ -1,10 +1,15 @@
 package operations
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/lugassawan/rimba/internal/git"
 )
 
 func TestScanWorktreeLocksFindsLocks(t *testing.T) {
@@ -118,5 +123,150 @@ func TestRemoveStaleLocksUnremovablePath(t *testing.T) {
 	}
 	if removals[0].Err == nil {
 		t.Error("expected error removing a nonexistent path")
+	}
+}
+
+// TestClassifyInterruptedWorktree covers classifyInterruptedWorktree's
+// decision table directly: which worktrees short-circuit before a status
+// call, and how the porcelain classification result is turned into a hit.
+func TestClassifyInterruptedWorktree(t *testing.T) {
+	cases := []struct {
+		name             string
+		bare             bool
+		prunable         bool
+		mainWorktreeGit  bool
+		writeIndexLock   bool
+		statusOutput     string
+		statusErr        error
+		wantOK           bool
+		wantDeletedCount int
+	}{
+		{
+			name:             "all unstaged deletions is interrupted",
+			statusOutput:     "1 .D a.txt\n1 .D b.txt\n",
+			wantOK:           true,
+			wantDeletedCount: 2,
+		},
+		{
+			name:           "index.lock present defers to the lock-scan flow",
+			writeIndexLock: true,
+			statusOutput:   "1 .D a.txt\n",
+			wantOK:         false,
+		},
+		{
+			name:         "a modified file mixed in is not interrupted",
+			statusOutput: "1 .M a.txt\n",
+			wantOK:       false,
+		},
+		{
+			name:   "bare worktree is skipped before status is checked",
+			bare:   true,
+			wantOK: false,
+		},
+		{
+			name:     "prunable worktree is skipped before status is checked",
+			prunable: true,
+			wantOK:   false,
+		},
+		{
+			name:            "main worktree's directory .git excludes it",
+			mainWorktreeGit: true,
+			wantOK:          false,
+		},
+		{
+			name:      "a per-worktree status error is swallowed",
+			statusErr: errGitFailed,
+			wantOK:    false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			commonDir := filepath.Join(root, "common")
+
+			var wt string
+			switch {
+			case tc.bare, tc.prunable:
+				wt = filepath.Join(root, "wt-skip")
+			case tc.mainWorktreeGit:
+				wt = root
+				if err := os.MkdirAll(filepath.Join(wt, ".git"), 0o755); err != nil {
+					t.Fatalf("MkdirAll .git dir: %v", err)
+				}
+			default:
+				var adminDir string
+				wt, adminDir = setupWorktree(t, root, commonDir, "wt-a")
+				if tc.writeIndexLock {
+					writeIndexLock(t, adminDir, 0)
+				}
+			}
+
+			entry := git.WorktreeEntry{Path: wt, Branch: branchFeature, Bare: tc.bare, Prunable: tc.prunable}
+			r := &mockRunner{
+				runInDir: func(_ string, _ ...string) (string, error) {
+					return tc.statusOutput, tc.statusErr
+				},
+			}
+
+			got, ok := classifyInterruptedWorktree(context.Background(), r, entry)
+			if ok != tc.wantOK {
+				t.Fatalf("ok = %v, want %v (result: %+v)", ok, tc.wantOK, got)
+			}
+			if !ok {
+				return
+			}
+			if got.DeletedCount != tc.wantDeletedCount {
+				t.Errorf("DeletedCount = %d, want %d", got.DeletedCount, tc.wantDeletedCount)
+			}
+			if got.Path != wt || got.Branch != branchFeature {
+				t.Errorf("got Path/Branch = %s/%s, want %s/%s", got.Path, got.Branch, wt, branchFeature)
+			}
+		})
+	}
+}
+
+// TestScanInterruptedWorktreesReturnsInterruptedEntries covers the full
+// ListWorktrees → classify plumbing, not just the per-entry decision table.
+func TestScanInterruptedWorktreesReturnsInterruptedEntries(t *testing.T) {
+	root := t.TempDir()
+	commonDir := filepath.Join(root, "common")
+	wt, _ := setupWorktree(t, root, commonDir, "wt-a")
+
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			return porcelainEntries(struct{ path, branch string }{wt, branchFeature}), nil
+		},
+		runInDir: func(dir string, _ ...string) (string, error) {
+			if dir != wt {
+				t.Fatalf("RunInDir dir = %s, want %s", dir, wt)
+			}
+			return "1 .D a.txt\n1 .D b.txt\n", nil
+		},
+	}
+
+	got, err := ScanInterruptedWorktrees(context.Background(), r)
+	if err != nil {
+		t.Fatalf("ScanInterruptedWorktrees: %v", err)
+	}
+	want := []InterruptedWorktree{{Path: wt, Branch: branchFeature, DeletedCount: 2}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+}
+
+// TestScanInterruptedWorktreesListWorktreesError confirms a ListWorktrees
+// failure is the one error that propagates as a hard error from the scan.
+func TestScanInterruptedWorktreesListWorktreesError(t *testing.T) {
+	r := &mockRunner{
+		run: func(_ ...string) (string, error) {
+			return "", errGitFailed
+		},
+		runInDir: noopRunInDir,
+	}
+
+	_, err := ScanInterruptedWorktrees(context.Background(), r)
+	if !errors.Is(err, errGitFailed) {
+		t.Fatalf("ScanInterruptedWorktrees error = %v, want %v", err, errGitFailed)
 	}
 }

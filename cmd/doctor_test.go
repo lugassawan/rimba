@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -331,6 +332,150 @@ func TestDoctorFixRecoversAliveMarkerPastCeiling(t *testing.T) {
 	}
 	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
 		t.Error("expected the lock to be removed once its manifest is past the alive-marker ceiling")
+	}
+}
+
+// setupInterruptedWorktree creates a real worktree directory at <root>/wt-<name>
+// whose `.git` pointer file resolves to an admin dir under commonDir,
+// mirroring `git worktree add`'s on-disk layout closely enough for
+// ScanInterruptedWorktrees's filesystem-based admin-dir lookup.
+func setupInterruptedWorktree(t *testing.T, root, commonDir, name string) string {
+	t.Helper()
+	wtPath := filepath.Join(root, "wt-"+name)
+	if err := os.MkdirAll(wtPath, 0o755); err != nil {
+		t.Fatalf("MkdirAll worktree: %v", err)
+	}
+	adminDir := filepath.Join(commonDir, "worktrees", name)
+	if err := os.MkdirAll(adminDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll admin dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(wtPath, ".git"), []byte("gitdir: "+adminDir+"\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile .git: %v", err)
+	}
+	return wtPath
+}
+
+// interruptedWorktreePorcelain builds a single-entry `git worktree list
+// --porcelain` block for path/branch.
+func interruptedWorktreePorcelain(path, branch string) string {
+	return "worktree " + path + "\nHEAD abc123\nbranch refs/heads/" + branch + "\n"
+}
+
+// mockInterruptedRunner resolves --git-common-dir to commonDir, `worktree
+// list --porcelain` to worktreeListOut, records any `worktree remove`
+// invocation into removeCalls, and answers every RunInDir status check with
+// statusOut.
+func mockInterruptedRunner(commonDir, worktreeListOut, statusOut string, removeCalls *[][]string) *mockRunner {
+	return &mockRunner{
+		run: func(args ...string) (string, error) {
+			switch {
+			case len(args) >= 2 && args[1] == cmdGitCommonDir:
+				return commonDir, nil
+			case len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == cmdList:
+				return worktreeListOut, nil
+			case len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == cmdRemove:
+				*removeCalls = append(*removeCalls, append([]string(nil), args...))
+				return "", nil
+			}
+			return "", nil
+		},
+		runInDir: func(_ string, _ ...string) (string, error) {
+			return statusOut, nil
+		},
+	}
+}
+
+// TestDoctorReportsInterruptedWorktree covers the no-`--fix` path: an
+// interrupted worktree is listed with its path/branch/deleted-count and the
+// remove/doctor-fix hint, and no `worktree remove` is ever issued.
+func TestDoctorReportsInterruptedWorktree(t *testing.T) {
+	root := t.TempDir()
+	commonDir := filepath.Join(root, "common")
+	wt := setupInterruptedWorktree(t, root, commonDir, "wt-a")
+
+	var removeCalls [][]string
+	r := mockInterruptedRunner(commonDir, interruptedWorktreePorcelain(wt, branchFeature), "1 .D a.txt\n", &removeCalls)
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().Bool(flagFix, false, "")
+	cmd.Flags().Bool(flagForce, false, "")
+
+	if err := doctorCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("doctorCmd.RunE: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, wt) {
+		t.Errorf("output = %q, want the interrupted worktree path %q", out, wt)
+	}
+	if !strings.Contains(out, "rimba remove <task> --force") {
+		t.Errorf("output = %q, want the remove --force hint", out)
+	}
+	if len(removeCalls) != 0 {
+		t.Errorf("removeCalls = %+v, want no worktree remove call issued", removeCalls)
+	}
+}
+
+// TestDoctorFixFinishesInterruptedWorktree covers `--fix --force`: the
+// worktree is removed via `git worktree remove --force -- <path>` and the
+// outcome is printed.
+func TestDoctorFixFinishesInterruptedWorktree(t *testing.T) {
+	root := t.TempDir()
+	commonDir := filepath.Join(root, "common")
+	wt := setupInterruptedWorktree(t, root, commonDir, "wt-a")
+
+	var removeCalls [][]string
+	r := mockInterruptedRunner(commonDir, interruptedWorktreePorcelain(wt, branchFeature), "1 .D a.txt\n", &removeCalls)
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().Bool(flagFix, true, "")
+	cmd.Flags().Bool(flagForce, true, "")
+
+	if err := doctorCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("doctorCmd.RunE: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Removed "+wt) {
+		t.Errorf("output = %q, want removal confirmation for %q", out, wt)
+	}
+	if len(removeCalls) != 1 {
+		t.Fatalf("removeCalls = %+v, want exactly 1 worktree remove call", removeCalls)
+	}
+	want := []string{"worktree", "remove", "--force", "--", wt}
+	if !reflect.DeepEqual(removeCalls[0], want) {
+		t.Errorf("removeCalls[0] = %v, want %v", removeCalls[0], want)
+	}
+}
+
+// TestDoctorFixDeclinedInterruptedWorktree covers the declined-confirm path:
+// answering "n" to the prompt aborts without issuing any worktree removal.
+func TestDoctorFixDeclinedInterruptedWorktree(t *testing.T) {
+	root := t.TempDir()
+	commonDir := filepath.Join(root, "common")
+	wt := setupInterruptedWorktree(t, root, commonDir, "wt-a")
+
+	var removeCalls [][]string
+	r := mockInterruptedRunner(commonDir, interruptedWorktreePorcelain(wt, branchFeature), "1 .D a.txt\n", &removeCalls)
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().Bool(flagFix, true, "")
+	cmd.Flags().Bool(flagForce, false, "")
+	cmd.SetIn(strings.NewReader("n\n"))
+
+	if err := doctorCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("doctorCmd.RunE: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Aborted.") {
+		t.Errorf("output = %q, want 'Aborted.'", out)
+	}
+	if len(removeCalls) != 0 {
+		t.Errorf("removeCalls = %+v, want no worktree remove call issued", removeCalls)
 	}
 }
 

@@ -422,3 +422,91 @@ func TestRemoveBranchErrorJSON(t *testing.T) {
 		t.Errorf("branch_error = %q, want non-empty", branchErr)
 	}
 }
+
+func TestRemoveAllDeletionsHint(t *testing.T) {
+	wtPath := t.TempDir()
+	// Create a .git file to make the worktree look real (non-orphaned)
+	if err := os.WriteFile(filepath.Join(wtPath, ".git"), []byte("gitdir: /somewhere/.git/worktrees/login\n"), 0o644); err != nil {
+		t.Fatalf("failed to create .git fixture: %v", err)
+	}
+	worktreeOut := "worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree " + wtPath + "\nHEAD def456\nbranch refs/heads/feature/login\n"
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == cmdRemove {
+				return "", errors.New("removal failed")
+			}
+			return worktreeOut, nil
+		},
+		runInDir: func(dir string, args ...string) (string, error) {
+			if dir == wtPath && len(args) > 0 && args[0] == cmdStatus {
+				// All unstaged deletions (porcelain v2)
+				return "1 .D file1.go\n1 .D file2.go\n", nil
+			}
+			return noopRunInDir(dir, args...)
+		},
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, _ := newTestCmd()
+	cmd.SetContext(config.WithConfig(context.Background(), &config.Config{}))
+	cmd.Flags().Bool(flagKeepBranch, false, "")
+	cmd.Flags().Bool(flagForce, false, "")
+
+	err := removeCmd.RunE(cmd, []string{"login"})
+	if err == nil {
+		t.Fatal("expected error from removal failure")
+	}
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "interrupted cleanup") {
+		t.Errorf("error = %q, want to contain 'interrupted cleanup'", errMsg)
+	}
+	if !strings.Contains(errMsg, "--force") {
+		t.Errorf("error = %q, want to contain '--force'", errMsg)
+	}
+}
+
+func TestRemoveModificationHint(t *testing.T) {
+	wtPath := t.TempDir()
+	// Create a .git file to make the worktree look real (non-orphaned)
+	if err := os.WriteFile(filepath.Join(wtPath, ".git"), []byte("gitdir: /somewhere/.git/worktrees/login\n"), 0o644); err != nil {
+		t.Fatalf("failed to create .git fixture: %v", err)
+	}
+	worktreeOut := "worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree " + wtPath + "\nHEAD def456\nbranch refs/heads/feature/login\n"
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == cmdWorktreeTest && args[1] == cmdRemove {
+				return "", errors.New("removal failed")
+			}
+			return worktreeOut, nil
+		},
+		runInDir: func(dir string, args ...string) (string, error) {
+			if dir == wtPath && len(args) > 0 && args[0] == cmdStatus {
+				// Mixed changes: a modification (not all deletions), porcelain v2
+				return "1 .M file1.go\n1 .D file2.go\n", nil
+			}
+			return noopRunInDir(dir, args...)
+		},
+	}
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, _ := newTestCmd()
+	cmd.SetContext(config.WithConfig(context.Background(), &config.Config{}))
+	cmd.Flags().Bool(flagKeepBranch, false, "")
+	cmd.Flags().Bool(flagForce, false, "")
+
+	err := removeCmd.RunE(cmd, []string{"login"})
+	if err == nil {
+		t.Fatal("expected error from removal failure")
+	}
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "commit or stash") {
+		t.Errorf("error = %q, want to contain 'commit or stash'", errMsg)
+	}
+	if strings.Contains(errMsg, "interrupted cleanup") {
+		t.Errorf("error = %q, must NOT contain 'interrupted cleanup'", errMsg)
+	}
+}

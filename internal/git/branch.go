@@ -103,6 +103,27 @@ func IsDirty(ctx context.Context, r Runner, dir string) (bool, error) {
 	return strings.TrimSpace(out) != "", nil
 }
 
+// PorcelainDeletionStatus holds the classification of unstaged deletions from git status --porcelain=v2.
+type PorcelainDeletionStatus struct {
+	Deleted int
+	Other   int
+}
+
+// AllDeletions returns true if all porcelain entries are unstaged deletions (and at least one exists).
+func (s PorcelainDeletionStatus) AllDeletions() bool {
+	return s.Deleted > 0 && s.Other == 0
+}
+
+// ClassifyPorcelainDeletions runs git status --porcelain=v2 in dir and classifies unstaged
+// deletions vs other changes; v2 avoids v1's leading-space corruption from RunInDir's TrimSpace.
+func ClassifyPorcelainDeletions(ctx context.Context, r Runner, dir string) (PorcelainDeletionStatus, error) {
+	out, err := r.RunInDir(ctx, dir, "status", "--porcelain=v2")
+	if err != nil {
+		return PorcelainDeletionStatus{}, err
+	}
+	return classifyPorcelain(out), nil
+}
+
 // AheadBehind returns the ahead/behind counts of the current branch vs its upstream.
 // Returns (0, 0, nil) if there's no upstream configured.
 // Returns ctx.Err() on context cancellation so callers can distinguish a
@@ -309,4 +330,27 @@ func parseCount(s string, v *int) {
 		n = n*10 + int(c-'0')
 	}
 	*v = n
+}
+
+// classifyPorcelain parses git status --porcelain=v2 output and counts unstaged deletions vs other
+// changes. A line is an unstaged deletion if it is an ordinary changed entry ("1 ...") with XY code ".D".
+func classifyPorcelain(out string) PorcelainDeletionStatus {
+	var status PorcelainDeletionStatus
+	for line := range strings.SplitSeq(out, "\n") {
+		if line == "" {
+			continue
+		}
+		if isUnstagedDeletionV2(line) {
+			status.Deleted++
+		} else {
+			status.Other++
+		}
+	}
+	return status
+}
+
+// isUnstagedDeletionV2 reports whether an ordinary changed entry ("1 XY ...") has XY == ".D"
+// (unmodified in index, deleted in worktree); renames, unmerged, untracked, and ignored never match.
+func isUnstagedDeletionV2(line string) bool {
+	return len(line) >= 4 && line[0] == '1' && line[1] == ' ' && line[2] == '.' && line[3] == 'D'
 }
