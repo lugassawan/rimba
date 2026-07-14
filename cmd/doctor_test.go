@@ -394,7 +394,7 @@ func TestDoctorReportsInterruptedWorktree(t *testing.T) {
 	wt := setupInterruptedWorktree(t, root, commonDir, "wt-a")
 
 	var removeCalls [][]string
-	r := mockInterruptedRunner(commonDir, interruptedWorktreePorcelain(wt, branchFeature), " D a.txt\n", &removeCalls)
+	r := mockInterruptedRunner(commonDir, interruptedWorktreePorcelain(wt, branchFeature), "1 .D a.txt\n", &removeCalls)
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -426,7 +426,7 @@ func TestDoctorFixFinishesInterruptedWorktree(t *testing.T) {
 	wt := setupInterruptedWorktree(t, root, commonDir, "wt-a")
 
 	var removeCalls [][]string
-	r := mockInterruptedRunner(commonDir, interruptedWorktreePorcelain(wt, branchFeature), " D a.txt\n", &removeCalls)
+	r := mockInterruptedRunner(commonDir, interruptedWorktreePorcelain(wt, branchFeature), "1 .D a.txt\n", &removeCalls)
 	restore := overrideNewRunner(r)
 	defer restore()
 
@@ -458,7 +458,7 @@ func TestDoctorFixDeclinedInterruptedWorktree(t *testing.T) {
 	wt := setupInterruptedWorktree(t, root, commonDir, "wt-a")
 
 	var removeCalls [][]string
-	r := mockInterruptedRunner(commonDir, interruptedWorktreePorcelain(wt, branchFeature), " D a.txt\n", &removeCalls)
+	r := mockInterruptedRunner(commonDir, interruptedWorktreePorcelain(wt, branchFeature), "1 .D a.txt\n", &removeCalls)
 	restore := overrideNewRunner(r)
 	defer restore()
 

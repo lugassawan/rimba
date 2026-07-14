@@ -143,19 +143,19 @@ func TestClassifyInterruptedWorktree(t *testing.T) {
 	}{
 		{
 			name:             "all unstaged deletions is interrupted",
-			statusOutput:     " D a.txt\n D b.txt\n",
+			statusOutput:     "1 .D a.txt\n1 .D b.txt\n",
 			wantOK:           true,
 			wantDeletedCount: 2,
 		},
 		{
 			name:           "index.lock present defers to the lock-scan flow",
 			writeIndexLock: true,
-			statusOutput:   " D a.txt\n",
+			statusOutput:   "1 .D a.txt\n",
 			wantOK:         false,
 		},
 		{
 			name:         "a modified file mixed in is not interrupted",
-			statusOutput: " M a.txt\n",
+			statusOutput: "1 .M a.txt\n",
 			wantOK:       false,
 		},
 		{
@@ -241,7 +241,7 @@ func TestScanInterruptedWorktreesReturnsInterruptedEntries(t *testing.T) {
 			if dir != wt {
 				t.Fatalf("RunInDir dir = %s, want %s", dir, wt)
 			}
-			return " D a.txt\n D b.txt\n", nil
+			return "1 .D a.txt\n1 .D b.txt\n", nil
 		},
 	}
 

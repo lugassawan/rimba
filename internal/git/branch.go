@@ -114,10 +114,14 @@ func (s PorcelainDeletionStatus) AllDeletions() bool {
 	return s.Deleted > 0 && s.Other == 0
 }
 
-// ClassifyPorcelainDeletions runs git status --porcelain in the given directory and classifies
-// the output into unstaged deletions (` D`) vs other changes.
+// ClassifyPorcelainDeletions runs git status --porcelain=v2 in the given directory and classifies
+// the output into unstaged deletions vs other changes. v2 (not v1) is used deliberately: every v1
+// line for an unstaged-only change starts with a literal space (e.g. ` D`), and RunInDir's shared
+// strings.TrimSpace strips exactly that leading space off the first line, corrupting it. v2 prefixes
+// every line with a non-space entry-type marker (`1 `, `2 `, `u `, `?`, `!`), so front-trimming never
+// eats meaningful content.
 func ClassifyPorcelainDeletions(ctx context.Context, r Runner, dir string) (PorcelainDeletionStatus, error) {
-	out, err := r.RunInDir(ctx, dir, "status", "--porcelain")
+	out, err := r.RunInDir(ctx, dir, "status", "--porcelain=v2")
 	if err != nil {
 		return PorcelainDeletionStatus{}, err
 	}
@@ -340,7 +344,7 @@ func classifyPorcelain(out string) PorcelainDeletionStatus {
 		if line == "" {
 			continue
 		}
-		if isUnstagedDeletion(line) {
+		if isUnstagedDeletionV2(line) {
 			status.Deleted++
 		} else {
 			status.Other++
@@ -349,8 +353,11 @@ func classifyPorcelain(out string) PorcelainDeletionStatus {
 	return status
 }
 
-// isUnstagedDeletion checks if a porcelain line represents an unstaged deletion.
-// The line must have at least 2 characters: first char is space, second char is 'D'.
-func isUnstagedDeletion(line string) bool {
-	return len(line) >= 2 && line[0] == ' ' && line[1] == 'D'
+// isUnstagedDeletionV2 checks if a porcelain v2 line represents an unstaged
+// deletion: an ordinary changed entry ("1 XY ...") whose XY code is ".D" —
+// unmodified in the index, deleted in the worktree. Renamed/copied ("2"),
+// unmerged ("u"), untracked ("?"), and ignored ("!") entries are never a bare
+// unstaged deletion, regardless of their own fields.
+func isUnstagedDeletionV2(line string) bool {
+	return len(line) >= 4 && line[0] == '1' && line[1] == ' ' && line[2] == '.' && line[3] == 'D'
 }

@@ -440,8 +440,8 @@ func TestRemoveAllDeletionsHint(t *testing.T) {
 		},
 		runInDir: func(dir string, args ...string) (string, error) {
 			if dir == wtPath && len(args) > 0 && args[0] == cmdStatus {
-				// All unstaged deletions
-				return " D file1.go\n D file2.go\n", nil
+				// All unstaged deletions (porcelain v2)
+				return "1 .D file1.go\n1 .D file2.go\n", nil
 			}
 			return noopRunInDir(dir, args...)
 		},
@@ -484,8 +484,8 @@ func TestRemoveModificationHint(t *testing.T) {
 		},
 		runInDir: func(dir string, args ...string) (string, error) {
 			if dir == wtPath && len(args) > 0 && args[0] == cmdStatus {
-				// Mixed changes: a modification (not all deletions)
-				return " M file1.go\n D file2.go\n", nil
+				// Mixed changes: a modification (not all deletions), porcelain v2
+				return "1 .M file1.go\n1 .D file2.go\n", nil
 			}
 			return noopRunInDir(dir, args...)
 		},
