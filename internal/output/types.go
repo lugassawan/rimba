@@ -250,3 +250,24 @@ type SyncData struct {
 	Summary    SyncSummary        `json:"summary"`
 	Worktrees  []SyncWorktreeJSON `json:"worktrees"`
 }
+
+// PhaseStatJSON mirrors metrics.PhaseStat for JSON output (report).
+type PhaseStatJSON struct {
+	Name   string `json:"name"`
+	Count  int    `json:"count"`
+	P50MS  int64  `json:"p50_ms"`
+	P95MS  int64  `json:"p95_ms"`
+	MeanMS int64  `json:"mean_ms"`
+}
+
+// CommandReportJSON mirrors metrics.CommandReport for JSON output (report).
+type CommandReportJSON struct {
+	Command string          `json:"command"`
+	Count   int             `json:"count"`
+	Phases  []PhaseStatJSON `json:"phases"`
+}
+
+// ReportData is the top-level JSON output for the report command.
+type ReportData struct {
+	Commands []CommandReportJSON `json:"commands"`
+}
