@@ -15,6 +15,7 @@ import (
 	"github.com/lugassawan/rimba/internal/debug"
 	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/metrics"
 	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/progress"
 )
@@ -30,6 +31,10 @@ type Manager struct {
 
 	// Concurrency caps parallel module installs. <= 0 auto-picks a default.
 	Concurrency int
+
+	// Recorder collects per-module install timing spans. A nil Recorder is a
+	// safe no-op.
+	Recorder *metrics.Recorder
 }
 
 // InstallResult holds the outcome of installing a single module.
@@ -143,24 +148,30 @@ func buildExistingPaths(entries []git.WorktreeEntry, exclude, preferred string) 
 
 func (m *Manager) installModule(ctx context.Context, worktreePath string, mh ModuleWithHash, existingPaths []string) InstallResult {
 	mod := mh.Module
+	stop := m.Recorder.StartModuleSpan(mod.Dir)
 
 	if mh.Hash == "" {
+		stop(false)
 		return InstallResult{Module: mod}
 	}
 
 	if result, ok := tryCloneFromExisting(ctx, worktreePath, mh, existingPaths); ok {
+		stop(result.Cloned)
 		return result
 	}
 
 	if mod.CloneOnly {
+		stop(false)
 		return InstallResult{Module: mod}
 	}
 
 	if mod.InstallCmd != "" {
 		err := runInstall(ctx, worktreePath, mod)
+		stop(false)
 		return InstallResult{Module: mod, Error: err}
 	}
 
+	stop(false)
 	return InstallResult{Module: mod}
 }
 

@@ -16,7 +16,7 @@ func TestRunPostCreateHooksCancelledStopsLaunching(t *testing.T) {
 	cancel() // pre-cancel so no hooks launch
 
 	start := time.Now()
-	results := RunPostCreateHooks(ctx, dir, []string{"sleep 5", "touch " + marker}, nil)
+	results := RunPostCreateHooks(ctx, dir, []string{"sleep 5", "touch " + marker}, nil, nil)
 	elapsed := time.Since(start)
 
 	if elapsed > time.Second {
@@ -37,7 +37,7 @@ func TestRunPostCreateHooksKillsChild(t *testing.T) {
 
 	done := make(chan []HookResult, 1)
 	go func() {
-		done <- RunPostCreateHooks(ctx, dir, []string{"sleep 30"}, nil)
+		done <- RunPostCreateHooks(ctx, dir, []string{"sleep 30"}, nil, nil)
 	}()
 
 	time.Sleep(50 * time.Millisecond)

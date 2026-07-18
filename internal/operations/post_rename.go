@@ -51,7 +51,7 @@ func PostRenameSetup(ctx context.Context, r git.Runner, params PostRenameParams,
 
 	if !params.SkipHooks && len(params.PostRename) > 0 {
 		progress.Notify(onProgress, "Running post-rename hooks...")
-		result.HookResults = RunPostCreateHooks(ctx, params.WtPath, params.PostRename, onProgress)
+		result.HookResults = RunPostCreateHooks(ctx, params.WtPath, params.PostRename, nil, onProgress)
 	}
 
 	return result, nil

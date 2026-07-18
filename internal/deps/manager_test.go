@@ -2,6 +2,7 @@ package deps
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/metrics"
 )
 
 const (
@@ -34,6 +36,26 @@ type mockRunner struct {
 }
 
 var errGitFailed = errors.New("git worktree list failed")
+
+// flushedRun flushes rec to a temp file and unmarshals the single recorded
+// run, mirroring the flush-and-readback style internal/metrics' own tests use
+// to inspect Recorder internals (it has no exported span accessor).
+func flushedRun(t *testing.T, rec *metrics.Recorder) metrics.Run {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "metrics.jsonl")
+	if err := rec.Flush(path, 0); err != nil {
+		t.Fatalf("Flush: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	var run metrics.Run
+	if err := json.Unmarshal([]byte(strings.TrimSpace(string(data))), &run); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	return run
+}
 
 func (m *mockRunner) Run(_ context.Context, args ...string) (string, error) {
 	return m.worktreeOutput, nil
@@ -946,6 +968,110 @@ func TestInstallOutputCapture(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "captured-output") {
 		t.Errorf("error should contain captured output, got %q", err.Error())
+	}
+}
+
+func TestInstallModuleRecordsModuleSpanCloneHit(t *testing.T) {
+	existingWT := t.TempDir()
+	newWT := t.TempDir()
+
+	writeFile(t, existingWT, LockfilePnpm, "lockfile-v6-content")
+	writeFile(t, newWT, LockfilePnpm, "lockfile-v6-content")
+
+	if err := os.MkdirAll(filepath.Join(existingWT, DirNodeModules), 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(existingWT, DirNodeModules), "package.json", "{}")
+
+	runner := &mockRunner{worktreeOutput: mockWorktreeList(existingWT, newWT)}
+	rec := metrics.NewRecorder("add", "task-1", "svc")
+	mgr := &Manager{Runner: runner, Recorder: rec}
+	modules := []Module{
+		{Dir: DirNodeModules, Lockfile: LockfilePnpm, InstallCmd: "pnpm install --frozen-lockfile"},
+	}
+
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
+	if len(results) != 1 {
+		t.Fatalf(fmtExpectedResults, len(results))
+	}
+	if !results[0].Cloned {
+		t.Fatal("expected Cloned=true")
+	}
+
+	run := flushedRun(t, rec)
+	if len(run.Spans) != 1 {
+		t.Fatalf("expected 1 span, got %d", len(run.Spans))
+	}
+	span := run.Spans[0]
+	if span.Name != DirNodeModules {
+		t.Errorf("span.Name = %q, want %q", span.Name, DirNodeModules)
+	}
+	if span.Cloned == nil || !*span.Cloned {
+		t.Errorf("span.Cloned = %v, want true", span.Cloned)
+	}
+}
+
+func TestInstallModuleRecordsModuleSpanRealInstall(t *testing.T) {
+	newWT := t.TempDir()
+	writeFile(t, newWT, LockfilePnpm, "lockfile-content")
+
+	runner := &mockRunner{worktreeOutput: mockWorktreeList(newWT)}
+	rec := metrics.NewRecorder("add", "task-1", "svc")
+	mgr := &Manager{Runner: runner, Recorder: rec}
+	modules := []Module{
+		{Dir: DirNodeModules, Lockfile: LockfilePnpm, InstallCmd: "echo ok"},
+	}
+
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
+	if len(results) != 1 {
+		t.Fatalf(fmtExpectedResults, len(results))
+	}
+	if results[0].Cloned {
+		t.Fatal("expected Cloned=false (no other worktree to clone from)")
+	}
+
+	run := flushedRun(t, rec)
+	if len(run.Spans) != 1 {
+		t.Fatalf("expected 1 span, got %d", len(run.Spans))
+	}
+	span := run.Spans[0]
+	if span.Name != DirNodeModules {
+		t.Errorf("span.Name = %q, want %q", span.Name, DirNodeModules)
+	}
+	if span.Cloned == nil || *span.Cloned {
+		t.Errorf("span.Cloned = %v, want false", span.Cloned)
+	}
+}
+
+func TestInstallModuleRecordsModuleSpanOnInstallError(t *testing.T) {
+	newWT := t.TempDir()
+	writeFile(t, newWT, LockfilePnpm, "lockfile-content")
+
+	runner := &mockRunner{worktreeOutput: mockWorktreeList(newWT)}
+	rec := metrics.NewRecorder("add", "task-1", "svc")
+	mgr := &Manager{Runner: runner, Recorder: rec}
+	modules := []Module{
+		{Dir: DirNodeModules, Lockfile: LockfilePnpm, InstallCmd: "/nonexistent-command-xyz"},
+	}
+
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
+	if len(results) != 1 {
+		t.Fatalf(fmtExpectedResults, len(results))
+	}
+	if results[0].Error == nil {
+		t.Fatal("expected error from invalid install command")
+	}
+
+	run := flushedRun(t, rec)
+	if len(run.Spans) != 1 {
+		t.Fatalf("expected 1 span, got %d", len(run.Spans))
+	}
+	span := run.Spans[0]
+	if span.Name != DirNodeModules {
+		t.Errorf("span.Name = %q, want %q", span.Name, DirNodeModules)
+	}
+	if span.Cloned == nil || *span.Cloned {
+		t.Errorf("span.Cloned = %v, want false", span.Cloned)
 	}
 }
 

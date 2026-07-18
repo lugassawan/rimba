@@ -11,6 +11,7 @@ import (
 	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/gitref"
+	"github.com/lugassawan/rimba/internal/metrics"
 	"github.com/lugassawan/rimba/internal/progress"
 	"github.com/lugassawan/rimba/internal/resolver"
 )
@@ -26,6 +27,7 @@ type PostCreateOptions struct {
 	SkipHooks     bool
 	PostCreate    []string // hook commands
 	Concurrency   int      // max parallel module installs; 0 = Manager default
+	Recorder      *metrics.Recorder
 }
 
 // AddParams holds the inputs for creating a new worktree.
@@ -83,7 +85,10 @@ func AddWorktree(ctx context.Context, r git.Runner, params AddParams, onProgress
 
 	// Create worktree
 	progress.Notify(onProgress, "Creating worktree...")
-	if err := git.AddWorktree(ctx, r, wtPath, branch, params.Source); err != nil {
+	stop := params.Recorder.StartSpan("create")
+	err := git.AddWorktree(ctx, r, wtPath, branch, params.Source)
+	stop()
+	if err != nil {
 		return result, err
 	}
 
@@ -100,6 +105,7 @@ func AddWorktree(ctx context.Context, r git.Runner, params AddParams, onProgress
 		SkipHooks:     params.SkipHooks,
 		PostCreate:    params.PostCreate,
 		Concurrency:   params.Concurrency,
+		Recorder:      params.Recorder,
 	}, onProgress)
 	if err != nil {
 		return result, err

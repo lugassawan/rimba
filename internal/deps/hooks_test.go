@@ -6,12 +6,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/lugassawan/rimba/internal/metrics"
 )
 
 func TestRunPostCreateHooksSuccess(t *testing.T) {
 	dir := t.TempDir()
 
-	results := RunPostCreateHooks(context.Background(), dir, []string{"touch marker.txt"}, nil)
+	results := RunPostCreateHooks(context.Background(), dir, []string{"touch marker.txt"}, nil, nil)
 
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedOneResult, len(results))
@@ -33,7 +35,7 @@ func TestRunPostCreateHooksPartialFailure(t *testing.T) {
 		"touch good.txt",
 		"false", // always fails
 		"touch also-good.txt",
-	}, nil)
+	}, nil, nil)
 
 	if len(results) != 3 {
 		t.Fatalf("expected 3 results, got %d", len(results))
@@ -61,7 +63,7 @@ func TestRunPostCreateHooksPartialFailure(t *testing.T) {
 func TestRunPostCreateHooksEmpty(t *testing.T) {
 	dir := t.TempDir()
 
-	results := RunPostCreateHooks(context.Background(), dir, nil, nil)
+	results := RunPostCreateHooks(context.Background(), dir, nil, nil, nil)
 
 	if len(results) != 0 {
 		t.Errorf("expected 0 results, got %d", len(results))
@@ -74,7 +76,7 @@ func TestRunPostCreateHooksShellFeatures(t *testing.T) {
 	// Test shell features: pipes and quoting
 	results := RunPostCreateHooks(context.Background(), dir, []string{
 		"echo 'hello world' > output.txt",
-	}, nil)
+	}, nil, nil)
 
 	if results[0].Error != nil {
 		t.Fatalf(fmtExpectedNoError, results[0].Error)
@@ -98,7 +100,7 @@ func TestRunPostCreateHooksProgressCallback(t *testing.T) {
 	}
 
 	hooks := []string{"touch a.txt", "touch b.txt"}
-	RunPostCreateHooks(context.Background(), dir, hooks, onProgress)
+	RunPostCreateHooks(context.Background(), dir, hooks, nil, onProgress)
 
 	if len(calls) != 2 {
 		t.Fatalf("expected 2 progress calls, got %d", len(calls))
@@ -116,7 +118,7 @@ func TestRunPostCreateHooksOutputCapture(t *testing.T) {
 
 	results := RunPostCreateHooks(context.Background(), dir, []string{
 		"echo hook-output-captured && exit 1",
-	}, nil)
+	}, nil, nil)
 
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedOneResult, len(results))
@@ -126,5 +128,45 @@ func TestRunPostCreateHooksOutputCapture(t *testing.T) {
 	}
 	if !strings.Contains(results[0].Error.Error(), "hook-output-captured") {
 		t.Errorf("error should contain captured output, got %q", results[0].Error.Error())
+	}
+}
+
+func TestRunPostCreateHooksRecordsOneSpanPerHook(t *testing.T) {
+	dir := t.TempDir()
+
+	rec := metrics.NewRecorder("add", "task-1", "svc")
+	hooks := []string{"touch a.txt", "false"}
+
+	results := RunPostCreateHooks(context.Background(), dir, hooks, rec, nil)
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+
+	run := flushedRun(t, rec)
+	if len(run.Spans) != 2 {
+		t.Fatalf("expected 2 spans, got %d", len(run.Spans))
+	}
+	for i, hook := range hooks {
+		if run.Spans[i].Name != hook {
+			t.Errorf("span[%d].Name = %q, want %q", i, run.Spans[i].Name, hook)
+		}
+	}
+}
+
+func TestRunPostCreateHooksNilRecorderNoPanic(t *testing.T) {
+	dir := t.TempDir()
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("RunPostCreateHooks panicked with nil rec: %v", r)
+		}
+	}()
+
+	results := RunPostCreateHooks(context.Background(), dir, []string{"touch marker.txt"}, nil, nil)
+	if len(results) != 1 {
+		t.Fatalf(fmtExpectedOneResult, len(results))
+	}
+	if results[0].Error != nil {
+		t.Errorf(fmtExpectedNoError, results[0].Error)
 	}
 }

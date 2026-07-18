@@ -2,12 +2,35 @@ package operations
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/lugassawan/rimba/internal/metrics"
 )
+
+// flushedRun flushes rec to a temp file and unmarshals the single recorded
+// run, mirroring internal/metrics' own flush-and-readback test style since
+// Recorder has no exported span accessor.
+func flushedRun(t *testing.T, rec *metrics.Recorder) metrics.Run {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "metrics.jsonl")
+	if err := rec.Flush(path, 0); err != nil {
+		t.Fatalf("Flush: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	var run metrics.Run
+	if err := json.Unmarshal([]byte(strings.TrimSpace(string(data))), &run); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	return run
+}
 
 func TestPostCreateSetupReportsSkippedSymlinks(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -211,6 +234,67 @@ func TestPostCreateSetupCopyFilesErrorIncludesRecoveryHint(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "To fix: rimba remove test-task") {
 		t.Errorf("error = %q, want recovery hint 'To fix: rimba remove test-task'", err.Error())
+	}
+}
+
+func TestPostCreateSetupRecordsSpansInOrder(t *testing.T) {
+	tmpDir := t.TempDir()
+	wtPath := filepath.Join(tmpDir, "worktree")
+	if err := os.MkdirAll(wtPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &mockRunner{
+		run:      func(args ...string) (string, error) { return "", nil },
+		runInDir: noopRunInDir,
+	}
+
+	rec := metrics.NewRecorder("add", "test-task", "")
+
+	_, err := PostCreateSetup(context.Background(), r, PostCreateParams{
+		RepoRoot:   tmpDir,
+		WtPath:     wtPath,
+		Task:       "test-task",
+		PostCreate: []string{"echo hello"},
+		Recorder:   rec,
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	run := flushedRun(t, rec)
+
+	// The "hooks" phase span wraps RunPostCreateHooks, whose own per-hook
+	// span ("echo hello") is appended before the wrapping span's stop() runs
+	// — so alongside copy/deps/hooks we also expect one per-hook span. Filter
+	// down to the three phase spans and check their relative order.
+	var phaseNames []string
+	for _, span := range run.Spans {
+		switch span.Name {
+		case "copy", "deps", "hooks":
+			phaseNames = append(phaseNames, span.Name)
+		}
+	}
+
+	wantPhaseOrder := []string{"copy", "deps", "hooks"}
+	if len(phaseNames) != len(wantPhaseOrder) {
+		t.Fatalf("expected phase spans %v, got %v (all spans: %+v)", wantPhaseOrder, phaseNames, run.Spans)
+	}
+	for i, want := range wantPhaseOrder {
+		if phaseNames[i] != want {
+			t.Errorf("phase span[%d] = %q, want %q", i, phaseNames[i], want)
+		}
+	}
+
+	// The hook command itself should also be recorded as its own span.
+	var sawHookSpan bool
+	for _, span := range run.Spans {
+		if span.Name == "echo hello" {
+			sawHookSpan = true
+		}
+	}
+	if !sawHookSpan {
+		t.Errorf("expected a per-hook span named %q, got %+v", "echo hello", run.Spans)
 	}
 }
 

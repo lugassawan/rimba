@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/lugassawan/rimba/internal/metrics"
 	"github.com/lugassawan/rimba/internal/progress"
 )
 
@@ -19,7 +20,7 @@ type HookResult struct {
 // RunPostCreateHooks executes shell commands in the worktree directory.
 // Skips launching new hooks when ctx is already cancelled; kills any in-flight
 // hook subprocess when ctx is cancelled (via exec.CommandContext).
-func RunPostCreateHooks(ctx context.Context, worktreeDir string, hooks []string, onProgress progress.Func) []HookResult {
+func RunPostCreateHooks(ctx context.Context, worktreeDir string, hooks []string, rec *metrics.Recorder, onProgress progress.Func) []HookResult {
 	results := make([]HookResult, 0, len(hooks))
 	for i, hook := range hooks {
 		if ctx.Err() != nil {
@@ -35,7 +36,9 @@ func RunPostCreateHooks(ctx context.Context, worktreeDir string, hooks []string,
 		cmd.Stdout = &buf
 		cmd.Stderr = &buf
 
+		stop := rec.StartSpan(hook)
 		err := cmd.Run()
+		stop()
 		if err != nil {
 			err = fmt.Errorf("hook %q: %w\n%s", hook, err, strings.TrimSpace(buf.String()))
 		}

@@ -9,6 +9,7 @@ import (
 	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/fileutil"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/metrics"
 	"github.com/lugassawan/rimba/internal/progress"
 )
 
@@ -27,6 +28,7 @@ type PostCreateParams struct {
 	PostCreate    []string // hook commands
 	SourcePath    string   // if non-empty, prefer copying deps from this worktree
 	Concurrency   int      // max parallel module installs; 0 = Manager default
+	Recorder      *metrics.Recorder
 }
 
 // PostCreateResult holds the outcome of the post-create setup sequence.
@@ -45,7 +47,9 @@ func PostCreateSetup(ctx context.Context, r git.Runner, params PostCreateParams,
 
 	// Copy files
 	progress.Notify(onProgress, "Copying files...")
+	stopCopy := params.Recorder.StartSpan("copy")
 	copied, skippedSymlinks, err := fileutil.CopyEntries(params.RepoRoot, params.WtPath, params.CopyFiles)
+	stopCopy()
 	if err != nil {
 		return result, errhint.WithFix(
 			fmt.Errorf("failed to copy files: %w\nTo retry, manually copy files to: %s", err, params.WtPath),
@@ -59,6 +63,7 @@ func PostCreateSetup(ctx context.Context, r git.Runner, params PostCreateParams,
 	// Dependencies
 	if !params.SkipDeps {
 		progress.Notify(onProgress, "Installing dependencies...")
+		stopDeps := params.Recorder.StartSpan("deps")
 		wtEntries, err := git.ListWorktrees(ctx, r)
 		if err != nil {
 			return result, errhint.WithFix(
@@ -74,18 +79,22 @@ func PostCreateSetup(ctx context.Context, r git.Runner, params PostCreateParams,
 			ConfigModules: params.ConfigModules,
 			Entries:       wtEntries,
 			Concurrency:   params.Concurrency,
+			Recorder:      params.Recorder,
 		}
 		if params.SourcePath != "" {
 			result.DepsResults = InstallDepsPreferSource(ctx, r, params.SourcePath, dp, onProgress)
 		} else {
 			result.DepsResults = InstallDeps(ctx, r, dp, onProgress)
 		}
+		stopDeps()
 	}
 
 	// Post-create hooks
 	if !params.SkipHooks && len(params.PostCreate) > 0 {
 		progress.Notify(onProgress, "Running hooks...")
-		result.HookResults = RunPostCreateHooks(ctx, params.WtPath, params.PostCreate, onProgress)
+		stopHooks := params.Recorder.StartSpan("hooks")
+		result.HookResults = RunPostCreateHooks(ctx, params.WtPath, params.PostCreate, params.Recorder, onProgress)
+		stopHooks()
 	}
 
 	return result, nil
