@@ -289,6 +289,7 @@ func buildPostCreateOptions(cfg *config.Config, repoRoot string, skipDeps, skipH
 		SkipHooks:     skipHooks,
 		PostCreate:    cfg.PostCreate,
 		Concurrency:   cfg.DepsConcurrency(),
+		HooksParallel: cfg.IsHooksParallel(),
 	}
 }
 

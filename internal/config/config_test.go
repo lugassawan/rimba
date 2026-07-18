@@ -261,6 +261,29 @@ func TestSaveAndLoadWithOpen(t *testing.T) {
 	}
 }
 
+func TestSaveAndLoadWithHooks(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, config.FileName)
+
+	boolPtr := func(b bool) *bool { return &b }
+	original := config.DefaultConfig(testRepoName, testDefaultBranch)
+	original.Hooks = &config.HooksConfig{Parallel: boolPtr(true)}
+	if err := config.Save(path, original); err != nil {
+		t.Fatalf(fatalSave, err)
+	}
+
+	loaded, err := config.Load(path)
+	if err != nil {
+		t.Fatalf(fatalLoad, err)
+	}
+
+	// default_source is internal-only (toml:"-") and is never persisted.
+	original.DefaultSource = ""
+	if !reflect.DeepEqual(original, loaded) {
+		t.Errorf("loaded config differs:\n  got:  %+v\n  want: %+v", loaded, original)
+	}
+}
+
 func TestLoadWithoutOpenSection(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, config.FileName)
@@ -377,6 +400,29 @@ func TestMergeDepsReplaces(t *testing.T) {
 	merged := config.Merge(team, local)
 	if merged.Deps == nil || merged.Deps.AutoDetect == nil || *merged.Deps.AutoDetect != false {
 		t.Errorf("Deps.AutoDetect = %v, want false", merged.Deps)
+	}
+}
+
+func TestMergeHooksReplaces(t *testing.T) {
+	boolPtr := func(b bool) *bool { return &b }
+	team := &config.Config{
+		WorktreeDir:   "../wt",
+		DefaultSource: testDefaultBranch,
+		Hooks:         &config.HooksConfig{Parallel: boolPtr(false)},
+	}
+	local := &config.Config{
+		Hooks: &config.HooksConfig{Parallel: boolPtr(true)},
+	}
+
+	merged := config.Merge(team, local)
+	if merged.Hooks == nil || merged.Hooks.Parallel == nil || *merged.Hooks.Parallel != true {
+		t.Errorf("Hooks = %v, want {Parallel: true}", merged.Hooks)
+	}
+
+	// local nil Hooks → team value preserved
+	mergedNilLocal := config.Merge(team, &config.Config{})
+	if mergedNilLocal.Hooks == nil || mergedNilLocal.Hooks.Parallel == nil || *mergedNilLocal.Hooks.Parallel != false {
+		t.Errorf("Hooks with nil local Hooks = %v, want team's {Parallel: false}", mergedNilLocal.Hooks)
 	}
 }
 
@@ -952,6 +998,45 @@ func TestObservabilityRetentionDays(t *testing.T) {
 			got := tt.cfg.ObservabilityRetentionDays()
 			if got != tt.want {
 				t.Errorf("ObservabilityRetentionDays() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsHooksParallel(t *testing.T) {
+	boolPtr := func(b bool) *bool { return &b }
+
+	tests := []struct {
+		name string
+		cfg  config.Config
+		want bool
+	}{
+		{
+			name: "nil hooks",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch},
+			want: false,
+		},
+		{
+			name: "nil parallel",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch, Hooks: &config.HooksConfig{}},
+			want: false,
+		},
+		{
+			name: "parallel false",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch, Hooks: &config.HooksConfig{Parallel: boolPtr(false)}},
+			want: false,
+		},
+		{
+			name: "parallel true",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch, Hooks: &config.HooksConfig{Parallel: boolPtr(true)}},
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.cfg.IsHooksParallel(); got != tt.want {
+				t.Errorf("IsHooksParallel() = %v, want %v", got, tt.want)
 			}
 		})
 	}

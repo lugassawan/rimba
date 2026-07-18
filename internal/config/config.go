@@ -47,6 +47,7 @@ type Config struct {
 	Open          map[string]string    `toml:"open,omitempty"`
 	Resolver      *ResolverConfig      `toml:"resolver,omitempty"`
 	Observability *ObservabilityConfig `toml:"observability,omitempty"`
+	Hooks         *HooksConfig         `toml:"hooks,omitempty"`
 }
 
 // DefaultObservabilityRetentionDays is used when [observability] retention_days is unset.
@@ -127,6 +128,22 @@ func (c *Config) DepsConcurrency() int {
 		return 0
 	}
 	return c.Deps.Concurrency
+}
+
+// HooksConfig holds optional post-create hook execution settings.
+type HooksConfig struct {
+	Parallel *bool `toml:"parallel,omitempty"`
+}
+
+// IsHooksParallel reports whether post-create hooks run concurrently instead
+// of serially. Defaults to false: parallel hooks can break execution-order
+// dependencies between commands (e.g. hook 1 generates a file hook 2 reads),
+// so a repo must explicitly declare its hooks are independent.
+func (c *Config) IsHooksParallel() bool {
+	if c.Hooks == nil || c.Hooks.Parallel == nil {
+		return false
+	}
+	return *c.Hooks.Parallel
 }
 
 // DefaultWorktreeDir returns the conventional worktree directory path for a repo.
@@ -228,6 +245,9 @@ func Merge(team, local *Config) *Config {
 	}
 	if local.Deps != nil {
 		merged.Deps = local.Deps
+	}
+	if local.Hooks != nil {
+		merged.Hooks = local.Hooks
 	}
 	if local.Open != nil {
 		merged.Open = local.Open

@@ -27,6 +27,7 @@ type PostCreateOptions struct {
 	SkipHooks     bool
 	PostCreate    []string // hook commands
 	Concurrency   int      // max parallel module installs; 0 = Manager default
+	HooksParallel bool     // run post-create hooks concurrently instead of serially
 }
 
 // AddParams holds the inputs for creating a new worktree.
@@ -105,6 +106,7 @@ func AddWorktree(ctx context.Context, r git.Runner, params AddParams, onProgress
 		SkipHooks:     params.SkipHooks,
 		PostCreate:    params.PostCreate,
 		Concurrency:   params.Concurrency,
+		HooksParallel: params.HooksParallel,
 	}, onProgress)
 	if err != nil {
 		return result, err

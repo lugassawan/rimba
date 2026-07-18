@@ -28,6 +28,7 @@ type PostCreateParams struct {
 	PostCreate    []string // hook commands
 	SourcePath    string   // if non-empty, prefer copying deps from this worktree
 	Concurrency   int      // max parallel module installs; 0 = Manager default
+	HooksParallel bool     // run post-create hooks concurrently instead of serially
 }
 
 // PostCreateResult holds the outcome of the post-create setup sequence.
@@ -93,7 +94,7 @@ func PostCreateSetup(ctx context.Context, r git.Runner, params PostCreateParams,
 	if !params.SkipHooks && len(params.PostCreate) > 0 {
 		stop := rec.StartSpan("hooks")
 		progress.Notify(onProgress, "Running hooks...")
-		result.HookResults = RunPostCreateHooks(ctx, params.WtPath, params.PostCreate, onProgress)
+		result.HookResults = RunPostCreateHooks(ctx, params.WtPath, params.PostCreate, params.HooksParallel, onProgress)
 		stop()
 	}
 

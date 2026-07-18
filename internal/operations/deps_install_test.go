@@ -115,7 +115,7 @@ func TestInstallDepsPreferSourceNoModules(t *testing.T) {
 
 func TestRunPostCreateHooksEmpty(t *testing.T) {
 	tmpDir := t.TempDir()
-	results := RunPostCreateHooks(context.Background(), tmpDir, nil, nil)
+	results := RunPostCreateHooks(context.Background(), tmpDir, nil, false, nil)
 	if len(results) != 0 {
 		t.Errorf("expected 0 results for empty hooks, got %d", len(results))
 	}
@@ -123,7 +123,7 @@ func TestRunPostCreateHooksEmpty(t *testing.T) {
 
 func TestRunPostCreateHooksInvalidCommand(t *testing.T) {
 	tmpDir := t.TempDir()
-	results := RunPostCreateHooks(context.Background(), tmpDir, []string{"nonexistent-command-xyz"}, nil)
+	results := RunPostCreateHooks(context.Background(), tmpDir, []string{"nonexistent-command-xyz"}, false, nil)
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
