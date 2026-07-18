@@ -3,10 +3,12 @@ package operations
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/lugassawan/rimba/internal/observability"
 )
@@ -213,6 +215,60 @@ func TestPostCreateSetupCopyFilesErrorIncludesRecoveryHint(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "To fix: rimba remove test-task") {
 		t.Errorf("error = %q, want recovery hint 'To fix: rimba remove test-task'", err.Error())
+	}
+}
+
+// TestPostCreateSetupHooksParallelReachesRunPostCreateHooks proves that
+// PostCreateParams.HooksParallel actually reaches deps.RunPostCreateHooks as
+// true through the full PostCreateSetup call chain. Mirrors
+// internal/deps' TestRunPostCreateHooksParallelIsActuallyConcurrent: with
+// HooksParallel true, N sleeping hooks should complete in well under their
+// serial worst case.
+func TestPostCreateSetupHooksParallelReachesRunPostCreateHooks(t *testing.T) {
+	tmpDir := t.TempDir()
+	wtPath := filepath.Join(tmpDir, "worktree")
+	if err := os.MkdirAll(wtPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &mockRunner{
+		run:      func(args ...string) (string, error) { return "", nil },
+		runInDir: noopRunInDir,
+	}
+
+	const n = 4
+	const sleepMS = 150
+	hooks := make([]string, n)
+	for i := range hooks {
+		hooks[i] = fmt.Sprintf("sleep %.3f", sleepMS/1000.0)
+	}
+
+	start := time.Now()
+	result, err := PostCreateSetup(context.Background(), r, PostCreateParams{
+		RepoRoot:      tmpDir,
+		WtPath:        wtPath,
+		Task:          "test-task",
+		SkipDeps:      true,
+		PostCreate:    hooks,
+		HooksParallel: true,
+	}, nil)
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result.HookResults) != n {
+		t.Fatalf("expected %d hook results, got %d", n, len(result.HookResults))
+	}
+	for i, hr := range result.HookResults {
+		if hr.Error != nil {
+			t.Errorf("hook results[%d]: unexpected error %v", i, hr.Error)
+		}
+	}
+
+	serialWorstCase := n * sleepMS * time.Millisecond
+	if elapsed >= serialWorstCase {
+		t.Errorf("elapsed %v was not faster than serial worst case %v — HooksParallel does not appear to have reached RunPostCreateHooks as true", elapsed, serialWorstCase)
 	}
 }
 

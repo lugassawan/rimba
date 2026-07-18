@@ -208,5 +208,6 @@ func buildPostCreateOptions(hctx *HandlerContext, cfg *config.Config, req mcp.Ca
 		SkipHooks:     req.GetBool("skip_hooks", false),
 		PostCreate:    cfg.PostCreate,
 		Concurrency:   cfg.DepsConcurrency(),
+		HooksParallel: cfg.IsHooksParallel(),
 	}
 }

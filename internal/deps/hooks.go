@@ -90,6 +90,9 @@ func runHooksParallel(ctx context.Context, worktreeDir string, hooks []string, r
 
 	if ctx.Err() != nil {
 		for i, r := range results {
+			// Accepted residual edge case: a hook with a genuinely empty-string
+			// Command that legitimately succeeds is indistinguishable from an
+			// un-launched slot and would be mislabeled as failed here.
 			if r.Command == "" && r.Error == nil {
 				results[i] = HookResult{Command: hooks[i], Error: ctx.Err()}
 			}
