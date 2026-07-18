@@ -261,6 +261,29 @@ func TestSaveAndLoadWithOpen(t *testing.T) {
 	}
 }
 
+func TestSaveAndLoadWithMetrics(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, config.FileName)
+
+	boolPtr := func(b bool) *bool { return &b }
+	original := config.DefaultConfig(testRepoName, testDefaultBranch)
+	original.Metrics = &config.MetricsConfig{Enabled: boolPtr(false), MaxRuns: 250}
+	if err := config.Save(path, original); err != nil {
+		t.Fatalf(fatalSave, err)
+	}
+
+	loaded, err := config.Load(path)
+	if err != nil {
+		t.Fatalf(fatalLoad, err)
+	}
+
+	// default_source is internal-only (toml:"-") and is never persisted.
+	original.DefaultSource = ""
+	if !reflect.DeepEqual(original, loaded) {
+		t.Errorf("loaded config differs:\n  got:  %+v\n  want: %+v", loaded, original)
+	}
+}
+
 func TestLoadWithoutOpenSection(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, config.FileName)
@@ -377,6 +400,29 @@ func TestMergeDepsReplaces(t *testing.T) {
 	merged := config.Merge(team, local)
 	if merged.Deps == nil || merged.Deps.AutoDetect == nil || *merged.Deps.AutoDetect != false {
 		t.Errorf("Deps.AutoDetect = %v, want false", merged.Deps)
+	}
+}
+
+func TestMergeMetricsReplaces(t *testing.T) {
+	boolPtr := func(b bool) *bool { return &b }
+	team := &config.Config{
+		WorktreeDir:   "../wt",
+		DefaultSource: testDefaultBranch,
+		Metrics:       &config.MetricsConfig{Enabled: boolPtr(true), MaxRuns: 100},
+	}
+	local := &config.Config{
+		Metrics: &config.MetricsConfig{Enabled: boolPtr(false), MaxRuns: 250},
+	}
+
+	merged := config.Merge(team, local)
+	if merged.Metrics == nil || merged.Metrics.Enabled == nil || *merged.Metrics.Enabled != false || merged.Metrics.MaxRuns != 250 {
+		t.Errorf("Metrics = %v, want {Enabled: false, MaxRuns: 250}", merged.Metrics)
+	}
+
+	// local nil → team value preserved
+	mergedNilLocal := config.Merge(team, &config.Config{})
+	if mergedNilLocal.Metrics == nil || mergedNilLocal.Metrics.Enabled == nil || *mergedNilLocal.Metrics.Enabled != true || mergedNilLocal.Metrics.MaxRuns != 100 {
+		t.Errorf("Metrics with nil local Metrics = %v, want team's {Enabled: true, MaxRuns: 100}", mergedNilLocal.Metrics)
 	}
 }
 
@@ -822,41 +868,75 @@ func TestConfigValidate(t *testing.T) {
 	}
 }
 
-func TestIsAutoDetectDeps(t *testing.T) {
+// TestIsAutoDetectDepsAndIsMetricsEnabled covers IsAutoDetectDeps and
+// IsMetricsEnabled together: both are opt-out bool accessors with the same
+// nil-block/nil-field/true/false shape, one per config sub-block (deps,
+// metrics). Combined into one table (rather than two near-identical test
+// funcs) to avoid a structural near-duplicate between the two.
+func TestIsAutoDetectDepsAndIsMetricsEnabled(t *testing.T) {
 	boolPtr := func(b bool) *bool { return &b }
 
 	tests := []struct {
 		name string
 		cfg  config.Config
+		get  func(config.Config) bool
 		want bool
 	}{
 		{
-			name: "nil deps",
+			name: "deps: nil deps",
 			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch},
+			get:  func(c config.Config) bool { return c.IsAutoDetectDeps() },
 			want: true,
 		},
 		{
-			name: "nil auto_detect",
+			name: "deps: nil auto_detect",
 			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch, Deps: &config.DepsConfig{}},
+			get:  func(c config.Config) bool { return c.IsAutoDetectDeps() },
 			want: true,
 		},
 		{
-			name: "auto_detect true",
+			name: "deps: auto_detect true",
 			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch, Deps: &config.DepsConfig{AutoDetect: boolPtr(true)}},
+			get:  func(c config.Config) bool { return c.IsAutoDetectDeps() },
 			want: true,
 		},
 		{
-			name: "auto_detect false",
+			name: "deps: auto_detect false",
 			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch, Deps: &config.DepsConfig{AutoDetect: boolPtr(false)}},
+			get:  func(c config.Config) bool { return c.IsAutoDetectDeps() },
+			want: false,
+		},
+		{
+			name: "metrics: nil metrics",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch},
+			get:  func(c config.Config) bool { return c.IsMetricsEnabled() },
+			want: true,
+		},
+		{
+			name: "metrics: nil enabled",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch, Metrics: &config.MetricsConfig{}},
+			get:  func(c config.Config) bool { return c.IsMetricsEnabled() },
+			want: true,
+		},
+		{
+			name: "metrics: enabled true",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch, Metrics: &config.MetricsConfig{Enabled: boolPtr(true)}},
+			get:  func(c config.Config) bool { return c.IsMetricsEnabled() },
+			want: true,
+		},
+		{
+			name: "metrics: enabled false",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch, Metrics: &config.MetricsConfig{Enabled: boolPtr(false)}},
+			get:  func(c config.Config) bool { return c.IsMetricsEnabled() },
 			want: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := tt.cfg.IsAutoDetectDeps()
+			got := tt.get(tt.cfg)
 			if got != tt.want {
-				t.Errorf("IsAutoDetectDeps() = %v, want %v", got, tt.want)
+				t.Errorf("got %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -885,6 +965,39 @@ func TestDepsConcurrency(t *testing.T) {
 			got := tt.cfg.DepsConcurrency()
 			if got != tt.want {
 				t.Errorf("DepsConcurrency() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMetricsMaxRuns(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  config.Config
+		want int
+	}{
+		{
+			name: "nil metrics",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch},
+			want: 0,
+		},
+		{
+			name: "unset max_runs",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch, Metrics: &config.MetricsConfig{}},
+			want: 0,
+		},
+		{
+			name: "configured max_runs",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch, Metrics: &config.MetricsConfig{MaxRuns: 250}},
+			want: 250,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.cfg.MetricsMaxRuns()
+			if got != tt.want {
+				t.Errorf("MetricsMaxRuns() = %v, want %v", got, tt.want)
 			}
 		})
 	}

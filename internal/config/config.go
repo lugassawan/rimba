@@ -46,6 +46,7 @@ type Config struct {
 	Deps     *DepsConfig       `toml:"deps,omitempty"`
 	Open     map[string]string `toml:"open,omitempty"`
 	Resolver *ResolverConfig   `toml:"resolver,omitempty"`
+	Metrics  *MetricsConfig    `toml:"metrics,omitempty"`
 }
 
 // EffectiveCommandTimeout returns the parsed CommandTimeout, or DefaultCommandTimeout
@@ -92,6 +93,31 @@ func (c *Config) DepsConcurrency() int {
 		return 0
 	}
 	return c.Deps.Concurrency
+}
+
+// MetricsConfig holds optional metrics collection settings.
+type MetricsConfig struct {
+	Enabled *bool `toml:"enabled,omitempty"`
+	MaxRuns int   `toml:"max_runs,omitempty"`
+}
+
+// IsMetricsEnabled reports whether automatic collection is enabled. Defaults
+// to true — collection is opt-out, not opt-in, since a .rimba/ dir existing
+// is itself the signal this repo wants rimba's tooling.
+func (c *Config) IsMetricsEnabled() bool {
+	if c.Metrics == nil || c.Metrics.Enabled == nil {
+		return true
+	}
+	return *c.Metrics.Enabled
+}
+
+// MetricsMaxRuns returns the configured trim cap, or 0 if unset (0 means
+// "caller applies its own default" — see metrics.DefaultMaxRuns).
+func (c *Config) MetricsMaxRuns() int {
+	if c.Metrics == nil {
+		return 0
+	}
+	return c.Metrics.MaxRuns
 }
 
 // DefaultWorktreeDir returns the conventional worktree directory path for a repo.
@@ -193,6 +219,9 @@ func Merge(team, local *Config) *Config {
 	}
 	if local.Deps != nil {
 		merged.Deps = local.Deps
+	}
+	if local.Metrics != nil {
+		merged.Metrics = local.Metrics
 	}
 	if local.Open != nil {
 		merged.Open = local.Open
