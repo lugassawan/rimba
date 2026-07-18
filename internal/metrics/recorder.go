@@ -10,7 +10,9 @@ import (
 )
 
 // Recorder accumulates spans for one command invocation. A nil *Recorder is
-// safe to call every method on (all become no-ops) — see Global Constraints.
+// safe to call every method on — every method no-ops. This lets callers that
+// never construct a Recorder (yet) pass nil through shared code paths with
+// zero special-casing.
 type Recorder struct {
 	mu      sync.Mutex
 	command string

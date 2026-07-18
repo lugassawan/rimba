@@ -3,6 +3,7 @@ package metrics
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -190,6 +191,8 @@ func TestFlushAppendsAndTrims(t *testing.T) {
 
 	for i := range totalFlushes {
 		r := NewRecorder("add", "task-1", "svc")
+		stop := r.StartSpan(fmt.Sprintf("span-%d", i))
+		stop()
 		if err := r.Flush(path, maxRuns); err != nil {
 			t.Fatalf("Flush %d: %v", i, err)
 		}
@@ -198,6 +201,56 @@ func TestFlushAppendsAndTrims(t *testing.T) {
 	lines := readFlushedLines(t, path)
 	if len(lines) != maxRuns {
 		t.Fatalf("expected %d lines, got %d", maxRuns, len(lines))
+	}
+
+	// The survivors must be the LAST maxRuns iterations, oldest-first,
+	// newest-last — i.e. span-2, span-3, span-4 in that order.
+	wantSpanNames := make([]string, maxRuns)
+	for i := range maxRuns {
+		wantSpanNames[i] = fmt.Sprintf("span-%d", totalFlushes-maxRuns+i)
+	}
+
+	for i, line := range lines {
+		var run Run
+		if err := json.Unmarshal([]byte(line), &run); err != nil {
+			t.Fatalf("unmarshal line %d: %v", i, err)
+		}
+		if len(run.Spans) != 1 {
+			t.Fatalf("line %d: expected 1 span, got %d", i, len(run.Spans))
+		}
+		if run.Spans[0].Name != wantSpanNames[i] {
+			t.Errorf("line %d: span name = %q, want %q", i, run.Spans[0].Name, wantSpanNames[i])
+		}
+	}
+}
+
+func TestFlushSpanAccumulationOrder(t *testing.T) {
+	r := NewRecorder("add", "task-1", "svc")
+
+	stopA := r.StartSpan("a")
+	stopA()
+	stopB := r.StartSpan("b")
+	stopB()
+
+	path := filepath.Join(t.TempDir(), "metrics.jsonl")
+	if err := r.Flush(path, 0); err != nil {
+		t.Fatalf("Flush: %v", err)
+	}
+
+	var run Run
+	lines := readFlushedLines(t, path)
+	if err := json.Unmarshal([]byte(lines[0]), &run); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if len(run.Spans) != 2 {
+		t.Fatalf("expected 2 spans, got %d", len(run.Spans))
+	}
+	if run.Spans[0].Name != "a" {
+		t.Errorf("Spans[0].Name = %q, want %q", run.Spans[0].Name, "a")
+	}
+	if run.Spans[1].Name != "b" {
+		t.Errorf("Spans[1].Name = %q, want %q", run.Spans[1].Name, "b")
 	}
 }
 
