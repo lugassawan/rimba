@@ -81,6 +81,9 @@ func runHooksSerial(ctx context.Context, worktreeDir string, hooks []string, rec
 func runHooksParallel(ctx context.Context, worktreeDir string, hooks []string, rec *observability.Recorder, onProgress progress.Func) []HookResult {
 	total := len(hooks)
 	var done atomic.Int32
+	// Concurrency 0 (unbounded) is intentional: unlike deps modules, hooks
+	// are user-configured and typically few, so there's no auto-detected
+	// count to guard against — no need for a DepsConcurrency()-style cap.
 	results := parallel.Collect(ctx, total, 0, func(ctx context.Context, i int) HookResult {
 		res := runHook(ctx, worktreeDir, hooks[i], rec)
 		completed := done.Add(1)
