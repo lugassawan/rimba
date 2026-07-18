@@ -315,11 +315,14 @@ func TestPostCreateSetupListWorktreesError(t *testing.T) {
 		runInDir: noopRunInDir,
 	}
 
+	rec := metrics.NewRecorder("add", "test-task", "")
+
 	_, err := PostCreateSetup(context.Background(), r, PostCreateParams{
 		RepoRoot: tmpDir,
 		WtPath:   wtPath,
 		Task:     "test-task",
 		SkipDeps: false, // Enable deps so ListWorktrees is called
+		Recorder: rec,
 	}, nil)
 	if err == nil {
 		t.Fatal("expected error when ListWorktrees fails")
@@ -329,5 +332,19 @@ func TestPostCreateSetupListWorktreesError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "To fix: rimba remove test-task") {
 		t.Errorf("error = %q, want recovery hint 'To fix: rimba remove test-task'", err.Error())
+	}
+
+	// Even though ListWorktrees errored and PostCreateSetup returned early,
+	// the "deps" span should still be recorded — real wall-clock was spent
+	// inside the phase before the abort, mirroring "copy"'s unconditional stop.
+	run := flushedRun(t, rec)
+	var sawDepsSpan bool
+	for _, span := range run.Spans {
+		if span.Name == "deps" {
+			sawDepsSpan = true
+		}
+	}
+	if !sawDepsSpan {
+		t.Errorf("expected a %q span despite early return, got %+v", "deps", run.Spans)
 	}
 }

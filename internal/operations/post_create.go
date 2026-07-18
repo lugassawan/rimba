@@ -66,6 +66,7 @@ func PostCreateSetup(ctx context.Context, r git.Runner, params PostCreateParams,
 		stopDeps := params.Recorder.StartSpan("deps")
 		wtEntries, err := git.ListWorktrees(ctx, r)
 		if err != nil {
+			stopDeps()
 			return result, errhint.WithFix(
 				fmt.Errorf("failed to list worktrees for dependency setup: %w", err),
 				"rimba remove "+params.Task,
