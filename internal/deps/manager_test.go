@@ -1009,6 +1009,119 @@ func TestInstallOutputCapture(t *testing.T) {
 	}
 }
 
+func TestRunInstallOutputTailCapped(t *testing.T) {
+	// Regression test for the bounded tail buffer: a failing command that
+	// writes more than outputTailCapBytes of output must produce an error
+	// message containing only the tail — the earliest-written marker should
+	// be dropped, the latest-written marker must survive.
+	dir := t.TempDir()
+	fillerSize := outputTailCapBytes + 4096
+	// The markers are split across separate printf calls in the command
+	// source so the contiguous marker text only ever appears in the
+	// captured *output*, never in InstallCmd itself — errhint.WithFix
+	// embeds the raw InstallCmd in its "to fix" hint, which would otherwise
+	// make this assertion pass regardless of whether output capping works.
+	mod := Module{
+		Dir: DirNodeModules,
+		InstallCmd: fmt.Sprintf(
+			"printf 'EARLY'; printf 'MARKER'; yes x | head -c %d; printf 'LATE'; printf 'MARKERTAIL'; exit 1",
+			fillerSize),
+	}
+
+	err := runInstall(context.Background(), dir, mod)
+	if err == nil {
+		t.Fatal("expected error from runInstall")
+	}
+	if strings.Contains(err.Error(), "EARLYMARKER") {
+		t.Error("error contains the earliest-written output, want it dropped by the tail cap")
+	}
+	if !strings.Contains(err.Error(), "LATEMARKERTAIL") {
+		t.Error("error should contain the latest-written output")
+	}
+}
+
+func TestInstallModuleRecordsModuleSpanCloneHit(t *testing.T) {
+	existingWT := t.TempDir()
+	newWT := t.TempDir()
+
+	writeFile(t, existingWT, LockfilePnpm, "lockfile-v6-content")
+	writeFile(t, newWT, LockfilePnpm, "lockfile-v6-content")
+
+	if err := os.MkdirAll(filepath.Join(existingWT, DirNodeModules), 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(existingWT, DirNodeModules), "package.json", "{}")
+
+	runner := &mockRunner{worktreeOutput: mockWorktreeList(existingWT, newWT)}
+	mgr := &Manager{Runner: runner}
+	modules := []Module{
+		{Dir: DirNodeModules, Lockfile: LockfilePnpm, InstallCmd: "pnpm install --frozen-lockfile"},
+	}
+
+	sink := &fakeSink{}
+	rec := observability.Maybe(true, sink, "add", "task", "", "v1")
+	ctx := observability.WithRecorder(context.Background(), rec)
+
+	results := mgr.Install(ctx, newWT, modules, nil, nil)
+	if len(results) != 1 {
+		t.Fatalf(fmtExpectedResults, len(results))
+	}
+	if !results[0].Cloned {
+		t.Fatal("expected Cloned=true")
+	}
+
+	if len(sink.metrics) != 1 {
+		t.Fatalf("len(sink.metrics) = %d, want 1", len(sink.metrics))
+	}
+	span, ok := sink.metrics[0].(observability.SpanRecord)
+	if !ok {
+		t.Fatalf("sink.metrics[0] = %T, want SpanRecord", sink.metrics[0])
+	}
+	if span.Name != "deps:"+DirNodeModules {
+		t.Errorf("span.Name = %q, want %q", span.Name, "deps:"+DirNodeModules)
+	}
+	if span.Detail != "cloned" {
+		t.Errorf("span.Detail = %q, want %q", span.Detail, "cloned")
+	}
+}
+
+func TestInstallModuleRecordsModuleSpanOnInstallError(t *testing.T) {
+	newWT := t.TempDir()
+	writeFile(t, newWT, LockfilePnpm, "lockfile-content")
+
+	runner := &mockRunner{worktreeOutput: mockWorktreeList(newWT)}
+	mgr := &Manager{Runner: runner}
+	modules := []Module{
+		{Dir: DirNodeModules, Lockfile: LockfilePnpm, InstallCmd: "/nonexistent-command-xyz"},
+	}
+
+	sink := &fakeSink{}
+	rec := observability.Maybe(true, sink, "add", "task", "", "v1")
+	ctx := observability.WithRecorder(context.Background(), rec)
+
+	results := mgr.Install(ctx, newWT, modules, nil, nil)
+	if len(results) != 1 {
+		t.Fatalf(fmtExpectedResults, len(results))
+	}
+	if results[0].Error == nil {
+		t.Fatal("expected error from invalid install command")
+	}
+
+	if len(sink.metrics) != 1 {
+		t.Fatalf("len(sink.metrics) = %d, want 1", len(sink.metrics))
+	}
+	span, ok := sink.metrics[0].(observability.SpanRecord)
+	if !ok {
+		t.Fatalf("sink.metrics[0] = %T, want SpanRecord", sink.metrics[0])
+	}
+	if span.Name != "deps:"+DirNodeModules {
+		t.Errorf("span.Name = %q, want %q", span.Name, "deps:"+DirNodeModules)
+	}
+	if span.Detail != "installed" {
+		t.Errorf("span.Detail = %q, want %q (a span is still recorded when install fails)", span.Detail, "installed")
+	}
+}
+
 func TestResolveModulesConfigWithWorkDir(t *testing.T) {
 	dir := t.TempDir()
 

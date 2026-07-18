@@ -2,6 +2,7 @@ package deps
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -128,6 +129,39 @@ func TestRunPostCreateHooksOutputCapture(t *testing.T) {
 	}
 	if !strings.Contains(results[0].Error.Error(), "hook-output-captured") {
 		t.Errorf("error should contain captured output, got %q", results[0].Error.Error())
+	}
+}
+
+func TestRunPostCreateHooksOutputTailCapped(t *testing.T) {
+	// Regression test for the bounded tail buffer: a failing hook that writes
+	// more than outputTailCapBytes of output must produce an error message
+	// containing only the tail — the earliest-written marker should be
+	// dropped, the latest-written marker must survive.
+	dir := t.TempDir()
+	fillerSize := outputTailCapBytes + 4096
+	// The markers are split across separate printf calls in the hook source
+	// so the contiguous marker text only ever appears in the captured
+	// *output*, never in the hook string itself — RunPostCreateHooks embeds
+	// the raw hook string (via %q) in the wrapped error, which would
+	// otherwise make this assertion pass regardless of whether output
+	// capping works.
+	hook := fmt.Sprintf(
+		"printf 'EARLY'; printf 'MARKER'; yes x | head -c %d; printf 'LATE'; printf 'MARKERTAIL'; exit 1",
+		fillerSize)
+
+	results := RunPostCreateHooks(context.Background(), dir, []string{hook}, nil)
+
+	if len(results) != 1 {
+		t.Fatalf(fmtExpectedOneResult, len(results))
+	}
+	if results[0].Error == nil {
+		t.Fatal("expected error from failing hook")
+	}
+	if strings.Contains(results[0].Error.Error(), "EARLYMARKER") {
+		t.Error("error contains the earliest-written output, want it dropped by the tail cap")
+	}
+	if !strings.Contains(results[0].Error.Error(), "LATEMARKERTAIL") {
+		t.Error("error should contain the latest-written output")
 	}
 }
 
