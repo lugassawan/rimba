@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/gitref"
 	"github.com/lugassawan/rimba/internal/hint"
+	"github.com/lugassawan/rimba/internal/metrics"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/resolver"
@@ -22,10 +24,15 @@ import (
 )
 
 const (
-	flagSource = "source"
-	flagTask   = "task"
+	flagSource    = "source"
+	flagTask      = "task"
+	flagNoMetrics = "no-metrics"
 
 	hintSource = "Branch from a specific source instead of the default branch"
+
+	// metricsFileName is the JSONL file rimba add appends timing spans to,
+	// relative to config.DirName. Shared with cmd/init.go's gitignore entry.
+	metricsFileName = "metrics.jsonl"
 )
 
 var prArgRe = regexp.MustCompile(`^pr:(\d+)$`)
@@ -148,6 +155,12 @@ func runAddTask(cmd *cobra.Command, r git.Runner, arg string, cfg *config.Config
 			Show()
 	}
 
+	noMetrics, _ := cmd.Flags().GetBool(flagNoMetrics)
+	rec := metrics.Maybe(metricsEnabled(cfg, noMetrics), "add", task, service)
+	// postOpts is a value param (not a pointer), so this only affects the
+	// local copy passed into AddParams below — runAddPR's postOpts is unaffected.
+	postOpts.Recorder = rec
+
 	s.Start("Creating worktree...")
 	result, err := operations.AddWorktree(cmd.Context(), r, operations.AddParams{
 		Task:              task,
@@ -162,6 +175,8 @@ func runAddTask(cmd *cobra.Command, r git.Runner, arg string, cfg *config.Config
 
 	s.Stop()
 
+	flushMetricsBestEffort(cmd, rec, repoRoot, cfg.MetricsMaxRuns())
+
 	if isJSON(cmd) {
 		return writeAddJSON(cmd, "task", nil, result)
 	}
@@ -173,6 +188,33 @@ func runAddTask(cmd *cobra.Command, r git.Runner, arg string, cfg *config.Config
 	printWorktreeResult(cmd, header, result)
 
 	return nil
+}
+
+// metricsEnabled resolves whether rimba add should collect timing metrics for
+// this invocation. The --no-metrics flag and RIMBA_METRICS=0 both override
+// config regardless of [metrics].enabled.
+func metricsEnabled(cfg *config.Config, noMetricsFlag bool) bool {
+	if noMetricsFlag {
+		return false
+	}
+	if os.Getenv("RIMBA_METRICS") == "0" {
+		return false
+	}
+	return cfg.IsMetricsEnabled()
+}
+
+// flushMetricsBestEffort writes rec's spans to <repoRoot>/.rimba/metrics.jsonl.
+// A nil rec (metrics disabled) and a nil-safe Flush make this a no-op in that
+// case. A flush failure never fails the add command — it is only logged to
+// stderr when RIMBA_DEBUG is set.
+func flushMetricsBestEffort(cmd *cobra.Command, rec *metrics.Recorder, repoRoot string, maxRuns int) {
+	if rec == nil {
+		return
+	}
+	path := filepath.Join(repoRoot, config.DirName, metricsFileName)
+	if err := rec.Flush(path, maxRuns); err != nil && os.Getenv("RIMBA_DEBUG") != "" {
+		fmt.Fprintf(cmd.ErrOrStderr(), "\n[debug] metrics flush failed: %v\n", err)
+	}
 }
 
 // resolveAddPrefix prefers an explicit prefix flag over a positional segment.
@@ -298,6 +340,7 @@ func init() {
 	addCmd.Flags().String(flagTask, "", "override auto-derived task name (pr:<num> mode only)")
 	addCmd.Flags().Bool(flagSkipDeps, false, "skip dependency detection and installation")
 	addCmd.Flags().Bool(flagSkipHooks, false, "skip post-create hooks")
+	addCmd.Flags().Bool(flagNoMetrics, false, "disable automatic timing metrics collection for this run")
 	_ = addCmd.RegisterFlagCompletionFunc(flagSource, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return completeBranchNames(cmd, toComplete), cobra.ShellCompDirectiveNoFileComp
 	})

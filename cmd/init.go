@@ -167,6 +167,12 @@ func runInitFresh(ctx context.Context, cmd *cobra.Command, r git.Runner, repoRoo
 		return errhint.WithFix(fmt.Errorf("failed to update .gitignore: %w", err), gitignoreHint)
 	}
 
+	if !personal {
+		if _, err := fileutil.EnsureGitignore(repoRoot, config.DirName+"/"+metricsFileName); err != nil {
+			return errhint.WithFix(fmt.Errorf("failed to update .gitignore: %w", err), gitignoreHint)
+		}
+	}
+
 	fmt.Fprintf(cmd.OutOrStdout(), "Initialized rimba in %s\n", repoRoot)
 	fmt.Fprintf(cmd.OutOrStdout(), "  Config:       %s\n", filepath.Join(dirPath, config.TeamFile))
 	fmt.Fprintf(cmd.OutOrStdout(), "  Worktree dir: %s\n", wtDir)
@@ -354,6 +360,11 @@ func reconcileExistingIgnore(cmd *cobra.Command, repoRoot string, personal bool)
 	if added {
 		fmt.Fprintf(cmd.OutOrStdout(), "  Gitignore:    %s added to .gitignore\n", config.DirName+"/"+config.LocalGlob)
 	}
+
+	if _, err := fileutil.EnsureGitignore(repoRoot, config.DirName+"/"+metricsFileName); err != nil {
+		return errhint.WithFix(fmt.Errorf("failed to update .gitignore: %w", err), gitignoreHint)
+	}
+
 	return nil
 }
 
