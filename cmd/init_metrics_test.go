@@ -145,6 +145,109 @@ func TestInitReInitMetricsGitignoreWriteError(t *testing.T) {
 	}
 }
 
+// TestInitMigrateGitignoreIncludesMetrics asserts a non-personal init on a
+// repo with a legacy .rimba.toml (the migration path) also gets the
+// metrics.jsonl gitignore entry, not just the local-config glob.
+func TestInitMigrateGitignoreIncludesMetrics(t *testing.T) {
+	repoDir := t.TempDir()
+
+	legacyCfg := &config.Config{WorktreeDir: "../wt", DefaultSource: "main"}
+	if err := config.Save(filepath.Join(repoDir, config.FileName), legacyCfg); err != nil {
+		t.Fatalf("save legacy config: %v", err)
+	}
+
+	r := repoRootRunner(repoDir, func(_ ...string) (string, error) { return "", nil })
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	if err := initCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("initCmd.RunE: %v", err)
+	}
+	if !strings.Contains(buf.String(), "Migrated rimba config") {
+		t.Fatalf("expected migration path, output:\n%s", buf.String())
+	}
+
+	data, err := os.ReadFile(filepath.Join(repoDir, ".gitignore"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	metricsEntry := config.DirName + "/" + metricsFileName
+	if !strings.Contains(string(data), metricsEntry) {
+		t.Errorf(".gitignore should contain %q after migration, got:\n%s", metricsEntry, data)
+	}
+}
+
+// TestInitMigratePersonalGitignoreExcludesMetrics asserts --personal init on
+// a repo with a legacy .rimba.toml does NOT add a redundant metrics.jsonl
+// entry — the whole .rimba/ dir is already ignored.
+func TestInitMigratePersonalGitignoreExcludesMetrics(t *testing.T) {
+	repoDir := t.TempDir()
+
+	legacyCfg := &config.Config{WorktreeDir: "../wt", DefaultSource: "main"}
+	if err := config.Save(filepath.Join(repoDir, config.FileName), legacyCfg); err != nil {
+		t.Fatalf("save legacy config: %v", err)
+	}
+
+	r := repoRootRunner(repoDir, func(_ ...string) (string, error) { return "", nil })
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, buf := newTestCmd()
+	cmd.Flags().Bool(flagPersonal, true, "")
+	if err := initCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("initCmd.RunE: %v", err)
+	}
+	if !strings.Contains(buf.String(), "Migrated rimba config") {
+		t.Fatalf("expected migration path, output:\n%s", buf.String())
+	}
+
+	data, err := os.ReadFile(filepath.Join(repoDir, ".gitignore"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	metricsEntry := config.DirName + "/" + metricsFileName
+	if strings.Contains(string(data), metricsEntry) {
+		t.Errorf(".gitignore should not contain %q in personal mode, got:\n%s", metricsEntry, data)
+	}
+}
+
+// TestInitMigrateMetricsGitignoreWriteError covers the error path of the new
+// metrics.jsonl gitignore call in runInitMigrate: the glob entry is already
+// present (so ensureLocalIgnore's write is a no-op), but .gitignore is
+// read-only so appending the metrics entry fails — and that failure must
+// fail rimba init, mirroring the existing gitignore call's failure policy.
+func TestInitMigrateMetricsGitignoreWriteError(t *testing.T) {
+	repoDir := t.TempDir()
+
+	legacyCfg := &config.Config{WorktreeDir: "../wt", DefaultSource: "main"}
+	if err := config.Save(filepath.Join(repoDir, config.FileName), legacyCfg); err != nil {
+		t.Fatalf("save legacy config: %v", err)
+	}
+
+	// Pre-seed .gitignore with the glob entry already present (so
+	// ensureLocalIgnore's write is a no-op) and make it read-only.
+	globEntry := config.DirName + "/" + config.LocalGlob
+	gitignorePath := filepath.Join(repoDir, ".gitignore")
+	if err := os.WriteFile(gitignorePath, []byte(globEntry+"\n"), 0444); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(gitignorePath, 0644) })
+
+	r := repoRootRunner(repoDir, func(_ ...string) (string, error) { return "", nil })
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	cmd, _ := newTestCmd()
+	err := initCmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when .gitignore is read-only for the metrics entry during migration, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to update .gitignore") {
+		t.Errorf("error = %q, want 'failed to update .gitignore'", err.Error())
+	}
+}
+
 // TestInitReInitAddsMetricsGitignore covers the re-init-on-existing-.rimba/
 // path (reconcileExistingIgnore) — users upgrading rimba on an
 // already-initialized non-personal repo get the metrics entry too.

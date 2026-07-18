@@ -235,6 +235,12 @@ func runInitMigrate(cmd *cobra.Command, repoRoot, dirPath, legacyPath, gitignore
 		return errhint.WithFix(fmt.Errorf("failed to update .gitignore: %w", err), gitignoreHint)
 	}
 
+	if !personal {
+		if _, err := fileutil.EnsureGitignore(repoRoot, config.DirName+"/"+metricsFileName); err != nil {
+			return errhint.WithFix(fmt.Errorf("failed to update .gitignore: %w", err), gitignoreHint)
+		}
+	}
+
 	fmt.Fprintf(cmd.OutOrStdout(), "Migrated rimba config in %s\n", repoRoot)
 	fmt.Fprintf(cmd.OutOrStdout(), "  Moved:     %s → %s\n", config.FileName, filepath.Join(config.DirName, config.TeamFile))
 	if !personal {
