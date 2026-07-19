@@ -53,6 +53,14 @@ lockfile = 'api/go.sum'
 install = 'go mod vendor'
 work_dir = 'api'
 
+# Patch an auto-detected module by dir alone — lockfile/install are inherited.
+# Only works when auto_detect is true (the default): with auto_detect = false,
+# there is no detected module to inherit from, so every [[deps.modules]] entry
+# must fully specify lockfile and install itself.
+[[deps.modules]]
+dir = 'internal-cli/node_modules'
+eager = true
+
 # Custom branch prefixes (optional — supplements the built-in feature/bugfix/hotfix/docs/test/chore)
 [[resolver.prefix]]
 prefix = 'spike/'
@@ -93,11 +101,12 @@ rimba init
 | `post_rename` | Shell commands to run after `rimba rename` | (none) |
 | `command_timeout` | Deadline for internal git/gh subprocess calls, as a Go duration (e.g. `90s`, `2m`) — does not bound `post_create`/`post_rename` hooks or `deps.modules[].install`, which are unbounded | `120s` |
 | `open.<name>` | Named shortcut command for `rimba open --with <name>` | (none) |
-| `deps.auto_detect` | Auto-detect dependency modules from lockfiles | `true` |
+| `deps.auto_detect` | Auto-detect dependency modules from lockfiles. When `false`, no lockfile scanning happens at all — only modules explicitly listed in `deps.modules` are managed, and each one must fully specify `lockfile`/`install` itself (there's no detected module left to patch/inherit from — see below) | `true` |
 | `deps.modules[].dir` | Dependency directory to clone (e.g. `node_modules`) | — |
-| `deps.modules[].lockfile` | Lockfile used to match worktrees (e.g. `pnpm-lock.yaml`) | — |
-| `deps.modules[].install` | Install command to run if no matching worktree is found | — |
+| `deps.modules[].lockfile` | Lockfile used to match worktrees (e.g. `pnpm-lock.yaml`). May be omitted, together with `install`, when `dir` matches an auto-detected module — both are then inherited from detection. Requires `deps.auto_detect = true`; with detection off, omitting these produces a non-functional module (no lockfile to hash, no install command to run) | — |
+| `deps.modules[].install` | Install command to run if no matching worktree is found. Same omission rule and `auto_detect` requirement as `lockfile` | — |
 | `deps.modules[].work_dir` | Subdirectory to run the install command in | (repo root) |
+| `deps.modules[].eager` | Override the eager/lazy default for this module. Unset: infer from service scope, then default to lazy for modules detected as part of a workspace/monorepo package manager (`Recursive`), eager otherwise. See [rimba deps]({{ '/commands/deps' | relative_url }}#deferred-modules) | (inferred) |
 | `deps.concurrency` | Max parallel dependency-module installs | `auto (0)` |
 | `resolver.prefix[].prefix` | Custom branch prefix to register, added to the built-ins (e.g. `spike/`) | — |
 | `resolver.prefix[].aliases` | Alternative creation tokens for the prefix (e.g. `experiment` → `spike/`) | (none) |
@@ -166,6 +175,6 @@ Configuration is validated on every command invocation; errors are surfaced toge
 | `worktree_dir` | `worktree_dir must be relative, got "<dir>"` | Set a path relative to the repo root in `.rimba/settings.toml` |
 | `deps.modules[].dir` | `deps.modules[<i>]: dir is empty` | Set `dir = "<path>"` for the module |
 | `deps.modules[].dir` (duplicate) | `deps.modules[<i>]: duplicate dir "<dir>"` | Remove the duplicate `[[deps.modules]]` entry |
-| `deps.modules[].install` | `deps.modules["<dir>"]: install command is empty` | Set `install = "<command>"` for the module |
+| `deps.modules[].lockfile`/`install` | `deps.modules["<dir>"]: lockfile and install must be set together` | Set both to define a new module, or remove both to patch an auto-detected module by `dir` |
 | `open.<name>` (empty key) | `open: shortcut name is empty` | Remove the empty-keyed entry under `[open]` |
 | `open.<name>` (path separator) | `open["<name>"]: shortcut name must not contain path separators` | Rename the shortcut to a name without `/` |

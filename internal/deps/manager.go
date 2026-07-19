@@ -33,6 +33,11 @@ type Manager struct {
 
 	// Concurrency caps parallel module installs. <= 0 auto-picks a default.
 	Concurrency int
+
+	// SkipDeferred skips non-Eager modules entirely (see InstallResult.Deferred).
+	// Set only by the automatic add/restore/duplicate path; `rimba deps install`
+	// leaves it false to always honor an explicit ask.
+	SkipDeferred bool
 }
 
 // InstallResult holds the outcome of installing a single module.
@@ -40,11 +45,22 @@ type InstallResult struct {
 	Module Module
 	Source string // source worktree path if cloned
 	Cloned bool
-	Error  error
+
+	// Reflink is true when Cloned was a genuine CoW reflink/clonefile (per
+	// cowEligible), false when Cloned was a byte-copy (CloneOnly modules
+	// forced through on a non-CoW filesystem). Meaningless when !Cloned.
+	Reflink bool
+
+	Error error
 
 	// Ran is true only if this module's install goroutine actually executed,
 	// distinguishing a cancelled dispatch from a real no-op.
 	Ran bool
+
+	// Deferred is true when Manager.SkipDeferred is set and the module's
+	// Eager is false — the module was skipped entirely, no clone or install
+	// attempted.
+	Deferred bool
 }
 
 // Install clones or installs deps for each module.
@@ -70,6 +86,12 @@ func ResolveModules(worktreePath, service string, autoDetect bool, configModules
 		modules = MergeWithConfig(detected, configModules)
 	} else if len(configModules) > 0 {
 		for _, cm := range configModules {
+			if cm.Lockfile == "" && cm.Install == "" {
+				// Patch-only entry with auto-detection off: there's no
+				// detected module to patch, so skip it rather than build a
+				// Module with an empty Lockfile (crashes HashLockfile).
+				continue
+			}
 			modules = append(modules, moduleFromConfig(cm))
 		}
 	}
@@ -79,6 +101,7 @@ func ResolveModules(worktreePath, service string, autoDetect bool, configModules
 	}
 
 	modules = FilterCloneOnly(modules, existingWTPaths)
+	modules = resolveEagerness(worktreePath, service, modules, configModules)
 
 	return modules, nil
 }
@@ -145,18 +168,39 @@ func buildExistingPaths(entries []git.WorktreeEntry, exclude, preferred string) 
 }
 
 // installModule wraps installModuleInner with a module-level observability
-// span, recording whether the module was cloned from a sibling worktree or
-// freshly installed.
+// span, recording whether the module was cloned via a true reflink, cloned
+// via a byte-copy, or freshly installed.
 func (m *Manager) installModule(ctx context.Context, worktreePath string, mh ModuleWithHash, existingPaths []string) InstallResult {
 	rec := observability.FromContext(ctx)
 	stop := rec.StartModuleSpan(mh.Module.Dir)
 	result := m.installModuleInner(ctx, worktreePath, mh, existingPaths)
-	stop(result.Cloned)
+	stop(moduleSpanDetail(result))
 	return result
+}
+
+// moduleSpanDetail maps an InstallResult to the observability detail label
+// distinguishing a deferred (skipped) module, a true reflink clone (fast), a
+// byte-copy clone (the pessimization Stage 1 exists to avoid for
+// install-capable modules), and a fresh install.
+func moduleSpanDetail(result InstallResult) string {
+	if result.Deferred {
+		return observability.DetailDeferred
+	}
+	if !result.Cloned {
+		return observability.DetailInstalled
+	}
+	if result.Reflink {
+		return observability.DetailClonedReflink
+	}
+	return observability.DetailClonedCopy
 }
 
 func (m *Manager) installModuleInner(ctx context.Context, worktreePath string, mh ModuleWithHash, existingPaths []string) InstallResult {
 	mod := mh.Module
+
+	if m.SkipDeferred && !mod.Eager {
+		return InstallResult{Module: mod, Deferred: true}
+	}
 
 	if mh.Hash == "" {
 		return InstallResult{Module: mod}
@@ -178,9 +222,17 @@ func (m *Manager) installModuleInner(ctx context.Context, worktreePath string, m
 	return InstallResult{Module: mod}
 }
 
-// tryCloneFromExisting attempts to clone the module from an existing worktree with matching lockfile.
+// tryCloneFromExisting clones from a matching-lockfile sibling worktree when
+// cheap, else falls through to install. Recursive install-capable modules
+// always skip straight to install: a 100k+-entry tree's reflink clone still
+// costs 100+s (syscall-per-entry) vs. ~2-5s for a real install.
 func tryCloneFromExisting(ctx context.Context, worktreePath string, mh ModuleWithHash, existingPaths []string) (InstallResult, bool) {
 	mod := mh.Module
+
+	if mod.Recursive && mod.InstallCmd != "" && !mod.CloneOnly {
+		return InstallResult{}, false
+	}
+
 	for _, wtPath := range existingPaths {
 		otherHash, err := HashLockfile(wtPath, mod.Lockfile)
 		if err != nil || otherHash != mh.Hash {
@@ -192,13 +244,19 @@ func tryCloneFromExisting(ctx context.Context, worktreePath string, mh ModuleWit
 			continue
 		}
 
-		return cloneAndPost(ctx, worktreePath, wtPath, mod), true
+		reflink := cowEligible(ctx, modDir, worktreePath)
+		if mod.InstallCmd != "" && !mod.CloneOnly && !reflink {
+			continue // prefer install over a byte-copy in disguise
+		}
+
+		return cloneAndPost(ctx, worktreePath, wtPath, mod, reflink), true
 	}
 	return InstallResult{}, false
 }
 
 // cloneAndPost clones the module from srcWT to dstWT and runs the PostClone hook.
-func cloneAndPost(ctx context.Context, dstWT, srcWT string, mod Module) InstallResult {
+// reflink records whether cowEligible confirmed a true CoW clone (for observability).
+func cloneAndPost(ctx context.Context, dstWT, srcWT string, mod Module, reflink bool) InstallResult {
 	if err := CloneModule(ctx, srcWT, dstWT, mod); err != nil {
 		if !mod.CloneOnly {
 			installErr := runInstall(ctx, dstWT, mod)
@@ -214,7 +272,7 @@ func cloneAndPost(ctx context.Context, dstWT, srcWT string, mod Module) InstallR
 		}
 	}
 
-	return InstallResult{Module: mod, Source: srcWT, Cloned: true}
+	return InstallResult{Module: mod, Source: srcWT, Cloned: true, Reflink: reflink}
 }
 
 func runInstall(ctx context.Context, worktreePath string, mod Module) error {

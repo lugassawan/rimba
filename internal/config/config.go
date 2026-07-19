@@ -104,12 +104,18 @@ type DepsConfig struct {
 	Concurrency int `toml:"concurrency,omitempty"`
 }
 
-// ModuleConfig defines a manually configured dependency module.
+// ModuleConfig defines a manually configured dependency module, or (when
+// Lockfile/Install are both left empty and Dir matches an auto-detected
+// module) a "patch by Dir" entry that inherits everything else from detection.
 type ModuleConfig struct {
 	Dir      string `toml:"dir"`
-	Lockfile string `toml:"lockfile"`
-	Install  string `toml:"install"`
+	Lockfile string `toml:"lockfile,omitempty"`
+	Install  string `toml:"install,omitempty"`
 	WorkDir  string `toml:"work_dir,omitempty"`
+	// Eager overrides the eager/lazy default for this module's Dir. nil
+	// means unset (fall through to service-scope inference, then the
+	// Recursive-flag heuristic).
+	Eager *bool `toml:"eager,omitempty"`
 }
 
 // IsAutoDetectDeps returns whether automatic dependency detection is enabled.
@@ -327,25 +333,42 @@ func validateWorktreeDir(dir string) []error {
 	return nil
 }
 
-// validateDeps checks that each module has a non-empty, unique Dir and a
-// non-empty Install command. Empty Dir collides in the downstream map keyed
-// by Dir; empty Install is a silent no-op at install time.
+// validateDeps checks that each module has a non-empty, unique Dir (it's the
+// downstream map key) and that lockfile/install are set together per
+// validateModuleLockfileInstall.
 func validateDeps(deps *DepsConfig) []error {
 	if deps == nil {
 		return nil
 	}
+	autoDetect := deps.AutoDetect == nil || *deps.AutoDetect
 	var errs []error
 	seenDirs := make(map[string]bool, len(deps.Modules))
 	for i, m := range deps.Modules {
 		errs = append(errs, validateModuleDir(i, m.Dir, seenDirs)...)
-		if strings.TrimSpace(m.Install) == "" {
-			errs = append(errs, errhint.WithFix(
-				fmt.Errorf("config: deps.modules[%q]: install command is empty", m.Dir),
-				"set install = \"<command>\" for the module in .rimba/settings.toml",
-			))
-		}
+		errs = append(errs, validateModuleLockfileInstall(m, autoDetect)...)
 	}
 	return errs
+}
+
+// validateModuleLockfileInstall requires Lockfile and Install to be set
+// together (a full module definition), or both empty (a patch-by-Dir entry) —
+// but only when auto_detect is on, since there's nothing to patch otherwise.
+func validateModuleLockfileInstall(m ModuleConfig, autoDetect bool) []error {
+	lockSet := strings.TrimSpace(m.Lockfile) != ""
+	installSet := strings.TrimSpace(m.Install) != ""
+	if lockSet != installSet {
+		return []error{errhint.WithFix(
+			fmt.Errorf("config: deps.modules[%q]: lockfile and install must be set together", m.Dir),
+			"set both lockfile and install to define a new module, or remove both to patch an auto-detected module by dir in .rimba/settings.toml",
+		)}
+	}
+	if !lockSet && !autoDetect {
+		return []error{errhint.WithFix(
+			fmt.Errorf("config: deps.modules[%q]: lockfile and install are required when deps.auto_detect is false", m.Dir),
+			"set both lockfile and install, or enable deps.auto_detect to use this as a patch-by-dir entry",
+		)}
+	}
+	return nil
 }
 
 // validateModuleDir returns an error if dir is empty or a duplicate, and

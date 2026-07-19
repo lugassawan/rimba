@@ -335,6 +335,28 @@ func TestDepsInstallNoModules(t *testing.T) {
 	}
 }
 
+func TestFilterModulesByPath(t *testing.T) {
+	modules := []deps.Module{
+		{Dir: "node_modules"},
+		{Dir: "standalone-svc-a/node_modules"},
+	}
+
+	got, err := filterModulesByPath(modules, "standalone-svc-a/node_modules")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(got) != 1 || got[0].Dir != "standalone-svc-a/node_modules" {
+		t.Errorf("expected only the matching module, got %+v", got)
+	}
+}
+
+func TestFilterModulesByPathNoMatch(t *testing.T) {
+	modules := []deps.Module{{Dir: "node_modules"}}
+	if _, err := filterModulesByPath(modules, "nonexistent"); err == nil {
+		t.Error("expected an error when no module matches the given path")
+	}
+}
+
 func TestFormatDepsInstallLine(t *testing.T) {
 	tests := []struct {
 		name string
@@ -375,6 +397,11 @@ func TestFormatDepsInstallLine(t *testing.T) {
 			name: "error takes precedence over cancelled",
 			res:  deps.InstallResult{Module: deps.Module{Dir: "vendor"}, Error: errors.New("install failed"), Ran: false},
 			want: "vendor: install failed",
+		},
+		{
+			name: "deferred",
+			res:  deps.InstallResult{Module: deps.Module{Dir: "node_modules"}, Deferred: true},
+			want: "node_modules: deferred",
 		},
 	}
 

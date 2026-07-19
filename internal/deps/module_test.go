@@ -345,6 +345,110 @@ func TestMergeWithConfigEmpty(t *testing.T) {
 	assertModuleCount(t, result, 1)
 }
 
+func TestMergeWithConfigPatchesOnlySetFields(t *testing.T) {
+	detected := []Module{
+		{Dir: DirNodeModules, Lockfile: LockfilePnpm, InstallCmd: "pnpm install --frozen-lockfile", Recursive: true},
+	}
+	configModules := []config.ModuleConfig{
+		{Dir: DirNodeModules, Install: "pnpm install --frozen-lockfile --prefer-offline"},
+	}
+
+	merged := MergeWithConfig(detected, configModules)
+
+	assertModuleCount(t, merged, 1)
+	m := merged[0]
+	if m.InstallCmd != "pnpm install --frozen-lockfile --prefer-offline" {
+		t.Errorf("expected patched InstallCmd, got %q", m.InstallCmd)
+	}
+	if m.Lockfile != LockfilePnpm {
+		t.Errorf("expected inherited Lockfile %q, got %q", LockfilePnpm, m.Lockfile)
+	}
+	if !m.Recursive {
+		t.Error("expected inherited Recursive=true (config can't express this field)")
+	}
+}
+
+func TestMergeWithConfigNewModuleStillNeedsFullDefinition(t *testing.T) {
+	configModules := []config.ModuleConfig{
+		{Dir: testDirCustomDeps, Lockfile: "custom.lock", Install: "custom-install"},
+	}
+
+	merged := MergeWithConfig(nil, configModules)
+
+	assertModuleCount(t, merged, 1)
+	if merged[0].Lockfile != "custom.lock" || merged[0].InstallCmd != "custom-install" {
+		t.Errorf("expected brand-new module fully defined from config, got %+v", merged[0])
+	}
+}
+
+// TestMergeWithConfigUnmatchedPatchOnlyEntryIsNoOp verifies a real production
+// bug: a patch-only config entry (dir + eager, no lockfile/install) whose Dir
+// isn't in `detected` — e.g. because a --service-scoped DetectModules call
+// never looked at that subdirectory at all — must be silently skipped, not
+// added as a broken "new module" with an empty Lockfile. An empty Lockfile
+// makes HashLockfile try to read the worktree directory itself, erroring out
+// hashing for the ENTIRE batch (including otherwise-fine modules like a
+// correctly detected root module).
+func TestMergeWithConfigUnmatchedPatchOnlyEntryIsNoOp(t *testing.T) {
+	detected := []Module{
+		{Dir: DirNodeModules, Lockfile: LockfileYarn, InstallCmd: "yarn install", Recursive: true},
+	}
+	configModules := []config.ModuleConfig{
+		{Dir: "internal-cli/node_modules", Eager: new(true)},
+	}
+
+	merged := MergeWithConfig(detected, configModules)
+
+	assertModuleCount(t, merged, 1)
+	if merged[0].Dir != DirNodeModules {
+		t.Errorf("expected only the detected root module to survive, got %+v", merged)
+	}
+}
+
+func TestMergeWithConfigMatchedPatchOnlyEntryStillPatches(t *testing.T) {
+	detected := []Module{
+		{Dir: "internal-cli/node_modules", Lockfile: "internal-cli/package-lock.json", InstallCmd: "npm ci", WorkDir: "internal-cli"},
+	}
+	configModules := []config.ModuleConfig{
+		{Dir: "internal-cli/node_modules", Eager: new(true)},
+	}
+
+	merged := MergeWithConfig(detected, configModules)
+
+	assertModuleCount(t, merged, 1)
+	if merged[0].Lockfile != "internal-cli/package-lock.json" || merged[0].InstallCmd != "npm ci" {
+		t.Errorf("expected the matched entry to still patch (inheriting lockfile/install), got %+v", merged[0])
+	}
+}
+
+func TestModuleInstallState(t *testing.T) {
+	tests := []struct {
+		name      string
+		eager     bool
+		createDir bool
+		want      string
+	}{
+		{name: "installed", eager: true, createDir: true, want: "installed"},
+		{name: "missing", eager: true, createDir: false, want: "missing"},
+		{name: "deferred", eager: false, createDir: false, want: "deferred"},
+		{name: "installed even if lazy", eager: false, createDir: true, want: "installed"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			mod := Module{Dir: DirNodeModules, Eager: tt.eager}
+			if tt.createDir {
+				if err := os.MkdirAll(filepath.Join(dir, DirNodeModules), 0755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if got := mod.InstallState(dir); got != tt.want {
+				t.Errorf("InstallState() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestPrefixDirsEmpty(t *testing.T) {
 	result := prefixDirs("api", nil)
 	if result != nil {

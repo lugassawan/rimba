@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/deps"
@@ -14,11 +15,21 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const flagPath = "path"
+
+// depsStatusModuleJSON adds the on-disk install state to a ModuleWithHash
+// for `deps status --json` — computed relative to a specific worktree path,
+// so it can't live on ModuleWithHash itself.
+type depsStatusModuleJSON struct {
+	deps.ModuleWithHash
+	InstallState string `json:"install_state"`
+}
+
 type depsStatusJSONItem struct {
-	Branch  string                `json:"branch"`
-	Path    string                `json:"path"`
-	Modules []deps.ModuleWithHash `json:"modules"`
-	Error   string                `json:"error,omitempty"`
+	Branch  string                 `json:"branch"`
+	Path    string                 `json:"path"`
+	Modules []depsStatusModuleJSON `json:"modules"`
+	Error   string                 `json:"error,omitempty"`
 }
 
 var depsCmd = &cobra.Command{
@@ -61,13 +72,13 @@ var depsStatusCmd = &cobra.Command{
 				modules, err := deps.ResolveModules(wt.Path, wt.Service, cfg.IsAutoDetectDeps(), configModules, existingPaths)
 				if err != nil {
 					item.Error = err.Error()
-					item.Modules = make([]deps.ModuleWithHash, 0)
+					item.Modules = make([]depsStatusModuleJSON, 0)
 					items = append(items, item)
 					continue
 				}
 
 				if len(modules) == 0 {
-					item.Modules = make([]deps.ModuleWithHash, 0)
+					item.Modules = make([]depsStatusModuleJSON, 0)
 					items = append(items, item)
 					continue
 				}
@@ -75,12 +86,16 @@ var depsStatusCmd = &cobra.Command{
 				hashed, err := deps.HashModules(wt.Path, modules)
 				if err != nil {
 					item.Error = err.Error()
-					item.Modules = make([]deps.ModuleWithHash, 0)
+					item.Modules = make([]depsStatusModuleJSON, 0)
 					items = append(items, item)
 					continue
 				}
 
-				item.Modules = hashed
+				jsonModules := make([]depsStatusModuleJSON, len(hashed))
+				for i, mh := range hashed {
+					jsonModules[i] = depsStatusModuleJSON{ModuleWithHash: mh, InstallState: mh.Module.InstallState(wt.Path)}
+				}
+				item.Modules = jsonModules
 				items = append(items, item)
 			}
 			return output.WriteJSON(cmd.OutOrStdout(), version, "deps status", items)
@@ -116,7 +131,7 @@ var depsStatusCmd = &cobra.Command{
 				if hash == "" {
 					hash = "(no lockfile)"
 				}
-				fmt.Fprintf(out, "  %s [%s]\n", mh.Module.Dir, hash)
+				fmt.Fprintf(out, "  %s [%s] %s\n", mh.Module.Dir, hash, mh.Module.InstallState(wt.Path))
 			}
 		}
 
@@ -189,6 +204,13 @@ var depsInstallCmd = &cobra.Command{
 			return nil
 		}
 
+		if path, _ := cmd.Flags().GetString(flagPath); path != "" {
+			modules, err = filterModulesByPath(modules, path)
+			if err != nil {
+				return err
+			}
+		}
+
 		if err := ensureTrust(cmd, repoRoot, cfg); err != nil {
 			return err
 		}
@@ -216,12 +238,17 @@ var depsInstallCmd = &cobra.Command{
 func init() {
 	depsCmd.AddCommand(depsStatusCmd)
 	depsCmd.AddCommand(depsInstallCmd)
+	depsInstallCmd.Flags().String(flagPath, "", "install only the module at this dir (e.g. standalone-svc-a/node_modules)")
 	rootCmd.AddCommand(depsCmd)
 }
 
 // formatDepsInstallLine renders one module's install outcome for `rimba deps install`.
+// Deferred can't actually occur here today (this command's Manager leaves
+// SkipDeferred false), but is handled for defensive completeness.
 func formatDepsInstallLine(res deps.InstallResult) string {
 	switch {
+	case res.Deferred:
+		return res.Module.Dir + ": deferred"
 	case res.Cloned:
 		return fmt.Sprintf("%s: cloned from %s", res.Module.Dir, filepath.Base(res.Source))
 	case res.Error != nil:
@@ -233,4 +260,19 @@ func formatDepsInstallLine(res deps.InstallResult) string {
 	default:
 		return res.Module.Dir + ": skipped"
 	}
+}
+
+// filterModulesByPath returns the single module whose Dir equals dir, or an
+// error listing the available dirs if none match.
+func filterModulesByPath(modules []deps.Module, dir string) ([]deps.Module, error) {
+	for _, m := range modules {
+		if m.Dir == dir {
+			return []deps.Module{m}, nil
+		}
+	}
+	available := make([]string, len(modules))
+	for i, m := range modules {
+		available[i] = m.Dir
+	}
+	return nil, fmt.Errorf("no module with dir %q; available: %s", dir, strings.Join(available, ", "))
 }

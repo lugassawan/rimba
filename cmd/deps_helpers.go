@@ -27,6 +27,8 @@ func printInstallResults(out io.Writer, results []deps.InstallResult) {
 // installResultLine formats one dependency's status, or "" for a ran no-op.
 func installResultLine(r deps.InstallResult) string {
 	switch {
+	case r.Deferred:
+		return fmt.Sprintf("%s: deferred — run `rimba deps install <task> --path %s` if you need it", r.Module.Dir, r.Module.Dir)
 	case r.Cloned:
 		return fmt.Sprintf("%s: cloned from %s", r.Module.Dir, filepath.Base(r.Source))
 	case r.Error != nil:
