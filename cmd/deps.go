@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/deps"
@@ -13,6 +14,8 @@ import (
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
 )
+
+const flagPath = "path"
 
 type depsStatusJSONItem struct {
 	Branch  string                `json:"branch"`
@@ -189,6 +192,13 @@ var depsInstallCmd = &cobra.Command{
 			return nil
 		}
 
+		if path, _ := cmd.Flags().GetString(flagPath); path != "" {
+			modules, err = filterModulesByPath(modules, path)
+			if err != nil {
+				return err
+			}
+		}
+
 		if err := ensureTrust(cmd, repoRoot, cfg); err != nil {
 			return err
 		}
@@ -216,12 +226,17 @@ var depsInstallCmd = &cobra.Command{
 func init() {
 	depsCmd.AddCommand(depsStatusCmd)
 	depsCmd.AddCommand(depsInstallCmd)
+	depsInstallCmd.Flags().String(flagPath, "", "install only the module at this dir (e.g. standalone-svc-a/node_modules)")
 	rootCmd.AddCommand(depsCmd)
 }
 
 // formatDepsInstallLine renders one module's install outcome for `rimba deps install`.
+// Deferred can't actually occur here today (this command's Manager leaves
+// SkipDeferred false), but is handled for defensive completeness.
 func formatDepsInstallLine(res deps.InstallResult) string {
 	switch {
+	case res.Deferred:
+		return res.Module.Dir + ": deferred"
 	case res.Cloned:
 		return fmt.Sprintf("%s: cloned from %s", res.Module.Dir, filepath.Base(res.Source))
 	case res.Error != nil:
@@ -233,4 +248,19 @@ func formatDepsInstallLine(res deps.InstallResult) string {
 	default:
 		return res.Module.Dir + ": skipped"
 	}
+}
+
+// filterModulesByPath returns the single module whose Dir equals dir, or an
+// error listing the available dirs if none match.
+func filterModulesByPath(modules []deps.Module, dir string) ([]deps.Module, error) {
+	for _, m := range modules {
+		if m.Dir == dir {
+			return []deps.Module{m}, nil
+		}
+	}
+	available := make([]string, len(modules))
+	for i, m := range modules {
+		available[i] = m.Dir
+	}
+	return nil, fmt.Errorf("no module with dir %q; available: %s", dir, strings.Join(available, ", "))
 }

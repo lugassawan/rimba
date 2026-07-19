@@ -90,22 +90,19 @@ func TestAddWithDepsClone(t *testing.T) {
 	// Manually create node_modules in the first worktree (simulating npm install)
 	addNodeModules(t, wt1Path, map[string]string{".package-lock.json": "{}"})
 
-	// Create second worktree — a Recursive install-capable module (pnpm
-	// node_modules) always installs rather than clones, even with a
-	// byte-identical sibling present: clone cost is unbounded (scales with
-	// monorepo workspace count) while install is bounded by the package
-	// manager's own store. pnpm is stubbed since it's not on the test host.
-	//
-	// A clean, error-free install prints no "Dependencies:" line at all
-	// (installResultLine's default case returns "" — pre-existing behavior,
-	// unrelated to this fix), so the filesystem is the only signal here.
-	r := rimbaSuccessWithEnv(t, repo, stubPnpm(t), "add", "task-deps-2")
+	// Create second worktree with no service scope — a Recursive
+	// install-capable module (pnpm node_modules) is deferred by default:
+	// neither cloned nor installed, even with a byte-identical sibling
+	// present. Clone cost is unbounded (scales with monorepo workspace
+	// count); an eager install is real but unneeded until something in this
+	// worktree actually requires the module.
+	r := rimbaSuccess(t, repo, "add", "task-deps-2")
 
 	branch2 := resolver.BranchName(defaultPrefix, "task-deps-2")
 	wt2Path := resolver.WorktreePath(wtDir, branch2)
 
-	assertFileExists(t, filepath.Join(wt2Path, deps.DirNodeModules, "installed.marker"))
-	assertFileNotExists(t, filepath.Join(wt2Path, deps.DirNodeModules, ".package-lock.json"))
+	assertFileNotExists(t, filepath.Join(wt2Path, deps.DirNodeModules))
+	assertContains(t, r.Stdout, "deferred")
 	assertNotContains(t, r.Stdout, msgClonedFrom)
 }
 
@@ -139,18 +136,18 @@ func TestAddWithDepsNestedModules(t *testing.T) {
 	}
 	testutil.CreateFile(t, filepath.Join(wt1Path, testDirAppWeb, deps.DirNodeModules), "app.json", "{}")
 
-	// Recursive walks and clones every nested node_modules dir in a
-	// monorepo — the exact unbounded cost this fix avoids. Even with a
-	// sibling that has both root and nested node_modules ready to clone, it
-	// must install instead (root.json/app.json must never appear).
-	r := rimbaSuccessWithEnv(t, repo, stubPnpm(t), "add", "mono-2")
+	// No service scope — Recursive walks and clones every nested
+	// node_modules dir in a monorepo, an unbounded cost that's deferred by
+	// default rather than paid eagerly. root.json/app.json must never appear
+	// (not cloned), and node_modules must not exist at all (not installed).
+	r := rimbaSuccess(t, repo, "add", "mono-2")
 
 	branch2 := resolver.BranchName(defaultPrefix, "mono-2")
 	wt2Path := resolver.WorktreePath(wtDir, branch2)
 
-	assertFileExists(t, filepath.Join(wt2Path, deps.DirNodeModules, "installed.marker"))
-	assertFileNotExists(t, filepath.Join(wt2Path, deps.DirNodeModules, "root.json"))
+	assertFileNotExists(t, filepath.Join(wt2Path, deps.DirNodeModules))
 	assertFileNotExists(t, filepath.Join(wt2Path, testDirAppWeb, deps.DirNodeModules, "app.json"))
+	assertContains(t, r.Stdout, "deferred")
 	assertNotContains(t, r.Stdout, msgClonedFrom)
 }
 
@@ -275,6 +272,65 @@ func TestDepsInstall(t *testing.T) {
 	assertNotContains(t, r.Stdout, msgClonedFrom)
 }
 
+// depsInstallPathFlagFixture sets up a repo with a single, guaranteed-eager,
+// non-CloneOnly custom module (trivial install command, no pnpm/yarn
+// needed) so --path's filtering can be exercised deterministically.
+func depsInstallPathFlagFixture(t *testing.T) (repo string, task string) {
+	t.Helper()
+	repo = setupInitializedRepo(t)
+	commitLockfile(t, repo, "custom.lock")
+
+	cfg := loadConfig(t, repo)
+	cfg.Deps = &config.DepsConfig{
+		Modules: []config.ModuleConfig{
+			{
+				Dir:      "custom-deps",
+				Lockfile: "custom.lock",
+				Install:  "mkdir -p custom-deps && touch custom-deps/installed.marker",
+			},
+		},
+	}
+	saveConfig(t, repo, cfg)
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "add custom module for --path e2e")
+
+	task = "path-flag-task"
+	rimbaSuccess(t, repo, "add", "--yes", flagSkipDepsE2E, task)
+	return repo, task
+}
+
+func TestDepsInstallPathFlagInstallsOnlyThatModule(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo, task := depsInstallPathFlagFixture(t)
+
+	r := rimbaSuccess(t, repo, "deps", "install", task, "--path", "custom-deps")
+
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch := resolver.BranchName(defaultPrefix, task)
+	wtPath := resolver.WorktreePath(wtDir, branch)
+
+	assertFileExists(t, filepath.Join(wtPath, "custom-deps", "installed.marker"))
+	assertContains(t, r.Stdout, "custom-deps")
+}
+
+func TestDepsInstallPathFlagUnknownDirErrors(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo, task := depsInstallPathFlagFixture(t)
+
+	r := rimba(t, repo, "deps", "install", task, "--path", "nonexistent/dir")
+	if r.ExitCode == 0 {
+		t.Fatal("expected non-zero exit for an unknown --path dir")
+	}
+	assertContains(t, r.Stderr+r.Stdout, "nonexistent/dir")
+}
+
 func TestPostCreateHooks(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
@@ -344,16 +400,14 @@ func TestDuplicateWithDepsClone(t *testing.T) {
 	}
 	testutil.CreateFile(t, filepath.Join(srcPath, deps.DirNodeModules), "source.json", "from-source")
 
-	r := rimbaSuccessWithEnv(t, repo, stubPnpm(t), "duplicate", taskDupSrc)
+	// No service scope — deferred by default, same as add/restore.
+	r := rimbaSuccess(t, repo, "duplicate", taskDupSrc)
 
 	dupBranch := resolver.BranchName(defaultPrefix, "dup-src-1")
 	dupPath := resolver.WorktreePath(wtDir, dupBranch)
 
-	// A clean, error-free install prints no "Dependencies:" line at all
-	// (installResultLine's default case returns "" — pre-existing behavior),
-	// so the filesystem is the only signal here.
-	assertFileExists(t, filepath.Join(dupPath, deps.DirNodeModules, "installed.marker"))
-	assertFileNotExists(t, filepath.Join(dupPath, deps.DirNodeModules, "source.json"))
+	assertFileNotExists(t, filepath.Join(dupPath, deps.DirNodeModules))
+	assertContains(t, r.Stdout, "deferred")
 	assertNotContains(t, r.Stdout, msgClonedFrom)
 }
 
@@ -362,21 +416,25 @@ func TestDuplicateWithDepsClone(t *testing.T) {
 // filesystem can't honor a true reflink, an install-capable module runs its
 // InstallCmd instead of byte-copying the sibling's node_modules. A config
 // module override supplies a trivial InstallCmd so the assertion doesn't
-// depend on pnpm being installed on the test host.
+// depend on pnpm being installed on the test host. The lockfile name
+// deliberately doesn't match any auto-detection preset (e.g. not
+// pnpm-lock.yaml), so this stays a genuinely non-recursive custom module
+// instead of patching (and inheriting Recursive=true from) an auto-detected
+// root module — see resolveEagerness's Recursive-lazy default.
 func TestAddWithDepsIneligibleCloneFallsBackToInstall(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
 	}
 
 	repo := setupInitializedRepo(t)
-	commitLockfile(t, repo, deps.LockfilePnpm)
+	commitLockfile(t, repo, "custom.lock")
 
 	cfg := loadConfig(t, repo)
 	cfg.Deps = &config.DepsConfig{
 		Modules: []config.ModuleConfig{
 			{
 				Dir:      deps.DirNodeModules,
-				Lockfile: deps.LockfilePnpm,
+				Lockfile: "custom.lock",
 				Install:  "mkdir -p node_modules && touch node_modules/installed.marker",
 			},
 		},
@@ -417,14 +475,14 @@ func TestAddWithDepsEligibleCloneSucceeds(t *testing.T) {
 	}
 
 	repo := setupInitializedRepo(t)
-	commitLockfile(t, repo, deps.LockfilePnpm)
+	commitLockfile(t, repo, "custom.lock")
 
 	cfg := loadConfig(t, repo)
 	cfg.Deps = &config.DepsConfig{
 		Modules: []config.ModuleConfig{
 			{
 				Dir:      deps.DirNodeModules,
-				Lockfile: deps.LockfilePnpm,
+				Lockfile: "custom.lock",
 				Install:  "mkdir -p node_modules && touch node_modules/installed.marker",
 			},
 		},
