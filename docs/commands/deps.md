@@ -30,12 +30,14 @@ rimba deps status
 
 ```
 refs/heads/main (/path/to/repo)
-  node_modules [a1b2c3d4e5f6]
-  vendor [7g8h9i0j1k2l]
+  node_modules [a1b2c3d4e5f6] installed
+  vendor [7g8h9i0j1k2l] installed
 refs/heads/feature/auth (/path/to/worktrees/feature-auth)
-  node_modules [a1b2c3d4e5f6]
-  vendor [7g8h9i0j1k2l]
+  node_modules [a1b2c3d4e5f6] deferred
+  vendor [7g8h9i0j1k2l] installed
 ```
+
+Each module's install state — `installed`, `deferred`, or `missing` (expected but absent, e.g. a failed install) — is shown alongside its lockfile hash. See [Deferred modules](#deferred-modules) below.
 
 ---
 
@@ -46,13 +48,43 @@ Detect and install dependencies for a specific worktree. Clones from an existing
 ### Synopsis
 
 ```sh
-rimba deps install <task>
+rimba deps install <task> [--path <dir>]
 ```
 
 ### Examples
 
 ```sh
 rimba deps install my-feature
+```
+
+### `--path`
+
+Install only one module instead of everything detected for the worktree:
+
+```sh
+rimba deps install my-feature --path standalone-svc-a/node_modules
+```
+
+---
+
+## Deferred modules
+
+Modules whose install cost is unbounded — pnpm/yarn/npm `node_modules` in a workspace/monorepo setup — are **deferred by default**: `rimba add`/`restore`/`duplicate` don't install them automatically unless the worktree's service scope specifically implies they're needed (a workspace member with no lockfile of its own, or a service matching the module's own independent lockfile). A deferred module's directory simply doesn't exist until you install it:
+
+```sh
+rimba add my-feature
+# Dependencies:
+#   node_modules: deferred — run `rimba deps install my-feature --path node_modules` if you need it
+
+rimba deps install my-feature --path node_modules
+```
+
+Override the default for a specific module in `.rimba/settings.toml`:
+
+```toml
+[[deps.modules]]
+dir = "internal-cli/node_modules"
+eager = true
 ```
 
 ---
