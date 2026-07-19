@@ -31,6 +31,14 @@ copy_files = ['.env', '.env.local', '.envrc', '.tool-versions', '.vscode']
 # Post-create hooks (run in new worktree directory)
 post_create = ['./gradlew build']
 
+# Staged post-create hooks: a nested array groups hooks into stages. Stages
+# run in order; every hook within a stage runs concurrently. The nested
+# shape alone is the parallelism declaration — no [hooks] section needed.
+# post_create = [
+#   ['npm run lint', 'npm run format:check'],  # stage 1: independent, run in parallel
+#   ['npm run build'],                          # stage 2: runs after stage 1 completes
+# ]
+
 # Open shortcuts (used by `rimba open --ide`, `--agent`, `-w`)
 [open]
 ide = 'code .'
@@ -93,8 +101,8 @@ rimba init
 |-------|-------------|---------|
 | `worktree_dir` | Directory (relative to repo root) where worktrees are created | `../<repo-name>-worktrees` |
 | `copy_files` | Files or directories to copy from repo root into new worktrees | auto-detected on `rimba init` from gitignored local files; falls back to `.env`, `.env.local`, `.envrc`, `.tool-versions` |
-| `post_create` | Shell commands to run in new worktrees after creation | (none) |
-| `post_rename` | Shell commands to run after `rimba rename` | (none) |
+| `post_create` | Shell commands to run in new worktrees after creation. Either a flat array of commands, or a nested array of stages — see the staged example above — where each inner array's commands run concurrently and stages run in order | (none) |
+| `post_rename` | Shell commands to run after `rimba rename`. Accepts the same flat-or-staged shape as `post_create` — but a flat `post_rename` list always runs fully serially regardless of `hooks.parallel` (only `post_create`'s flat form honors that flag); only the nested/staged shape opts `post_rename` into parallelism | (none) |
 | `command_timeout` | Deadline for internal git/gh subprocess calls, as a Go duration (e.g. `90s`, `2m`) — does not bound `post_create`/`post_rename` hooks or `deps.modules[].install`, which are unbounded | `120s` |
 | `open.<name>` | Named shortcut command for `rimba open --with <name>` | (none) |
 | `deps.auto_detect` | Auto-detect dependency modules from lockfiles | `true` |
@@ -105,7 +113,7 @@ rimba init
 | `deps.concurrency` | Max parallel dependency-module installs | `auto (0)` |
 | `resolver.prefix[].prefix` | Custom branch prefix to register, added to the built-ins (e.g. `spike/`) | — |
 | `resolver.prefix[].aliases` | Alternative creation tokens for the prefix (e.g. `experiment` → `spike/`) | (none) |
-| `hooks.parallel` | Run `post_create` hooks concurrently instead of serially. Opt-in: parallel hooks can break execution-order dependencies between commands (e.g. hook 1 generates a file hook 2 reads), so only enable it if your hooks are independent | `false` |
+| `hooks.parallel` | Run a flat `post_create` list's hooks concurrently instead of serially (has no effect on a nested/staged `post_create`, or on `post_rename` at all — see above). Opt-in: parallel hooks can break execution-order dependencies between commands (e.g. hook 1 generates a file hook 2 reads), so only enable it if your hooks are independent | `false` |
 
 ## Auto-Detected Ecosystems
 
