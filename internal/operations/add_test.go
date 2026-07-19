@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/gitref"
+	"github.com/lugassawan/rimba/internal/observability"
 	"github.com/lugassawan/rimba/internal/progress"
 )
 
@@ -57,6 +58,60 @@ func TestAddWorktreeSuccess(t *testing.T) {
 	}
 	if !strings.Contains(result.Path, ".worktrees") {
 		t.Errorf("expected path to contain .worktrees, got %q", result.Path)
+	}
+}
+
+// TestAddWorktreeRecordsCreateSpan verifies AddWorktree wraps git.AddWorktree
+// in a "create" span when a Recorder is attached to ctx.
+func TestAddWorktreeRecordsCreateSpan(t *testing.T) {
+	tmpDir := t.TempDir()
+	wtDir := filepath.Join(tmpDir, ".worktrees")
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == cmdRevParse {
+				return "", errors.New("not found")
+			}
+			if len(args) > 0 && args[0] == gitCmdWorktree && len(args) > 1 && args[1] == gitSubcmdAdd {
+				_ = os.MkdirAll(args[2], 0o755)
+				return "", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	sink := &fakeSink{}
+	rec := observability.Maybe(true, sink, "add", "login", "", "v1")
+	ctx := observability.WithRecorder(context.Background(), rec)
+
+	_, err := AddWorktree(ctx, r, AddParams{
+		Task:   "login",
+		Prefix: "feature/",
+		Source: branchMain,
+		PostCreateOptions: PostCreateOptions{
+			RepoRoot:    tmpDir,
+			WorktreeDir: wtDir,
+			SkipDeps:    true,
+			SkipHooks:   true,
+		},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// PostCreateSetup's own "copy" span also fires (CopyFiles defaults to
+	// empty, but the copy phase always runs regardless of SkipDeps/SkipHooks),
+	// so assert on the first span specifically rather than the total count.
+	if len(sink.metrics) == 0 {
+		t.Fatal("expected at least one span to be recorded")
+	}
+	span, ok := sink.metrics[0].(observability.SpanRecord)
+	if !ok {
+		t.Fatalf("sink.metrics[0] = %T, want SpanRecord", sink.metrics[0])
+	}
+	if span.Name != "create" {
+		t.Errorf("span.Name = %q, want %q", span.Name, "create")
 	}
 }
 
