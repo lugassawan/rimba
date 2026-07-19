@@ -984,3 +984,18 @@ func TestResolveMCPPrefixTypeExplicitTypeWins(t *testing.T) {
 		t.Errorf("resolveMCPPrefixType = %q, want %q", got, "hotfix")
 	}
 }
+
+// TestAddToolWithRecorderWrappingPreservesResponse confirms server.go's
+// withRecorder wrapping (registration-time, see observability.go) doesn't
+// change handleAdd's response shape or error text — only observes it.
+func TestAddToolWithRecorderWrappingPreservesResponse(t *testing.T) {
+	withRedirectedCacheDir(t)
+	hctx := testContext(&mockRunner{})
+	handler := withRecorder(hctx, "add", handleAdd(hctx))
+
+	result := callTool(t, handler, nil)
+	errText := resultError(t, result)
+	if !strings.Contains(errText, "task is required") {
+		t.Errorf("expected 'task is required' unchanged by wrapping, got: %s", errText)
+	}
+}

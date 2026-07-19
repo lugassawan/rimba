@@ -43,9 +43,44 @@ type Config struct {
 	PostCreate     []string `toml:"post_create,omitempty"`
 	PostRename     []string `toml:"post_rename,omitempty"`
 
-	Deps     *DepsConfig       `toml:"deps,omitempty"`
-	Open     map[string]string `toml:"open,omitempty"`
-	Resolver *ResolverConfig   `toml:"resolver,omitempty"`
+	Deps          *DepsConfig          `toml:"deps,omitempty"`
+	Open          map[string]string    `toml:"open,omitempty"`
+	Resolver      *ResolverConfig      `toml:"resolver,omitempty"`
+	Observability *ObservabilityConfig `toml:"observability,omitempty"`
+}
+
+// DefaultObservabilityRetentionDays is used when [observability] retention_days is unset.
+const DefaultObservabilityRetentionDays = 14
+
+// ObservabilityConfig holds optional observability settings.
+type ObservabilityConfig struct {
+	Enabled *bool `toml:"enabled,omitempty"`
+	// RetentionDays is a pointer: nil means "unset" (default), 0 means
+	// "explicitly disable pruning" — a plain int's zero value can't tell those apart.
+	RetentionDays *int `toml:"retention_days,omitempty"`
+}
+
+// IsObservabilityEnabled reports whether the observability layer should record this
+// invocation. RIMBA_NO_OBSERVABILITY (any value, checked via os.LookupEnv) forces it
+// off regardless of config. Config [observability] enabled defaults to true when unset.
+func (c *Config) IsObservabilityEnabled() bool {
+	if _, off := os.LookupEnv("RIMBA_NO_OBSERVABILITY"); off {
+		return false
+	}
+	if c.Observability == nil || c.Observability.Enabled == nil {
+		return true
+	}
+	return *c.Observability.Enabled
+}
+
+// ObservabilityRetentionDays returns the configured retention window in days.
+// <= 0 means "pruning disabled" (an explicit choice, never "delete everything").
+// Unset (nil) returns DefaultObservabilityRetentionDays.
+func (c *Config) ObservabilityRetentionDays() int {
+	if c.Observability == nil || c.Observability.RetentionDays == nil {
+		return DefaultObservabilityRetentionDays
+	}
+	return *c.Observability.RetentionDays
 }
 
 // EffectiveCommandTimeout returns the parsed CommandTimeout, or DefaultCommandTimeout
@@ -199,6 +234,9 @@ func Merge(team, local *Config) *Config {
 	}
 	if local.Resolver != nil {
 		merged.Resolver = local.Resolver
+	}
+	if local.Observability != nil {
+		merged.Observability = local.Observability
 	}
 
 	return &merged

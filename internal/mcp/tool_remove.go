@@ -24,7 +24,7 @@ func registerRemoveTool(s *server.MCPServer, hctx *HandlerContext) {
 			mcp.Description("Force removal even if the worktree has uncommitted changes"),
 		),
 	)
-	s.AddTool(tool, handleRemove(hctx))
+	s.AddTool(tool, withRecorder(hctx, "remove", handleRemove(hctx)))
 }
 
 func handleRemove(hctx *HandlerContext) server.ToolHandlerFunc {

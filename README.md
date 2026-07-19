@@ -142,6 +142,7 @@ rimba remove my-feature
 | `rimba deps install <task>` | Detect and install dependencies for a worktree |
 | `rimba clean` | Prune stale references or remove merged/stale worktrees |
 | `rimba doctor` | Diagnose and remove stale git `index.lock` files left by killed worktree operations; `--fix` deletes them |
+| `rimba report` | Aggregate this repo's observability timing metrics (p50/p95/mean) into a report for filing issues; `--json` for machine-readable output |
 | `rimba update` | Check for updates and replace the binary in place; reminds you to refresh agent files after a successful update |
 | `rimba version` | Print version, commit, build date, and platform info (os/arch/go) |
 | `rimba mcp` | Start MCP server for AI tool integration |

@@ -25,7 +25,7 @@ func registerArchiveTool(s *server.MCPServer, hctx *HandlerContext) {
 			mcp.Description("Preview what would be archived without making changes"),
 		),
 	)
-	s.AddTool(tool, handleArchive(hctx))
+	s.AddTool(tool, withRecorder(hctx, "archive", handleArchive(hctx)))
 }
 
 func handleArchive(hctx *HandlerContext) server.ToolHandlerFunc {

@@ -13,6 +13,7 @@ import (
 	"github.com/lugassawan/rimba/internal/executor"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
+	"github.com/lugassawan/rimba/internal/observability"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/parallel"
@@ -83,7 +84,7 @@ func runExec(cmd *cobra.Command, args []string, r git.Runner, execFn execRunner)
 		Command:     args[0],
 		Concurrency: opts.concurrency,
 		FailFast:    opts.failFast,
-		Runner:      executor.ShellRunner(),
+		Runner:      executor.WrapRunFunc(executor.ShellRunner(), observability.FromContext(cmd.Context())),
 	})
 
 	s.Stop()

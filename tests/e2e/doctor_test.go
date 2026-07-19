@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/testutil"
 )
 
@@ -122,6 +124,57 @@ func TestCleanMergedAutoReapsConfidentDeadOwnerSweepLock(t *testing.T) {
 	assertContains(t, r.Stdout, "Recovered 1 stale index.lock file(s)")
 	assertFileNotExists(t, lockPath)
 	assertFileNotExists(t, manifestPath)
+}
+
+// TestDoctorReportsAndFixesInterruptedWorktree guards this branch's core
+// scenario (issue #410): a `git worktree remove` killed mid-flight deletes
+// every tracked file but never gets to deregister the worktree or touch the
+// index, leaving `git status --porcelain` showing 100% unstaged deletions.
+// `rimba doctor` must report it with a path + hint, and `--fix --force` must
+// finish the removal.
+func TestDoctorReportsAndFixesInterruptedWorktree(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	wtPath := plantInterruptedWorktree(t, repo, taskDoctorInterrupted)
+
+	r := rimbaSuccess(t, repo, "doctor")
+	assertContains(t, r.Stdout, wtPath)
+	assertContains(t, r.Stdout, "rimba remove")
+
+	r = rimbaSuccess(t, repo, "doctor", "--fix", flagForceE2E)
+	assertContains(t, r.Stdout, "Removed")
+
+	out := testutil.GitCmd(t, repo, "worktree", "list")
+	if strings.Contains(out, wtPath) {
+		t.Errorf("expected worktree entry for %s to be removed, got: %s", wtPath, out)
+	}
+}
+
+// plantInterruptedWorktree synthesizes the interrupted-clean signature with
+// real git: `rimba add` (skipping deps/hooks so the worktree starts with no
+// untracked noise) creates a normal worktree, then its tracked README.md is
+// deleted directly from disk — not via `git rm` — the same end state a killed
+// `git worktree remove` leaves: the file is gone, the worktree stays
+// registered, no index.lock exists, and `git status --porcelain` shows a bare
+// unstaged deletion.
+func plantInterruptedWorktree(t *testing.T, repo, task string) string {
+	t.Helper()
+
+	rimbaSuccess(t, repo, "add", task, flagSkipDepsE2E, flagSkipHooksE2E)
+
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch := resolver.BranchName(defaultPrefix, task)
+	wtPath := resolver.WorktreePath(wtDir, branch)
+
+	if err := os.Remove(filepath.Join(wtPath, "README.md")); err != nil {
+		t.Fatalf("remove tracked file README.md: %v", err)
+	}
+
+	return wtPath
 }
 
 // plantSweepManifest writes a sweep manifest naming adminDir, resolved to

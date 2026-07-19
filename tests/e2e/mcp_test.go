@@ -69,7 +69,10 @@ func mcpSession(t *testing.T, dir string, messages ...string) []map[string]any {
 	cmd := exec.Command(binaryPath, "mcp")
 	cmd.Dir = dir
 	cmd.Stdin = &stdin
-	cmd.Env = append(os.Environ(), "GOCOVERDIR="+coverDir, "NO_COLOR=1")
+	// RIMBA_NO_OBSERVABILITY=1 keeps these tool-call round trips from writing
+	// real day-files under the developer's/CI's actual OS cache dir (mirrors
+	// the same default in rimbaWithEnv in e2e_test.go).
+	cmd.Env = append(os.Environ(), "GOCOVERDIR="+coverDir, "NO_COLOR=1", "RIMBA_NO_OBSERVABILITY=1")
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

@@ -3,6 +3,7 @@ package deps
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,11 +11,13 @@ import (
 	"runtime"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/debug"
 	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/observability"
 	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/progress"
 )
@@ -141,7 +144,18 @@ func buildExistingPaths(entries []git.WorktreeEntry, exclude, preferred string) 
 	return paths
 }
 
+// installModule wraps installModuleInner with a module-level observability
+// span, recording whether the module was cloned from a sibling worktree or
+// freshly installed.
 func (m *Manager) installModule(ctx context.Context, worktreePath string, mh ModuleWithHash, existingPaths []string) InstallResult {
+	rec := observability.FromContext(ctx)
+	stop := rec.StartModuleSpan(mh.Module.Dir)
+	result := m.installModuleInner(ctx, worktreePath, mh, existingPaths)
+	stop(result.Cloned)
+	return result
+}
+
+func (m *Manager) installModuleInner(ctx context.Context, worktreePath string, mh ModuleWithHash, existingPaths []string) InstallResult {
 	mod := mh.Module
 
 	if mh.Hash == "" {
@@ -217,7 +231,19 @@ func runInstall(ctx context.Context, worktreePath string, mod Module) error {
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
 
-	if err := cmd.Run(); err != nil {
+	start := time.Now()
+	err := cmd.Run()
+	exitCode := 0
+	if err != nil {
+		exitCode = -1
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			exitCode = exitErr.ExitCode()
+		}
+	}
+	observability.FromContext(ctx).LogSubprocess(observability.CategoryExec, dir, []string{mod.InstallCmd}, exitCode, time.Since(start), buf.String(), err != nil)
+
+	if err != nil {
 		wrapped := fmt.Errorf("install %q in %s: %w\n%s",
 			mod.Dir, dir, err, strings.TrimSpace(buf.String()))
 		return errhint.WithFix(wrapped, fmt.Sprintf("cd %s && %s", dir, mod.InstallCmd))

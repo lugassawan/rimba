@@ -16,7 +16,7 @@ If not found, **ask the user** before installing. Never install automatically.
 | Concern | Commands |
 |---------|----------|
 | Create & navigate | `rimba add <task>`, `rimba add pr:<num>` (from a GitHub PR), `rimba open <task>`, `rimba rename <task> [new-task]`, `rimba duplicate <task>` |
-| Inspect | `rimba list` (`--full` adds PR/CI columns), `rimba status` (`--detail` adds disk/velocity), `rimba doctor` |
+| Inspect | `rimba list` (`--full` adds PR/CI columns), `rimba status` (`--detail` adds disk/velocity), `rimba doctor`, `rimba report` |
 | Sync & merge | `rimba sync [task]`, `rimba merge <task>` |
 | Clean up | `rimba clean --merged`, `rimba archive <task>`, `rimba restore <task>`, `rimba remove <task>` |
 | Cross-cutting | `rimba exec <cmd>`, `rimba conflict-check` |

@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -11,6 +13,8 @@ import (
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/observability"
+	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/updater"
 	"github.com/spf13/cobra"
 )
@@ -37,6 +41,12 @@ const (
 // commandName stores the resolved command name for JSON error reporting.
 var commandName string
 
+// lastRecorder captures PersistentPreRunE's Recorder for the most recently
+// invoked command, since cobra never copies a subcommand's context back up
+// to rootCmd (so Execute() can't recover it via rootCmd.Context()). Reset to
+// nil at the top of every PersistentPreRunE to avoid leaking a stale value.
+var lastRecorder *observability.Recorder
+
 var rootCmd = &cobra.Command{
 	Use:   "rimba",
 	Short: "Manage git worktrees — create, sync, merge, and organize branches",
@@ -51,6 +61,7 @@ Persistent flags (available on every command):
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		commandName = strings.TrimPrefix(cmd.CommandPath(), "rimba ")
+		lastRecorder = nil
 
 		if debug, _ := cmd.Flags().GetBool(flagDebug); debug {
 			_ = os.Setenv("RIMBA_DEBUG", "1")
@@ -91,7 +102,24 @@ Persistent flags (available on every command):
 			return err
 		}
 
-		cmd.SetContext(config.WithConfig(cmd.Context(), cfg))
+		// Only open the sink when observability is enabled, so disabling it
+		// leaves zero filesystem footprint (not just an empty untouched file).
+		var rec *observability.Recorder
+		if cfg.IsObservabilityEnabled() {
+			sink, sinkErr := observability.NewFileSink(repoRoot, cfg.ObservabilityRetentionDays())
+			if sinkErr == nil {
+				rec = observability.Maybe(true, sink, commandName, "", "", version)
+			} else if os.Getenv("RIMBA_DEBUG") != "" {
+				// Swallowed deliberately (e.g. a read-only cache dir must never
+				// block a command); surfaced only under RIMBA_DEBUG.
+				fmt.Fprintf(os.Stderr, "\n[debug] observability disabled: %v\n", sinkErr)
+			}
+		}
+		lastRecorder = rec
+
+		ctx := observability.WithRecorder(cmd.Context(), rec)
+		ctx = config.WithConfig(ctx, cfg)
+		cmd.SetContext(ctx)
 		return nil
 	},
 }
@@ -143,5 +171,26 @@ func Execute() error {
 	rootCmd.SetVersionTemplate("{{.Version}}")
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return rootCmd.ExecuteContext(ctx)
+
+	err := rootCmd.ExecuteContext(ctx)
+
+	// rootCmd.Context() doesn't reflect PersistentPreRunE's context (see
+	// lastRecorder's doc comment), so the Recorder is read from lastRecorder.
+	if rec := lastRecorder; rec != nil {
+		defer rec.Close() // registered first so it runs LAST (after Finalize below)
+		exitCode := 0
+		var silent *output.SilentError
+		if errors.As(err, &silent) {
+			exitCode = silent.ExitCode
+		} else if err != nil {
+			exitCode = 1
+		}
+		outcome := observability.OutcomeSuccess
+		if err != nil {
+			outcome = observability.OutcomeError
+		}
+		rec.Finalize(outcome, exitCode, err)
+	}
+
+	return err
 }

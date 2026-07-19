@@ -19,7 +19,7 @@ func registerStatusTool(s *server.MCPServer, hctx *HandlerContext) {
 			mcp.Description("Number of days after which a worktree is considered stale (default: 14)"),
 		),
 	)
-	s.AddTool(tool, handleStatus(hctx))
+	s.AddTool(tool, withRecorder(hctx, "status", handleStatus(hctx)))
 }
 
 // statusCollectedEntry holds per-worktree data gathered concurrently for the status tool.

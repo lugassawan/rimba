@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/errhint"
+	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/output"
@@ -87,7 +89,7 @@ var removeCmd = &cobra.Command{
 		})
 		if err != nil {
 			if !force {
-				return errhint.WithFix(err, "commit or stash changes, or use --force to discard")
+				return removeFailureHint(cmd.Context(), r, wt.Path, err)
 			}
 			return err
 		}
@@ -128,4 +130,15 @@ func init() {
 	removeCmd.Flags().BoolP(flagForce, "f", false, "force removal even if worktree is dirty")
 	removeCmd.Flags().Bool(flagDryRun, false, "preview what would be removed without making changes")
 	rootCmd.AddCommand(removeCmd)
+}
+
+// removeFailureHint tailors the error hint based on whether the worktree's uncommitted state
+// is the "interrupted cleanup" signature (all unstaged deletions). If so, it suggests rerunning
+// with --force; otherwise, it suggests commit/stash.
+func removeFailureHint(ctx context.Context, r git.Runner, path string, err error) error {
+	status, classifyErr := git.ClassifyPorcelainDeletions(ctx, r, path)
+	if classifyErr != nil || !status.AllDeletions() {
+		return errhint.WithFix(err, "commit or stash changes, or use --force to discard")
+	}
+	return errhint.WithFix(err, "interrupted cleanup left this worktree's files partially deleted; rerun with --force to safely finish removing it")
 }
