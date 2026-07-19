@@ -143,7 +143,9 @@ func FilterCloneOnly(modules []Module, worktreePaths []string) []Module {
 }
 
 // MergeWithConfig merges auto-detected modules with user-configured modules.
-// Config modules override auto-detected ones for the same Dir.
+// A config entry whose Dir matches a detected module patches it (only the
+// config entry's explicitly-set fields override — see patchModule); a Dir
+// matching nothing detected defines a brand-new module, fully from config.
 func MergeWithConfig(detected []Module, configModules []config.ModuleConfig) []Module {
 	if len(configModules) == 0 {
 		return detected
@@ -158,7 +160,7 @@ func MergeWithConfig(detected []Module, configModules []config.ModuleConfig) []M
 	seenDirs := make(map[string]bool)
 	for _, m := range detected {
 		if cm, ok := configDirs[m.Dir]; ok {
-			result = append(result, moduleFromConfig(cm))
+			result = append(result, patchModule(m, cm))
 		} else {
 			result = append(result, m)
 		}
@@ -172,6 +174,24 @@ func MergeWithConfig(detected []Module, configModules []config.ModuleConfig) []M
 	}
 
 	return result
+}
+
+// patchModule applies cm's explicitly-set fields onto an auto-detected
+// module, keeping everything else — including Recursive/CloneOnly/ExtraDirs,
+// which ModuleConfig has no field for — from detection. Never blanks a field
+// the config entry left empty, unlike moduleFromConfig.
+func patchModule(detected Module, cm config.ModuleConfig) Module {
+	patched := detected
+	if cm.Lockfile != "" {
+		patched.Lockfile = cm.Lockfile
+	}
+	if cm.Install != "" {
+		patched.InstallCmd = cm.Install
+	}
+	if cm.WorkDir != "" {
+		patched.WorkDir = cm.WorkDir
+	}
+	return patched
 }
 
 func detectRootModules(worktreePath string, modules []Module, seenDirs map[string]bool) []Module {

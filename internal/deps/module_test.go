@@ -345,6 +345,42 @@ func TestMergeWithConfigEmpty(t *testing.T) {
 	assertModuleCount(t, result, 1)
 }
 
+func TestMergeWithConfigPatchesOnlySetFields(t *testing.T) {
+	detected := []Module{
+		{Dir: DirNodeModules, Lockfile: LockfilePnpm, InstallCmd: "pnpm install --frozen-lockfile", Recursive: true},
+	}
+	configModules := []config.ModuleConfig{
+		{Dir: DirNodeModules, Install: "pnpm install --frozen-lockfile --prefer-offline"},
+	}
+
+	merged := MergeWithConfig(detected, configModules)
+
+	assertModuleCount(t, merged, 1)
+	m := merged[0]
+	if m.InstallCmd != "pnpm install --frozen-lockfile --prefer-offline" {
+		t.Errorf("expected patched InstallCmd, got %q", m.InstallCmd)
+	}
+	if m.Lockfile != LockfilePnpm {
+		t.Errorf("expected inherited Lockfile %q, got %q", LockfilePnpm, m.Lockfile)
+	}
+	if !m.Recursive {
+		t.Error("expected inherited Recursive=true (config can't express this field)")
+	}
+}
+
+func TestMergeWithConfigNewModuleStillNeedsFullDefinition(t *testing.T) {
+	configModules := []config.ModuleConfig{
+		{Dir: testDirCustomDeps, Lockfile: "custom.lock", Install: "custom-install"},
+	}
+
+	merged := MergeWithConfig(nil, configModules)
+
+	assertModuleCount(t, merged, 1)
+	if merged[0].Lockfile != "custom.lock" || merged[0].InstallCmd != "custom-install" {
+		t.Errorf("expected brand-new module fully defined from config, got %+v", merged[0])
+	}
+}
+
 func TestPrefixDirsEmpty(t *testing.T) {
 	result := prefixDirs("api", nil)
 	if result != nil {
