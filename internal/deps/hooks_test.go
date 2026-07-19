@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/lugassawan/rimba/internal/observability"
 )
 
 func TestRunPostCreateHooksSuccess(t *testing.T) {
@@ -126,5 +128,56 @@ func TestRunPostCreateHooksOutputCapture(t *testing.T) {
 	}
 	if !strings.Contains(results[0].Error.Error(), "hook-output-captured") {
 		t.Errorf("error should contain captured output, got %q", results[0].Error.Error())
+	}
+}
+
+// TestRunPostCreateHooksRecordsSubprocess verifies each hook invocation is
+// recorded via the Recorder attached to ctx, with the right category/exit
+// code/outcome.
+func TestRunPostCreateHooksRecordsSubprocess(t *testing.T) {
+	dir := t.TempDir()
+	sink := &fakeSink{}
+	rec := observability.Maybe(true, sink, "add", "task", "", "v1")
+	ctx := observability.WithRecorder(context.Background(), rec)
+
+	results := RunPostCreateHooks(ctx, dir, []string{"touch good.txt", "exit 3"}, nil)
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+
+	if len(sink.logs) != 2 {
+		t.Fatalf("len(sink.logs) = %d, want 2", len(sink.logs))
+	}
+
+	okRec, ok := sink.logs[0].(observability.SubprocessRecord)
+	if !ok {
+		t.Fatalf("sink.logs[0] = %T, want SubprocessRecord", sink.logs[0])
+	}
+	if okRec.Category != observability.CategoryHook {
+		t.Errorf("Category = %q, want %q", okRec.Category, observability.CategoryHook)
+	}
+	if okRec.Outcome != observability.OutcomeSuccess || okRec.ExitCode != 0 {
+		t.Errorf("first hook record = %+v, want success/exit 0", okRec)
+	}
+
+	failRec, ok := sink.logs[1].(observability.SubprocessRecord)
+	if !ok {
+		t.Fatalf("sink.logs[1] = %T, want SubprocessRecord", sink.logs[1])
+	}
+	if failRec.Outcome != observability.OutcomeError || failRec.ExitCode != 3 {
+		t.Errorf("second hook record = %+v, want error/exit 3", failRec)
+	}
+}
+
+// TestRunPostCreateHooksNilRecorderNoPanic confirms observability-off callers
+// (bare context.Background(), no Recorder attached) still work — the
+// nil-safety contract exercised in practice, not just in isolation.
+func TestRunPostCreateHooksNilRecorderNoPanic(t *testing.T) {
+	dir := t.TempDir()
+
+	results := RunPostCreateHooks(context.Background(), dir, []string{"touch marker.txt"}, nil)
+
+	if len(results) != 1 || results[0].Error != nil {
+		t.Fatalf("expected 1 successful result, got %+v", results)
 	}
 }

@@ -3,10 +3,13 @@ package deps
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 
+	"github.com/lugassawan/rimba/internal/observability"
 	"github.com/lugassawan/rimba/internal/progress"
 )
 
@@ -20,6 +23,7 @@ type HookResult struct {
 // Skips launching new hooks when ctx is already cancelled; kills any in-flight
 // hook subprocess when ctx is cancelled (via exec.CommandContext).
 func RunPostCreateHooks(ctx context.Context, worktreeDir string, hooks []string, onProgress progress.Func) []HookResult {
+	rec := observability.FromContext(ctx)
 	results := make([]HookResult, 0, len(hooks))
 	for i, hook := range hooks {
 		if ctx.Err() != nil {
@@ -35,7 +39,17 @@ func RunPostCreateHooks(ctx context.Context, worktreeDir string, hooks []string,
 		cmd.Stdout = &buf
 		cmd.Stderr = &buf
 
+		start := time.Now()
 		err := cmd.Run()
+		exitCode := 0
+		if err != nil {
+			var exitErr *exec.ExitError
+			if errors.As(err, &exitErr) {
+				exitCode = exitErr.ExitCode()
+			}
+		}
+		rec.LogSubprocess(observability.CategoryHook, worktreeDir, []string{hook}, exitCode, time.Since(start), buf.String(), err != nil)
+
 		if err != nil {
 			err = fmt.Errorf("hook %q: %w\n%s", hook, err, strings.TrimSpace(buf.String()))
 		}
