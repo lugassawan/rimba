@@ -36,7 +36,7 @@ func registerLogTool(s *server.MCPServer, hctx *HandlerContext) {
 			mcp.Description("Only show entries since this duration ago, e.g. '7d', '2w', '3h'"),
 		),
 	)
-	s.AddTool(tool, handleLog(hctx))
+	s.AddTool(tool, withRecorder(hctx, "log", handleLog(hctx)))
 }
 
 // handleLog intentionally skips requireConfig(): mirrors the CLI's skipConfig

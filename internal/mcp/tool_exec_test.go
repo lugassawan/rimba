@@ -13,10 +13,33 @@ import (
 	"time"
 
 	"github.com/lugassawan/rimba/internal/executor"
+	"github.com/lugassawan/rimba/internal/observability"
 	"github.com/lugassawan/rimba/internal/resolver"
+	"github.com/mark3labs/mcp-go/mcp"
 )
 
 const cmdEchoTest = "echo test"
+
+// fakeSink is a tiny in-memory observability.Sink test double, mirroring
+// internal/executor/record_test.go's fakeSink.
+type fakeSink struct {
+	logs    []any
+	metrics []any
+}
+
+func (f *fakeSink) WriteLog(record any) error {
+	f.logs = append(f.logs, record)
+	return nil
+}
+
+func (f *fakeSink) WriteMetric(record any) error {
+	f.metrics = append(f.metrics, record)
+	return nil
+}
+
+func (f *fakeSink) Close() error {
+	return nil
+}
 
 func TestExecToolRequiresCommand(t *testing.T) {
 	hctx := testContext(&mockRunner{})
@@ -451,5 +474,58 @@ func TestExecToolWithDirtyFilter(t *testing.T) {
 	data := unmarshalJSON[execData](t, result)
 	if data.Command != cmdEchoTest {
 		t.Errorf("command = %q", data.Command)
+	}
+}
+
+// TestExecToolRecorderWiresIntoRunner mirrors cmd/exec_observability_test.go's
+// TestExecCmdRecorderWiresIntoRunner: closes the sibling gap where
+// runExecCommand built its executor.Config.Runner via a bare
+// executor.ShellRunner() instead of wrapping it with the Recorder attached to
+// ctx by withRecorder (server.go's registration-time wrapping). Verifies a
+// SubprocessRecord with Category == CategoryExec lands on the sink when a
+// Recorder is present on ctx.
+func TestExecToolRecorderWiresIntoRunner(t *testing.T) {
+	wtDir := t.TempDir()
+	porcelain := worktreePorcelain(
+		struct{ path, branch string }{"/repo", "main"},
+		struct{ path, branch string }{wtDir, "feature/foo"},
+	)
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			return porcelain, nil
+		},
+		runInDir: func(dir string, args ...string) (string, error) {
+			return "", nil
+		},
+	}
+	hctx := testContext(r)
+	handler := handleExec(hctx)
+
+	sink := &fakeSink{}
+	rec := observability.Maybe(true, sink, "exec", "", "", "test")
+	ctx := observability.WithRecorder(context.Background(), rec)
+
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{"command": cmdEchoTest, "all": true}
+	result, err := handler(ctx, req)
+	if err != nil {
+		t.Fatalf("handler returned protocol error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("unexpected tool error: %s", resultError(t, result))
+	}
+
+	var subRec *observability.SubprocessRecord
+	for _, l := range sink.logs {
+		if sr, ok := l.(observability.SubprocessRecord); ok {
+			subRec = &sr
+			break
+		}
+	}
+	if subRec == nil {
+		t.Fatal("expected a SubprocessRecord to be logged")
+	}
+	if subRec.Category != observability.CategoryExec {
+		t.Errorf("Category = %q, want %q", subRec.Category, observability.CategoryExec)
 	}
 }

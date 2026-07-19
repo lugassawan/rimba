@@ -40,7 +40,7 @@ func registerAddTool(s *server.MCPServer, hctx *HandlerContext) {
 			mcp.Description("Skip post-create hooks (applies to task and pr modes)"),
 		),
 	)
-	s.AddTool(tool, handleAdd(hctx))
+	s.AddTool(tool, withRecorder(hctx, "add", handleAdd(hctx)))
 }
 
 func handleAdd(hctx *HandlerContext) server.ToolHandlerFunc {

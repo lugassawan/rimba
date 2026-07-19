@@ -40,7 +40,7 @@ func registerRenameTool(s *server.MCPServer, hctx *HandlerContext) {
 			mcp.Description("Skip post-rename hooks"),
 		),
 	)
-	s.AddTool(tool, handleRename(hctx))
+	s.AddTool(tool, withRecorder(hctx, "rename", handleRename(hctx)))
 }
 
 func handleRename(hctx *HandlerContext) server.ToolHandlerFunc {
