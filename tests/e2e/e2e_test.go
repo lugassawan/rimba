@@ -166,7 +166,11 @@ func rimbaWithEnv(t *testing.T, dir string, extraEnv []string, args ...string) r
 
 	cmd := exec.Command(binaryPath, args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GOCOVERDIR="+coverDir, "NO_COLOR=1")
+	// RIMBA_NO_OBSERVABILITY=1 keeps e2e runs from writing real day-files
+	// under the developer's/CI's actual OS cache dir (~/Library/Caches/rimba
+	// and similar) on every invocation; extraEnv is appended after so a test
+	// that specifically exercises observability can override it.
+	cmd.Env = append(os.Environ(), "GOCOVERDIR="+coverDir, "NO_COLOR=1", "RIMBA_NO_OBSERVABILITY=1")
 	cmd.Env = append(cmd.Env, extraEnv...)
 
 	var stdout, stderr bytes.Buffer

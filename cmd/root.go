@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -11,6 +13,8 @@ import (
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/observability"
+	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/updater"
 	"github.com/spf13/cobra"
 )
@@ -37,6 +41,21 @@ const (
 // commandName stores the resolved command name for JSON error reporting.
 var commandName string
 
+// lastRecorder captures the Recorder built inside PersistentPreRunE for the
+// most recently invoked command. Execute() cannot recover it via
+// rootCmd.Context() after ExecuteContext returns: cobra only copies context
+// from a parent command down to a child whose own ctx is still nil (see
+// Command.ExecuteC's `if cmd.ctx == nil { cmd.ctx = c.ctx }`) — it never
+// copies back up. cmd.SetContext inside PersistentPreRunE is called on the
+// *invoked* (sub)command object, not on rootCmd, so rootCmd.ctx is left
+// exactly as ExecuteContext set it and never reflects the config/Recorder
+// context built during preRun (verified empirically: a minimal cobra repro
+// showed root.Context() nil while the invoked subcommand's Context() carried
+// the value). Reset to nil at the top of every PersistentPreRunE invocation
+// so a command that skips the observability build (completion, __complete,
+// skipConfig-annotated chains) never leaks a previous invocation's Recorder.
+var lastRecorder *observability.Recorder
+
 var rootCmd = &cobra.Command{
 	Use:   "rimba",
 	Short: "Manage git worktrees — create, sync, merge, and organize branches",
@@ -51,6 +70,7 @@ Persistent flags (available on every command):
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		commandName = strings.TrimPrefix(cmd.CommandPath(), "rimba ")
+		lastRecorder = nil
 
 		if debug, _ := cmd.Flags().GetBool(flagDebug); debug {
 			_ = os.Setenv("RIMBA_DEBUG", "1")
@@ -91,7 +111,28 @@ Persistent flags (available on every command):
 			return err
 		}
 
-		cmd.SetContext(config.WithConfig(cmd.Context(), cfg))
+		// Only open the sink (and thus create today's day-files) when
+		// observability is actually enabled — RIMBA_NO_OBSERVABILITY / a
+		// config [observability] enabled=false must leave zero filesystem
+		// footprint, not merely an empty file with no records written to it.
+		var rec *observability.Recorder
+		if cfg.IsObservabilityEnabled() {
+			sink, sinkErr := observability.NewFileSink(repoRoot, cfg.ObservabilityRetentionDays())
+			if sinkErr == nil {
+				rec = observability.Maybe(true, sink, commandName, "", "", version)
+			} else if os.Getenv("RIMBA_DEBUG") != "" {
+				// sinkErr is swallowed here deliberately: observability must never
+				// block a command from running (e.g. a read-only cache dir).
+				// Surface it only under RIMBA_DEBUG, to stderr, the same channel
+				// debug output already uses.
+				fmt.Fprintf(os.Stderr, "\n[debug] observability disabled: %v\n", sinkErr)
+			}
+		}
+		lastRecorder = rec
+
+		ctx := observability.WithRecorder(cmd.Context(), rec)
+		ctx = config.WithConfig(ctx, cfg)
+		cmd.SetContext(ctx)
 		return nil
 	},
 }
@@ -143,5 +184,27 @@ func Execute() error {
 	rootCmd.SetVersionTemplate("{{.Version}}")
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return rootCmd.ExecuteContext(ctx)
+
+	err := rootCmd.ExecuteContext(ctx)
+
+	// See lastRecorder's doc comment: rootCmd.Context() does not reflect the
+	// context PersistentPreRunE set on the invoked (sub)command, so the
+	// Recorder built there is captured via lastRecorder instead.
+	if rec := lastRecorder; rec != nil {
+		defer rec.Close() // registered first so it runs LAST (after Finalize below)
+		exitCode := 0
+		var silent *output.SilentError
+		if errors.As(err, &silent) {
+			exitCode = silent.ExitCode
+		} else if err != nil {
+			exitCode = 1
+		}
+		outcome := observability.OutcomeSuccess
+		if err != nil {
+			outcome = observability.OutcomeError
+		}
+		rec.Finalize(outcome, exitCode, err)
+	}
+
+	return err
 }
