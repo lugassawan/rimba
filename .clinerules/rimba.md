@@ -20,8 +20,9 @@ If not found, **ask the user** before installing. Never install automatically.
 8. `rimba duplicate <task>` — duplicate an existing worktree
 9. `rimba archive <task>` / `rimba restore <task>` — archive and restore worktrees
 10. `rimba doctor` — diagnose stale git index.lock files
-11. `rimba trust` — approve committed shell commands
-12. `rimba mcp` — start MCP server for AI tool integration
+11. `rimba report` — aggregate observability timing metrics (p50/p95/mean)
+12. `rimba trust` — approve committed shell commands
+13. `rimba mcp` — start MCP server for AI tool integration
 
 ## MCP Tools
 

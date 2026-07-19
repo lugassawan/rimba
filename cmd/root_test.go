@@ -92,6 +92,7 @@ func TestPersistentPreRunEConfigLoadError(t *testing.T) {
 }
 
 func TestPersistentPreRunESuccess(t *testing.T) {
+	t.Setenv("RIMBA_NO_OBSERVABILITY", "1") // not under test here; avoid touching the real cache dir
 	dir := t.TempDir()
 	cfg := &config.Config{WorktreeDir: "../worktrees"}
 	if err := config.Save(filepath.Join(dir, config.FileName), cfg); err != nil {
@@ -127,6 +128,7 @@ func TestPersistentPreRunESuccess(t *testing.T) {
 }
 
 func TestPersistentPreRunESuccessWithDirConfig(t *testing.T) {
+	t.Setenv("RIMBA_NO_OBSERVABILITY", "1") // not under test here; avoid touching the real cache dir
 	dir := t.TempDir()
 	rimbaDir := filepath.Join(dir, config.DirName)
 	if err := os.MkdirAll(rimbaDir, 0755); err != nil {

@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/lugassawan/rimba/internal/observability"
 )
 
 func TestPostCreateSetupReportsSkippedSymlinks(t *testing.T) {
@@ -245,5 +247,96 @@ func TestPostCreateSetupListWorktreesError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "To fix: rimba remove test-task") {
 		t.Errorf("error = %q, want recovery hint 'To fix: rimba remove test-task'", err.Error())
+	}
+}
+
+// TestPostCreateSetupRecordsCopyDepsHooksSpans verifies each of the three
+// phases records its own named span via the Recorder attached to ctx.
+func TestPostCreateSetupRecordsCopyDepsHooksSpans(t *testing.T) {
+	tmpDir := t.TempDir()
+	wtPath := filepath.Join(tmpDir, "worktree")
+	if err := os.MkdirAll(wtPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &mockRunner{
+		run:      func(args ...string) (string, error) { return "", nil },
+		runInDir: noopRunInDir,
+	}
+
+	sink := &fakeSink{}
+	rec := observability.Maybe(true, sink, "add", "test-task", "", "v1")
+	ctx := observability.WithRecorder(context.Background(), rec)
+
+	_, err := PostCreateSetup(ctx, r, PostCreateParams{
+		RepoRoot:   tmpDir,
+		WtPath:     wtPath,
+		Task:       "test-task",
+		SkipDeps:   false,
+		SkipHooks:  false,
+		PostCreate: []string{"echo hello"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	wantNames := []string{"copy", "deps", "hooks"}
+	if len(sink.metrics) != len(wantNames) {
+		t.Fatalf("len(sink.metrics) = %d, want %d", len(sink.metrics), len(wantNames))
+	}
+	for i, want := range wantNames {
+		span, ok := sink.metrics[i].(observability.SpanRecord)
+		if !ok {
+			t.Fatalf("sink.metrics[%d] = %T, want SpanRecord", i, sink.metrics[i])
+		}
+		if span.Name != want {
+			t.Errorf("sink.metrics[%d].Name = %q, want %q", i, span.Name, want)
+		}
+	}
+}
+
+// TestPostCreateSetupRecordsDepsSpanOnListWorktreesError confirms the "deps"
+// span's stop() still runs on the early-return error path (ListWorktrees
+// failure), not just on success — a span whose stop-closure never runs would
+// silently drop that phase's timing.
+func TestPostCreateSetupRecordsDepsSpanOnListWorktreesError(t *testing.T) {
+	tmpDir := t.TempDir()
+	wtPath := filepath.Join(tmpDir, "worktree")
+	if err := os.MkdirAll(wtPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) > 0 && args[0] == gitCmdWorktree {
+				return "", errors.New("permission denied")
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	sink := &fakeSink{}
+	rec := observability.Maybe(true, sink, "add", "test-task", "", "v1")
+	ctx := observability.WithRecorder(context.Background(), rec)
+
+	_, err := PostCreateSetup(ctx, r, PostCreateParams{
+		RepoRoot: tmpDir,
+		WtPath:   wtPath,
+		Task:     "test-task",
+		SkipDeps: false,
+	}, nil)
+	if err == nil {
+		t.Fatal("expected error when ListWorktrees fails")
+	}
+
+	var sawDepsSpan bool
+	for _, m := range sink.metrics {
+		if span, ok := m.(observability.SpanRecord); ok && span.Name == "deps" {
+			sawDepsSpan = true
+		}
+	}
+	if !sawDepsSpan {
+		t.Error("expected a \"deps\" span even though PostCreateSetup returned early on ListWorktrees error")
 	}
 }

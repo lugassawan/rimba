@@ -250,3 +250,30 @@ type SyncData struct {
 	Summary    SyncSummary        `json:"summary"`
 	Worktrees  []SyncWorktreeJSON `json:"worktrees"`
 }
+
+// ReportEnvHeader is the environment header included in every `rimba report`
+// payload, designed to be pasted into a filed issue.
+type ReportEnvHeader struct {
+	OS                string   `json:"os"`
+	Arch              string   `json:"arch"`
+	NumCPU            int      `json:"num_cpu"`
+	RimbaVersion      string   `json:"rimba_version"`
+	RimbaVersionsSeen []string `json:"rimba_versions_seen"`
+	UnparseableLines  int      `json:"unparseable_lines"`
+}
+
+// ReportPhaseStats holds aggregated timing stats for one (command, phase) pair.
+type ReportPhaseStats struct {
+	Command string  `json:"command"`
+	Phase   string  `json:"phase"`
+	Count   int     `json:"count"`
+	P50MS   float64 `json:"p50_ms"`
+	P95MS   float64 `json:"p95_ms"`
+	MeanMS  float64 `json:"mean_ms"`
+}
+
+// ReportData is the `rimba report --json` payload.
+type ReportData struct {
+	Env    ReportEnvHeader    `json:"env"`
+	Phases []ReportPhaseStats `json:"phases"`
+}

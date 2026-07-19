@@ -30,7 +30,7 @@ func registerCleanTool(s *server.MCPServer, hctx *HandlerContext) {
 			mcp.Description("Number of days to consider a worktree stale (default: 14, used with mode=stale)"),
 		),
 	)
-	s.AddTool(tool, handleClean(hctx))
+	s.AddTool(tool, withRecorder(hctx, "clean", handleClean(hctx)))
 }
 
 func handleClean(hctx *HandlerContext) server.ToolHandlerFunc {

@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/observability"
 )
 
 const (
@@ -474,6 +475,65 @@ func TestManagerInstallFallbackToInstallCmd(t *testing.T) {
 	r := results[0]
 	if r.Cloned {
 		t.Error("expected Cloned=false (hash mismatch)")
+	}
+}
+
+// TestManagerInstallRecordsModuleSpanAndExecSubprocess verifies installModule
+// records a "deps:<dir>" module span (with the correct cloned/installed
+// detail) and runInstall records a CategoryExec subprocess, both via the
+// Recorder attached to ctx.
+func TestManagerInstallRecordsModuleSpanAndExecSubprocess(t *testing.T) {
+	newWT := t.TempDir()
+	writeFile(t, newWT, LockfilePnpm, "lockfile-content")
+
+	runner := &mockRunner{worktreeOutput: mockWorktreeList(newWT)}
+	mgr := &Manager{Runner: runner}
+	modules := []Module{
+		{
+			Dir:        DirNodeModules,
+			Lockfile:   LockfilePnpm,
+			InstallCmd: "echo ok",
+		},
+	}
+
+	sink := &fakeSink{}
+	rec := observability.Maybe(true, sink, "add", "task", "", "v1")
+	ctx := observability.WithRecorder(context.Background(), rec)
+
+	results := mgr.Install(ctx, newWT, modules, nil, nil)
+	if len(results) != 1 {
+		t.Fatalf(fmtExpectedOneResult, len(results))
+	}
+	if results[0].Error != nil {
+		t.Fatalf(fmtExpectedNoError, results[0].Error)
+	}
+
+	if len(sink.metrics) != 1 {
+		t.Fatalf("len(sink.metrics) = %d, want 1", len(sink.metrics))
+	}
+	span, ok := sink.metrics[0].(observability.SpanRecord)
+	if !ok {
+		t.Fatalf("sink.metrics[0] = %T, want SpanRecord", sink.metrics[0])
+	}
+	if span.Name != "deps:"+DirNodeModules {
+		t.Errorf("span.Name = %q, want %q", span.Name, "deps:"+DirNodeModules)
+	}
+	if span.Detail != "installed" {
+		t.Errorf("span.Detail = %q, want %q (no clone source, falls through to InstallCmd)", span.Detail, "installed")
+	}
+
+	if len(sink.logs) != 1 {
+		t.Fatalf("len(sink.logs) = %d, want 1", len(sink.logs))
+	}
+	subRec, ok := sink.logs[0].(observability.SubprocessRecord)
+	if !ok {
+		t.Fatalf("sink.logs[0] = %T, want SubprocessRecord", sink.logs[0])
+	}
+	if subRec.Category != observability.CategoryExec {
+		t.Errorf("Category = %q, want %q", subRec.Category, observability.CategoryExec)
+	}
+	if subRec.Outcome != observability.OutcomeSuccess {
+		t.Errorf("Outcome = %q, want %q", subRec.Outcome, observability.OutcomeSuccess)
 	}
 }
 

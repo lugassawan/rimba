@@ -29,7 +29,7 @@ func registerListTool(s *server.MCPServer, hctx *HandlerContext) {
 			mcp.Description("Show archived branches instead of active worktrees"),
 		),
 	)
-	s.AddTool(tool, handleList(hctx))
+	s.AddTool(tool, withRecorder(hctx, "list", handleList(hctx)))
 }
 
 func handleList(hctx *HandlerContext) server.ToolHandlerFunc {

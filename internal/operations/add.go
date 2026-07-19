@@ -11,6 +11,7 @@ import (
 	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/gitref"
+	"github.com/lugassawan/rimba/internal/observability"
 	"github.com/lugassawan/rimba/internal/progress"
 	"github.com/lugassawan/rimba/internal/resolver"
 )
@@ -83,7 +84,11 @@ func AddWorktree(ctx context.Context, r git.Runner, params AddParams, onProgress
 
 	// Create worktree
 	progress.Notify(onProgress, "Creating worktree...")
-	if err := git.AddWorktree(ctx, r, wtPath, branch, params.Source); err != nil {
+	rec := observability.FromContext(ctx)
+	stop := rec.StartSpan("create")
+	err := git.AddWorktree(ctx, r, wtPath, branch, params.Source)
+	stop()
+	if err != nil {
 		return result, err
 	}
 

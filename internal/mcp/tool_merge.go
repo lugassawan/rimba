@@ -30,7 +30,7 @@ func registerMergeTool(s *server.MCPServer, hctx *HandlerContext) {
 			mcp.Description("Delete source worktree after merging into another worktree"),
 		),
 	)
-	s.AddTool(tool, handleMerge(hctx))
+	s.AddTool(tool, withRecorder(hctx, "merge", handleMerge(hctx)))
 }
 
 func handleMerge(hctx *HandlerContext) server.ToolHandlerFunc {

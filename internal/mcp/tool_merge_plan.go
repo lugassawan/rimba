@@ -15,7 +15,7 @@ func registerMergePlanTool(s *server.MCPServer, hctx *HandlerContext) {
 	tool := mcp.NewTool("merge-plan",
 		mcp.WithDescription("Recommend a merge order for active worktree branches that minimizes conflicts"),
 	)
-	s.AddTool(tool, handleMergePlan(hctx))
+	s.AddTool(tool, withRecorder(hctx, "merge-plan", handleMergePlan(hctx)))
 }
 
 func handleMergePlan(hctx *HandlerContext) server.ToolHandlerFunc {

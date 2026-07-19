@@ -29,7 +29,7 @@ func registerRestoreTool(s *server.MCPServer, hctx *HandlerContext) {
 			mcp.Description("Skip post-create hooks"),
 		),
 	)
-	s.AddTool(tool, handleRestore(hctx))
+	s.AddTool(tool, withRecorder(hctx, "restore", handleRestore(hctx)))
 }
 
 func handleRestore(hctx *HandlerContext) server.ToolHandlerFunc {

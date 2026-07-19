@@ -862,6 +862,118 @@ func TestIsAutoDetectDeps(t *testing.T) {
 	}
 }
 
+func TestIsObservabilityEnabled(t *testing.T) {
+	boolPtr := func(b bool) *bool { return &b }
+
+	tests := []struct {
+		name       string
+		cfg        config.Config
+		envDisable bool
+		want       bool
+	}{
+		{
+			name: "nil observability defaults true",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch},
+			want: true,
+		},
+		{
+			name: "nil enabled defaults true",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch, Observability: &config.ObservabilityConfig{}},
+			want: true,
+		},
+		{
+			name: "enabled true",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch, Observability: &config.ObservabilityConfig{Enabled: boolPtr(true)}},
+			want: true,
+		},
+		{
+			name: "enabled false",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch, Observability: &config.ObservabilityConfig{Enabled: boolPtr(false)}},
+			want: false,
+		},
+		{
+			name:       "env var forces off even when config says enabled",
+			cfg:        config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch, Observability: &config.ObservabilityConfig{Enabled: boolPtr(true)}},
+			envDisable: true,
+			want:       false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.envDisable {
+				t.Setenv("RIMBA_NO_OBSERVABILITY", "1")
+			}
+			got := tt.cfg.IsObservabilityEnabled()
+			if got != tt.want {
+				t.Errorf("IsObservabilityEnabled() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestObservabilityRetentionDays(t *testing.T) {
+	intPtr := func(i int) *int { return &i }
+
+	tests := []struct {
+		name string
+		cfg  config.Config
+		want int
+	}{
+		{
+			name: "nil observability defaults to 14",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch},
+			want: 14,
+		},
+		{
+			name: "nil retention_days defaults to 14",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch, Observability: &config.ObservabilityConfig{}},
+			want: 14,
+		},
+		{
+			name: "configured retention_days",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch, Observability: &config.ObservabilityConfig{RetentionDays: intPtr(30)}},
+			want: 30,
+		},
+		{
+			name: "explicit zero disables pruning, must not fall back to default",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch, Observability: &config.ObservabilityConfig{RetentionDays: intPtr(0)}},
+			want: 0,
+		},
+		{
+			name: "negative value must not fall back to default",
+			cfg:  config.Config{WorktreeDir: "../wt", DefaultSource: testDefaultBranch, Observability: &config.ObservabilityConfig{RetentionDays: intPtr(-5)}},
+			want: -5,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.cfg.ObservabilityRetentionDays()
+			if got != tt.want {
+				t.Errorf("ObservabilityRetentionDays() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMergeObservabilityReplaces(t *testing.T) {
+	boolPtr := func(b bool) *bool { return &b }
+	team := &config.Config{
+		WorktreeDir:   "../wt",
+		DefaultSource: testDefaultBranch,
+		Observability: &config.ObservabilityConfig{Enabled: boolPtr(true)},
+	}
+	local := &config.Config{
+		Observability: &config.ObservabilityConfig{Enabled: boolPtr(false)},
+	}
+
+	merged := config.Merge(team, local)
+	if merged.Observability == nil || merged.Observability.Enabled == nil || *merged.Observability.Enabled != false {
+		t.Errorf("Observability.Enabled = %v, want false", merged.Observability)
+	}
+}
+
 func TestDepsConcurrency(t *testing.T) {
 	tests := []struct {
 		name string

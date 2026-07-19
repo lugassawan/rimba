@@ -16,7 +16,7 @@ func registerConflictCheckTool(s *server.MCPServer, hctx *HandlerContext) {
 			mcp.Description("Simulate merges with git merge-tree to detect actual conflicts (requires git 2.38+)"),
 		),
 	)
-	s.AddTool(tool, handleConflictCheck(hctx))
+	s.AddTool(tool, withRecorder(hctx, "conflict-check", handleConflictCheck(hctx)))
 }
 
 func handleConflictCheck(hctx *HandlerContext) server.ToolHandlerFunc {

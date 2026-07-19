@@ -26,6 +26,7 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 | Filter by service (monorepo) | `rimba list --service <svc>` |
 | Check worktree health | `rimba status` |
 | Diagnose stale worktree locks | `rimba doctor` |
+| Get observability timing metrics for an issue | `rimba report` |
 | Navigate to a worktree | `cd $(rimba open <task>)` |
 | Update from source branch | `rimba sync <task>` or `rimba sync --all` |
 | Finish a feature | `rimba merge <task>` (auto-removes worktree) |

@@ -10,6 +10,7 @@ import (
 	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/executor"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/observability"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/resolver"
@@ -40,7 +41,7 @@ func registerExecTool(s *server.MCPServer, hctx *HandlerContext) {
 			mcp.Description("Max parallel executions (0 = unlimited)"),
 		),
 	)
-	s.AddTool(tool, handleExec(hctx))
+	s.AddTool(tool, withRecorder(hctx, "exec", handleExec(hctx)))
 }
 
 // handleExec runs ad-hoc caller-supplied shell commands across worktrees.
@@ -154,7 +155,7 @@ func runExecCommand(ctx context.Context, command string, filtered []resolver.Wor
 		Command:     command,
 		Concurrency: concurrency,
 		FailFast:    failFast,
-		Runner:      executor.ShellRunner(),
+		Runner:      executor.WrapRunFunc(executor.ShellRunner(), observability.FromContext(ctx)),
 	})
 
 	return marshalResult(buildExecData(command, results))

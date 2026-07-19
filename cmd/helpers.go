@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 
 	"github.com/lugassawan/rimba/internal/config"
-	"github.com/lugassawan/rimba/internal/debug"
 	"github.com/lugassawan/rimba/internal/gh"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/observability"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/resolver"
@@ -18,25 +18,26 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newRunner creates a git.Runner for command execution.
-// Defined as a variable to allow test overrides (same pattern as newUpdater).
-// When RIMBA_DEBUG is set, wraps the runner with timing instrumentation.
-// The timeout is sourced from config in ctx; falls back to DefaultCommandTimeout.
+// newRunner creates a git.Runner for command execution, always wrapped with
+// observability.WrapRunner (see its doc for the per-call ctx-derivation
+// rationale). Defined as a variable to allow test overrides (same pattern as
+// newUpdater).
 var newRunner = func(ctx context.Context) git.Runner {
 	timeout := config.DefaultCommandTimeout
 	if cfg := config.FromContext(ctx); cfg != nil {
 		timeout = cfg.EffectiveCommandTimeout()
 	}
-	return debug.WrapRunner(&git.ExecRunner{Timeout: timeout})
+	return observability.WrapRunner(&git.ExecRunner{Timeout: timeout})
 }
 
-// newGHRunner creates a gh.Runner with a timeout sourced from config in ctx.
+// newGHRunner creates a gh.Runner with a timeout sourced from config in ctx,
+// always wrapped with gh.WrapRunner.
 var newGHRunner = func(ctx context.Context) gh.Runner {
 	timeout := config.DefaultCommandTimeout
 	if cfg := config.FromContext(ctx); cfg != nil {
 		timeout = cfg.EffectiveCommandTimeout()
 	}
-	return gh.Default(timeout)
+	return gh.WrapRunner(gh.Default(timeout))
 }
 
 // hintPainter returns a termcolor.Painter derived from the cobra command flags.

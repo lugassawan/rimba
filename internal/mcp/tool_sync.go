@@ -33,7 +33,7 @@ func registerSyncTool(s *server.MCPServer, hctx *HandlerContext) {
 			mcp.Description("Skip pushing after sync"),
 		),
 	)
-	s.AddTool(tool, handleSync(hctx))
+	s.AddTool(tool, withRecorder(hctx, "sync", handleSync(hctx)))
 }
 
 // syncOpts bundles shared sync configuration derived from a single request.
