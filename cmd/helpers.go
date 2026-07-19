@@ -10,6 +10,7 @@ import (
 	"github.com/lugassawan/rimba/internal/debug"
 	"github.com/lugassawan/rimba/internal/gh"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/observability"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/output"
 	"github.com/lugassawan/rimba/internal/resolver"
@@ -20,14 +21,23 @@ import (
 
 // newRunner creates a git.Runner for command execution.
 // Defined as a variable to allow test overrides (same pattern as newUpdater).
-// When RIMBA_DEBUG is set, wraps the runner with timing instrumentation.
+// When a Recorder is attached to ctx, wraps the runner so every git call is
+// recorded; otherwise falls back to the RIMBA_DEBUG stderr timing wrapper.
 // The timeout is sourced from config in ctx; falls back to DefaultCommandTimeout.
 var newRunner = func(ctx context.Context) git.Runner {
 	timeout := config.DefaultCommandTimeout
 	if cfg := config.FromContext(ctx); cfg != nil {
 		timeout = cfg.EffectiveCommandTimeout()
 	}
-	return debug.WrapRunner(&git.ExecRunner{Timeout: timeout})
+	base := &git.ExecRunner{Timeout: timeout}
+	if rec := observability.FromContext(ctx); rec != nil {
+		// The recorder folds RIMBA_DEBUG's stderr timing line into LogSubprocess
+		// itself, so stacking debug.WrapRunner on top would time every call twice.
+		return observability.WrapRunner(base, rec)
+	}
+	// No recorder on ctx (observability disabled for this invocation): fall back
+	// to the stderr-only debug timer so --debug/RIMBA_DEBUG keeps working.
+	return debug.WrapRunner(base)
 }
 
 // newGHRunner creates a gh.Runner with a timeout sourced from config in ctx.
