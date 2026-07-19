@@ -1105,6 +1105,17 @@ func TestValidateDepsModuleLockfileInstallBothSet(t *testing.T) {
 	}
 }
 
+func TestValidateDepsModuleLockfileInstallBothEmptyWithAutoDetectFalseIsError(t *testing.T) {
+	no := false
+	cfg := &config.Config{Deps: &config.DepsConfig{
+		AutoDetect: &no,
+		Modules:    []config.ModuleConfig{{Dir: "internal-cli/node_modules"}},
+	}}
+	if err := cfg.Validate(); err == nil {
+		t.Error("expected error for a patch-only entry when auto_detect is false — nothing to patch")
+	}
+}
+
 func TestValidateDepsModuleLockfileOnlySetIsError(t *testing.T) {
 	cfg := &config.Config{Deps: &config.DepsConfig{Modules: []config.ModuleConfig{
 		{Dir: "custom", Lockfile: "custom.lock"},

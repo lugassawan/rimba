@@ -34,12 +34,9 @@ type Manager struct {
 	// Concurrency caps parallel module installs. <= 0 auto-picks a default.
 	Concurrency int
 
-	// SkipDeferred, when true, skips modules whose Eager is false instead of
-	// installing them (no clone, no install attempted — see InstallResult.Deferred).
-	// Set by the automatic add/restore/duplicate/rename composition root
-	// (internal/operations/deps_install.go). Left false (default) by `rimba
-	// deps install`, an explicit, deliberate ask that always installs
-	// everything regardless of Eager.
+	// SkipDeferred skips non-Eager modules entirely (see InstallResult.Deferred).
+	// Set only by the automatic add/restore/duplicate path; `rimba deps install`
+	// leaves it false to always honor an explicit ask.
 	SkipDeferred bool
 }
 
@@ -89,6 +86,12 @@ func ResolveModules(worktreePath, service string, autoDetect bool, configModules
 		modules = MergeWithConfig(detected, configModules)
 	} else if len(configModules) > 0 {
 		for _, cm := range configModules {
+			if cm.Lockfile == "" && cm.Install == "" {
+				// Patch-only entry with auto-detection off: there's no
+				// detected module to patch, so skip it rather than build a
+				// Module with an empty Lockfile (crashes HashLockfile).
+				continue
+			}
 			modules = append(modules, moduleFromConfig(cm))
 		}
 	}
@@ -219,24 +222,10 @@ func (m *Manager) installModuleInner(ctx context.Context, worktreePath string, m
 	return InstallResult{Module: mod}
 }
 
-// tryCloneFromExisting attempts to clone the module from an existing worktree
-// with a matching lockfile. For install-capable modules (mod.InstallCmd set),
-// a clone is only attempted when cowEligible confirms the dst filesystem
-// truly honors a reflink/clonefile — otherwise it's skipped in favor of the
-// install path, which is dramatically cheaper than a byte-copy of a large
-// dependency tree (see cowEligible's doc comment). CloneOnly modules (no
-// install fallback to fall back to) and modules with no InstallCmd at all
-// always attempt the clone, matching pre-existing behavior.
-//
-// Recursive install-capable modules (pnpm/yarn/npm node_modules) are a
-// special case: cowEligible only measures whether ONE file reflinks, but a
-// Recursive clone walks and clones every nested node_modules dir in a
-// monorepo — an unbounded cost that scales with workspace count. Confirmed
-// empirically: a genuine reflink clone of a 100k+-entry node_modules still
-// took 100+s (syscall-per-entry overhead, not a byte-copy in disguise),
-// while the real install stayed at 2-5s regardless (the package manager's
-// own store materializes it). So Recursive install-capable modules always
-// install — the probe is never even consulted for them.
+// tryCloneFromExisting clones from a matching-lockfile sibling worktree when
+// cheap, else falls through to install. Recursive install-capable modules
+// always skip straight to install: a 100k+-entry tree's reflink clone still
+// costs 100+s (syscall-per-entry) vs. ~2-5s for a real install.
 func tryCloneFromExisting(ctx context.Context, worktreePath string, mh ModuleWithHash, existingPaths []string) (InstallResult, bool) {
 	mod := mh.Module
 

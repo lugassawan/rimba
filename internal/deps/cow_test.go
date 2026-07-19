@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -101,7 +103,7 @@ func TestCowEligibleRealImplementation(t *testing.T) {
 	t.Cleanup(func() { cowProbeCmd = orig })
 
 	dstDir := t.TempDir()
-	t.Cleanup(func() { cowProbeCache.Delete(dstDir) })
+	t.Cleanup(func() { cowProbeCache.Delete(dstDir); cowProbeOnce.Delete(dstDir) })
 
 	if !cowEligible(context.Background(), dstDir, dstDir) {
 		t.Fatal("expected eligible=true: same path, injected probe succeeds")
@@ -111,6 +113,41 @@ func TestCowEligibleRealImplementation(t *testing.T) {
 	}
 	if invocations != 1 {
 		t.Errorf("probe invoked %d times, want 1 (result should be cached per dstDir)", invocations)
+	}
+}
+
+// TestCowEligibleConcurrentProbesShareOneRun proves the Load/probe/Store
+// TOCTOU gap is closed: several modules racing to probe the same brand-new
+// dstDir must still only invoke the underlying probe command once.
+func TestCowEligibleConcurrentProbesShareOneRun(t *testing.T) {
+	if !probeCowCapableSupportedOS() {
+		t.Skip("probe only runs on darwin/linux")
+	}
+
+	var invocations atomic.Int32
+	orig := cowProbeCmd
+	cowProbeCmd = func(ctx context.Context, src, dst string) *exec.Cmd {
+		invocations.Add(1)
+		return exec.CommandContext(ctx, "true")
+	}
+	t.Cleanup(func() { cowProbeCmd = orig })
+
+	dstDir := t.TempDir()
+	t.Cleanup(func() { cowProbeCache.Delete(dstDir); cowProbeOnce.Delete(dstDir) })
+
+	const goroutines = 10
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+			cowEligible(context.Background(), dstDir, dstDir)
+		}()
+	}
+	wg.Wait()
+
+	if got := invocations.Load(); got != 1 {
+		t.Errorf("probe invoked %d times, want 1 (concurrent first-time probes must share one run)", got)
 	}
 }
 
@@ -153,7 +190,7 @@ func TestCowEligibleProbeFailureIsNotEligible(t *testing.T) {
 	t.Cleanup(func() { cowProbeCmd = orig })
 
 	dstDir := t.TempDir()
-	t.Cleanup(func() { cowProbeCache.Delete(dstDir) })
+	t.Cleanup(func() { cowProbeCache.Delete(dstDir); cowProbeOnce.Delete(dstDir) })
 
 	if cowEligible(context.Background(), dstDir, dstDir) {
 		t.Error("expected eligible=false when the underlying probe fails")

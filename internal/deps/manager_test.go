@@ -625,6 +625,27 @@ func TestResolveModulesNoAutoDetectNoConfig(t *testing.T) {
 	}
 }
 
+func TestResolveModulesNoAutoDetectSkipsPatchOnlyEntry(t *testing.T) {
+	dir := t.TempDir()
+
+	// A patch-only entry (no Lockfile/Install) has nothing to patch when
+	// auto-detection is off — it must be skipped, not turned into a broken
+	// module with an empty Lockfile (which would crash HashModules).
+	configModules := []config.ModuleConfig{{Dir: testDirCustomDeps}}
+
+	modules, err := ResolveModules(dir, "", false, configModules, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if modules != nil {
+		t.Errorf("expected nil modules, got %v", modules)
+	}
+
+	if _, err := HashModules(dir, modules); err != nil {
+		t.Errorf("HashModules on skipped entry: %v", err)
+	}
+}
+
 func TestResolveModulesFilterCloneOnly(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, LockfileGo, "go.sum content")

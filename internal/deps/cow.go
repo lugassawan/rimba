@@ -13,29 +13,22 @@ import (
 // invocation regardless of how many modules clone into the same worktree.
 var cowProbeCache sync.Map // dstDir string -> bool
 
+// cowProbeOnce guards cowProbeCache's first write per dstDir so concurrent
+// modules probing the same new destination share a single real probe instead
+// of each racing to populate the cache.
+var cowProbeOnce sync.Map // dstDir string -> *sync.Once
+
 // cowEligibleOverrideEnv lets e2e tests pin cowEligible's decision ("1" or
-// "0") instead of depending on the test host's real filesystem. Internal test
-// seam only — not a documented user-facing config knob — needed because CI
-// runners' temp filesystems don't reliably support (or reliably lack)
-// reflink/clonefile, and the compiled e2e binary can't use the Go-level
-// var-injection seam unit tests use.
+// "0"), since CI temp filesystems don't reliably support (or lack)
+// reflink/clonefile and the compiled e2e binary can't use the Go-injection
+// seam unit tests use. Internal test seam only, not a user-facing config knob.
 const cowEligibleOverrideEnv = "RIMBA_COW_ELIGIBLE_OVERRIDE"
 
-// cowEligible reports whether cloning src onto dstDir is expected to be a
-// true reflink/clonefile (near-instant) rather than a byte-copy in disguise.
-//
-// The production copy path (cowCopyCmd) intentionally uses the permissive
-// "-c"/"--reflink=auto" flags, which silently perform a full byte-copy
-// instead of erroring when the filesystem can't honor a reflink — that
-// silent fallback is exactly what turned a handful of "cloned" node_modules
-// spans into 14-123s pessimizations instead of the sub-second clones the
-// flag promises. This probe answers the question those flags refuse to:
-// same-device is the necessary precondition, and the temp-file probe (using
-// the strict "always"/"-c" forms, which DO fail outright rather than
-// silently falling back) confirms the filesystem actually honors it.
-//
-// A package var so tests can force the outcome deterministically instead of
-// depending on the test host's real filesystem.
+// cowEligible reports whether cloning src onto dstDir is a true
+// reflink/clonefile (near-instant) rather than cowCopyCmd's permissive
+// "-c"/"--reflink=auto" silently falling back to a full byte-copy — the exact
+// silent fallback that turned "cloned" node_modules spans into 14-123s
+// pessimizations. A package var so tests can force the outcome deterministically.
 var cowEligible = func(ctx context.Context, src, dstDir string) bool {
 	if v, ok := os.LookupEnv(cowEligibleOverrideEnv); ok {
 		return v == "1"
@@ -45,12 +38,13 @@ var cowEligible = func(ctx context.Context, src, dstDir string) bool {
 		return false
 	}
 
-	if v, cached := cowProbeCache.Load(dstDir); cached {
-		return v.(bool) //nolint:forcetypeassert // only this file ever stores into cowProbeCache
-	}
-	result := probeCowCapable(ctx, dstDir)
-	cowProbeCache.Store(dstDir, result)
-	return result
+	onceI, _ := cowProbeOnce.LoadOrStore(dstDir, new(sync.Once))
+	once := onceI.(*sync.Once) //nolint:forcetypeassert // only this file ever stores into cowProbeOnce
+	once.Do(func() {
+		cowProbeCache.Store(dstDir, probeCowCapable(ctx, dstDir))
+	})
+	v, _ := cowProbeCache.Load(dstDir)
+	return v.(bool) //nolint:forcetypeassert // once.Do guarantees a store before this load
 }
 
 // cowProbeCmd builds the strict CoW-probe copy command for the host OS. A
