@@ -279,6 +279,9 @@ func buildPostCreateOptions(cfg *config.Config, repoRoot string, skipDeps, skipH
 	if cfg.Deps != nil {
 		configModules = cfg.Deps.Modules
 	}
+	// Error is ignored: cfg.Validate() (run in root.go's PersistentPreRunE)
+	// already guarantees post_create is well-formed before any command runs.
+	stages, _ := cfg.PostCreateStages()
 	return operations.PostCreateOptions{
 		RepoRoot:      repoRoot,
 		WorktreeDir:   filepath.Join(repoRoot, cfg.WorktreeDir),
@@ -287,9 +290,8 @@ func buildPostCreateOptions(cfg *config.Config, repoRoot string, skipDeps, skipH
 		AutoDetect:    cfg.IsAutoDetectDeps(),
 		ConfigModules: configModules,
 		SkipHooks:     skipHooks,
-		PostCreate:    cfg.PostCreate,
+		PostCreate:    stages,
 		Concurrency:   cfg.DepsConcurrency(),
-		HooksParallel: cfg.IsHooksParallel(),
 	}
 }
 

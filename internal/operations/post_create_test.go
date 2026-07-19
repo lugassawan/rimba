@@ -122,7 +122,7 @@ func TestPostCreateSetupSkipDepsAndHooks(t *testing.T) {
 		Task:       "test-task",
 		SkipDeps:   true,
 		SkipHooks:  true,
-		PostCreate: []string{"echo hello"},
+		PostCreate: [][]string{{"echo hello"}},
 	}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -218,13 +218,13 @@ func TestPostCreateSetupCopyFilesErrorIncludesRecoveryHint(t *testing.T) {
 	}
 }
 
-// TestPostCreateSetupHooksParallelReachesRunPostCreateHooks proves that
-// PostCreateParams.HooksParallel actually reaches deps.RunPostCreateHooks as
-// true through the full PostCreateSetup call chain. Mirrors
-// internal/deps' TestRunPostCreateHooksParallelIsActuallyConcurrent: with
-// HooksParallel true, N sleeping hooks should complete in well under their
-// serial worst case.
-func TestPostCreateSetupHooksParallelReachesRunPostCreateHooks(t *testing.T) {
+// TestPostCreateSetupStagedHooksReachRunPostCreateHooksConcurrently proves
+// that a multi-command PostCreateParams.PostCreate stage actually reaches
+// deps.RunPostCreateHooks and runs concurrently through the full
+// PostCreateSetup call chain. Mirrors internal/deps'
+// TestRunPostCreateHooksParallelIsActuallyConcurrent: N sleeping hooks in one
+// stage should complete in well under their serial worst case.
+func TestPostCreateSetupStagedHooksReachRunPostCreateHooksConcurrently(t *testing.T) {
 	tmpDir := t.TempDir()
 	wtPath := filepath.Join(tmpDir, "worktree")
 	if err := os.MkdirAll(wtPath, 0o755); err != nil {
@@ -245,12 +245,11 @@ func TestPostCreateSetupHooksParallelReachesRunPostCreateHooks(t *testing.T) {
 
 	start := time.Now()
 	result, err := PostCreateSetup(context.Background(), r, PostCreateParams{
-		RepoRoot:      tmpDir,
-		WtPath:        wtPath,
-		Task:          "test-task",
-		SkipDeps:      true,
-		PostCreate:    hooks,
-		HooksParallel: true,
+		RepoRoot:   tmpDir,
+		WtPath:     wtPath,
+		Task:       "test-task",
+		SkipDeps:   true,
+		PostCreate: [][]string{hooks},
 	}, nil)
 	elapsed := time.Since(start)
 	if err != nil {
@@ -330,7 +329,7 @@ func TestPostCreateSetupRecordsCopyDepsHooksSpans(t *testing.T) {
 		Task:       "test-task",
 		SkipDeps:   false,
 		SkipHooks:  false,
-		PostCreate: []string{"echo hello"},
+		PostCreate: [][]string{{"echo hello"}},
 	}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

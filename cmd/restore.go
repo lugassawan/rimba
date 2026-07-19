@@ -77,6 +77,11 @@ to see available archived branches.`,
 			configModules = cfg.Deps.Modules
 		}
 
+		// Error is ignored: cfg.Validate() (run in root.go's
+		// PersistentPreRunE) already guarantees post_create is well-formed
+		// before any command runs.
+		postCreateStages, _ := cfg.PostCreateStages()
+
 		pcResult, err := operations.PostCreateSetup(cmd.Context(), r, operations.PostCreateParams{
 			RepoRoot:      repoRoot,
 			WtPath:        wtPath,
@@ -87,7 +92,7 @@ to see available archived branches.`,
 			AutoDetect:    cfg.IsAutoDetectDeps(),
 			ConfigModules: configModules,
 			SkipHooks:     skipHooks,
-			PostCreate:    cfg.PostCreate,
+			PostCreate:    postCreateStages,
 			Concurrency:   cfg.DepsConcurrency(),
 		}, func(msg string) { s.Update(msg) })
 		if err != nil {
