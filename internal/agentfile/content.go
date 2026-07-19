@@ -75,7 +75,7 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 | Concern | Commands |
 |---------|----------|
 | Create & navigate | ` + "`" + `rimba add <task>` + "`" + ` (or ` + "`" + `rimba add service/task` + "`" + ` for monorepos), ` + "`" + `rimba add pr:<num>` + "`" + ` (from a GitHub PR), ` + "`" + `rimba open <task>` + "`" + `, ` + "`" + `rimba rename <task> [new-task]` + "`" + `, ` + "`" + `rimba duplicate <task>` + "`" + ` |
-| Inspect | ` + "`" + `rimba list` + "`" + ` (` + "`" + `--full` + "`" + ` adds PR/CI columns), ` + "`" + `rimba status` + "`" + ` (` + "`" + `--detail` + "`" + ` adds disk/velocity), ` + "`" + `rimba log` + "`" + `, ` + "`" + `rimba doctor` + "`" + ` |
+| Inspect | ` + "`" + `rimba list` + "`" + ` (` + "`" + `--full` + "`" + ` adds PR/CI columns), ` + "`" + `rimba status` + "`" + ` (` + "`" + `--detail` + "`" + ` adds disk/velocity), ` + "`" + `rimba log` + "`" + `, ` + "`" + `rimba doctor` + "`" + `, ` + "`" + `rimba report` + "`" + ` |
 | Sync & merge | ` + "`" + `rimba sync [task]` + "`" + `, ` + "`" + `rimba merge <task>` + "`" + ` |
 | Clean up | ` + "`" + `rimba clean --merged` + "`" + `, ` + "`" + `rimba archive <task>` + "`" + `, ` + "`" + `rimba restore <task>` + "`" + `, ` + "`" + `rimba remove <task>` + "`" + ` |
 | Cross-cutting | ` + "`" + `rimba exec <cmd>` + "`" + `, ` + "`" + `rimba conflict-check` + "`" + `, ` + "`" + `rimba deps status` + "`" + ` |
@@ -153,6 +153,7 @@ See AGENTS.md at the repo root for full rimba documentation.
 - ` + "`" + `rimba duplicate <task>` + "`" + ` — create a new worktree from an existing one
 - ` + "`" + `rimba list` + "`" + ` (` + "`" + `--full` + "`" + ` adds PR/CI columns) / ` + "`" + `rimba status` + "`" + ` (` + "`" + `--detail` + "`" + ` adds disk/velocity) — inspect worktrees (` + "`" + `--service <svc>` + "`" + ` to filter)
 - ` + "`" + `rimba doctor` + "`" + ` — diagnose stale git index.lock files
+- ` + "`" + `rimba report` + "`" + ` — aggregate observability timing metrics (p50/p95/mean) for a filed issue
 - ` + "`" + `rimba merge <task>` + "`" + ` — merge into main and auto-clean up
 - ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
 - ` + "`" + `rimba archive <task>` + "`" + ` / ` + "`" + `rimba restore <task>` + "`" + ` — remove worktree keeping branch / recreate from an archived branch
@@ -206,10 +207,11 @@ See AGENTS.md at the repo root for full documentation.
 10. ` + "`" + `rimba archive <task>` + "`" + ` — remove worktree, keep branch
 11. ` + "`" + `rimba restore <task>` + "`" + ` — recreate a worktree from an archived branch
 12. ` + "`" + `rimba doctor` + "`" + ` — diagnose stale git index.lock files
-13. ` + "`" + `rimba trust` + "`" + ` — approve committed shell commands
-14. ` + "`" + `rimba exec <cmd>` + "`" + ` — run across all worktrees
-15. ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
-16. ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
+13. ` + "`" + `rimba report` + "`" + ` — aggregate observability timing metrics (p50/p95/mean)
+14. ` + "`" + `rimba trust` + "`" + ` — approve committed shell commands
+15. ` + "`" + `rimba exec <cmd>` + "`" + ` — run across all worktrees
+16. ` + "`" + `rimba clean --merged` + "`" + ` — remove merged worktrees
+17. ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
 
 ## Workflow Recipes
 
@@ -253,7 +255,7 @@ If not found, **ask the user** before installing. Never install automatically.
 | Concern | Commands |
 |---------|----------|
 | Create & navigate | ` + "`" + `rimba add <task>` + "`" + `, ` + "`" + `rimba add pr:<num>` + "`" + ` (from a GitHub PR), ` + "`" + `rimba open <task>` + "`" + `, ` + "`" + `rimba rename <task> [new-task]` + "`" + `, ` + "`" + `rimba duplicate <task>` + "`" + ` |
-| Inspect | ` + "`" + `rimba list` + "`" + ` (` + "`" + `--full` + "`" + ` adds PR/CI columns), ` + "`" + `rimba status` + "`" + ` (` + "`" + `--detail` + "`" + ` adds disk/velocity), ` + "`" + `rimba doctor` + "`" + ` |
+| Inspect | ` + "`" + `rimba list` + "`" + ` (` + "`" + `--full` + "`" + ` adds PR/CI columns), ` + "`" + `rimba status` + "`" + ` (` + "`" + `--detail` + "`" + ` adds disk/velocity), ` + "`" + `rimba doctor` + "`" + `, ` + "`" + `rimba report` + "`" + ` |
 | Sync & merge | ` + "`" + `rimba sync [task]` + "`" + `, ` + "`" + `rimba merge <task>` + "`" + ` |
 | Clean up | ` + "`" + `rimba clean --merged` + "`" + `, ` + "`" + `rimba archive <task>` + "`" + `, ` + "`" + `rimba restore <task>` + "`" + `, ` + "`" + `rimba remove <task>` + "`" + ` |
 | Cross-cutting | ` + "`" + `rimba exec <cmd>` + "`" + `, ` + "`" + `rimba conflict-check` + "`" + ` |
@@ -289,8 +291,9 @@ If not found, **ask the user** before installing. Never install automatically.
 8. ` + "`" + `rimba duplicate <task>` + "`" + ` — duplicate an existing worktree
 9. ` + "`" + `rimba archive <task>` + "`" + ` / ` + "`" + `rimba restore <task>` + "`" + ` — archive and restore worktrees
 10. ` + "`" + `rimba doctor` + "`" + ` — diagnose stale git index.lock files
-11. ` + "`" + `rimba trust` + "`" + ` — approve committed shell commands
-12. ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
+11. ` + "`" + `rimba report` + "`" + ` — aggregate observability timing metrics (p50/p95/mean)
+12. ` + "`" + `rimba trust` + "`" + ` — approve committed shell commands
+13. ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
 
 ` + mcpToolsSection("##") + `
 `
@@ -320,8 +323,9 @@ If not found, **ask the user** before installing. Never install automatically.
 8. ` + "`" + `rimba duplicate <task>` + "`" + ` — duplicate an existing worktree
 9. ` + "`" + `rimba archive <task>` + "`" + ` / ` + "`" + `rimba restore <task>` + "`" + ` — archive and restore worktrees
 10. ` + "`" + `rimba doctor` + "`" + ` — diagnose stale git index.lock files
-11. ` + "`" + `rimba trust` + "`" + ` — approve committed shell commands
-12. ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
+11. ` + "`" + `rimba report` + "`" + ` — aggregate observability timing metrics (p50/p95/mean)
+12. ` + "`" + `rimba trust` + "`" + ` — approve committed shell commands
+13. ` + "`" + `rimba mcp` + "`" + ` — start MCP server for AI tool integration
 
 ` + mcpToolsSection("##") + `
 `
@@ -545,6 +549,7 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 | Filter by service (monorepo) | ` + "`" + `rimba list --service <svc>` + "`" + ` |
 | Check worktree health | ` + "`" + `rimba status` + "`" + ` |
 | Diagnose stale worktree locks | ` + "`" + `rimba doctor` + "`" + ` |
+| Get observability timing metrics for an issue | ` + "`" + `rimba report` + "`" + ` |
 | Navigate to a worktree | ` + "`" + `cd $(rimba open <task>)` + "`" + ` |
 | Update from source branch | ` + "`" + `rimba sync <task>` + "`" + ` or ` + "`" + `rimba sync --all` + "`" + ` |
 | Finish a feature | ` + "`" + `rimba merge <task>` + "`" + ` (auto-removes worktree) |

@@ -24,10 +24,11 @@ See AGENTS.md at the repo root for full documentation.
 10. `rimba archive <task>` — remove worktree, keep branch
 11. `rimba restore <task>` — recreate a worktree from an archived branch
 12. `rimba doctor` — diagnose stale git index.lock files
-13. `rimba trust` — approve committed shell commands
-14. `rimba exec <cmd>` — run across all worktrees
-15. `rimba clean --merged` — remove merged worktrees
-16. `rimba mcp` — start MCP server for AI tool integration
+13. `rimba report` — aggregate observability timing metrics (p50/p95/mean)
+14. `rimba trust` — approve committed shell commands
+15. `rimba exec <cmd>` — run across all worktrees
+16. `rimba clean --merged` — remove merged worktrees
+17. `rimba mcp` — start MCP server for AI tool integration
 
 ## Workflow Recipes
 

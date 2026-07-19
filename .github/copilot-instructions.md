@@ -13,6 +13,7 @@ See AGENTS.md at the repo root for full rimba documentation.
 - `rimba duplicate <task>` — create a new worktree from an existing one
 - `rimba list` (`--full` adds PR/CI columns) / `rimba status` (`--detail` adds disk/velocity) — inspect worktrees (`--service <svc>` to filter)
 - `rimba doctor` — diagnose stale git index.lock files
+- `rimba report` — aggregate observability timing metrics (p50/p95/mean) for a filed issue
 - `rimba merge <task>` — merge into main and auto-clean up
 - `rimba clean --merged` — remove merged worktrees
 - `rimba archive <task>` / `rimba restore <task>` — remove worktree keeping branch / recreate from an archived branch
