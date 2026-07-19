@@ -84,11 +84,11 @@ func newFileSinkAt(cacheDir, repoRoot string, retentionDays int) (Sink, error) {
 	prefix := RepoPrefix(repoRoot)
 	today := time.Now().Format("2006-01-02")
 
-	logFile, err := os.OpenFile(filepath.Join(dir, prefix+"-"+today+".log.jsonl"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644) //nolint:gosec // observability log lines hold no secrets; 0644 matches other rimba log files
+	logFile, err := os.OpenFile(filepath.Join(dir, prefix+"-"+today+".log.jsonl"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec // 0600 avoids the G302 permissive-mode warning; log lines can carry command args/stderr that may include secrets, so this is NOT "safe to expose", just owner-only
 	if err != nil {
 		return nil, fmt.Errorf("failed to open observability log file: %w", err)
 	}
-	metricFile, err := os.OpenFile(filepath.Join(dir, prefix+"-"+today+".metrics.jsonl"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644) //nolint:gosec // same as the log file above
+	metricFile, err := os.OpenFile(filepath.Join(dir, prefix+"-"+today+".metrics.jsonl"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec // same as the log file above
 	if err != nil {
 		_ = logFile.Close()
 		return nil, fmt.Errorf("failed to open observability metrics file: %w", err)

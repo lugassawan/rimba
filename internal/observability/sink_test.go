@@ -93,6 +93,36 @@ func TestFileSinkWriteReadRoundTrip(t *testing.T) {
 	}
 }
 
+// TestFileSinkFilePermissions confirms both day-files are created 0600 (owner
+// read/write only) — these files can carry secrets via subprocess Args or
+// failure Stderr/Error text, so they must not be group/other readable.
+func TestFileSinkFilePermissions(t *testing.T) {
+	cacheDir := t.TempDir()
+	repoRoot := "/repo/permcheck"
+	sink, err := newFileSinkAt(cacheDir, repoRoot, 14)
+	if err != nil {
+		t.Fatalf("newFileSinkAt: %v", err)
+	}
+	t.Cleanup(func() { _ = sink.Close() })
+
+	base := filepath.Base(repoRoot)
+	sum := sha256.Sum256([]byte(repoRoot))
+	hash := hex.EncodeToString(sum[:])[:8]
+	prefix := fmt.Sprintf("rimba-%s-%s", base, hash)
+	today := time.Now().Format("2006-01-02")
+	dir := filepath.Join(cacheDir, "rimba")
+
+	for _, name := range []string{prefix + "-" + today + ".log.jsonl", prefix + "-" + today + ".metrics.jsonl"} {
+		info, err := os.Stat(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatalf("stat %s: %v", name, err)
+		}
+		if perm := info.Mode().Perm(); perm != 0o600 {
+			t.Errorf("%s: perm = %o, want 0600", name, perm)
+		}
+	}
+}
+
 func TestFileSinkConcurrentWrites(t *testing.T) {
 	cacheDir := t.TempDir()
 	repoRoot := "/repo/concurrent"

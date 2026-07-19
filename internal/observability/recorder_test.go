@@ -196,6 +196,56 @@ func TestLogSubprocessStderrOnlyOnFailure(t *testing.T) {
 	}
 }
 
+// TestLogErrorMessageTruncated confirms ErrorRecord.Message is capped the
+// same way SubprocessRecord.Stderr already is — a failing post-create hook
+// can wrap a very large combined stdout+stderr blob into its error.
+func TestLogErrorMessageTruncated(t *testing.T) {
+	sink := &fakeSink{}
+	rec := Maybe(true, sink, "add", "task", "svc", "v1")
+
+	huge := strings.Repeat("x", stderrTruncateLimit+500)
+	rec.LogError("ctx", errors.New(huge))
+
+	if len(sink.logs) != 1 {
+		t.Fatalf("len(sink.logs) = %d, want 1", len(sink.logs))
+	}
+	errRec, ok := sink.logs[0].(ErrorRecord)
+	if !ok {
+		t.Fatalf("sink.logs[0] = %T, want ErrorRecord", sink.logs[0])
+	}
+	if !strings.HasSuffix(errRec.Message, "...(truncated)") {
+		t.Errorf("Message = %q, want truncated suffix", errRec.Message)
+	}
+	if len(errRec.Message) >= len(huge) {
+		t.Errorf("Message length = %d, want less than untruncated length %d", len(errRec.Message), len(huge))
+	}
+}
+
+// TestFinalizeErrorTruncated confirms CommandRecord.Error is capped the same
+// way — Finalize can receive an error built from a failing subprocess's full
+// combined output.
+func TestFinalizeErrorTruncated(t *testing.T) {
+	sink := &fakeSink{}
+	rec := Maybe(true, sink, "add", "task", "svc", "v1")
+
+	huge := strings.Repeat("y", stderrTruncateLimit+500)
+	rec.Finalize(OutcomeError, 1, errors.New(huge))
+
+	if len(sink.logs) != 1 {
+		t.Fatalf("len(sink.logs) = %d, want 1", len(sink.logs))
+	}
+	cmdRec, ok := sink.logs[0].(CommandRecord)
+	if !ok {
+		t.Fatalf("sink.logs[0] = %T, want CommandRecord", sink.logs[0])
+	}
+	if !strings.HasSuffix(cmdRec.Error, "...(truncated)") {
+		t.Errorf("Error = %q, want truncated suffix", cmdRec.Error)
+	}
+	if len(cmdRec.Error) >= len(huge) {
+		t.Errorf("Error length = %d, want less than untruncated length %d", len(cmdRec.Error), len(huge))
+	}
+}
+
 func TestRunIDStableSeqIncreasing(t *testing.T) {
 	sink := &fakeSink{}
 	rec := Maybe(true, sink, "add", "task", "svc", "v1")

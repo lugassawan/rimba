@@ -113,7 +113,7 @@ func (r *Recorder) LogError(context string, err error) {
 		Seq:           r.seq.Add(1),
 		Timestamp:     time.Now().Format(time.RFC3339Nano),
 		Command:       r.command,
-		Message:       context + ": " + err.Error(),
+		Message:       truncate(context+": "+err.Error(), stderrTruncateLimit),
 	}
 	_ = r.sink.WriteLog(rec)
 }
@@ -172,7 +172,7 @@ func (r *Recorder) Finalize(outcome string, exitCode int, err error) {
 		Outcome:       outcome,
 		ExitCode:      exitCode,
 		DurationMS:    d.Milliseconds(),
-		Error:         errString(err),
+		Error:         truncate(errString(err), stderrTruncateLimit),
 	}
 	_ = r.sink.WriteLog(rec)
 	r.writeSpan(r.rootSpanID, "", "command", d, "")
