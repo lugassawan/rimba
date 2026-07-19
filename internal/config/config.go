@@ -55,9 +55,8 @@ const DefaultObservabilityRetentionDays = 14
 // ObservabilityConfig holds optional observability settings.
 type ObservabilityConfig struct {
 	Enabled *bool `toml:"enabled,omitempty"`
-	// RetentionDays is a pointer so an explicit 0 ("disable pruning") is
-	// distinguishable from "unset" (defaults to DefaultObservabilityRetentionDays).
-	// A plain int cannot make this distinction — its zero value is ambiguous.
+	// RetentionDays is a pointer: nil means "unset" (default), 0 means
+	// "explicitly disable pruning" — a plain int's zero value can't tell those apart.
 	RetentionDays *int `toml:"retention_days,omitempty"`
 }
 

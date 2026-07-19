@@ -46,9 +46,8 @@ func (w *recordingRunner) log(ctx context.Context, dir string, args []string, st
 		debug.LogGitTiming(dir, args, time.Since(start))
 		return
 	}
-	// git.Runner doesn't expose a real process exit code (see Global Constraints);
-	// 0/-1 is an accepted approximation, distinguishable from a real git exit code
-	// of 0 only in that -1 can never occur for git itself.
+	// git.Runner exposes no real exit code; 0/-1 approximates it (-1 can
+	// never be a genuine git exit code, so it's distinguishable from success).
 	exitCode := 0
 	if err != nil {
 		exitCode = -1

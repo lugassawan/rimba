@@ -9,10 +9,9 @@ import (
 )
 
 // withRecorder decorates a tool handler so each call builds its own Recorder
-// (bound to this one call, not the long-lived server process), attaches it to
-// ctx, and finalizes + closes it before returning — mirroring cmd/root.go's
-// PersistentPreRunE-build / Execute-finalize pair, but scoped to a single
-// request instead of a single process.
+// (bound to this one call, not the long-lived server process), attaches it
+// to ctx, and finalizes + closes it before returning — the MCP-per-call
+// counterpart to cmd/root.go's PersistentPreRunE-build / Execute-finalize pair.
 func withRecorder(hctx *HandlerContext, toolName string, handler server.ToolHandlerFunc) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if hctx.Config == nil || !hctx.Config.IsObservabilityEnabled() {

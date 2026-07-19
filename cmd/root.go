@@ -103,20 +103,16 @@ Persistent flags (available on every command):
 			return err
 		}
 
-		// Only open the sink (and thus create today's day-files) when
-		// observability is actually enabled — RIMBA_NO_OBSERVABILITY / a
-		// config [observability] enabled=false must leave zero filesystem
-		// footprint, not merely an empty file with no records written to it.
+		// Only open the sink when observability is enabled, so disabling it
+		// leaves zero filesystem footprint (not just an empty untouched file).
 		var rec *observability.Recorder
 		if cfg.IsObservabilityEnabled() {
 			sink, sinkErr := observability.NewFileSink(repoRoot, cfg.ObservabilityRetentionDays())
 			if sinkErr == nil {
 				rec = observability.Maybe(true, sink, commandName, "", "", version)
 			} else if os.Getenv("RIMBA_DEBUG") != "" {
-				// sinkErr is swallowed here deliberately: observability must never
-				// block a command from running (e.g. a read-only cache dir).
-				// Surface it only under RIMBA_DEBUG, to stderr, the same channel
-				// debug output already uses.
+				// Swallowed deliberately (e.g. a read-only cache dir must never
+				// block a command); surfaced only under RIMBA_DEBUG.
 				fmt.Fprintf(os.Stderr, "\n[debug] observability disabled: %v\n", sinkErr)
 			}
 		}
@@ -179,9 +175,8 @@ func Execute() error {
 
 	err := rootCmd.ExecuteContext(ctx)
 
-	// See lastRecorder's doc comment: rootCmd.Context() does not reflect the
-	// context PersistentPreRunE set on the invoked (sub)command, so the
-	// Recorder built there is captured via lastRecorder instead.
+	// rootCmd.Context() doesn't reflect PersistentPreRunE's context (see
+	// lastRecorder's doc comment), so the Recorder is read from lastRecorder.
 	if rec := lastRecorder; rec != nil {
 		defer rec.Close() // registered first so it runs LAST (after Finalize below)
 		exitCode := 0
