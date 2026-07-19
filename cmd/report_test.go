@@ -211,6 +211,50 @@ func TestReportCmdNoDataTextMode(t *testing.T) {
 	}
 }
 
+func TestReportCmdTextModeWithData(t *testing.T) {
+	restore := overrideNewRunner(&mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[1] == cmdGitCommonDir {
+				return filepath.Join(repoPath, ".git"), nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	})
+	defer restore()
+
+	cacheDir := t.TempDir()
+	t.Setenv("HOME", cacheDir)
+	t.Setenv("XDG_CACHE_HOME", "")
+
+	prefix := observability.RepoPrefix(repoPath)
+	// os.UserCacheDir() resolves relative to $HOME; write to both possible
+	// per-OS locations so this test is platform-agnostic (see
+	// TestReportCmdJSONRoundTrip for the same pattern).
+	for _, sub := range []string{"Library/Caches", ".cache"} {
+		writeReportFile(t, filepath.Join(cacheDir, sub), prefix+"-2026-07-19.metrics.jsonl", []string{
+			marshalSpan(t, observability.SpanRecord{Command: wantAddCommand, Name: "command", DurationMS: 42}),
+		})
+	}
+
+	cmd, buf := newTestCmd()
+	_ = cmd.Flags().Set(flagNoColor, "true")
+
+	if err := reportCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("reportCmd.RunE: %v", err)
+	}
+
+	out := buf.String()
+	for _, want := range []string{"COMMAND", "PHASE", "COUNT", "P50", "P95", "MEAN", wantAddCommand, "command", "42.0ms"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q, got: %q", want, out)
+		}
+	}
+	if strings.Contains(out, "No observability data found") {
+		t.Errorf("expected populated table, got 'no data' message: %q", out)
+	}
+}
+
 func TestReportCmdJSONRoundTrip(t *testing.T) {
 	restore := overrideNewRunner(&mockRunner{
 		run: func(args ...string) (string, error) {
