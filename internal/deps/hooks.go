@@ -38,6 +38,13 @@ type HookResult struct {
 // runStageParallel's doc comment. A failing hook never stops others from
 // running, whether they're in the same stage or a later one.
 //
+// This means a single cancelled run of a staged config can report
+// asymmetrically: a cancelled single-command stage's hooks are silently
+// absent from the returned slice, while a cancelled multi-command stage's
+// hooks are all present, each marked failed with ctx.Err(). Callers
+// displaying HookResults should not assume its length always equals the
+// input hook count when ctx may be cancelled mid-run.
+//
 // Progress messages preserve each of the two historical formats depending on
 // stage shape: a single-command stage reports "<hook> (i/N)" (the original
 // serial per-hook ordinal, byte-for-byte unchanged for the common

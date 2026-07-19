@@ -39,12 +39,12 @@ func BenchmarkRunPostCreateHooksSerial(b *testing.B) {
 	}
 }
 
-// BenchmarkRunPostCreateHooksParallel measures the opt-in [hooks] parallel =
-// true path added by this change. Run both with `go test -bench=RunPostCreateHooks
+// BenchmarkRunPostCreateHooksParallel measures the multi-command-stage
+// (concurrent) execution path. Run both with `go test -bench=RunPostCreateHooks
 // -benchmem ./internal/deps/...` to compare before/after wall-clock —
-// parallel should approach the single-slowest-hook duration instead of the
-// sum of all hooks, proportional to hook count (a single-hook config sees no
-// speedup, by design — nothing to parallelize).
+// the multi-command stage should approach the single-slowest-hook duration
+// instead of the sum of all hooks, proportional to hook count (a single-hook
+// stage sees no speedup, by design — nothing to parallelize).
 func BenchmarkRunPostCreateHooksParallel(b *testing.B) {
 	dir := b.TempDir()
 	stages := [][]string{benchHooks()}

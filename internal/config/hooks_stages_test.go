@@ -20,6 +20,100 @@ func TestNormalizeHookStagesNil(t *testing.T) {
 	}
 }
 
+func TestNormalizeHookStagesNativeGoStringSlice(t *testing.T) {
+	// A native []string (set directly in code, e.g. by tests or
+	// DefaultConfig) must normalize the same way as its []any-decoded
+	// TOML equivalent — this is the shape config.Config{PostCreate:
+	// []string{...}} literals produce, not just TOML.Unmarshal output.
+	raw := []string{"cmd1", "cmd2"}
+
+	serial, err := config.NormalizeHookStages(raw, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := [][]string{{"cmd1"}, {"cmd2"}}; !reflect.DeepEqual(serial, want) {
+		t.Errorf("serial stages = %v, want %v", serial, want)
+	}
+
+	parallel, err := config.NormalizeHookStages(raw, true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := [][]string{{"cmd1", "cmd2"}}; !reflect.DeepEqual(parallel, want) {
+		t.Errorf("parallel stages = %v, want %v", parallel, want)
+	}
+}
+
+func TestNormalizeHookStagesNativeGoEmptyStringSlice(t *testing.T) {
+	stages, err := config.NormalizeHookStages([]string{}, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stages != nil {
+		t.Errorf("stages = %v, want nil", stages)
+	}
+}
+
+func TestNormalizeHookStagesNativeGoNestedSlice(t *testing.T) {
+	// A native [][]string (already-canonical stages, e.g. constructed
+	// directly by a caller) must be returned as given.
+	raw := [][]string{{"cmd1", "cmd2"}, {"cmd3"}}
+
+	stages, err := config.NormalizeHookStages(raw, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !reflect.DeepEqual(stages, raw) {
+		t.Errorf("stages = %v, want %v", stages, raw)
+	}
+}
+
+func TestNormalizeHookStagesNativeGoEmptyNestedSlice(t *testing.T) {
+	stages, err := config.NormalizeHookStages([][]string{}, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stages != nil {
+		t.Errorf("stages = %v, want nil", stages)
+	}
+}
+
+func TestConfigPostCreateStagesFromNativeGoStringSlice(t *testing.T) {
+	// Exercises the DefaultConfig()/test-fixture path: PostCreate assigned
+	// as a Go-level []string literal, not loaded from a TOML file.
+	cfg := &config.Config{PostCreate: []string{"echo hello"}}
+	stages, err := cfg.PostCreateStages()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := [][]string{{"echo hello"}}
+	if !reflect.DeepEqual(stages, want) {
+		t.Errorf("stages = %v, want %v", stages, want)
+	}
+}
+
+func TestConfigPostCreateStagesWrapsError(t *testing.T) {
+	cfg := &config.Config{PostCreate: "not-an-array"}
+	_, err := cfg.PostCreateStages()
+	if err == nil {
+		t.Fatal("expected error for malformed post_create")
+	}
+	if !strings.Contains(err.Error(), "post_create") {
+		t.Errorf("error = %q, want it prefixed with 'post_create'", err.Error())
+	}
+}
+
+func TestConfigPostRenameStagesWrapsError(t *testing.T) {
+	cfg := &config.Config{PostRename: "not-an-array"}
+	_, err := cfg.PostRenameStages()
+	if err == nil {
+		t.Fatal("expected error for malformed post_rename")
+	}
+	if !strings.Contains(err.Error(), "post_rename") {
+		t.Errorf("error = %q, want it prefixed with 'post_rename'", err.Error())
+	}
+}
+
 func TestNormalizeHookStagesFlatSerial(t *testing.T) {
 	raw := []any{"cmd1", "cmd2"}
 	stages, err := config.NormalizeHookStages(raw, false)

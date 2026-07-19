@@ -43,6 +43,10 @@ type Config struct {
 	// PostCreate and PostRename hold either a flat list of hook commands or a
 	// nested list of stages (each inner list run concurrently, stages run in
 	// order) — see NormalizeHookStages/PostCreateStages/PostRenameStages.
+	// Never read these fields directly; always go through PostCreateStages/
+	// PostRenameStages, and only after Validate() has run (every caller in
+	// this codebase reaches these fields downstream of a Validate() call —
+	// see cmd/root.go's PersistentPreRunE and internal/mcp's requireConfig).
 	PostCreate any `toml:"post_create,omitempty"`
 	PostRename any `toml:"post_rename,omitempty"`
 

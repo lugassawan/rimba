@@ -267,7 +267,7 @@ func TestPostCreateSetupStagedHooksReachRunPostCreateHooksConcurrently(t *testin
 
 	serialWorstCase := n * sleepMS * time.Millisecond
 	if elapsed >= serialWorstCase {
-		t.Errorf("elapsed %v was not faster than serial worst case %v — HooksParallel does not appear to have reached RunPostCreateHooks as true", elapsed, serialWorstCase)
+		t.Errorf("elapsed %v was not faster than serial worst case %v — multi-command stage does not appear to have run concurrently", elapsed, serialWorstCase)
 	}
 }
 
