@@ -33,14 +33,18 @@ const (
 
 // Module represents a detected or configured dependency module.
 type Module struct {
-	Dir        string                                      `json:"dir"`                   // Primary dir: "node_modules" or "service-api/vendor"
-	Lockfile   string                                      `json:"lockfile"`              // "pnpm-lock.yaml" or "service-api/go.sum"
-	InstallCmd string                                      `json:"install_cmd,omitempty"` // "pnpm install --frozen-lockfile" or "go mod vendor"
-	WorkDir    string                                      `json:"work_dir,omitempty"`    // Subdir to run install in: "" (root) or "service-api"
-	Recursive  bool                                        `json:"recursive,omitempty"`   // If true, clone ALL dirs named Dir found recursively (monorepo)
-	ExtraDirs  []string                                    `json:"extra_dirs,omitempty"`  // Additional dirs to clone (e.g., ".yarn/cache")
-	CloneOnly  bool                                        `json:"clone_only,omitempty"`  // If true, only clone (don't run install if no match). For Go vendor.
-	PostClone  func(srcWT, dstWT string, mod Module) error `json:"-"`                     // Optional hook run after successful clone.
+	Dir        string   `json:"dir"`                   // Primary dir: "node_modules" or "service-api/vendor"
+	Lockfile   string   `json:"lockfile"`              // "pnpm-lock.yaml" or "service-api/go.sum"
+	InstallCmd string   `json:"install_cmd,omitempty"` // "pnpm install --frozen-lockfile" or "go mod vendor"
+	WorkDir    string   `json:"work_dir,omitempty"`    // Subdir to run install in: "" (root) or "service-api"
+	Recursive  bool     `json:"recursive,omitempty"`   // If true, clone ALL dirs named Dir found recursively (monorepo)
+	ExtraDirs  []string `json:"extra_dirs,omitempty"`  // Additional dirs to clone (e.g., ".yarn/cache")
+	CloneOnly  bool     `json:"clone_only,omitempty"`  // If true, only clone (don't run install if no match). For Go vendor.
+	// Eager is computed by ResolveModules (see resolveEagerness): whether
+	// this module installs automatically or is deferred until explicitly
+	// requested via `rimba deps install --path`.
+	Eager     bool                                        `json:"eager"`
+	PostClone func(srcWT, dstWT string, mod Module) error `json:"-"` // Optional hook run after successful clone.
 }
 
 type preset struct {

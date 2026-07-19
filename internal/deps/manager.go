@@ -85,6 +85,7 @@ func ResolveModules(worktreePath, service string, autoDetect bool, configModules
 	}
 
 	modules = FilterCloneOnly(modules, existingWTPaths)
+	modules = resolveEagerness(worktreePath, service, modules, configModules)
 
 	return modules, nil
 }
