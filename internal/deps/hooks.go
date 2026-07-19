@@ -20,53 +20,77 @@ type HookResult struct {
 	Error   error
 }
 
-// RunPostCreateHooks executes shell commands in the worktree directory.
-// Skips launching new hooks when ctx is already cancelled; kills any in-flight
-// hook subprocess when ctx is cancelled (via exec.CommandContext).
+// RunPostCreateHooks executes shell commands in the worktree directory,
+// organized into stages: stages run in order, and every command within a
+// stage runs concurrently. A flat hook list normalizes to one single-command
+// stage per hook (serial) or one stage holding every hook (parallel) — see
+// internal/config's PostCreateStages/PostRenameStages/NormalizeHookStages for
+// how the [hooks] parallel flag and the nested-array config shape both
+// collapse into this canonical stages form before reaching here.
 //
-// When parallel is false (the default), hooks run serially in input order:
-// launching stops (without starting the next hook) once ctx is cancelled, and
-// a failing hook does not stop later hooks from running. This mode is
-// byte-for-byte unchanged from before parallel execution existed.
+// Cancellation is handled per stage type, matching each one's pre-existing
+// behavior exactly rather than gating at the stage-loop level: a
+// single-command stage stops before launching once ctx is cancelled (so a
+// pre-cancelled ctx yields 0 results for that stage — serial's original
+// behavior); a multi-command stage still dispatches to parallel.Collect
+// regardless of ctx's state at entry, always yielding one result per command
+// (parallel's original "never silently drops a slot" invariant) — see
+// runStageParallel's doc comment. A failing hook never stops others from
+// running, whether they're in the same stage or a later one.
 //
-// When parallel is true, all hooks are launched concurrently via
-// parallel.Collect; a failing or cancelled hook still does not stop the
-// others. The returned slice keeps input order regardless of completion
-// order, and every entry's Command always names the hook it corresponds to
-// — see runHooksParallel's doc comment for how a hook that never got to run
-// because ctx was already cancelled is reported (as a failure, not a silent
-// success).
-func RunPostCreateHooks(ctx context.Context, worktreeDir string, hooks []string, runParallel bool, onProgress progress.Func) []HookResult {
+// Progress messages preserve each of the two historical formats depending on
+// stage shape: a single-command stage reports "<hook> (i/N)" (the original
+// serial per-hook ordinal, byte-for-byte unchanged for the common
+// all-single-command-stages case), a multi-command stage reports
+// "N/total complete" (the original parallel completion counter). Both share
+// one continuous atomic counter spanning the whole run, not reset per stage,
+// so numbering stays correct across a mix of stage shapes.
+func RunPostCreateHooks(ctx context.Context, worktreeDir string, stages [][]string, onProgress progress.Func) []HookResult {
 	rec := observability.FromContext(ctx)
-	if runParallel {
-		return runHooksParallel(ctx, worktreeDir, hooks, rec, onProgress)
+
+	total := 0
+	for _, stage := range stages {
+		total += len(stage)
 	}
-	return runHooksSerial(ctx, worktreeDir, hooks, rec, onProgress)
+
+	var results []HookResult
+	var done atomic.Int32
+	for _, stage := range stages {
+		if len(stage) <= 1 {
+			results = append(results, runStageSerial(ctx, worktreeDir, stage, rec, &done, total, onProgress)...)
+		} else {
+			results = append(results, runStageParallel(ctx, worktreeDir, stage, rec, &done, total, onProgress)...)
+		}
+	}
+	return results
 }
 
-// runHooksSerial runs hooks one at a time, stopping before launching the next
-// hook once ctx is cancelled. This is the original RunPostCreateHooks
-// behavior, unchanged.
-func runHooksSerial(ctx context.Context, worktreeDir string, hooks []string, rec *observability.Recorder, onProgress progress.Func) []HookResult {
+// runStageSerial runs a stage's commands one at a time (used for 0- or
+// 1-command stages), stopping before launching the next once ctx is
+// cancelled — this is the original RunPostCreateHooks serial behavior,
+// unchanged. done is the run-wide atomic.Int32 progress counter, shared with
+// runStageParallel, so numbering stays continuous across stage boundaries
+// regardless of stage shape.
+func runStageSerial(ctx context.Context, worktreeDir string, hooks []string, rec *observability.Recorder, done *atomic.Int32, total int, onProgress progress.Func) []HookResult {
 	results := make([]HookResult, 0, len(hooks))
-	for i, hook := range hooks {
+	for _, hook := range hooks {
 		if ctx.Err() != nil {
 			break
 		}
-		progress.Notifyf(onProgress, "%s (%d/%d)", hook, i+1, len(hooks))
+		ordinal := done.Add(1)
+		progress.Notifyf(onProgress, "%s (%d/%d)", hook, ordinal, total)
 		results = append(results, runHook(ctx, worktreeDir, hook, rec))
 	}
 	return results
 }
 
-// runHooksParallel runs all hooks concurrently via parallel.Collect, mirroring
-// internal/deps/manager.go's install method: an atomic.Int32 completion
-// counter drives "%d/%d complete" progress notifications instead of the
-// serial mode's per-hook ordinal message, since ordinals don't mean the same
-// thing once hooks run concurrently.
+// runStageParallel runs a stage's commands concurrently via parallel.Collect,
+// mirroring internal/deps/manager.go's install method. done is the run-wide
+// atomic.Int32 progress counter, shared with runStageSerial, driving
+// continuous "%d/%d complete" progress notifications.
 //
 // Cancellation-timing caveat (observed empirically, see
-// internal/deps/hooks_ctx_test.go): unlike the serial loop's explicit
+// internal/deps/hooks_ctx_test.go): unlike runStageSerial's explicit
 // `if ctx.Err() != nil { break }` check before each hook, parallel.Collect
 // races each hook's dispatch against ctx.Done() internally via a select —
 // even with concurrency == len(hooks) (no semaphore contention), Go's
@@ -78,13 +102,12 @@ func runHooksSerial(ctx context.Context, worktreeDir string, hooks []string, rec
 // fixup loop below turns any such slot into {Command: <the real hook>,
 // Error: ctx.Err()} so an un-launched hook is always reported as failed
 // with its real command, never as a silent phantom success.
-func runHooksParallel(ctx context.Context, worktreeDir string, hooks []string, rec *observability.Recorder, onProgress progress.Func) []HookResult {
-	total := len(hooks)
-	var done atomic.Int32
+func runStageParallel(ctx context.Context, worktreeDir string, hooks []string, rec *observability.Recorder, done *atomic.Int32, total int, onProgress progress.Func) []HookResult {
+	n := len(hooks)
 	// Concurrency 0 (unbounded) is intentional: unlike deps modules, hooks
 	// are user-configured and typically few, so there's no auto-detected
 	// count to guard against — no need for a DepsConcurrency()-style cap.
-	results := parallel.Collect(ctx, total, 0, func(ctx context.Context, i int) HookResult {
+	results := parallel.Collect(ctx, n, 0, func(ctx context.Context, i int) HookResult {
 		res := runHook(ctx, worktreeDir, hooks[i], rec)
 		completed := done.Add(1)
 		progress.Notifyf(onProgress, "%d/%d complete", completed, total)

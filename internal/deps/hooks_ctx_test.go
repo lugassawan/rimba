@@ -16,7 +16,7 @@ func TestRunPostCreateHooksCancelledStopsLaunching(t *testing.T) {
 	cancel() // pre-cancel so no hooks launch
 
 	start := time.Now()
-	results := RunPostCreateHooks(ctx, dir, []string{"sleep 5", "touch " + marker}, false, nil)
+	results := RunPostCreateHooks(ctx, dir, serialStages([]string{"sleep 5", "touch " + marker}), nil)
 	elapsed := time.Since(start)
 
 	if elapsed > time.Second {
@@ -37,7 +37,7 @@ func TestRunPostCreateHooksKillsChild(t *testing.T) {
 
 	done := make(chan []HookResult, 1)
 	go func() {
-		done <- RunPostCreateHooks(ctx, dir, []string{"sleep 30"}, false, nil)
+		done <- RunPostCreateHooks(ctx, dir, [][]string{{"sleep 30"}}, nil)
 	}()
 
 	time.Sleep(50 * time.Millisecond)
@@ -54,15 +54,16 @@ func TestRunPostCreateHooksKillsChild(t *testing.T) {
 }
 
 // TestRunPostCreateHooksParallelPreCancelledNoPhantomSuccess documents (and
-// guards against regressing) the parallel-mode cancellation behavior found
-// while implementing this task: parallel.Collect races each hook's dispatch
-// against ctx.Done() via a select, and — even with concurrency==len(hooks),
-// so no semaphore contention — Go's pseudo-random choice between two
-// simultaneously-ready channels means some hooks lose that race and never
-// call runHook. Without the fixup in runHooksParallel, those slots would
-// keep the Go zero value HookResult{Command: "", Error: nil}, which reads as
-// a phantom hook that silently "succeeded". This test asserts every result
-// names its real hook and carries a non-nil error instead.
+// guards against regressing) the multi-command-stage cancellation behavior
+// found while implementing this task: parallel.Collect races each hook's
+// dispatch against ctx.Done() via a select, and — even with
+// concurrency==len(hooks), so no semaphore contention — Go's pseudo-random
+// choice between two simultaneously-ready channels means some hooks lose
+// that race and never call runHook. Without the fixup in runStageParallel,
+// those slots would keep the Go zero value HookResult{Command: "", Error:
+// nil}, which reads as a phantom hook that silently "succeeded". This test
+// asserts every result names its real hook and carries a non-nil error
+// instead.
 func TestRunPostCreateHooksParallelPreCancelledNoPhantomSuccess(t *testing.T) {
 	dir := t.TempDir()
 
@@ -74,7 +75,7 @@ func TestRunPostCreateHooksParallelPreCancelledNoPhantomSuccess(t *testing.T) {
 		hooks[i] = "touch marker-" + string(rune('a'+i)) + ".txt"
 	}
 
-	results := RunPostCreateHooks(ctx, dir, hooks, true, nil)
+	results := RunPostCreateHooks(ctx, dir, [][]string{hooks}, nil)
 	if len(results) != len(hooks) {
 		t.Fatalf("expected %d results (parallel.Collect always returns len==n), got %d", len(hooks), len(results))
 	}
@@ -104,7 +105,7 @@ func TestRunPostCreateHooksParallelCancelMidFlightKillsChildren(t *testing.T) {
 
 	done := make(chan []HookResult, 1)
 	go func() {
-		done <- RunPostCreateHooks(ctx, dir, hooks, true, nil)
+		done <- RunPostCreateHooks(ctx, dir, [][]string{hooks}, nil)
 	}()
 
 	time.Sleep(50 * time.Millisecond)

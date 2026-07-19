@@ -16,7 +16,7 @@ import (
 func TestRunPostCreateHooksSuccess(t *testing.T) {
 	dir := t.TempDir()
 
-	results := RunPostCreateHooks(context.Background(), dir, []string{"touch marker.txt"}, false, nil)
+	results := RunPostCreateHooks(context.Background(), dir, [][]string{{"touch marker.txt"}}, nil)
 
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedOneResult, len(results))
@@ -34,11 +34,11 @@ func TestRunPostCreateHooksSuccess(t *testing.T) {
 func TestRunPostCreateHooksPartialFailure(t *testing.T) {
 	dir := t.TempDir()
 
-	results := RunPostCreateHooks(context.Background(), dir, []string{
+	results := RunPostCreateHooks(context.Background(), dir, serialStages([]string{
 		"touch good.txt",
 		"false", // always fails
 		"touch also-good.txt",
-	}, false, nil)
+	}), nil)
 
 	if len(results) != 3 {
 		t.Fatalf("expected 3 results, got %d", len(results))
@@ -66,7 +66,7 @@ func TestRunPostCreateHooksPartialFailure(t *testing.T) {
 func TestRunPostCreateHooksEmpty(t *testing.T) {
 	dir := t.TempDir()
 
-	results := RunPostCreateHooks(context.Background(), dir, nil, false, nil)
+	results := RunPostCreateHooks(context.Background(), dir, nil, nil)
 
 	if len(results) != 0 {
 		t.Errorf("expected 0 results, got %d", len(results))
@@ -77,9 +77,9 @@ func TestRunPostCreateHooksShellFeatures(t *testing.T) {
 	dir := t.TempDir()
 
 	// Test shell features: pipes and quoting
-	results := RunPostCreateHooks(context.Background(), dir, []string{
+	results := RunPostCreateHooks(context.Background(), dir, [][]string{{
 		"echo 'hello world' > output.txt",
-	}, false, nil)
+	}}, nil)
 
 	if results[0].Error != nil {
 		t.Fatalf(fmtExpectedNoError, results[0].Error)
@@ -103,7 +103,7 @@ func TestRunPostCreateHooksProgressCallback(t *testing.T) {
 	}
 
 	hooks := []string{"touch a.txt", "touch b.txt"}
-	RunPostCreateHooks(context.Background(), dir, hooks, false, onProgress)
+	RunPostCreateHooks(context.Background(), dir, serialStages(hooks), onProgress)
 
 	if len(calls) != 2 {
 		t.Fatalf("expected 2 progress calls, got %d", len(calls))
@@ -119,9 +119,9 @@ func TestRunPostCreateHooksProgressCallback(t *testing.T) {
 func TestRunPostCreateHooksOutputCapture(t *testing.T) {
 	dir := t.TempDir()
 
-	results := RunPostCreateHooks(context.Background(), dir, []string{
+	results := RunPostCreateHooks(context.Background(), dir, [][]string{{
 		"echo hook-output-captured && exit 1",
-	}, false, nil)
+	}}, nil)
 
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedOneResult, len(results))
@@ -151,7 +151,7 @@ func TestRunPostCreateHooksOutputTailCapped(t *testing.T) {
 		"printf 'EARLY'; printf 'MARKER'; yes x | head -c %d; printf 'LATE'; printf 'MARKERTAIL'; exit 1",
 		fillerSize)
 
-	results := RunPostCreateHooks(context.Background(), dir, []string{hook}, false, nil)
+	results := RunPostCreateHooks(context.Background(), dir, [][]string{{hook}}, nil)
 
 	if len(results) != 1 {
 		t.Fatalf(fmtExpectedOneResult, len(results))
@@ -176,7 +176,7 @@ func TestRunPostCreateHooksRecordsSubprocess(t *testing.T) {
 	rec := observability.Maybe(true, sink, "add", "task", "", "v1")
 	ctx := observability.WithRecorder(context.Background(), rec)
 
-	results := RunPostCreateHooks(ctx, dir, []string{"touch good.txt", "exit 3"}, false, nil)
+	results := RunPostCreateHooks(ctx, dir, serialStages([]string{"touch good.txt", "exit 3"}), nil)
 	if len(results) != 2 {
 		t.Fatalf("expected 2 results, got %d", len(results))
 	}
@@ -211,14 +211,14 @@ func TestRunPostCreateHooksRecordsSubprocess(t *testing.T) {
 func TestRunPostCreateHooksNilRecorderNoPanic(t *testing.T) {
 	dir := t.TempDir()
 
-	results := RunPostCreateHooks(context.Background(), dir, []string{"touch marker.txt"}, false, nil)
+	results := RunPostCreateHooks(context.Background(), dir, [][]string{{"touch marker.txt"}}, nil)
 
 	if len(results) != 1 || results[0].Error != nil {
 		t.Fatalf("expected 1 successful result, got %+v", results)
 	}
 }
 
-// --- parallel mode (parallel=true) ---
+// --- multi-command stages (a single stage holding more than one command) ---
 
 func TestRunPostCreateHooksParallelAllRun(t *testing.T) {
 	dir := t.TempDir()
@@ -231,7 +231,7 @@ func TestRunPostCreateHooksParallelAllRun(t *testing.T) {
 		"touch three.txt",
 	}
 
-	results := RunPostCreateHooks(context.Background(), dir, hooks, true, nil)
+	results := RunPostCreateHooks(context.Background(), dir, [][]string{hooks}, nil)
 	if len(results) != 3 {
 		t.Fatalf("expected 3 results, got %d", len(results))
 	}
@@ -259,7 +259,7 @@ func TestRunPostCreateHooksParallelFailureIsolation(t *testing.T) {
 		"touch good-b.txt",
 	}
 
-	results := RunPostCreateHooks(context.Background(), dir, hooks, true, nil)
+	results := RunPostCreateHooks(context.Background(), dir, [][]string{hooks}, nil)
 	if len(results) != 3 {
 		t.Fatalf("expected 3 results, got %d", len(results))
 	}
@@ -288,7 +288,7 @@ func TestRunPostCreateHooksParallelRecordsSubprocessPerHook(t *testing.T) {
 
 	hooks := []string{"touch a.txt", "touch b.txt", "false"}
 
-	results := RunPostCreateHooks(ctx, dir, hooks, true, nil)
+	results := RunPostCreateHooks(ctx, dir, [][]string{hooks}, nil)
 	if len(results) != 3 {
 		t.Fatalf("expected 3 results, got %d", len(results))
 	}
@@ -336,16 +336,16 @@ func TestRunPostCreateHooksParallelProgressCallback(t *testing.T) {
 	}
 
 	hooks := []string{"touch a.txt", "touch b.txt", "touch c.txt"}
-	RunPostCreateHooks(context.Background(), dir, hooks, true, onProgress)
+	RunPostCreateHooks(context.Background(), dir, [][]string{hooks}, onProgress)
 
 	mu.Lock()
 	defer mu.Unlock()
 	if len(calls) != 3 {
 		t.Fatalf("expected 3 progress calls, got %d", len(calls))
 	}
-	// Parallel mode reports a completion count ("N/total complete"), not the
-	// serial "hook (i/N)" ordinal message — ordinals don't mean the same
-	// thing once hooks run concurrently.
+	// A multi-command stage reports a completion count ("N/total complete"),
+	// not the single-command-stage "hook (i/N)" ordinal message — ordinals
+	// don't mean the same thing once commands run concurrently.
 	want := map[string]bool{
 		"1/3 complete": true,
 		"2/3 complete": true,
@@ -376,7 +376,7 @@ func TestRunPostCreateHooksParallelIsActuallyConcurrent(t *testing.T) {
 	}
 
 	start := time.Now()
-	results := RunPostCreateHooks(context.Background(), dir, hooks, true, nil)
+	results := RunPostCreateHooks(context.Background(), dir, [][]string{hooks}, nil)
 	elapsed := time.Since(start)
 
 	if len(results) != n {

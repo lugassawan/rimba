@@ -17,15 +17,25 @@ func benchHooks() []string {
 	}
 }
 
+// serialStages splits hooks into one single-command stage each, the
+// canonical form a flat, non-parallel post_create list normalizes to.
+func serialStages(hooks []string) [][]string {
+	stages := make([][]string, len(hooks))
+	for i, h := range hooks {
+		stages[i] = []string{h}
+	}
+	return stages
+}
+
 // BenchmarkRunPostCreateHooksSerial measures the pre-existing (and still
 // default) serial execution path.
 func BenchmarkRunPostCreateHooksSerial(b *testing.B) {
 	dir := b.TempDir()
-	hooks := benchHooks()
+	stages := serialStages(benchHooks())
 
 	b.ResetTimer()
 	for b.Loop() {
-		RunPostCreateHooks(context.Background(), dir, hooks, false, nil)
+		RunPostCreateHooks(context.Background(), dir, stages, nil)
 	}
 }
 
@@ -37,10 +47,10 @@ func BenchmarkRunPostCreateHooksSerial(b *testing.B) {
 // speedup, by design — nothing to parallelize).
 func BenchmarkRunPostCreateHooksParallel(b *testing.B) {
 	dir := b.TempDir()
-	hooks := benchHooks()
+	stages := [][]string{benchHooks()}
 
 	b.ResetTimer()
 	for b.Loop() {
-		RunPostCreateHooks(context.Background(), dir, hooks, true, nil)
+		RunPostCreateHooks(context.Background(), dir, stages, nil)
 	}
 }
