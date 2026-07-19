@@ -39,7 +39,7 @@ type fileSink struct {
 // first 8 hex characters of the SHA-256 of its absolute path, disambiguating
 // same-named repos in different locations. This is the single source of
 // truth for the naming formula — NewFileSink and `rimba report`'s file
-// discovery both derive their glob patterns from it.
+// discovery both derive their ListDayFiles prefix from it.
 func RepoPrefix(repoRoot string) string {
 	base := filepath.Base(repoRoot)
 	sum := sha256.Sum256([]byte(repoRoot))

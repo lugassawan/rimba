@@ -179,8 +179,8 @@ func (r *Recorder) Finalize(outcome string, exitCode int, err error) {
 }
 
 // Close releases the underlying sink's file handles. Nil-safe. Callers defer
-// this immediately after Maybe(...) returns — see cmd/root.go and the MCP
-// wiring task for the required defer ordering (Finalize must run before Close).
+// this immediately after Maybe(...) returns; Finalize must run before Close
+// (see cmd/root.go's Execute and internal/mcp/observability.go's withRecorder).
 func (r *Recorder) Close() error {
 	if r == nil {
 		return nil

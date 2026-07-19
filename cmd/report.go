@@ -78,8 +78,8 @@ func init() {
 	rootCmd.AddCommand(reportCmd)
 }
 
-// collectReportData glob-matches this repo's day-files under
-// cacheDir/rimba, aggregates every .metrics.jsonl SpanRecord line into
+// collectReportData finds this repo's day-files under cacheDir/rimba,
+// aggregates every .metrics.jsonl SpanRecord line into
 // per-(command, phase) stats, and scans .log.jsonl CommandRecord lines only
 // to collect the distinct rimba_version values seen (SpanRecord itself
 // carries no version field — see internal/observability/record.go).
@@ -124,9 +124,9 @@ func collectReportData(cacheDir, repoRoot string) output.ReportData {
 // DurationMS into durations keyed by (Command, Name). Returns the count of
 // lines that failed to parse as JSON or carried a schema_version other than
 // observability.SchemaVersion — both signal a possibly corrupted/interleaved
-// write (the plan's "interleave canary").
+// write.
 func scanMetricsFile(path string, durations map[reportPhaseKey][]int64) int {
-	f, err := os.Open(path) //nolint:gosec // path comes from our own glob under the user's cache dir
+	f, err := os.Open(path) //nolint:gosec // path comes from observability.ListDayFiles under the user's cache dir
 	if err != nil {
 		return 0
 	}
@@ -162,7 +162,7 @@ func scanMetricsFile(path string, durations map[reportPhaseKey][]int64) int {
 // scanLogFileVersions reads path line by line, adding the RimbaVersion of
 // every well-formed "command"-kind, current-schema line to seen.
 func scanLogFileVersions(path string, seen map[string]struct{}) {
-	f, err := os.Open(path) //nolint:gosec // path comes from our own glob under the user's cache dir
+	f, err := os.Open(path) //nolint:gosec // path comes from observability.ListDayFiles under the user's cache dir
 	if err != nil {
 		return
 	}
