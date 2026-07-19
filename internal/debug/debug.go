@@ -21,11 +21,9 @@ func StartTimer(label string) func() {
 	}
 }
 
-// LogGitTiming writes a debug timing line for a labelled git subprocess call,
-// if RIMBA_DEBUG is set; no-op otherwise. Exported so other decorators (the
-// observability recorder's no-Recorder-on-ctx fallback) can share this exact
-// format instead of duplicating it, keeping RIMBA_DEBUG working even for
-// invocations that carry no per-call Recorder.
+// LogGitTiming writes a debug timing line for a labelled git subprocess
+// call, if RIMBA_DEBUG is set; no-op otherwise. Exported so the
+// observability recorder's no-Recorder fallback can share this format.
 func LogGitTiming(dir string, args []string, d time.Duration) {
 	if !enabled() {
 		return

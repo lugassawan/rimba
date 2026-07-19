@@ -20,14 +20,9 @@ import (
 
 // newRunner creates a git.Runner for command execution.
 // Defined as a variable to allow test overrides (same pattern as newUpdater).
-// Always wrapped with the observability Recorder decorator, which derives
-// its Recorder fresh from each call's own ctx (see
-// observability.WrapRunner) rather than one captured here at construction
-// time — this is what lets a single instance built once (as MCP's
-// HandlerContext holds it for the server's whole lifetime) still record
-// each tool call's own per-call Recorder correctly. A call whose ctx
-// carries no Recorder falls back to the RIMBA_DEBUG stderr timer.
-// The timeout is sourced from config in ctx; falls back to DefaultCommandTimeout.
+// Always wrapped with observability.WrapRunner (see its doc for the
+// per-call ctx-derivation rationale). The timeout is sourced from config in
+// ctx; falls back to DefaultCommandTimeout.
 var newRunner = func(ctx context.Context) git.Runner {
 	timeout := config.DefaultCommandTimeout
 	if cfg := config.FromContext(ctx); cfg != nil {
@@ -37,11 +32,7 @@ var newRunner = func(ctx context.Context) git.Runner {
 }
 
 // newGHRunner creates a gh.Runner with a timeout sourced from config in ctx.
-// Always wrapped with the observability Recorder decorator — same
-// per-call-derives-from-ctx design as newRunner, for the same reason (a
-// single long-lived instance must still record each MCP tool call
-// correctly). gh has no RIMBA_DEBUG fallback; it was never covered by that
-// timer before this feature existed.
+// Always wrapped with gh.WrapRunner, same per-call design as newRunner.
 var newGHRunner = func(ctx context.Context) gh.Runner {
 	timeout := config.DefaultCommandTimeout
 	if cfg := config.FromContext(ctx); cfg != nil {

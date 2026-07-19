@@ -7,20 +7,16 @@ import (
 	"github.com/lugassawan/rimba/internal/observability"
 )
 
-// recordingRunner decorates a Runner so every gh subprocess call is logged
-// via whichever Recorder is attached to that specific call's ctx (looked up
-// fresh on each call, never captured once at wrap time). This lets a single
-// long-lived wrapped Runner — as the MCP server's HandlerContext holds for
-// its whole process lifetime — correctly record each tool call's own
-// per-call Recorder.
+// recordingRunner decorates a Runner, recording each gh subprocess call via
+// whichever Recorder is attached to that call's ctx — see WrapRunner.
 type recordingRunner struct {
 	inner Runner
 }
 
 // WrapRunner decorates r so every gh subprocess is recorded via whichever
-// Recorder is attached to each call's ctx. Safe to call unconditionally — a
-// call whose ctx carries no Recorder simply isn't recorded (gh has no
-// RIMBA_DEBUG fallback timer, unlike git).
+// Recorder is on each call's ctx — the same per-call design as
+// observability.WrapRunner, for the same MCP reason. gh has no
+// RIMBA_DEBUG fallback; it was never covered by that timer.
 func WrapRunner(r Runner) Runner {
 	return &recordingRunner{inner: r}
 }

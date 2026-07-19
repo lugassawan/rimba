@@ -41,19 +41,11 @@ const (
 // commandName stores the resolved command name for JSON error reporting.
 var commandName string
 
-// lastRecorder captures the Recorder built inside PersistentPreRunE for the
-// most recently invoked command. Execute() cannot recover it via
-// rootCmd.Context() after ExecuteContext returns: cobra only copies context
-// from a parent command down to a child whose own ctx is still nil (see
-// Command.ExecuteC's `if cmd.ctx == nil { cmd.ctx = c.ctx }`) — it never
-// copies back up. cmd.SetContext inside PersistentPreRunE is called on the
-// *invoked* (sub)command object, not on rootCmd, so rootCmd.ctx is left
-// exactly as ExecuteContext set it and never reflects the config/Recorder
-// context built during preRun (verified empirically: a minimal cobra repro
-// showed root.Context() nil while the invoked subcommand's Context() carried
-// the value). Reset to nil at the top of every PersistentPreRunE invocation
-// so a command that skips the observability build (completion, __complete,
-// skipConfig-annotated chains) never leaks a previous invocation's Recorder.
+// lastRecorder captures the Recorder built in PersistentPreRunE for the most
+// recently invoked command — Execute() can't recover it via
+// rootCmd.Context() (cobra never copies a subcommand's context back up to
+// root). Reset to nil at the top of every PersistentPreRunE so a command
+// that skips the observability build never leaks a prior invocation's value.
 var lastRecorder *observability.Recorder
 
 var rootCmd = &cobra.Command{
