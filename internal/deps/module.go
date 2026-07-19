@@ -186,9 +186,20 @@ func MergeWithConfig(detected []Module, configModules []config.ModuleConfig) []M
 	}
 
 	for _, cm := range configModules {
-		if !seenDirs[cm.Dir] {
-			result = append(result, moduleFromConfig(cm))
+		if seenDirs[cm.Dir] {
+			continue
 		}
+		if cm.Lockfile == "" && cm.Install == "" {
+			// Patch-only entry (e.g. just Eager) with nothing detected to
+			// patch this call — most commonly because a --service-scoped
+			// DetectModules never looked at this Dir's subdirectory at all.
+			// Silently no-op rather than add a broken "new module" with an
+			// empty Lockfile: HashLockfile("") would try to read the
+			// worktree directory itself as a file and error, aborting
+			// hashing for every module in the batch, not just this one.
+			continue
+		}
+		result = append(result, moduleFromConfig(cm))
 	}
 
 	return result

@@ -381,6 +381,46 @@ func TestMergeWithConfigNewModuleStillNeedsFullDefinition(t *testing.T) {
 	}
 }
 
+// TestMergeWithConfigUnmatchedPatchOnlyEntryIsNoOp verifies a real production
+// bug: a patch-only config entry (dir + eager, no lockfile/install) whose Dir
+// isn't in `detected` — e.g. because a --service-scoped DetectModules call
+// never looked at that subdirectory at all — must be silently skipped, not
+// added as a broken "new module" with an empty Lockfile. An empty Lockfile
+// makes HashLockfile try to read the worktree directory itself, erroring out
+// hashing for the ENTIRE batch (including otherwise-fine modules like a
+// correctly detected root module).
+func TestMergeWithConfigUnmatchedPatchOnlyEntryIsNoOp(t *testing.T) {
+	detected := []Module{
+		{Dir: DirNodeModules, Lockfile: LockfileYarn, InstallCmd: "yarn install", Recursive: true},
+	}
+	configModules := []config.ModuleConfig{
+		{Dir: "internal-cli/node_modules", Eager: new(true)},
+	}
+
+	merged := MergeWithConfig(detected, configModules)
+
+	assertModuleCount(t, merged, 1)
+	if merged[0].Dir != DirNodeModules {
+		t.Errorf("expected only the detected root module to survive, got %+v", merged)
+	}
+}
+
+func TestMergeWithConfigMatchedPatchOnlyEntryStillPatches(t *testing.T) {
+	detected := []Module{
+		{Dir: "internal-cli/node_modules", Lockfile: "internal-cli/package-lock.json", InstallCmd: "npm ci", WorkDir: "internal-cli"},
+	}
+	configModules := []config.ModuleConfig{
+		{Dir: "internal-cli/node_modules", Eager: new(true)},
+	}
+
+	merged := MergeWithConfig(detected, configModules)
+
+	assertModuleCount(t, merged, 1)
+	if merged[0].Lockfile != "internal-cli/package-lock.json" || merged[0].InstallCmd != "npm ci" {
+		t.Errorf("expected the matched entry to still patch (inheriting lockfile/install), got %+v", merged[0])
+	}
+}
+
 func TestModuleInstallState(t *testing.T) {
 	tests := []struct {
 		name      string
