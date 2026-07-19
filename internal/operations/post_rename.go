@@ -18,7 +18,7 @@ type PostRenameParams struct {
 	AutoDetect    bool
 	ConfigModules []config.ModuleConfig
 	SkipHooks     bool
-	PostRename    []string
+	PostRename    [][]string // hook stages — see config.PostRenameStages
 	Concurrency   int
 }
 
@@ -51,6 +51,10 @@ func PostRenameSetup(ctx context.Context, r git.Runner, params PostRenameParams,
 
 	if !params.SkipHooks && len(params.PostRename) > 0 {
 		progress.Notify(onProgress, "Running post-rename hooks...")
+		// A flat post_rename list always normalizes to fully-serial stages
+		// (config.PostRenameStages ignores [hooks] parallel for the flat
+		// case) — post-rename hooks opt into parallelism only via the
+		// nested/staged config shape, same as post_create.
 		result.HookResults = RunPostCreateHooks(ctx, params.WtPath, params.PostRename, onProgress)
 	}
 

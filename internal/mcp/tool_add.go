@@ -198,6 +198,9 @@ func buildPostCreateOptions(hctx *HandlerContext, cfg *config.Config, req mcp.Ca
 	if cfg.Deps != nil {
 		configModules = cfg.Deps.Modules
 	}
+	// Error is ignored: cfg.Validate() (run in HandlerContext setup)
+	// already guarantees post_create is well-formed before any tool runs.
+	stages, _ := cfg.PostCreateStages()
 	return operations.PostCreateOptions{
 		RepoRoot:      hctx.RepoRoot,
 		WorktreeDir:   filepath.Join(hctx.RepoRoot, cfg.WorktreeDir),
@@ -206,7 +209,7 @@ func buildPostCreateOptions(hctx *HandlerContext, cfg *config.Config, req mcp.Ca
 		AutoDetect:    cfg.IsAutoDetectDeps(),
 		ConfigModules: configModules,
 		SkipHooks:     req.GetBool("skip_hooks", false),
-		PostCreate:    cfg.PostCreate,
+		PostCreate:    stages,
 		Concurrency:   cfg.DepsConcurrency(),
 	}
 }

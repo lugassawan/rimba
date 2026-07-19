@@ -17,7 +17,7 @@ func TestPostRenameSetupSkipAll(t *testing.T) {
 		WtPath:     "/wt/feature/auth",
 		SkipDeps:   true,
 		SkipHooks:  true,
-		PostRename: []string{"echo hook"},
+		PostRename: [][]string{{"echo hook"}},
 	}
 	res, err := PostRenameSetup(context.Background(), newNoopRunner(), params, nil)
 	if err != nil {
@@ -37,7 +37,7 @@ func TestPostRenameSetupRunsHooks(t *testing.T) {
 		WtPath:     hookDir,
 		SkipDeps:   true,
 		SkipHooks:  false,
-		PostRename: []string{"echo hook-ran"},
+		PostRename: [][]string{{"echo hook-ran"}},
 	}
 	res, err := PostRenameSetup(context.Background(), newNoopRunner(), params, nil)
 	if err != nil {
@@ -73,7 +73,7 @@ func TestPostRenameSetupHookFailure(t *testing.T) {
 		WtPath:     hookDir,
 		SkipDeps:   true,
 		SkipHooks:  false,
-		PostRename: []string{"false"},
+		PostRename: [][]string{{"false"}},
 	}
 	res, err := PostRenameSetup(context.Background(), newNoopRunner(), params, nil)
 	if err != nil {

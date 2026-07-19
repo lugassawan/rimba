@@ -49,9 +49,9 @@ func InstallDepsPreferSource(ctx context.Context, r git.Runner, sourceWT string,
 	return mgr.InstallPreferSource(ctx, p.WtPath, sourceWT, modules, p.Entries, onProgress)
 }
 
-// RunPostCreateHooks executes post-create hooks and returns the results.
-func RunPostCreateHooks(ctx context.Context, wtPath string, hooks []string, onProgress progress.Func) []deps.HookResult {
-	return deps.RunPostCreateHooks(ctx, wtPath, hooks, onProgress)
+// RunPostCreateHooks executes post-create hook stages and returns the results.
+func RunPostCreateHooks(ctx context.Context, wtPath string, stages [][]string, onProgress progress.Func) []deps.HookResult {
+	return deps.RunPostCreateHooks(ctx, wtPath, stages, onProgress)
 }
 
 // WorktreePathsExcluding returns paths from entries, excluding the given path.

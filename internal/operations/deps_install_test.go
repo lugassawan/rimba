@@ -169,7 +169,7 @@ func TestRunPostCreateHooksEmpty(t *testing.T) {
 
 func TestRunPostCreateHooksInvalidCommand(t *testing.T) {
 	tmpDir := t.TempDir()
-	results := RunPostCreateHooks(context.Background(), tmpDir, []string{"nonexistent-command-xyz"}, nil)
+	results := RunPostCreateHooks(context.Background(), tmpDir, [][]string{{"nonexistent-command-xyz"}}, nil)
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}

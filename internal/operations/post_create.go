@@ -25,9 +25,9 @@ type PostCreateParams struct {
 	AutoDetect    bool
 	ConfigModules []config.ModuleConfig
 	SkipHooks     bool
-	PostCreate    []string // hook commands
-	SourcePath    string   // if non-empty, prefer copying deps from this worktree
-	Concurrency   int      // max parallel module installs; 0 = Manager default
+	PostCreate    [][]string // hook stages — see config.PostCreateStages
+	SourcePath    string     // if non-empty, prefer copying deps from this worktree
+	Concurrency   int        // max parallel module installs; 0 = Manager default
 }
 
 // PostCreateResult holds the outcome of the post-create setup sequence.

@@ -443,7 +443,7 @@ func TestAddWorktreeWithHooks(t *testing.T) {
 			WorktreeDir: wtDir,
 			SkipDeps:    true,
 			SkipHooks:   false,
-			PostCreate:  []string{"echo hello"},
+			PostCreate:  [][]string{{"echo hello"}},
 		},
 	}, nil)
 	if err != nil {
