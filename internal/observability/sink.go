@@ -151,7 +151,7 @@ func pruneSuffix(dir, prefix, suffix string, retentionDays int, today string) {
 			continue
 		}
 		if time.Since(date) > time.Duration(retentionDays)*24*time.Hour {
-			_ = os.Remove(filepath.Join(dir, name))
+			_ = os.Remove(match)
 		}
 	}
 }
