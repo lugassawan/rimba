@@ -23,6 +23,25 @@ const (
 	taskDupSrc      = "dup-src"
 )
 
+// envForceCowEligible pins cowEligible's decision to true for a rimba
+// invocation, so tests asserting clone-from-sibling behavior for
+// install-capable modules (pnpm/yarn/npm node_modules) don't depend on the
+// test host's real filesystem CoW support — CI runners' temp filesystems
+// commonly don't support reflink at all, which correctly (and intentionally)
+// routes such modules to their install command instead.
+var envForceCowEligible = []string{"RIMBA_COW_ELIGIBLE_OVERRIDE=1"}
+
+// rimbaSuccessWithEnv is rimbaSuccess with extra environment variables.
+func rimbaSuccessWithEnv(t *testing.T, dir string, extraEnv []string, args ...string) result {
+	t.Helper()
+	r := rimbaWithEnv(t, dir, extraEnv, args...)
+	if r.ExitCode != 0 {
+		t.Fatalf("rimba %v: expected exit 0, got %d\nstdout: %s\nstderr: %s",
+			args, r.ExitCode, r.Stdout, r.Stderr)
+	}
+	return r
+}
+
 func commitLockfile(t *testing.T, repo, name string) {
 	t.Helper()
 	testutil.CreateFile(t, repo, name, testLockContent)
@@ -61,7 +80,7 @@ func TestAddWithDepsClone(t *testing.T) {
 	addNodeModules(t, wt1Path, map[string]string{".package-lock.json": "{}"})
 
 	// Create second worktree — should clone node_modules
-	r := rimbaSuccess(t, repo, "add", "task-deps-2")
+	r := rimbaSuccessWithEnv(t, repo, envForceCowEligible, "add", "task-deps-2")
 
 	branch2 := resolver.BranchName(defaultPrefix, "task-deps-2")
 	wt2Path := resolver.WorktreePath(wtDir, branch2)
@@ -102,7 +121,7 @@ func TestAddWithDepsNestedModules(t *testing.T) {
 	}
 	testutil.CreateFile(t, filepath.Join(wt1Path, testDirAppWeb, deps.DirNodeModules), "app.json", "{}")
 
-	r := rimbaSuccess(t, repo, "add", "mono-2")
+	r := rimbaSuccessWithEnv(t, repo, envForceCowEligible, "add", "mono-2")
 
 	branch2 := resolver.BranchName(defaultPrefix, "mono-2")
 	wt2Path := resolver.WorktreePath(wtDir, branch2)
@@ -223,7 +242,7 @@ func TestDepsInstall(t *testing.T) {
 	// Create second worktree with --skip-deps (no deps initially)
 	rimbaSuccess(t, repo, "add", flagSkipDepsE2E, taskInstallDst)
 
-	r := rimbaSuccess(t, repo, "deps", "install", taskInstallDst)
+	r := rimbaSuccessWithEnv(t, repo, envForceCowEligible, "deps", "install", taskInstallDst)
 
 	branch2 := resolver.BranchName(defaultPrefix, taskInstallDst)
 	wt2Path := resolver.WorktreePath(wtDir, branch2)
@@ -301,7 +320,7 @@ func TestDuplicateWithDepsClone(t *testing.T) {
 	}
 	testutil.CreateFile(t, filepath.Join(srcPath, deps.DirNodeModules), "source.json", "from-source")
 
-	r := rimbaSuccess(t, repo, "duplicate", taskDupSrc)
+	r := rimbaSuccessWithEnv(t, repo, envForceCowEligible, "duplicate", taskDupSrc)
 
 	dupBranch := resolver.BranchName(defaultPrefix, "dup-src-1")
 	dupPath := resolver.WorktreePath(wtDir, dupBranch)
@@ -309,6 +328,54 @@ func TestDuplicateWithDepsClone(t *testing.T) {
 	assertFileExists(t, filepath.Join(dupPath, deps.DirNodeModules, "source.json"))
 	assertContains(t, r.Stdout, msgDependencies)
 	assertContains(t, r.Stdout, msgClonedFrom)
+}
+
+// TestAddWithDepsIneligibleCloneFallsBackToInstall verifies Stage 1's other
+// headline case end-to-end: when cowEligible reports the destination
+// filesystem can't honor a true reflink, an install-capable module runs its
+// InstallCmd instead of byte-copying the sibling's node_modules. A config
+// module override supplies a trivial InstallCmd so the assertion doesn't
+// depend on pnpm being installed on the test host.
+func TestAddWithDepsIneligibleCloneFallsBackToInstall(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	commitLockfile(t, repo, deps.LockfilePnpm)
+
+	cfg := loadConfig(t, repo)
+	cfg.Deps = &config.DepsConfig{
+		Modules: []config.ModuleConfig{
+			{
+				Dir:      deps.DirNodeModules,
+				Lockfile: deps.LockfilePnpm,
+				Install:  "mkdir -p node_modules && touch node_modules/installed.marker",
+			},
+		},
+	}
+	saveConfig(t, repo, cfg)
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "override node_modules install for e2e")
+
+	rimbaSuccess(t, repo, "add", "--yes", "ineligible-src")
+
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch1 := resolver.BranchName(defaultPrefix, "ineligible-src")
+	wt1Path := resolver.WorktreePath(wtDir, branch1)
+
+	// A sibling that, if cloned, would be trivially distinguishable from a
+	// fresh install (the install command only ever produces installed.marker).
+	addNodeModules(t, wt1Path, map[string]string{"from-sibling.json": "{}"})
+
+	r := rimbaSuccessWithEnv(t, repo, []string{"RIMBA_COW_ELIGIBLE_OVERRIDE=0"}, "add", "ineligible-dst")
+
+	branch2 := resolver.BranchName(defaultPrefix, "ineligible-dst")
+	wt2Path := resolver.WorktreePath(wtDir, branch2)
+
+	assertFileExists(t, filepath.Join(wt2Path, deps.DirNodeModules, "installed.marker"))
+	assertFileNotExists(t, filepath.Join(wt2Path, deps.DirNodeModules, "from-sibling.json"))
+	assertNotContains(t, r.Stdout, msgClonedFrom)
 }
 
 func TestDepsStatusNoModules(t *testing.T) {

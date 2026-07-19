@@ -114,6 +114,29 @@ func TestCowEligibleRealImplementation(t *testing.T) {
 	}
 }
 
+func TestCowEligibleOverrideEnv(t *testing.T) {
+	tests := []struct {
+		name string
+		val  string
+		want bool
+	}{
+		{name: "forced true", val: "1", want: true},
+		{name: "forced false", val: "0", want: false},
+		{name: "unrecognized value treated as false", val: "yes", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv(cowEligibleOverrideEnv, tt.val)
+			// Nonexistent src would normally make sameDevice fail (ineligible)
+			// regardless — proves the override short-circuits before that check.
+			dir := t.TempDir()
+			if got := cowEligible(context.Background(), filepath.Join(dir, "nonexistent-src"), dir); got != tt.want {
+				t.Errorf("cowEligible() with override=%q = %v, want %v", tt.val, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCowEligibleDifferentDevice(t *testing.T) {
 	dir := t.TempDir()
 	if got := cowEligible(context.Background(), filepath.Join(dir, "nonexistent-src"), dir); got {

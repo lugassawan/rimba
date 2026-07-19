@@ -13,6 +13,14 @@ import (
 // invocation regardless of how many modules clone into the same worktree.
 var cowProbeCache sync.Map // dstDir string -> bool
 
+// cowEligibleOverrideEnv lets e2e tests pin cowEligible's decision ("1" or
+// "0") instead of depending on the test host's real filesystem. Internal test
+// seam only — not a documented user-facing config knob — needed because CI
+// runners' temp filesystems don't reliably support (or reliably lack)
+// reflink/clonefile, and the compiled e2e binary can't use the Go-level
+// var-injection seam unit tests use.
+const cowEligibleOverrideEnv = "RIMBA_COW_ELIGIBLE_OVERRIDE"
+
 // cowEligible reports whether cloning src onto dstDir is expected to be a
 // true reflink/clonefile (near-instant) rather than a byte-copy in disguise.
 //
@@ -29,6 +37,10 @@ var cowProbeCache sync.Map // dstDir string -> bool
 // A package var so tests can force the outcome deterministically instead of
 // depending on the test host's real filesystem.
 var cowEligible = func(ctx context.Context, src, dstDir string) bool {
+	if v, ok := os.LookupEnv(cowEligibleOverrideEnv); ok {
+		return v == "1"
+	}
+
 	if same, ok := sameDevice(src, dstDir); !ok || !same {
 		return false
 	}
