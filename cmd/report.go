@@ -223,7 +223,6 @@ func percentile(durations []int64, p float64) float64 {
 	return float64(sorted[idx])
 }
 
-// mean returns the arithmetic mean of durations.
 func mean(durations []int64) float64 {
 	var sum int64
 	for _, d := range durations {

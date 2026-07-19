@@ -194,8 +194,6 @@ func newRunID() string {
 	return fmt.Sprintf("%d-%d-%d", time.Now().UnixNano(), os.Getpid(), runIDCounter.Add(1))
 }
 
-// newSpanID derives a span identifier from the recorder's run ID and an
-// atomic per-recorder counter.
 func (r *Recorder) newSpanID() string {
 	return fmt.Sprintf("%s-%d", r.runID, r.spanCounter.Add(1))
 }
@@ -219,7 +217,6 @@ func (r *Recorder) writeSpan(spanID, parentSpanID, name string, d time.Duration,
 	_ = r.sink.WriteMetric(rec)
 }
 
-// errString returns "" if err is nil, else err.Error().
 func errString(err error) string {
 	if err == nil {
 		return ""

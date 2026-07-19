@@ -34,10 +34,7 @@ type fileSink struct {
 	metricFile *os.File
 }
 
-// RepoPrefix returns the day-file prefix ("rimba-<base>-<hash>") used for
-// repoRoot's observability files: the repo's base directory name plus the
-// first 8 hex characters of the SHA-256 of its absolute path, disambiguating
-// same-named repos in different locations. This is the single source of
+// RepoPrefix returns repoRoot's day-file prefix. It's the single source of
 // truth for the naming formula — NewFileSink and `rimba report`'s file
 // discovery both derive their ListDayFiles prefix from it.
 func RepoPrefix(repoRoot string) string {
@@ -58,12 +55,10 @@ func NewFileSink(repoRoot string, retentionDays int) (Sink, error) {
 	return newFileSinkAt(cacheDir, repoRoot, retentionDays)
 }
 
-// ListDayFiles returns the full paths of files under dir whose name starts
-// with prefix+"-" and ends with suffix — matched by literal string
-// comparison (via strings.HasPrefix/HasSuffix), not filepath.Glob, so a repo
-// directory name containing a glob metacharacter (e.g. "[", "*", "?") still
-// matches its own day-files correctly. Shared by pruning and `rimba report`,
-// the two places that need to discover this repo's own day-files.
+// ListDayFiles returns files under dir starting with prefix+"-" and ending
+// with suffix, matched literally rather than via filepath.Glob, so a repo
+// directory name containing a glob metacharacter ("[", "*", "?") still
+// matches its own day-files correctly.
 func ListDayFiles(dir, prefix, suffix string) []string {
 	entries, err := os.ReadDir(dir)
 	if err != nil {

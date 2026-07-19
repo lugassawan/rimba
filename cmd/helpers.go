@@ -31,8 +31,8 @@ var newRunner = func(ctx context.Context) git.Runner {
 	return observability.WrapRunner(&git.ExecRunner{Timeout: timeout})
 }
 
-// newGHRunner creates a gh.Runner with a timeout sourced from config in ctx.
-// Always wrapped with gh.WrapRunner, same per-call design as newRunner.
+// newGHRunner creates a gh.Runner with a timeout sourced from config in ctx,
+// always wrapped with gh.WrapRunner.
 var newGHRunner = func(ctx context.Context) gh.Runner {
 	timeout := config.DefaultCommandTimeout
 	if cfg := config.FromContext(ctx); cfg != nil {
