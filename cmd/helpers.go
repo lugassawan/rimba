@@ -18,11 +18,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newRunner creates a git.Runner for command execution.
-// Defined as a variable to allow test overrides (same pattern as newUpdater).
-// Always wrapped with observability.WrapRunner (see its doc for the
-// per-call ctx-derivation rationale). The timeout is sourced from config in
-// ctx; falls back to DefaultCommandTimeout.
+// newRunner creates a git.Runner for command execution, always wrapped with
+// observability.WrapRunner (see its doc for the per-call ctx-derivation
+// rationale). Defined as a variable to allow test overrides (same pattern as
+// newUpdater).
 var newRunner = func(ctx context.Context) git.Runner {
 	timeout := config.DefaultCommandTimeout
 	if cfg := config.FromContext(ctx); cfg != nil {

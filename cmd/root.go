@@ -41,11 +41,10 @@ const (
 // commandName stores the resolved command name for JSON error reporting.
 var commandName string
 
-// lastRecorder captures the Recorder built in PersistentPreRunE for the most
-// recently invoked command — Execute() can't recover it via
-// rootCmd.Context() (cobra never copies a subcommand's context back up to
-// root). Reset to nil at the top of every PersistentPreRunE so a command
-// that skips the observability build never leaks a prior invocation's value.
+// lastRecorder captures PersistentPreRunE's Recorder for the most recently
+// invoked command, since cobra never copies a subcommand's context back up
+// to rootCmd (so Execute() can't recover it via rootCmd.Context()). Reset to
+// nil at the top of every PersistentPreRunE to avoid leaking a stale value.
 var lastRecorder *observability.Recorder
 
 var rootCmd = &cobra.Command{

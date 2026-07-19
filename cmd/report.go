@@ -78,11 +78,10 @@ func init() {
 	rootCmd.AddCommand(reportCmd)
 }
 
-// collectReportData finds this repo's day-files under cacheDir/rimba,
-// aggregates every .metrics.jsonl SpanRecord line into
-// per-(command, phase) stats, and scans .log.jsonl CommandRecord lines only
-// to collect the distinct rimba_version values seen (SpanRecord itself
-// carries no version field — see internal/observability/record.go).
+// collectReportData aggregates this repo's .metrics.jsonl day-files into
+// per-(command, phase) stats and, since SpanRecord carries no version field
+// (see internal/observability/record.go), separately scans .log.jsonl for
+// the distinct rimba_version values seen.
 func collectReportData(cacheDir, repoRoot string) output.ReportData {
 	dir := filepath.Join(cacheDir, "rimba")
 	prefix := observability.RepoPrefix(repoRoot)
@@ -121,10 +120,9 @@ func collectReportData(cacheDir, repoRoot string) output.ReportData {
 }
 
 // scanMetricsFile reads path line by line, folding each valid span's
-// DurationMS into durations keyed by (Command, Name). Returns the count of
-// lines that failed to parse as JSON or carried a schema_version other than
-// observability.SchemaVersion — both signal a possibly corrupted/interleaved
-// write.
+// DurationMS into durations keyed by (Command, Name). The returned count is
+// lines that failed to parse or carried a schema_version mismatch — both
+// signal a possibly corrupted/interleaved write.
 func scanMetricsFile(path string, durations map[reportPhaseKey][]int64) int {
 	f, err := os.Open(path) //nolint:gosec // path comes from observability.ListDayFiles under the user's cache dir
 	if err != nil {
