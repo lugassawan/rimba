@@ -49,7 +49,7 @@ type SubprocessRecord struct {
 	RunID         string   `json:"run_id"`
 	Seq           uint64   `json:"seq"`
 	Timestamp     string   `json:"timestamp"`
-	Category      string   `json:"category"` // CategoryGit | CategoryExec | CategoryHook
+	Category      string   `json:"category"` // CategoryGit | CategoryGH | CategoryExec | CategoryHook
 	Args          []string `json:"args,omitempty"`
 	Dir           string   `json:"dir,omitempty"`
 	Outcome       string   `json:"outcome"`
