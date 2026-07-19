@@ -1,50 +1,12 @@
 package debug
 
 import (
-	"context"
 	"io"
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
-
-type stubRunner struct {
-	runCalled      bool
-	runInDirCalled bool
-}
-
-func (s *stubRunner) Run(_ context.Context, args ...string) (string, error) {
-	s.runCalled = true
-	return "ok", nil
-}
-
-func (s *stubRunner) RunInDir(_ context.Context, dir string, args ...string) (string, error) {
-	s.runInDirCalled = true
-	return "ok", nil
-}
-
-func TestWrapRunnerEnabled(t *testing.T) {
-	t.Setenv("RIMBA_DEBUG", "1")
-
-	stub := &stubRunner{}
-	wrapped := WrapRunner(stub)
-
-	if _, ok := wrapped.(*TimedRunner); !ok {
-		t.Error("expected TimedRunner when RIMBA_DEBUG is set")
-	}
-}
-
-func TestWrapRunnerDisabled(t *testing.T) {
-	os.Unsetenv("RIMBA_DEBUG")
-	t.Cleanup(func() { os.Unsetenv("RIMBA_DEBUG") })
-
-	stub := &stubRunner{}
-	wrapped := WrapRunner(stub)
-
-	if wrapped != stub {
-		t.Error("expected original runner returned when RIMBA_DEBUG is unset")
-	}
-}
 
 func TestStartTimerEnabled(t *testing.T) {
 	t.Setenv("RIMBA_DEBUG", "1")
@@ -88,38 +50,57 @@ func TestStartTimerDisabled(t *testing.T) {
 	}
 }
 
-func TestTimedRunnerRun(t *testing.T) {
+func TestLogGitTimingEnabledNoDir(t *testing.T) {
 	t.Setenv("RIMBA_DEBUG", "1")
 
-	stub := &stubRunner{}
-	wrapped := WrapRunner(stub)
+	r, w, _ := os.Pipe()
+	origStderr := os.Stderr
+	os.Stderr = w
+	t.Cleanup(func() { os.Stderr = origStderr })
 
-	out, err := wrapped.Run(context.Background(), "status")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if out != "ok" {
-		t.Errorf("expected ok, got %s", out)
-	}
-	if !stub.runCalled {
-		t.Error("inner runner Run was not called")
+	LogGitTiming("", []string{"status", "-s"}, 0)
+
+	w.Close()
+	output, _ := io.ReadAll(r)
+
+	if !strings.Contains(string(output), "[debug] git status -s: 0s") {
+		t.Errorf("expected undecorated git label, got %q", output)
 	}
 }
 
-func TestTimedRunnerRunInDir(t *testing.T) {
+func TestLogGitTimingEnabledWithDir(t *testing.T) {
 	t.Setenv("RIMBA_DEBUG", "1")
 
-	stub := &stubRunner{}
-	wrapped := WrapRunner(stub)
+	r, w, _ := os.Pipe()
+	origStderr := os.Stderr
+	os.Stderr = w
+	t.Cleanup(func() { os.Stderr = origStderr })
 
-	out, err := wrapped.RunInDir(context.Background(), "/tmp/test", "status")
-	if err != nil {
-		t.Fatal(err)
+	LogGitTiming("/tmp/worktree", []string{"fetch"}, 5*time.Millisecond)
+
+	w.Close()
+	output, _ := io.ReadAll(r)
+
+	if !strings.Contains(string(output), "[debug] git fetch [worktree]: 5ms") {
+		t.Errorf("expected dir-suffixed git label, got %q", output)
 	}
-	if out != "ok" {
-		t.Errorf("expected ok, got %s", out)
-	}
-	if !stub.runInDirCalled {
-		t.Error("inner runner RunInDir was not called")
+}
+
+func TestLogGitTimingDisabled(t *testing.T) {
+	os.Unsetenv("RIMBA_DEBUG")
+	t.Cleanup(func() { os.Unsetenv("RIMBA_DEBUG") })
+
+	r, w, _ := os.Pipe()
+	origStderr := os.Stderr
+	os.Stderr = w
+	t.Cleanup(func() { os.Stderr = origStderr })
+
+	LogGitTiming("/tmp/worktree", []string{"fetch"}, 0)
+
+	w.Close()
+	output, _ := io.ReadAll(r)
+
+	if len(output) != 0 {
+		t.Errorf("expected no output when disabled, got %q", output)
 	}
 }

@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 
 	"github.com/lugassawan/rimba/internal/config"
-	"github.com/lugassawan/rimba/internal/debug"
 	"github.com/lugassawan/rimba/internal/gh"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/observability"
@@ -21,36 +20,34 @@ import (
 
 // newRunner creates a git.Runner for command execution.
 // Defined as a variable to allow test overrides (same pattern as newUpdater).
-// When a Recorder is attached to ctx, wraps the runner so every git call is
-// recorded; otherwise falls back to the RIMBA_DEBUG stderr timing wrapper.
+// Always wrapped with the observability Recorder decorator, which derives
+// its Recorder fresh from each call's own ctx (see
+// observability.WrapRunner) rather than one captured here at construction
+// time — this is what lets a single instance built once (as MCP's
+// HandlerContext holds it for the server's whole lifetime) still record
+// each tool call's own per-call Recorder correctly. A call whose ctx
+// carries no Recorder falls back to the RIMBA_DEBUG stderr timer.
 // The timeout is sourced from config in ctx; falls back to DefaultCommandTimeout.
 var newRunner = func(ctx context.Context) git.Runner {
 	timeout := config.DefaultCommandTimeout
 	if cfg := config.FromContext(ctx); cfg != nil {
 		timeout = cfg.EffectiveCommandTimeout()
 	}
-	base := &git.ExecRunner{Timeout: timeout}
-	if rec := observability.FromContext(ctx); rec != nil {
-		// The recorder folds RIMBA_DEBUG's stderr timing line into LogSubprocess
-		// itself, so stacking debug.WrapRunner on top would time every call twice.
-		return observability.WrapRunner(base, rec)
-	}
-	// No recorder on ctx (observability disabled for this invocation): fall back
-	// to the stderr-only debug timer so --debug/RIMBA_DEBUG keeps working.
-	return debug.WrapRunner(base)
+	return observability.WrapRunner(&git.ExecRunner{Timeout: timeout})
 }
 
 // newGHRunner creates a gh.Runner with a timeout sourced from config in ctx.
-// Unlike newRunner, gh subprocesses are intentionally not wrapped with the
-// observability Recorder — gh calls are out of scope for this feature's
-// git/exec/hook subprocess coverage, so they never appear in `rimba report`
-// or the day-file logs.
+// Always wrapped with the observability Recorder decorator — same
+// per-call-derives-from-ctx design as newRunner, for the same reason (a
+// single long-lived instance must still record each MCP tool call
+// correctly). gh has no RIMBA_DEBUG fallback; it was never covered by that
+// timer before this feature existed.
 var newGHRunner = func(ctx context.Context) gh.Runner {
 	timeout := config.DefaultCommandTimeout
 	if cfg := config.FromContext(ctx); cfg != nil {
 		timeout = cfg.EffectiveCommandTimeout()
 	}
-	return gh.Default(timeout)
+	return gh.WrapRunner(gh.Default(timeout))
 }
 
 // hintPainter returns a termcolor.Painter derived from the cobra command flags.

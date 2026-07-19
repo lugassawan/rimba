@@ -1,23 +1,12 @@
 package debug
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/lugassawan/rimba/internal/git"
 )
-
-// WrapRunner returns a TimedRunner when RIMBA_DEBUG is set, otherwise returns r unchanged.
-func WrapRunner(r git.Runner) git.Runner {
-	if !enabled() {
-		return r
-	}
-	return &TimedRunner{Inner: r}
-}
 
 // StartTimer logs the start of a labelled operation and returns a function
 // that logs elapsed time when called. No-op when RIMBA_DEBUG is unset.
@@ -32,25 +21,20 @@ func StartTimer(label string) func() {
 	}
 }
 
-// TimedRunner decorates a git.Runner, logging each command with elapsed time to stderr.
-type TimedRunner struct {
-	Inner git.Runner
-}
-
-func (r *TimedRunner) Run(ctx context.Context, args ...string) (string, error) {
+// LogGitTiming writes a debug timing line for a labelled git subprocess call,
+// if RIMBA_DEBUG is set; no-op otherwise. Exported so other decorators (the
+// observability recorder's no-Recorder-on-ctx fallback) can share this exact
+// format instead of duplicating it, keeping RIMBA_DEBUG working even for
+// invocations that carry no per-call Recorder.
+func LogGitTiming(dir string, args []string, d time.Duration) {
+	if !enabled() {
+		return
+	}
 	label := "git " + strings.Join(args, " ")
-	start := time.Now()
-	out, err := r.Inner.Run(ctx, args...)
-	logf("%s: %s", label, time.Since(start).Round(time.Millisecond))
-	return out, err
-}
-
-func (r *TimedRunner) RunInDir(ctx context.Context, dir string, args ...string) (string, error) {
-	label := fmt.Sprintf("git %s [%s]", strings.Join(args, " "), filepath.Base(dir))
-	start := time.Now()
-	out, err := r.Inner.RunInDir(ctx, dir, args...)
-	logf("%s: %s", label, time.Since(start).Round(time.Millisecond))
-	return out, err
+	if dir != "" {
+		label = fmt.Sprintf("git %s [%s]", strings.Join(args, " "), filepath.Base(dir))
+	}
+	logf("%s: %s", label, d.Round(time.Millisecond))
 }
 
 // logf writes a formatted debug line to stderr.

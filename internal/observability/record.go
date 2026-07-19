@@ -14,6 +14,7 @@ const (
 	CategoryGit  = "git"
 	CategoryExec = "exec"
 	CategoryHook = "hook"
+	CategoryGH   = "gh"
 )
 
 // stderrTruncateLimit caps captured stderr so day-file lines stay a bounded
@@ -41,7 +42,7 @@ type CommandRecord struct {
 	Error         string `json:"error,omitempty"`
 }
 
-// SubprocessRecord is written once per git/exec/hook subprocess to the .log.jsonl stream.
+// SubprocessRecord is written once per git/gh/exec/hook subprocess to the .log.jsonl stream.
 type SubprocessRecord struct {
 	SchemaVersion int      `json:"schema_version"`
 	Kind          string   `json:"kind"` // always "subprocess"
