@@ -34,6 +34,19 @@ type fileSink struct {
 	metricFile *os.File
 }
 
+// RepoPrefix returns the day-file prefix ("rimba-<base>-<hash>") used for
+// repoRoot's observability files: the repo's base directory name plus the
+// first 8 hex characters of the SHA-256 of its absolute path, disambiguating
+// same-named repos in different locations. This is the single source of
+// truth for the naming formula — NewFileSink and `rimba report`'s file
+// discovery both derive their glob patterns from it.
+func RepoPrefix(repoRoot string) string {
+	base := filepath.Base(repoRoot)
+	sum := sha256.Sum256([]byte(repoRoot))
+	hash := hex.EncodeToString(sum[:])[:8]
+	return fmt.Sprintf("rimba-%s-%s", base, hash)
+}
+
 // NewFileSink opens (creating if necessary) today's log and metrics JSONL
 // files for repoRoot under the OS cache directory, and best-effort prunes
 // day-files older than retentionDays (<= 0 disables pruning).
@@ -68,10 +81,7 @@ func newFileSinkAt(cacheDir, repoRoot string, retentionDays int) (Sink, error) {
 		return nil, fmt.Errorf("failed to create observability cache dir: %w", err)
 	}
 
-	base := filepath.Base(repoRoot)
-	sum := sha256.Sum256([]byte(repoRoot))
-	hash := hex.EncodeToString(sum[:])[:8]
-	prefix := fmt.Sprintf("rimba-%s-%s", base, hash)
+	prefix := RepoPrefix(repoRoot)
 	today := time.Now().Format("2006-01-02")
 
 	logFile, err := os.OpenFile(filepath.Join(dir, prefix+"-"+today+".log.jsonl"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644) //nolint:gosec // observability log lines hold no secrets; 0644 matches other rimba log files
