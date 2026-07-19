@@ -41,6 +41,10 @@ var newRunner = func(ctx context.Context) git.Runner {
 }
 
 // newGHRunner creates a gh.Runner with a timeout sourced from config in ctx.
+// Unlike newRunner, gh subprocesses are intentionally not wrapped with the
+// observability Recorder — gh calls are out of scope for this feature's
+// git/exec/hook subprocess coverage, so they never appear in `rimba report`
+// or the day-file logs.
 var newGHRunner = func(ctx context.Context) gh.Runner {
 	timeout := config.DefaultCommandTimeout
 	if cfg := config.FromContext(ctx); cfg != nil {

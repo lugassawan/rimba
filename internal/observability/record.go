@@ -16,8 +16,11 @@ const (
 	CategoryHook = "hook"
 )
 
-// stderrTruncateLimit caps captured stderr so log lines stay well under PIPE_BUF
-// and cannot interleave-corrupt across processes appending to the same file.
+// stderrTruncateLimit caps captured stderr so day-file lines stay a bounded
+// size. Cross-process append safety comes from a single write() syscall being
+// atomic for regular files (not from PIPE_BUF, which governs pipes, not the
+// O_APPEND regular-file writes used here) — this cap is about keeping lines
+// reasonably sized, not about atomicity.
 const stderrTruncateLimit = 2 * 1024
 
 // CommandRecord is written once per command invocation, at Finalize, to the

@@ -12,6 +12,8 @@ rimba can record structured JSONL observability data (a log stream and a compact
 
 Works even in a repo without any recorded data, or without `.rimba/` initialized at all — it simply finds zero files and reports "no data found".
 
+**What gets recorded.** Observability is **on by default**. The log stream (`.log.jsonl`, not read by `rimba report`, but written to the same day-files) records every git/exec/hook subprocess this repo's rimba commands run, including the full command line — so a `rimba exec` command or a `post_create`/dependency-install command that embeds a credential (e.g. a registry token or a git URL with an embedded password) is written verbatim to `~/Library/Caches/rimba` (or the platform-equivalent cache dir) and kept for `retention_days` (default 14). Files are created `0600` (owner-only), but that doesn't protect against home-directory backups or cache-syncing tools. If this matters for your workflow, set `[observability] enabled = false` in `.rimba/settings.toml`, or export `RIMBA_NO_OBSERVABILITY` to disable it for a single invocation.
+
 ## Synopsis
 
 ```sh
