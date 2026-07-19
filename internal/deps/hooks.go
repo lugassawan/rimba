@@ -36,9 +36,9 @@ type HookResult struct {
 // — see runHooksParallel's doc comment for how a hook that never got to run
 // because ctx was already cancelled is reported (as a failure, not a silent
 // success).
-func RunPostCreateHooks(ctx context.Context, worktreeDir string, hooks []string, parallel bool, onProgress progress.Func) []HookResult {
+func RunPostCreateHooks(ctx context.Context, worktreeDir string, hooks []string, runParallel bool, onProgress progress.Func) []HookResult {
 	rec := observability.FromContext(ctx)
-	if parallel {
+	if runParallel {
 		return runHooksParallel(ctx, worktreeDir, hooks, rec, onProgress)
 	}
 	return runHooksSerial(ctx, worktreeDir, hooks, rec, onProgress)
@@ -119,6 +119,7 @@ func runHook(ctx context.Context, worktreeDir, hook string, rec *observability.R
 	err := cmd.Run()
 	exitCode := 0
 	if err != nil {
+		exitCode = -1
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
 			exitCode = exitErr.ExitCode()

@@ -57,6 +57,10 @@ work_dir = 'api'
 [[resolver.prefix]]
 prefix = 'spike/'
 aliases = ['experiment']
+
+# Post-create hook execution (optional — serial by default)
+[hooks]
+parallel = true
 ```
 
 ### Local overrides (`.rimba/settings.local.toml`)
@@ -101,6 +105,7 @@ rimba init
 | `deps.concurrency` | Max parallel dependency-module installs | `auto (0)` |
 | `resolver.prefix[].prefix` | Custom branch prefix to register, added to the built-ins (e.g. `spike/`) | — |
 | `resolver.prefix[].aliases` | Alternative creation tokens for the prefix (e.g. `experiment` → `spike/`) | (none) |
+| `hooks.parallel` | Run `post_create` hooks concurrently instead of serially. Opt-in: parallel hooks can break execution-order dependencies between commands (e.g. hook 1 generates a file hook 2 reads), so only enable it if your hooks are independent | `false` |
 
 ## Auto-Detected Ecosystems
 

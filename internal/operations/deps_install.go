@@ -46,8 +46,8 @@ func InstallDepsPreferSource(ctx context.Context, r git.Runner, sourceWT string,
 }
 
 // RunPostCreateHooks executes post-create hooks and returns the results.
-func RunPostCreateHooks(ctx context.Context, wtPath string, hooks []string, parallel bool, onProgress progress.Func) []deps.HookResult {
-	return deps.RunPostCreateHooks(ctx, wtPath, hooks, parallel, onProgress)
+func RunPostCreateHooks(ctx context.Context, wtPath string, hooks []string, runParallel bool, onProgress progress.Func) []deps.HookResult {
+	return deps.RunPostCreateHooks(ctx, wtPath, hooks, runParallel, onProgress)
 }
 
 // WorktreePathsExcluding returns paths from entries, excluding the given path.
