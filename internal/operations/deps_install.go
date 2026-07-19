@@ -19,7 +19,10 @@ type DepsParams struct {
 	Concurrency   int
 }
 
-// InstallDeps detects modules and installs dependencies.
+// InstallDeps detects modules and installs dependencies. SkipDeferred is
+// always true here: this is the automatic add/restore/duplicate/rename
+// path, which must not eagerly install a Recursive module's unbounded cost
+// unless resolveEagerness already determined it's needed (see deps.Module.Eager).
 func InstallDeps(ctx context.Context, r git.Runner, p DepsParams, onProgress progress.Func) []deps.InstallResult {
 	existingPaths := WorktreePathsExcluding(p.Entries, p.WtPath)
 
@@ -28,11 +31,12 @@ func InstallDeps(ctx context.Context, r git.Runner, p DepsParams, onProgress pro
 		return nil
 	}
 
-	mgr := &deps.Manager{Runner: r, Concurrency: p.Concurrency}
+	mgr := &deps.Manager{Runner: r, Concurrency: p.Concurrency, SkipDeferred: true}
 	return mgr.Install(ctx, p.WtPath, modules, p.Entries, onProgress)
 }
 
-// InstallDepsPreferSource is like InstallDeps but prefers cloning from sourceWT.
+// InstallDepsPreferSource is like InstallDeps but prefers cloning from
+// sourceWT. SkipDeferred is always true — see InstallDeps.
 func InstallDepsPreferSource(ctx context.Context, r git.Runner, sourceWT string, p DepsParams, onProgress progress.Func) []deps.InstallResult {
 	existingPaths := WorktreePathsExcluding(p.Entries, p.WtPath)
 
@@ -41,7 +45,7 @@ func InstallDepsPreferSource(ctx context.Context, r git.Runner, sourceWT string,
 		return nil
 	}
 
-	mgr := &deps.Manager{Runner: r, Concurrency: p.Concurrency}
+	mgr := &deps.Manager{Runner: r, Concurrency: p.Concurrency, SkipDeferred: true}
 	return mgr.InstallPreferSource(ctx, p.WtPath, sourceWT, modules, p.Entries, onProgress)
 }
 

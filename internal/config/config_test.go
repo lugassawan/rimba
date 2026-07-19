@@ -764,18 +764,31 @@ func TestConfigValidate(t *testing.T) {
 			wantSubstr: []string{"worktree_dir", "/abs/path/bad"},
 		},
 		{
-			name: "deps module with empty install",
+			name: "deps module with lockfile set but install empty",
 			cfg: &config.Config{
 				WorktreeDir:   "../wt",
 				DefaultSource: testDefaultBranch,
 				Deps: &config.DepsConfig{
 					Modules: []config.ModuleConfig{
-						{Dir: "web", Install: ""},
+						{Dir: "web", Lockfile: "package-lock.json", Install: ""},
 					},
 				},
 			},
 			wantErr:    true,
 			wantSubstr: []string{"deps", "web", "install"},
+		},
+		{
+			name: "deps module with dir only patches an auto-detected module",
+			cfg: &config.Config{
+				WorktreeDir:   "../wt",
+				DefaultSource: testDefaultBranch,
+				Deps: &config.DepsConfig{
+					Modules: []config.ModuleConfig{
+						{Dir: "web"},
+					},
+				},
+			},
+			wantErr: false,
 		},
 		{
 			name: "deps module with empty dir",
@@ -798,8 +811,8 @@ func TestConfigValidate(t *testing.T) {
 				DefaultSource: testDefaultBranch,
 				Deps: &config.DepsConfig{
 					Modules: []config.ModuleConfig{
-						{Dir: "web", Install: "npm ci"},
-						{Dir: "web", Install: "npm install"},
+						{Dir: "web", Lockfile: "package-lock.json", Install: "npm ci"},
+						{Dir: "web", Lockfile: "package-lock.json", Install: "npm install"},
 					},
 				},
 			},
@@ -834,7 +847,7 @@ func TestConfigValidate(t *testing.T) {
 				Open:          map[string]string{"bad/key": "echo hi"},
 				Deps: &config.DepsConfig{
 					Modules: []config.ModuleConfig{
-						{Dir: "web", Install: ""},
+						{Dir: "web", Lockfile: "package-lock.json", Install: ""},
 					},
 				},
 			},
@@ -1156,5 +1169,74 @@ func TestMergeCommandTimeout(t *testing.T) {
 	merged2 := config.Merge(team, localEmpty)
 	if merged2.CommandTimeout != "60s" {
 		t.Errorf("Merge CommandTimeout with empty local = %q, want %q", merged2.CommandTimeout, "60s")
+	}
+}
+
+func TestValidateDepsModuleLockfileInstallBothEmpty(t *testing.T) {
+	cfg := &config.Config{Deps: &config.DepsConfig{Modules: []config.ModuleConfig{
+		{Dir: "internal-cli/node_modules"},
+	}}}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("expected no error for a patch-only entry (dir only), got %v", err)
+	}
+}
+
+func TestValidateDepsModuleLockfileInstallBothSet(t *testing.T) {
+	cfg := &config.Config{Deps: &config.DepsConfig{Modules: []config.ModuleConfig{
+		{Dir: "custom", Lockfile: "custom.lock", Install: "custom-install"},
+	}}}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("expected no error when both lockfile and install are set, got %v", err)
+	}
+}
+
+func TestValidateDepsModuleLockfileInstallBothEmptyWithAutoDetectFalseIsError(t *testing.T) {
+	no := false
+	cfg := &config.Config{Deps: &config.DepsConfig{
+		AutoDetect: &no,
+		Modules:    []config.ModuleConfig{{Dir: "internal-cli/node_modules"}},
+	}}
+	if err := cfg.Validate(); err == nil {
+		t.Error("expected error for a patch-only entry when auto_detect is false — nothing to patch")
+	}
+}
+
+func TestValidateDepsModuleLockfileOnlySetIsError(t *testing.T) {
+	cfg := &config.Config{Deps: &config.DepsConfig{Modules: []config.ModuleConfig{
+		{Dir: "custom", Lockfile: "custom.lock"},
+	}}}
+	if err := cfg.Validate(); err == nil {
+		t.Error("expected error when lockfile is set but install is empty")
+	}
+}
+
+func TestValidateDepsModuleInstallOnlySetIsError(t *testing.T) {
+	cfg := &config.Config{Deps: &config.DepsConfig{Modules: []config.ModuleConfig{
+		{Dir: "custom", Install: "custom-install"},
+	}}}
+	if err := cfg.Validate(); err == nil {
+		t.Error("expected error when install is set but lockfile is empty")
+	}
+}
+
+func TestModuleConfigEagerRoundTripsThroughTOML(t *testing.T) {
+	yes := true
+	cfg := &config.Config{Deps: &config.DepsConfig{Modules: []config.ModuleConfig{
+		{Dir: "internal-cli/node_modules", Eager: &yes},
+	}}}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.toml")
+	if err := config.Save(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Deps == nil || len(loaded.Deps.Modules) != 1 {
+		t.Fatalf("expected 1 module after round-trip, got %+v", loaded.Deps)
+	}
+	if loaded.Deps.Modules[0].Eager == nil || !*loaded.Deps.Modules[0].Eager {
+		t.Errorf("expected Eager=true after round-trip, got %+v", loaded.Deps.Modules[0].Eager)
 	}
 }

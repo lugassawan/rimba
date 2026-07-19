@@ -50,7 +50,7 @@ func TestRecorderNilSafety(t *testing.T) {
 	stopSpan()
 
 	stopModule := r.StartModuleSpan("somedir")
-	stopModule(true)
+	stopModule(DetailClonedReflink)
 
 	r.Finalize(OutcomeSuccess, 0, nil)
 
@@ -134,11 +134,11 @@ func TestStartSpanWritesChildSpan(t *testing.T) {
 func TestStartModuleSpanDetail(t *testing.T) {
 	tests := []struct {
 		name       string
-		cloned     bool
 		wantDetail string
 	}{
-		{name: "cloned", cloned: true, wantDetail: "cloned"},
-		{name: "installed", cloned: false, wantDetail: "installed"},
+		{name: "cloned-reflink", wantDetail: DetailClonedReflink},
+		{name: "cloned-copy", wantDetail: DetailClonedCopy},
+		{name: "installed", wantDetail: DetailInstalled},
 	}
 
 	for _, tt := range tests {
@@ -146,8 +146,8 @@ func TestStartModuleSpanDetail(t *testing.T) {
 			sink := &fakeSink{}
 			rec := Maybe(true, sink, "add", "task", "svc", "v1")
 
-			stop := rec.StartModuleSpan("/path/to/mymodule")
-			stop(tt.cloned)
+			stop := rec.StartModuleSpan("frontend/node_modules")
+			stop(tt.wantDetail)
 
 			span, ok := sink.metrics[0].(SpanRecord)
 			if !ok {
@@ -156,10 +156,43 @@ func TestStartModuleSpanDetail(t *testing.T) {
 			if span.Detail != tt.wantDetail {
 				t.Errorf("span.Detail = %q, want %q", span.Detail, tt.wantDetail)
 			}
-			if span.Name != "deps:mymodule" {
-				t.Errorf("span.Name = %q, want %q", span.Name, "deps:mymodule")
+			if span.Name != "deps:frontend/node_modules" {
+				t.Errorf("span.Name = %q, want %q", span.Name, "deps:frontend/node_modules")
 			}
 		})
+	}
+}
+
+// TestStartModuleSpanDisambiguatesSharedBasename verifies distinct modules
+// that happen to share a basename (e.g. two "node_modules" dirs in different
+// monorepo subdirs) get distinct span names — collapsing them under one name
+// would average together installs with entirely different costs, hiding
+// which one is actually slow.
+func TestStartModuleSpanDisambiguatesSharedBasename(t *testing.T) {
+	sink := &fakeSink{}
+	rec := Maybe(true, sink, "add", "task", "svc", "v1")
+
+	rec.StartModuleSpan("node_modules")(DetailInstalled)
+	rec.StartModuleSpan("frontend/node_modules")(DetailInstalled)
+	rec.StartModuleSpan("backend/node_modules")(DetailInstalled)
+
+	if len(sink.metrics) != 3 {
+		t.Fatalf("len(sink.metrics) = %d, want 3", len(sink.metrics))
+	}
+
+	seen := make(map[string]bool)
+	for _, m := range sink.metrics {
+		span, ok := m.(SpanRecord)
+		if !ok {
+			t.Fatalf("metric = %T, want SpanRecord", m)
+		}
+		seen[span.Name] = true
+	}
+
+	for _, want := range []string{"deps:node_modules", "deps:frontend/node_modules", "deps:backend/node_modules"} {
+		if !seen[want] {
+			t.Errorf("expected a span named %q, got names: %v", want, seen)
+		}
 	}
 }
 

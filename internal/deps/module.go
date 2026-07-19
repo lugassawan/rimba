@@ -33,14 +33,18 @@ const (
 
 // Module represents a detected or configured dependency module.
 type Module struct {
-	Dir        string                                      `json:"dir"`                   // Primary dir: "node_modules" or "service-api/vendor"
-	Lockfile   string                                      `json:"lockfile"`              // "pnpm-lock.yaml" or "service-api/go.sum"
-	InstallCmd string                                      `json:"install_cmd,omitempty"` // "pnpm install --frozen-lockfile" or "go mod vendor"
-	WorkDir    string                                      `json:"work_dir,omitempty"`    // Subdir to run install in: "" (root) or "service-api"
-	Recursive  bool                                        `json:"recursive,omitempty"`   // If true, clone ALL dirs named Dir found recursively (monorepo)
-	ExtraDirs  []string                                    `json:"extra_dirs,omitempty"`  // Additional dirs to clone (e.g., ".yarn/cache")
-	CloneOnly  bool                                        `json:"clone_only,omitempty"`  // If true, only clone (don't run install if no match). For Go vendor.
-	PostClone  func(srcWT, dstWT string, mod Module) error `json:"-"`                     // Optional hook run after successful clone.
+	Dir        string   `json:"dir"`                   // Primary dir: "node_modules" or "service-api/vendor"
+	Lockfile   string   `json:"lockfile"`              // "pnpm-lock.yaml" or "service-api/go.sum"
+	InstallCmd string   `json:"install_cmd,omitempty"` // "pnpm install --frozen-lockfile" or "go mod vendor"
+	WorkDir    string   `json:"work_dir,omitempty"`    // Subdir to run install in: "" (root) or "service-api"
+	Recursive  bool     `json:"recursive,omitempty"`   // If true, clone ALL dirs named Dir found recursively (monorepo)
+	ExtraDirs  []string `json:"extra_dirs,omitempty"`  // Additional dirs to clone (e.g., ".yarn/cache")
+	CloneOnly  bool     `json:"clone_only,omitempty"`  // If true, only clone (don't run install if no match). For Go vendor.
+	// Eager is computed by ResolveModules (see resolveEagerness): whether
+	// this module installs automatically or is deferred until explicitly
+	// requested via `rimba deps install --path`.
+	Eager     bool                                        `json:"eager"`
+	PostClone func(srcWT, dstWT string, mod Module) error `json:"-"` // Optional hook run after successful clone.
 }
 
 type preset struct {
@@ -108,6 +112,20 @@ var presets = []preset{
 	{Lockfile: LockfileGradleKts, Dir: DirGradle, ExtraDirs: []string{DirGradleBuildOutput}, CloneOnly: true},
 }
 
+// InstallState classifies mod's on-disk presence against whether it was
+// expected (Eager) or deliberately deferred: "installed" (directory exists),
+// "missing" (expected but absent — e.g. a failed install), or "deferred"
+// (absent by design).
+func (m Module) InstallState(worktreePath string) string {
+	if info, err := os.Stat(filepath.Join(worktreePath, m.Dir)); err == nil && info.IsDir() {
+		return "installed"
+	}
+	if m.Eager {
+		return "missing"
+	}
+	return "deferred"
+}
+
 // DetectModules scans a worktree for known lockfiles. Root is always scanned.
 // When service is non-empty, only that subdirectory is checked instead of all depth-1 dirs.
 func DetectModules(worktreePath, service string) ([]Module, error) {
@@ -143,7 +161,9 @@ func FilterCloneOnly(modules []Module, worktreePaths []string) []Module {
 }
 
 // MergeWithConfig merges auto-detected modules with user-configured modules.
-// Config modules override auto-detected ones for the same Dir.
+// A config entry whose Dir matches a detected module patches it (only the
+// config entry's explicitly-set fields override — see patchModule); a Dir
+// matching nothing detected defines a brand-new module, fully from config.
 func MergeWithConfig(detected []Module, configModules []config.ModuleConfig) []Module {
 	if len(configModules) == 0 {
 		return detected
@@ -158,7 +178,7 @@ func MergeWithConfig(detected []Module, configModules []config.ModuleConfig) []M
 	seenDirs := make(map[string]bool)
 	for _, m := range detected {
 		if cm, ok := configDirs[m.Dir]; ok {
-			result = append(result, moduleFromConfig(cm))
+			result = append(result, patchModule(m, cm))
 		} else {
 			result = append(result, m)
 		}
@@ -166,12 +186,38 @@ func MergeWithConfig(detected []Module, configModules []config.ModuleConfig) []M
 	}
 
 	for _, cm := range configModules {
-		if !seenDirs[cm.Dir] {
-			result = append(result, moduleFromConfig(cm))
+		if seenDirs[cm.Dir] {
+			continue
 		}
+		if cm.Lockfile == "" && cm.Install == "" {
+			// Patch-only entry with nothing detected to patch this call (e.g.
+			// a --service scope that never looked at this Dir) — skip rather
+			// than add a module with an empty Lockfile, which crashes
+			// HashLockfile and aborts hashing for the whole batch.
+			continue
+		}
+		result = append(result, moduleFromConfig(cm))
 	}
 
 	return result
+}
+
+// patchModule applies cm's explicitly-set fields onto an auto-detected
+// module, keeping everything else — including Recursive/CloneOnly/ExtraDirs,
+// which ModuleConfig has no field for — from detection. Never blanks a field
+// the config entry left empty, unlike moduleFromConfig.
+func patchModule(detected Module, cm config.ModuleConfig) Module {
+	patched := detected
+	if cm.Lockfile != "" {
+		patched.Lockfile = cm.Lockfile
+	}
+	if cm.Install != "" {
+		patched.InstallCmd = cm.Install
+	}
+	if cm.WorkDir != "" {
+		patched.WorkDir = cm.WorkDir
+	}
+	return patched
 }
 
 func detectRootModules(worktreePath string, modules []Module, seenDirs map[string]bool) []Module {

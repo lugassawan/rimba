@@ -30,7 +30,7 @@ func TestCloneDirBasic(t *testing.T) {
 	}
 	writeFile(t, filepath.Join(src, "sub"), "nested.txt", "world")
 
-	if err := CloneDir(context.Background(), src, dst); err != nil {
+	if err := CloneDir(context.Background(), src, dst, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -45,7 +45,7 @@ func TestCloneDirSuccess(t *testing.T) {
 
 	writeFile(t, src, testDataTxt, "some data")
 
-	if err := CloneDir(context.Background(), src, dst); err != nil {
+	if err := CloneDir(context.Background(), src, dst, true); err != nil {
 		t.Fatalf("CloneDir failed: %v", err)
 	}
 
@@ -63,7 +63,7 @@ func TestCloneDirOverwritesExisting(t *testing.T) {
 	}
 	writeFile(t, dst, "old.txt", "old content")
 
-	if err := CloneDir(context.Background(), src, dst); err != nil {
+	if err := CloneDir(context.Background(), src, dst, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -87,7 +87,7 @@ func TestCloneDirOverwriteExisting(t *testing.T) {
 	// Create src with new content
 	writeFile(t, src, "fresh.txt", "fresh data")
 
-	if err := CloneDir(context.Background(), src, dst); err != nil {
+	if err := CloneDir(context.Background(), src, dst, true); err != nil {
 		t.Fatalf("CloneDir failed: %v", err)
 	}
 
@@ -228,7 +228,7 @@ func TestCloneExtraDirsSuccess(t *testing.T) {
 	}
 	writeFile(t, yarnCacheDir, "dep-1.0.0.zip", "cached-content")
 
-	err := cloneExtraDirs(context.Background(), srcWT, dstWT, []string{DirYarnCache})
+	err := cloneExtraDirs(context.Background(), srcWT, dstWT, []string{DirYarnCache}, true)
 	if err != nil {
 		t.Fatalf("cloneExtraDirs failed: %v", err)
 	}
@@ -241,7 +241,7 @@ func TestCloneExtraDirsMissing(t *testing.T) {
 	dstWT := t.TempDir()
 
 	// Call with a non-existent extra dir — should not error
-	err := cloneExtraDirs(context.Background(), srcWT, dstWT, []string{"does/not/exist"})
+	err := cloneExtraDirs(context.Background(), srcWT, dstWT, []string{"does/not/exist"}, true)
 	if err != nil {
 		t.Fatalf("expected no error for missing extra dir, got: %v", err)
 	}
@@ -267,7 +267,7 @@ func TestCloneIfParentExistsNoParent(t *testing.T) {
 	relPath := filepath.Join("packages", "foo", "node_modules")
 
 	var errs []error
-	err := cloneIfParentExists(context.Background(), srcPath, dstWT, relPath, &errs)
+	err := cloneIfParentExists(context.Background(), srcPath, dstWT, relPath, true, &errs)
 	if !errors.Is(err, filepath.SkipDir) {
 		t.Errorf("expected filepath.SkipDir, got: %v", err)
 	}
@@ -298,7 +298,7 @@ func TestCowCopySuccess(t *testing.T) {
 
 	writeFile(t, src, testDataTxt, "cow-content")
 
-	if err := cowCopy(context.Background(), src, dst); err != nil {
+	if err := cowCopy(context.Background(), src, dst, true); err != nil {
 		t.Fatalf("cowCopy failed: %v", err)
 	}
 
@@ -307,9 +307,36 @@ func TestCowCopySuccess(t *testing.T) {
 
 func TestCowCopyNonexistentSource(t *testing.T) {
 	dst := filepath.Join(t.TempDir(), "dst")
-	err := cowCopy(context.Background(), "/nonexistent/path/src", dst)
+	err := cowCopy(context.Background(), "/nonexistent/path/src", dst, true)
 	if err == nil {
 		t.Fatal("expected error for nonexistent source")
+	}
+}
+
+// TestCowCopyNoFallbackWhenDisallowed verifies the headline Stage 1
+// guarantee at cowCopy's own level: when allowByteCopyFallback is false, a
+// CoW command failure propagates the raw error immediately — no plain `cp -R`
+// byte-copy is attempted, and dst is left untouched by any fallback copy.
+func TestCowCopyNoFallbackWhenDisallowed(t *testing.T) {
+	src := t.TempDir()
+	dst := filepath.Join(t.TempDir(), "dst")
+	writeFile(t, src, testFileTxt, "source-content")
+
+	orig := cowCopyCmd
+	cowCopyCmd = func(ctx context.Context, s, d string) *exec.Cmd { return exec.CommandContext(ctx, "false") }
+	t.Cleanup(func() { cowCopyCmd = orig })
+
+	err := cowCopy(context.Background(), src, dst, false)
+	if err == nil {
+		t.Fatal("expected the raw CoW error to propagate when fallback is disallowed")
+	}
+	if strings.Contains(err.Error(), "fallback copy") {
+		t.Errorf("expected no fallback attempt, but error mentions fallback: %v", err)
+	}
+
+	// No byte-copy fallback means src's content must not have landed at dst.
+	if _, statErr := os.Stat(filepath.Join(dst, testFileTxt)); !os.IsNotExist(statErr) {
+		t.Error("expected dst to remain empty: no byte-copy fallback should have run")
 	}
 }
 
@@ -327,7 +354,7 @@ func TestCloneDirMkdirAllError(t *testing.T) {
 	}
 
 	dst := filepath.Join(blockFile, "child", "target")
-	err := CloneDir(context.Background(), src, dst)
+	err := CloneDir(context.Background(), src, dst, true)
 	if err == nil {
 		t.Fatal("expected error when MkdirAll cannot create parent")
 	}
@@ -367,7 +394,7 @@ func TestWalkCloneFuncSkipsErrors(t *testing.T) {
 	dstWT := t.TempDir()
 
 	var errs []error
-	fn := walkCloneFunc(context.Background(), srcWT, dstWT, DirNodeModules, &errs)
+	fn := walkCloneFunc(context.Background(), srcWT, dstWT, DirNodeModules, true, &errs)
 
 	// Call the returned WalkDirFunc with a non-nil error — should return nil (keep walking)
 	err := fn("/some/path", nil, os.ErrPermission)
@@ -406,7 +433,7 @@ func TestWalkCloneFuncSkipsFiles(t *testing.T) {
 	}
 
 	var errs []error
-	fn := walkCloneFunc(context.Background(), srcWT, dstWT, DirNodeModules, &errs)
+	fn := walkCloneFunc(context.Background(), srcWT, dstWT, DirNodeModules, true, &errs)
 
 	result := fn(filePath, fileEntry, nil)
 	if result != nil {
@@ -428,7 +455,7 @@ func TestCloneIfParentExistsCloneFails(t *testing.T) {
 	relPath := filepath.Join("packages", "foo", "node_modules")
 
 	var errs []error
-	err := cloneIfParentExists(context.Background(), srcPath, dstWT, relPath, &errs)
+	err := cloneIfParentExists(context.Background(), srcPath, dstWT, relPath, true, &errs)
 	if !errors.Is(err, filepath.SkipDir) {
 		t.Errorf("expected filepath.SkipDir on clone failure, got: %v", err)
 	}
@@ -454,7 +481,7 @@ func TestCloneExtraDirsCloneError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err := cloneExtraDirs(context.Background(), srcWT, dstWT, []string{".yarn/cache"})
+	err := cloneExtraDirs(context.Background(), srcWT, dstWT, []string{".yarn/cache"}, true)
 	if err == nil {
 		t.Fatal("expected error when extra dir clone fails")
 	}
@@ -481,7 +508,7 @@ func TestCloneDirRemoveAllError(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(parent, 0755) })
 
-	err := CloneDir(context.Background(), src, dst)
+	err := CloneDir(context.Background(), src, dst, true)
 	if err == nil {
 		t.Fatal("expected error when RemoveAll fails on read-only parent")
 	}
@@ -598,7 +625,7 @@ func TestCowCopyFallbackNotNested(t *testing.T) {
 	cowCopyCmd = func(ctx context.Context, s, d string) *exec.Cmd { return exec.Command("false") }
 	t.Cleanup(func() { cowCopyCmd = orig })
 
-	if err := cowCopy(context.Background(), src, dst); err != nil {
+	if err := cowCopy(context.Background(), src, dst, true); err != nil {
 		t.Fatalf("cowCopy returned unexpected error: %v", err)
 	}
 
@@ -630,7 +657,7 @@ func TestCowCopyDoubleFailurePreservesBothCauses(t *testing.T) {
 
 	// /nonexistent/... is guaranteed absent on any POSIX host; cp -R will fail,
 	// exercising the fallback-failure branch and the double-cause error chain.
-	err := cowCopy(context.Background(), "/nonexistent/does/not/exist/src", dst)
+	err := cowCopy(context.Background(), "/nonexistent/does/not/exist/src", dst, true)
 	if err == nil {
 		t.Fatal("expected error when both CoW and fallback copy fail")
 	}
@@ -666,7 +693,7 @@ func TestCowCopyRemoveAllError(t *testing.T) {
 	cowCopyCmd = func(ctx context.Context, s, d string) *exec.Cmd { return exec.Command("false") }
 	t.Cleanup(func() { cowCopyCmd = orig })
 
-	if err := cowCopy(context.Background(), "/some/src", dst); err == nil {
+	if err := cowCopy(context.Background(), "/some/src", dst, true); err == nil {
 		t.Fatal("expected error when RemoveAll cannot delete dst")
 	}
 }

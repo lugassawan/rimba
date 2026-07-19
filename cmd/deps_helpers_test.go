@@ -58,6 +58,24 @@ func TestPrintInstallResults(t *testing.T) {
 		}
 	})
 
+	t.Run("deferred module", func(t *testing.T) {
+		buf := new(bytes.Buffer)
+		results := []deps.InstallResult{
+			{Module: deps.Module{Dir: "node_modules"}, Deferred: true},
+		}
+		printInstallResults(buf, results)
+		out := buf.String()
+		if !bytes.Contains(buf.Bytes(), []byte("Dependencies:")) {
+			t.Errorf("output missing 'Dependencies:' header: %q", out)
+		}
+		if !bytes.Contains(buf.Bytes(), []byte("deferred")) {
+			t.Errorf("output missing 'deferred': %q", out)
+		}
+		if !bytes.Contains(buf.Bytes(), []byte("rimba deps install")) {
+			t.Errorf("output missing actionable hint: %q", out)
+		}
+	})
+
 	t.Run("error module", func(t *testing.T) {
 		buf := new(bytes.Buffer)
 		results := []deps.InstallResult{
@@ -112,6 +130,18 @@ func TestPrintHookResultsList(t *testing.T) {
 			t.Errorf("output missing error message: %q", out)
 		}
 	})
+}
+
+func TestInstallResultLineDeferred(t *testing.T) {
+	res := deps.InstallResult{
+		Module:   deps.Module{Dir: "node_modules"},
+		Deferred: true,
+	}
+	got := installResultLine(res)
+	want := "node_modules: deferred — run `rimba deps install <task> --path node_modules` if you need it"
+	if got != want {
+		t.Errorf("installResultLine() = %q, want %q", got, want)
+	}
 }
 
 func TestBuildDepResults(t *testing.T) {

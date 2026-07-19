@@ -4,7 +4,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/lugassawan/rimba/internal/deps"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/testutil"
 )
 
 func TestWorktreePathsExcluding(t *testing.T) {
@@ -110,6 +112,50 @@ func TestInstallDepsPreferSourceNoModules(t *testing.T) {
 	result := InstallDepsPreferSource(context.Background(), r, "/other/wt", DepsParams{WtPath: tmpDir}, nil)
 	if result != nil {
 		t.Errorf("expected nil result for no modules, got %v", result)
+	}
+}
+
+func TestInstallDepsSkipsDeferredModule(t *testing.T) {
+	newWT := t.TempDir()
+	testutil.CreateFile(t, newWT, deps.LockfilePnpm, "lockfile-content")
+
+	r := &mockRunner{
+		run:      func(args ...string) (string, error) { return "", nil },
+		runInDir: noopRunInDir,
+	}
+	results := InstallDeps(context.Background(), r, DepsParams{
+		WtPath:     newWT,
+		AutoDetect: true,
+		Entries:    []git.WorktreeEntry{{Path: newWT}},
+	}, nil)
+
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if !results[0].Deferred {
+		t.Error("expected the auto-detected Recursive pnpm module to be Deferred via InstallDeps (SkipDeferred must be true)")
+	}
+}
+
+func TestInstallDepsPreferSourceSkipsDeferredModule(t *testing.T) {
+	newWT := t.TempDir()
+	testutil.CreateFile(t, newWT, deps.LockfileYarn, "lockfile-content")
+
+	r := &mockRunner{
+		run:      func(args ...string) (string, error) { return "", nil },
+		runInDir: noopRunInDir,
+	}
+	results := InstallDepsPreferSource(context.Background(), r, "/other/wt", DepsParams{
+		WtPath:     newWT,
+		AutoDetect: true,
+		Entries:    []git.WorktreeEntry{{Path: newWT}},
+	}, nil)
+
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if !results[0].Deferred {
+		t.Error("expected the auto-detected Recursive yarn module to be Deferred via InstallDepsPreferSource (SkipDeferred must be true)")
 	}
 }
 

@@ -18,7 +18,7 @@ func TestCloneDirCancelledReturnsFast(t *testing.T) {
 	cancel() // pre-cancel so cp never starts
 
 	start := time.Now()
-	err := CloneDir(ctx, src, dst)
+	err := CloneDir(ctx, src, dst, true)
 	elapsed := time.Since(start)
 
 	if err == nil {
@@ -47,7 +47,7 @@ func TestCloneDirCancelledKillsChild(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- CloneDir(ctx, src, dst)
+		done <- CloneDir(ctx, src, dst, true)
 	}()
 
 	time.Sleep(50 * time.Millisecond)
