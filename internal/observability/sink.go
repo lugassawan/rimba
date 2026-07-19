@@ -58,6 +58,28 @@ func NewFileSink(repoRoot string, retentionDays int) (Sink, error) {
 	return newFileSinkAt(cacheDir, repoRoot, retentionDays)
 }
 
+// ListDayFiles returns the full paths of files under dir whose name starts
+// with prefix+"-" and ends with suffix — matched by literal string
+// comparison (via strings.HasPrefix/HasSuffix), not filepath.Glob, so a repo
+// directory name containing a glob metacharacter (e.g. "[", "*", "?") still
+// matches its own day-files correctly. Shared by pruning and `rimba report`,
+// the two places that need to discover this repo's own day-files.
+func ListDayFiles(dir, prefix, suffix string) []string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	want := prefix + "-"
+	var matches []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasPrefix(name, want) && strings.HasSuffix(name, suffix) {
+			matches = append(matches, filepath.Join(dir, name))
+		}
+	}
+	return matches
+}
+
 // WriteLog appends record to the log stream as one JSON line.
 func (f *fileSink) WriteLog(record any) error {
 	return appendJSONLine(&f.logMu, f.logFile, record)
@@ -108,22 +130,19 @@ func pruneOldDayFiles(dir, prefix string, retentionDays int, today string) {
 	if retentionDays <= 0 {
 		return
 	}
-	pruneGlob(dir, prefix+"-*.log.jsonl", prefix, ".log.jsonl", retentionDays, today)
-	pruneGlob(dir, prefix+"-*.metrics.jsonl", prefix, ".metrics.jsonl", retentionDays, today)
+	pruneSuffix(dir, prefix, ".log.jsonl", retentionDays, today)
+	pruneSuffix(dir, prefix, ".metrics.jsonl", retentionDays, today)
 }
 
-// pruneGlob deletes files matching pattern under dir whose embedded
-// YYYY-MM-DD date (between prefix+"-" and suffix) is older than
-// retentionDays days before today. Unparseable dates and today's own date
-// are always skipped.
-func pruneGlob(dir, pattern, prefix, suffix string, retentionDays int, today string) {
-	matches, err := filepath.Glob(filepath.Join(dir, pattern))
-	if err != nil {
-		return
-	}
-	for _, match := range matches {
+// pruneSuffix deletes files under dir whose name literally starts with
+// prefix+"-" and ends with suffix, and whose embedded YYYY-MM-DD date is
+// older than retentionDays days before today. Unparseable dates and today's
+// own date are always skipped.
+func pruneSuffix(dir, prefix, suffix string, retentionDays int, today string) {
+	want := prefix + "-"
+	for _, match := range ListDayFiles(dir, prefix, suffix) {
 		name := filepath.Base(match)
-		dateStr := strings.TrimSuffix(strings.TrimPrefix(name, prefix+"-"), suffix)
+		dateStr := strings.TrimSuffix(strings.TrimPrefix(name, want), suffix)
 		if dateStr == today {
 			continue
 		}
@@ -132,7 +151,7 @@ func pruneGlob(dir, pattern, prefix, suffix string, retentionDays int, today str
 			continue
 		}
 		if time.Since(date) > time.Duration(retentionDays)*24*time.Hour {
-			_ = os.Remove(match)
+			_ = os.Remove(filepath.Join(dir, name))
 		}
 	}
 }

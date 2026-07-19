@@ -90,13 +90,13 @@ func collectReportData(cacheDir, repoRoot string) output.ReportData {
 	durations := make(map[reportPhaseKey][]int64)
 	unparseable := 0
 
-	metricsFiles, _ := filepath.Glob(filepath.Join(dir, prefix+"-*.metrics.jsonl"))
+	metricsFiles := observability.ListDayFiles(dir, prefix, ".metrics.jsonl")
 	for _, f := range metricsFiles {
 		unparseable += scanMetricsFile(f, durations)
 	}
 
 	versionSet := make(map[string]struct{})
-	logFiles, _ := filepath.Glob(filepath.Join(dir, prefix+"-*.log.jsonl"))
+	logFiles := observability.ListDayFiles(dir, prefix, ".log.jsonl")
 	for _, f := range logFiles {
 		scanLogFileVersions(f, versionSet)
 	}

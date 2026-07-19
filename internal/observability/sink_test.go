@@ -350,11 +350,60 @@ func TestAppendJSONLineWriteError(t *testing.T) {
 	}
 }
 
-func TestPruneOldDayFilesBadGlobPattern(t *testing.T) {
+// TestListDayFilesMatchesGlobMetacharacterPrefix is the regression test for
+// a real gap: a repo directory name containing a glob metacharacter (here,
+// unmatched brackets) would silently fail to match its own files under
+// filepath.Glob. ListDayFiles matches by literal string comparison instead,
+// so it must find the file regardless.
+func TestListDayFilesMatchesGlobMetacharacterPrefix(t *testing.T) {
 	dir := t.TempDir()
-	// An unmatched '[' makes filepath.Glob return ErrBadPattern; this must
-	// be handled gracefully (best-effort pruning), not panic.
-	pruneOldDayFiles(dir, "bad[prefix", 14, time.Now().Format("2006-01-02"))
+	prefix := "rimba-my[repo]-deadbeef"
+	today := time.Now().Format("2006-01-02")
+	name := prefix + "-" + today + ".log.jsonl"
+	if err := os.WriteFile(filepath.Join(dir, name), []byte("{}\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	matches := ListDayFiles(dir, prefix, ".log.jsonl")
+	if len(matches) != 1 || filepath.Base(matches[0]) != name {
+		t.Errorf("ListDayFiles(%q) = %v, want exactly [%q]", prefix, matches, name)
+	}
+}
+
+// TestPruneOldDayFilesPrunesGlobMetacharacterPrefix confirms pruning itself
+// (not just listing) still targets the correct files when the prefix
+// contains glob metacharacters.
+func TestPruneOldDayFilesPrunesGlobMetacharacterPrefix(t *testing.T) {
+	dir := t.TempDir()
+	prefix := "rimba-my[repo]-deadbeef"
+	today := time.Now().Format("2006-01-02")
+	oldDate := time.Now().AddDate(0, 0, -20).Format("2006-01-02")
+	oldLog := prefix + "-" + oldDate + ".log.jsonl"
+	todayLog := prefix + "-" + today + ".log.jsonl"
+	for _, name := range []string{oldLog, todayLog} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("{}\n"), 0o644); err != nil {
+			t.Fatalf("WriteFile %s: %v", name, err)
+		}
+	}
+
+	pruneOldDayFiles(dir, prefix, 14, today)
+
+	if _, err := os.Stat(filepath.Join(dir, oldLog)); err == nil {
+		t.Error("old day-file with a glob-metacharacter prefix was not pruned")
+	}
+	if _, err := os.Stat(filepath.Join(dir, todayLog)); err != nil {
+		t.Error("today's file with a glob-metacharacter prefix should survive")
+	}
+}
+
+// TestListDayFilesMissingDirReturnsNil confirms the ReadDir-error path
+// degrades gracefully (best-effort), matching the old filepath.Glob
+// error-handling contract it replaced.
+func TestListDayFilesMissingDirReturnsNil(t *testing.T) {
+	matches := ListDayFiles(filepath.Join(t.TempDir(), "does-not-exist"), "rimba-x-deadbeef", ".log.jsonl")
+	if matches != nil {
+		t.Errorf("ListDayFiles on a missing dir = %v, want nil", matches)
+	}
 }
 
 func TestPruneOldDayFilesRetentionDisabled(t *testing.T) {
