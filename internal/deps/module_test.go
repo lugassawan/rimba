@@ -381,6 +381,34 @@ func TestMergeWithConfigNewModuleStillNeedsFullDefinition(t *testing.T) {
 	}
 }
 
+func TestModuleInstallState(t *testing.T) {
+	tests := []struct {
+		name      string
+		eager     bool
+		createDir bool
+		want      string
+	}{
+		{name: "installed", eager: true, createDir: true, want: "installed"},
+		{name: "missing", eager: true, createDir: false, want: "missing"},
+		{name: "deferred", eager: false, createDir: false, want: "deferred"},
+		{name: "installed even if lazy", eager: false, createDir: true, want: "installed"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			mod := Module{Dir: DirNodeModules, Eager: tt.eager}
+			if tt.createDir {
+				if err := os.MkdirAll(filepath.Join(dir, DirNodeModules), 0755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if got := mod.InstallState(dir); got != tt.want {
+				t.Errorf("InstallState() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestPrefixDirsEmpty(t *testing.T) {
 	result := prefixDirs("api", nil)
 	if result != nil {

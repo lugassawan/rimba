@@ -112,6 +112,20 @@ var presets = []preset{
 	{Lockfile: LockfileGradleKts, Dir: DirGradle, ExtraDirs: []string{DirGradleBuildOutput}, CloneOnly: true},
 }
 
+// InstallState classifies mod's on-disk presence against whether it was
+// expected (Eager) or deliberately deferred: "installed" (directory exists),
+// "missing" (expected but absent — e.g. a failed install), or "deferred"
+// (absent by design).
+func (m Module) InstallState(worktreePath string) string {
+	if info, err := os.Stat(filepath.Join(worktreePath, m.Dir)); err == nil && info.IsDir() {
+		return "installed"
+	}
+	if m.Eager {
+		return "missing"
+	}
+	return "deferred"
+}
+
 // DetectModules scans a worktree for known lockfiles. Root is always scanned.
 // When service is non-empty, only that subdirectory is checked instead of all depth-1 dirs.
 func DetectModules(worktreePath, service string) ([]Module, error) {
