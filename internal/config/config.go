@@ -40,8 +40,11 @@ type Config struct {
 	DefaultSource  string   `toml:"-"`
 	CommandTimeout string   `toml:"command_timeout,omitempty"`
 	CopyFiles      []string `toml:"copy_files"`
-	PostCreate     []string `toml:"post_create,omitempty"`
-	PostRename     []string `toml:"post_rename,omitempty"`
+	// PostCreate and PostRename hold either a flat list of hook commands or a
+	// nested list of stages (each inner list run concurrently, stages run in
+	// order) — see NormalizeHookStages/PostCreateStages/PostRenameStages.
+	PostCreate any `toml:"post_create,omitempty"`
+	PostRename any `toml:"post_rename,omitempty"`
 
 	Deps          *DepsConfig          `toml:"deps,omitempty"`
 	Open          map[string]string    `toml:"open,omitempty"`
@@ -178,6 +181,18 @@ func (c *Config) Validate() error {
 	errs = appendIf(errs, validateDeps(c.Deps)...)
 	errs = appendIf(errs, validateOpen(c.Open)...)
 	errs = appendIf(errs, validateResolver(c.Resolver)...)
+	if _, err := c.PostCreateStages(); err != nil {
+		errs = append(errs, errhint.WithFix(
+			fmt.Errorf("config: %w", err),
+			"post_create must be an array of strings, or an array of arrays of strings for staged execution, in .rimba/settings.toml",
+		))
+	}
+	if _, err := c.PostRenameStages(); err != nil {
+		errs = append(errs, errhint.WithFix(
+			fmt.Errorf("config: %w", err),
+			"post_rename must be an array of strings, or an array of arrays of strings for staged execution, in .rimba/settings.toml",
+		))
+	}
 	return errors.Join(errs...)
 }
 
