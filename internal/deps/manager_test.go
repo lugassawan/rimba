@@ -1352,6 +1352,8 @@ func TestRunInstallOutputTailCapped(t *testing.T) {
 }
 
 func TestInstallModuleRecordsModuleSpanCloneHit(t *testing.T) {
+	withCowEligible(t, true)
+
 	existingWT := t.TempDir()
 	newWT := t.TempDir()
 
@@ -1391,8 +1393,8 @@ func TestInstallModuleRecordsModuleSpanCloneHit(t *testing.T) {
 	if span.Name != "deps:"+DirNodeModules {
 		t.Errorf("span.Name = %q, want %q", span.Name, "deps:"+DirNodeModules)
 	}
-	if span.Detail != "cloned" {
-		t.Errorf("span.Detail = %q, want %q", span.Detail, "cloned")
+	if span.Detail != observability.DetailClonedReflink {
+		t.Errorf("span.Detail = %q, want %q", span.Detail, observability.DetailClonedReflink)
 	}
 }
 
@@ -1428,8 +1430,8 @@ func TestInstallModuleRecordsModuleSpanOnInstallError(t *testing.T) {
 	if span.Name != "deps:"+DirNodeModules {
 		t.Errorf("span.Name = %q, want %q", span.Name, "deps:"+DirNodeModules)
 	}
-	if span.Detail != "installed" {
-		t.Errorf("span.Detail = %q, want %q (a span is still recorded when install fails)", span.Detail, "installed")
+	if span.Detail != observability.DetailInstalled {
+		t.Errorf("span.Detail = %q, want %q (a span is still recorded when install fails)", span.Detail, observability.DetailInstalled)
 	}
 }
 
