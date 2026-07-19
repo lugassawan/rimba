@@ -25,6 +25,7 @@ const (
 	DetailInstalled     = "installed"
 	DetailClonedReflink = "cloned-reflink"
 	DetailClonedCopy    = "cloned-copy"
+	DetailDeferred      = "deferred"
 )
 
 // stderrTruncateLimit caps captured stderr so day-file lines stay a bounded

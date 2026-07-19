@@ -304,6 +304,7 @@ func TestModuleSpanDetail(t *testing.T) {
 		{name: "installed", result: InstallResult{Cloned: false}, want: observability.DetailInstalled},
 		{name: "cloned-reflink", result: InstallResult{Cloned: true, Reflink: true}, want: observability.DetailClonedReflink},
 		{name: "cloned-copy", result: InstallResult{Cloned: true, Reflink: false}, want: observability.DetailClonedCopy},
+		{name: "deferred", result: InstallResult{Deferred: true}, want: observability.DetailDeferred},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -311,6 +312,77 @@ func TestModuleSpanDetail(t *testing.T) {
 				t.Errorf("moduleSpanDetail(%+v) = %q, want %q", tt.result, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestManagerSkipDeferredSkipsLazyModule(t *testing.T) {
+	newWT := t.TempDir()
+	writeFile(t, newWT, LockfilePnpm, "lockfile-content")
+
+	runner := &mockRunner{worktreeOutput: mockWorktreeList(newWT)}
+	mgr := &Manager{Runner: runner, SkipDeferred: true}
+	modules := []Module{
+		{Dir: DirNodeModules, Lockfile: LockfilePnpm, InstallCmd: "echo ok", Recursive: true, Eager: false},
+	}
+
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
+	if len(results) != 1 {
+		t.Fatalf(fmtExpectedResults, len(results))
+	}
+
+	r := results[0]
+	if !r.Deferred {
+		t.Error("expected Deferred=true when SkipDeferred is set and the module isn't Eager")
+	}
+	if r.Cloned || r.Error != nil {
+		t.Errorf("expected no clone/install attempt for a deferred module, got Cloned=%v Error=%v", r.Cloned, r.Error)
+	}
+	if _, err := os.Stat(filepath.Join(newWT, DirNodeModules)); !os.IsNotExist(err) {
+		t.Error("expected node_modules to not exist: deferred modules are never materialized")
+	}
+}
+
+func TestManagerSkipDeferredStillInstallsEagerModule(t *testing.T) {
+	newWT := t.TempDir()
+	writeFile(t, newWT, LockfileGo, "go-sum-content")
+
+	runner := &mockRunner{worktreeOutput: mockWorktreeList(newWT)}
+	mgr := &Manager{Runner: runner, SkipDeferred: true}
+	modules := []Module{
+		{Dir: DirVendor, Lockfile: LockfileGo, InstallCmd: "echo ok", Eager: true},
+	}
+
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
+	if len(results) != 1 {
+		t.Fatalf(fmtExpectedResults, len(results))
+	}
+	if results[0].Deferred {
+		t.Error("expected Deferred=false for an Eager module even with SkipDeferred set")
+	}
+	if results[0].Error != nil {
+		t.Errorf(fmtExpectedNoError, results[0].Error)
+	}
+}
+
+func TestManagerWithoutSkipDeferredIgnoresEager(t *testing.T) {
+	newWT := t.TempDir()
+	writeFile(t, newWT, LockfilePnpm, "lockfile-content")
+
+	runner := &mockRunner{worktreeOutput: mockWorktreeList(newWT)}
+	mgr := &Manager{Runner: runner} // SkipDeferred defaults to false
+	modules := []Module{
+		{Dir: DirNodeModules, Lockfile: LockfilePnpm, InstallCmd: "echo ok", Recursive: true, Eager: false},
+	}
+
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
+	if len(results) != 1 {
+		t.Fatalf(fmtExpectedResults, len(results))
+	}
+	if results[0].Deferred {
+		t.Error("expected Deferred=false: SkipDeferred is false, so Eager is ignored (matches `rimba deps install`'s explicit-ask semantics)")
+	}
+	if results[0].Error != nil {
+		t.Errorf(fmtExpectedNoError, results[0].Error)
 	}
 }
 

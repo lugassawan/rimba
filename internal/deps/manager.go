@@ -33,6 +33,14 @@ type Manager struct {
 
 	// Concurrency caps parallel module installs. <= 0 auto-picks a default.
 	Concurrency int
+
+	// SkipDeferred, when true, skips modules whose Eager is false instead of
+	// installing them (no clone, no install attempted — see InstallResult.Deferred).
+	// Set by the automatic add/restore/duplicate/rename composition root
+	// (internal/operations/deps_install.go). Left false (default) by `rimba
+	// deps install`, an explicit, deliberate ask that always installs
+	// everything regardless of Eager.
+	SkipDeferred bool
 }
 
 // InstallResult holds the outcome of installing a single module.
@@ -51,6 +59,11 @@ type InstallResult struct {
 	// Ran is true only if this module's install goroutine actually executed,
 	// distinguishing a cancelled dispatch from a real no-op.
 	Ran bool
+
+	// Deferred is true when Manager.SkipDeferred is set and the module's
+	// Eager is false — the module was skipped entirely, no clone or install
+	// attempted.
+	Deferred bool
 }
 
 // Install clones or installs deps for each module.
@@ -163,10 +176,13 @@ func (m *Manager) installModule(ctx context.Context, worktreePath string, mh Mod
 }
 
 // moduleSpanDetail maps an InstallResult to the observability detail label
-// distinguishing a true reflink clone (fast) from a byte-copy clone (the
-// pessimization Stage 1 exists to avoid for install-capable modules) from a
-// fresh install.
+// distinguishing a deferred (skipped) module, a true reflink clone (fast), a
+// byte-copy clone (the pessimization Stage 1 exists to avoid for
+// install-capable modules), and a fresh install.
 func moduleSpanDetail(result InstallResult) string {
+	if result.Deferred {
+		return observability.DetailDeferred
+	}
 	if !result.Cloned {
 		return observability.DetailInstalled
 	}
@@ -178,6 +194,10 @@ func moduleSpanDetail(result InstallResult) string {
 
 func (m *Manager) installModuleInner(ctx context.Context, worktreePath string, mh ModuleWithHash, existingPaths []string) InstallResult {
 	mod := mh.Module
+
+	if m.SkipDeferred && !mod.Eager {
+		return InstallResult{Module: mod, Deferred: true}
+	}
 
 	if mh.Hash == "" {
 		return InstallResult{Module: mod}
