@@ -525,6 +525,33 @@ func TestDepsStatusNoModules(t *testing.T) {
 	assertContains(t, r.Stdout, "no modules detected")
 }
 
+func TestDepsStatusShowsInstallState(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	commitLockfile(t, repo, deps.LockfilePnpm)
+	rimbaSuccess(t, repo, "add", flagSkipDepsE2E, "status-task")
+
+	r := rimbaSuccess(t, repo, "deps", "status")
+	assertContains(t, r.Stdout, "deferred") // Recursive pnpm module, no service scope => lazy, never installed
+}
+
+func TestDepsStatusJSONIncludesInstallState(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	commitLockfile(t, repo, deps.LockfilePnpm)
+	rimbaSuccess(t, repo, "add", flagSkipDepsE2E, "status-json-task")
+
+	r := rimbaSuccess(t, repo, "deps", "status", "--json")
+	assertContains(t, r.Stdout, `"install_state"`)
+	assertContains(t, r.Stdout, `"deferred"`)
+}
+
 func TestDepsInstallNotFound(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)

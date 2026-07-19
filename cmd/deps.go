@@ -17,11 +17,19 @@ import (
 
 const flagPath = "path"
 
+// depsStatusModuleJSON adds the on-disk install state to a ModuleWithHash
+// for `deps status --json` — computed relative to a specific worktree path,
+// so it can't live on ModuleWithHash itself.
+type depsStatusModuleJSON struct {
+	deps.ModuleWithHash
+	InstallState string `json:"install_state"`
+}
+
 type depsStatusJSONItem struct {
-	Branch  string                `json:"branch"`
-	Path    string                `json:"path"`
-	Modules []deps.ModuleWithHash `json:"modules"`
-	Error   string                `json:"error,omitempty"`
+	Branch  string                 `json:"branch"`
+	Path    string                 `json:"path"`
+	Modules []depsStatusModuleJSON `json:"modules"`
+	Error   string                 `json:"error,omitempty"`
 }
 
 var depsCmd = &cobra.Command{
@@ -64,13 +72,13 @@ var depsStatusCmd = &cobra.Command{
 				modules, err := deps.ResolveModules(wt.Path, wt.Service, cfg.IsAutoDetectDeps(), configModules, existingPaths)
 				if err != nil {
 					item.Error = err.Error()
-					item.Modules = make([]deps.ModuleWithHash, 0)
+					item.Modules = make([]depsStatusModuleJSON, 0)
 					items = append(items, item)
 					continue
 				}
 
 				if len(modules) == 0 {
-					item.Modules = make([]deps.ModuleWithHash, 0)
+					item.Modules = make([]depsStatusModuleJSON, 0)
 					items = append(items, item)
 					continue
 				}
@@ -78,12 +86,16 @@ var depsStatusCmd = &cobra.Command{
 				hashed, err := deps.HashModules(wt.Path, modules)
 				if err != nil {
 					item.Error = err.Error()
-					item.Modules = make([]deps.ModuleWithHash, 0)
+					item.Modules = make([]depsStatusModuleJSON, 0)
 					items = append(items, item)
 					continue
 				}
 
-				item.Modules = hashed
+				jsonModules := make([]depsStatusModuleJSON, len(hashed))
+				for i, mh := range hashed {
+					jsonModules[i] = depsStatusModuleJSON{ModuleWithHash: mh, InstallState: mh.Module.InstallState(wt.Path)}
+				}
+				item.Modules = jsonModules
 				items = append(items, item)
 			}
 			return output.WriteJSON(cmd.OutOrStdout(), version, "deps status", items)
@@ -119,7 +131,7 @@ var depsStatusCmd = &cobra.Command{
 				if hash == "" {
 					hash = "(no lockfile)"
 				}
-				fmt.Fprintf(out, "  %s [%s]\n", mh.Module.Dir, hash)
+				fmt.Fprintf(out, "  %s [%s] %s\n", mh.Module.Dir, hash, mh.Module.InstallState(wt.Path))
 			}
 		}
 
