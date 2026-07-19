@@ -28,6 +28,9 @@ const (
 // node_modules/installed.marker`, run relative to the install command's cwd.
 const fakePnpmScript = "#!/bin/sh\nmkdir -p node_modules && touch node_modules/installed.marker\n"
 
+// fakeYarnScript mirrors fakePnpmScript for yarn-triggered modules.
+const fakeYarnScript = "#!/bin/sh\nmkdir -p node_modules && touch node_modules/installed.marker\n"
+
 // stubPnpm installs a fake `pnpm` binary on PATH and returns the env override
 // to make it visible to a spawned rimba process. Used to verify a Recursive
 // install-capable module (pnpm/yarn/npm node_modules) actually installs
@@ -40,6 +43,30 @@ func stubPnpm(t *testing.T) []string {
 		t.Fatalf("write fake pnpm: %v", err)
 	}
 	return []string{"PATH=" + dir + string(os.PathListSeparator) + os.Getenv("PATH")}
+}
+
+// stubYarn is stubPnpm's yarn equivalent.
+func stubYarn(t *testing.T) []string {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "yarn")
+	if err := os.WriteFile(path, []byte(fakeYarnScript), 0o755); err != nil {
+		t.Fatalf("write fake yarn: %v", err)
+	}
+	return []string{"PATH=" + dir + string(os.PathListSeparator) + os.Getenv("PATH")}
+}
+
+// taskWorktreePath resolves a service-scoped task's worktree path via the
+// repo's config. Pass service="" for a plain, unscoped task.
+func taskWorktreePath(t *testing.T, repo, service, task string) string {
+	t.Helper()
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch := defaultPrefix + task
+	if service != "" {
+		branch = resolver.FullBranchName(service, defaultPrefix, task)
+	}
+	return resolver.WorktreePath(wtDir, branch)
 }
 
 // rimbaSuccessWithEnv is rimbaSuccess with extra environment variables.
@@ -511,6 +538,71 @@ func TestAddWithDepsEligibleCloneSucceeds(t *testing.T) {
 	assertFileExists(t, filepath.Join(wt2Path, deps.DirNodeModules, "from-sibling.json"))
 	assertFileNotExists(t, filepath.Join(wt2Path, deps.DirNodeModules, "installed.marker"))
 	assertContains(t, r.Stdout, msgClonedFrom)
+}
+
+func TestAddWorkspaceMemberServiceMakesRootEager(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	commitLockfile(t, repo, deps.LockfileYarn)
+	testutil.CreateFile(t, repo, "package.json", `{"workspaces":["app-frontend"]}`)
+	if err := os.MkdirAll(filepath.Join(repo, "app-frontend"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	testutil.CreateFile(t, filepath.Join(repo, "app-frontend"), "package.json", "{}") // no own lockfile
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "add yarn workspace")
+
+	r := rimbaSuccessWithEnv(t, repo, stubYarn(t), "add", "app-frontend/my-task")
+
+	wtPath := taskWorktreePath(t, repo, "app-frontend", "my-task")
+	assertFileExists(t, filepath.Join(wtPath, deps.DirNodeModules, "installed.marker"))
+	assertNotContains(t, r.Stdout, "deferred")
+}
+
+func TestAddStandaloneLockfileServiceKeepsRootDeferred(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	commitLockfile(t, repo, deps.LockfileYarn)
+
+	if err := os.MkdirAll(filepath.Join(repo, "standalone-svc-a"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	testutil.CreateFile(t, filepath.Join(repo, "standalone-svc-a"), deps.LockfilePnpm, "standalone-svc-a-lock")
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "add standalone service")
+
+	r := rimbaSuccessWithEnv(t, repo, stubPnpm(t), "add", "standalone-svc-a/my-task")
+
+	wtPath := taskWorktreePath(t, repo, "standalone-svc-a", "my-task")
+	assertFileExists(t, filepath.Join(wtPath, "standalone-svc-a", deps.DirNodeModules, "installed.marker"))
+	assertFileNotExists(t, filepath.Join(wtPath, deps.DirNodeModules))
+	assertContains(t, r.Stdout, "deferred")
+}
+
+func TestAddNonJSServiceDefersAllJSModules(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	commitLockfile(t, repo, deps.LockfileYarn)
+
+	if err := os.MkdirAll(filepath.Join(repo, "auth-api-svc"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	testutil.CreateFile(t, filepath.Join(repo, "auth-api-svc"), deps.LockfileGo, "hash123")
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "add go service")
+
+	r := rimbaSuccess(t, repo, "add", "auth-api-svc/my-task")
+
+	assertContains(t, r.Stdout, "node_modules: deferred")
 }
 
 func TestDepsStatusNoModules(t *testing.T) {
