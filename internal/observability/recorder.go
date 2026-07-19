@@ -133,20 +133,17 @@ func (r *Recorder) StartSpan(name string) func() {
 }
 
 // StartModuleSpan is StartSpan specialized for a dependency-module install,
-// naming the span "deps:<filepath.Base(dir)>" and recording whether the
-// module was cloned from a sibling worktree or freshly installed. Nil-safe.
-func (r *Recorder) StartModuleSpan(dir string) func(cloned bool) {
+// naming the span "deps:<filepath.Base(dir)>". The caller passes one of the
+// Detail* constants (DetailClonedReflink / DetailClonedCopy / DetailInstalled)
+// recording how the module was materialized. Nil-safe.
+func (r *Recorder) StartModuleSpan(dir string) func(detail string) {
 	if r == nil {
-		return func(bool) {}
+		return func(string) {}
 	}
 	start := time.Now()
 	spanID := r.newSpanID()
 	name := "deps:" + filepath.Base(dir)
-	return func(cloned bool) {
-		detail := "installed"
-		if cloned {
-			detail = "cloned"
-		}
+	return func(detail string) {
 		r.writeSpan(spanID, r.rootSpanID, name, time.Since(start), detail)
 	}
 }

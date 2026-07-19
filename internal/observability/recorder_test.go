@@ -50,7 +50,7 @@ func TestRecorderNilSafety(t *testing.T) {
 	stopSpan()
 
 	stopModule := r.StartModuleSpan("somedir")
-	stopModule(true)
+	stopModule(DetailClonedReflink)
 
 	r.Finalize(OutcomeSuccess, 0, nil)
 
@@ -134,11 +134,11 @@ func TestStartSpanWritesChildSpan(t *testing.T) {
 func TestStartModuleSpanDetail(t *testing.T) {
 	tests := []struct {
 		name       string
-		cloned     bool
 		wantDetail string
 	}{
-		{name: "cloned", cloned: true, wantDetail: "cloned"},
-		{name: "installed", cloned: false, wantDetail: "installed"},
+		{name: "cloned-reflink", wantDetail: DetailClonedReflink},
+		{name: "cloned-copy", wantDetail: DetailClonedCopy},
+		{name: "installed", wantDetail: DetailInstalled},
 	}
 
 	for _, tt := range tests {
@@ -147,7 +147,7 @@ func TestStartModuleSpanDetail(t *testing.T) {
 			rec := Maybe(true, sink, "add", "task", "svc", "v1")
 
 			stop := rec.StartModuleSpan("/path/to/mymodule")
-			stop(tt.cloned)
+			stop(tt.wantDetail)
 
 			span, ok := sink.metrics[0].(SpanRecord)
 			if !ok {

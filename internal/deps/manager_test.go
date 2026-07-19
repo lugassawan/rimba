@@ -44,6 +44,16 @@ func (m *mockRunner) RunInDir(_ context.Context, dir string, args ...string) (st
 	return m.worktreeOutput, nil
 }
 
+// withCowEligible forces cowEligible's result for the duration of the test,
+// so clone-vs-install routing doesn't depend on the test host's real
+// filesystem CoW support. Restored via t.Cleanup.
+func withCowEligible(t *testing.T, eligible bool) {
+	t.Helper()
+	orig := cowEligible
+	cowEligible = func(context.Context, string, string) bool { return eligible }
+	t.Cleanup(func() { cowEligible = orig })
+}
+
 func mockWorktreeList(paths ...string) string {
 	var b strings.Builder
 	branches := []string{"refs/heads/main", "refs/heads/feature/task-1", "refs/heads/feature/other", "refs/heads/feature/new"}
@@ -60,6 +70,8 @@ func mockWorktreeList(paths ...string) string {
 }
 
 func TestManagerInstallClone(t *testing.T) {
+	withCowEligible(t, true)
+
 	existingWT := t.TempDir()
 	newWT := t.TempDir()
 
@@ -92,6 +104,9 @@ func TestManagerInstallClone(t *testing.T) {
 	if !r.Cloned {
 		t.Error("expected Cloned=true")
 	}
+	if !r.Reflink {
+		t.Error("expected Reflink=true when cowEligible confirms a true reflink")
+	}
 	if r.Source != existingWT {
 		t.Errorf("expected source %s, got %s", existingWT, r.Source)
 	}
@@ -103,6 +118,146 @@ func TestManagerInstallClone(t *testing.T) {
 	}
 
 	assertFileContent(t, filepath.Join(newWT, DirNodeModules, "package.json"), "{}")
+}
+
+// TestManagerInstallIneligibleCloneFallsThroughToInstall verifies Stage 1's
+// headline behavior: an install-capable module with a hash match and an
+// existing source dir still runs its InstallCmd instead of cloning when
+// cowEligible reports the destination filesystem can't honor a true
+// reflink/clonefile — preventing a byte-copy in disguise as a "clone".
+func TestManagerInstallIneligibleCloneFallsThroughToInstall(t *testing.T) {
+	withCowEligible(t, false)
+
+	existingWT := t.TempDir()
+	newWT := t.TempDir()
+
+	writeFile(t, existingWT, LockfilePnpm, "lockfile-v6-content")
+	writeFile(t, newWT, LockfilePnpm, "lockfile-v6-content")
+
+	if err := os.MkdirAll(filepath.Join(existingWT, DirNodeModules), 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(existingWT, DirNodeModules), "package.json", "{}")
+
+	runner := &mockRunner{worktreeOutput: mockWorktreeList(existingWT, newWT)}
+	mgr := &Manager{Runner: runner}
+	modules := []Module{
+		{
+			Dir:        DirNodeModules,
+			Lockfile:   LockfilePnpm,
+			InstallCmd: "echo ok",
+		},
+	}
+
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
+	if len(results) != 1 {
+		t.Fatalf(fmtExpectedResults, len(results))
+	}
+
+	r := results[0]
+	if r.Cloned {
+		t.Error("expected Cloned=false: ineligible clone must fall through to InstallCmd")
+	}
+	if r.Error != nil {
+		t.Errorf(fmtExpectedNoError, r.Error)
+	}
+
+	// The sibling's node_modules must NOT have been byte-copied over.
+	if _, err := os.Stat(filepath.Join(newWT, DirNodeModules, "package.json")); !os.IsNotExist(err) {
+		t.Error("expected no byte-copy of the sibling's node_modules")
+	}
+}
+
+// TestManagerInstallCloneOnlyIgnoresIneligibility verifies the plan's
+// documented exception: CloneOnly modules (Go vendor, Gradle) have no
+// install fallback, so they keep cloning even when cowEligible says the
+// filesystem can't honor a true reflink.
+func TestManagerInstallCloneOnlyIgnoresIneligibility(t *testing.T) {
+	withCowEligible(t, false)
+
+	existingWT := t.TempDir()
+	newWT := t.TempDir()
+
+	writeFile(t, existingWT, LockfileGo, "go-sum-content")
+	writeFile(t, newWT, LockfileGo, "go-sum-content")
+
+	if err := os.MkdirAll(filepath.Join(existingWT, DirVendor), 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(existingWT, DirVendor), "module.go", "package foo")
+
+	runner := &mockRunner{worktreeOutput: mockWorktreeList(existingWT, newWT)}
+	mgr := &Manager{Runner: runner}
+	modules := []Module{
+		{Dir: DirVendor, Lockfile: LockfileGo, InstallCmd: "go mod vendor", CloneOnly: true},
+	}
+
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
+	if len(results) != 1 {
+		t.Fatalf(fmtExpectedResults, len(results))
+	}
+
+	r := results[0]
+	if !r.Cloned {
+		t.Error("expected Cloned=true: CloneOnly modules clone regardless of cowEligible")
+	}
+	if r.Reflink {
+		t.Error("expected Reflink=false when cowEligible reports the fs can't honor a true reflink")
+	}
+	assertFileContent(t, filepath.Join(newWT, DirVendor, "module.go"), "package foo")
+}
+
+// TestManagerInstallNoInstallCmdIgnoresIneligibility verifies a module with
+// no InstallCmd at all (nothing to fall back to) always attempts the clone,
+// matching pre-Stage-1 behavior.
+func TestManagerInstallNoInstallCmdIgnoresIneligibility(t *testing.T) {
+	withCowEligible(t, false)
+
+	existingWT := t.TempDir()
+	newWT := t.TempDir()
+
+	writeFile(t, existingWT, LockfilePnpm, "lockfile-content")
+	writeFile(t, newWT, LockfilePnpm, "lockfile-content")
+
+	if err := os.MkdirAll(filepath.Join(existingWT, DirNodeModules), 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(existingWT, DirNodeModules), "package.json", "{}")
+
+	runner := &mockRunner{worktreeOutput: mockWorktreeList(existingWT, newWT)}
+	mgr := &Manager{Runner: runner}
+	modules := []Module{
+		{Dir: DirNodeModules, Lockfile: LockfilePnpm}, // no InstallCmd
+	}
+
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
+	if len(results) != 1 {
+		t.Fatalf(fmtExpectedResults, len(results))
+	}
+
+	r := results[0]
+	if !r.Cloned {
+		t.Error("expected Cloned=true: no InstallCmd means there's no fallback to prefer")
+	}
+}
+
+func TestModuleSpanDetail(t *testing.T) {
+	tests := []struct {
+		name   string
+		result InstallResult
+		want   string
+	}{
+		{name: "installed", result: InstallResult{Cloned: false}, want: observability.DetailInstalled},
+		{name: "cloned-reflink", result: InstallResult{Cloned: true, Reflink: true}, want: observability.DetailClonedReflink},
+		{name: "cloned-copy", result: InstallResult{Cloned: true, Reflink: false}, want: observability.DetailClonedCopy},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := moduleSpanDetail(tt.result); got != tt.want {
+				t.Errorf("moduleSpanDetail(%+v) = %q, want %q", tt.result, got, tt.want)
+			}
+		})
+	}
 }
 
 func TestManagerInstallPostCloneError(t *testing.T) {
@@ -727,6 +882,13 @@ func TestInstallPreferSourceListWorktreesError(t *testing.T) {
 }
 
 func TestManagerInstallCloneFailFallback(t *testing.T) {
+	// Force eligible=true so both subtests exercise a genuine CloneModule
+	// failure (the real `cp` against a read-only newWT) rather than being
+	// intercepted earlier by the ineligibility gate — which, on a read-only
+	// dst, would otherwise short-circuit here too (probeCowCapable can't
+	// create its temp file there either).
+	withCowEligible(t, true)
+
 	existingWT := t.TempDir()
 
 	lockContent := "same-lock-content"
@@ -769,7 +931,9 @@ func TestManagerInstallCloneFailFallback(t *testing.T) {
 		}
 	})
 
-	// CloneOnly=false: clone fails → fallback to InstallCmd
+	// CloneOnly=false, genuinely eligible clone whose real CloneModule call
+	// still fails (read-only dst) → cowCopy propagates the raw error (no
+	// byte-copy retry, per Stage 1) and cloneAndPost falls back to InstallCmd.
 	t.Run("clone fail fallback to install", func(t *testing.T) {
 		modules := []Module{
 			{Dir: DirNodeModules, Lockfile: LockfilePnpm, InstallCmd: "echo fallback"},

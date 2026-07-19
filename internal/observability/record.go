@@ -17,6 +17,16 @@ const (
 	CategoryGH   = "gh"
 )
 
+// Module-span detail values (see SpanRecord.Detail). DetailClonedReflink and
+// DetailClonedCopy split what used to be a single ambiguous "cloned" value —
+// that ambiguity hid a real regression where a "clone" was actually a silent
+// 14-123s byte-copy fallback in disguise as a sub-second reflink.
+const (
+	DetailInstalled     = "installed"
+	DetailClonedReflink = "cloned-reflink"
+	DetailClonedCopy    = "cloned-copy"
+)
+
 // stderrTruncateLimit caps captured stderr so day-file lines stay a bounded
 // size. Cross-process append safety comes from a single write() syscall being
 // atomic for regular files (not from PIPE_BUF, which governs pipes, not the
@@ -85,7 +95,7 @@ type SpanRecord struct {
 	Command       string `json:"command"`
 	Name          string `json:"name"` // "command" for the root span, else phase/module name
 	DurationMS    int64  `json:"duration_ms"`
-	Detail        string `json:"detail,omitempty"` // e.g. "cloned" / "installed" for module spans
+	Detail        string `json:"detail,omitempty"` // e.g. DetailClonedReflink / DetailClonedCopy / DetailInstalled for module spans
 }
 
 // truncate returns s unchanged when it fits within limit bytes, otherwise

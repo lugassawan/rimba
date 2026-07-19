@@ -40,7 +40,13 @@ type InstallResult struct {
 	Module Module
 	Source string // source worktree path if cloned
 	Cloned bool
-	Error  error
+
+	// Reflink is true when Cloned was a genuine CoW reflink/clonefile (per
+	// cowEligible), false when Cloned was a byte-copy (CloneOnly modules
+	// forced through on a non-CoW filesystem). Meaningless when !Cloned.
+	Reflink bool
+
+	Error error
 
 	// Ran is true only if this module's install goroutine actually executed,
 	// distinguishing a cancelled dispatch from a real no-op.
@@ -145,14 +151,28 @@ func buildExistingPaths(entries []git.WorktreeEntry, exclude, preferred string) 
 }
 
 // installModule wraps installModuleInner with a module-level observability
-// span, recording whether the module was cloned from a sibling worktree or
-// freshly installed.
+// span, recording whether the module was cloned via a true reflink, cloned
+// via a byte-copy, or freshly installed.
 func (m *Manager) installModule(ctx context.Context, worktreePath string, mh ModuleWithHash, existingPaths []string) InstallResult {
 	rec := observability.FromContext(ctx)
 	stop := rec.StartModuleSpan(mh.Module.Dir)
 	result := m.installModuleInner(ctx, worktreePath, mh, existingPaths)
-	stop(result.Cloned)
+	stop(moduleSpanDetail(result))
 	return result
+}
+
+// moduleSpanDetail maps an InstallResult to the observability detail label
+// distinguishing a true reflink clone (fast) from a byte-copy clone (the
+// pessimization Stage 1 exists to avoid for install-capable modules) from a
+// fresh install.
+func moduleSpanDetail(result InstallResult) string {
+	if !result.Cloned {
+		return observability.DetailInstalled
+	}
+	if result.Reflink {
+		return observability.DetailClonedReflink
+	}
+	return observability.DetailClonedCopy
 }
 
 func (m *Manager) installModuleInner(ctx context.Context, worktreePath string, mh ModuleWithHash, existingPaths []string) InstallResult {
@@ -178,7 +198,14 @@ func (m *Manager) installModuleInner(ctx context.Context, worktreePath string, m
 	return InstallResult{Module: mod}
 }
 
-// tryCloneFromExisting attempts to clone the module from an existing worktree with matching lockfile.
+// tryCloneFromExisting attempts to clone the module from an existing worktree
+// with a matching lockfile. For install-capable modules (mod.InstallCmd set),
+// a clone is only attempted when cowEligible confirms the dst filesystem
+// truly honors a reflink/clonefile — otherwise it's skipped in favor of the
+// install path, which is dramatically cheaper than a byte-copy of a large
+// dependency tree (see cowEligible's doc comment). CloneOnly modules (no
+// install fallback to fall back to) and modules with no InstallCmd at all
+// always attempt the clone, matching pre-existing behavior.
 func tryCloneFromExisting(ctx context.Context, worktreePath string, mh ModuleWithHash, existingPaths []string) (InstallResult, bool) {
 	mod := mh.Module
 	for _, wtPath := range existingPaths {
@@ -192,13 +219,19 @@ func tryCloneFromExisting(ctx context.Context, worktreePath string, mh ModuleWit
 			continue
 		}
 
-		return cloneAndPost(ctx, worktreePath, wtPath, mod), true
+		reflink := cowEligible(ctx, modDir, worktreePath)
+		if mod.InstallCmd != "" && !mod.CloneOnly && !reflink {
+			continue // prefer install over a byte-copy in disguise
+		}
+
+		return cloneAndPost(ctx, worktreePath, wtPath, mod, reflink), true
 	}
 	return InstallResult{}, false
 }
 
 // cloneAndPost clones the module from srcWT to dstWT and runs the PostClone hook.
-func cloneAndPost(ctx context.Context, dstWT, srcWT string, mod Module) InstallResult {
+// reflink records whether cowEligible confirmed a true CoW clone (for observability).
+func cloneAndPost(ctx context.Context, dstWT, srcWT string, mod Module, reflink bool) InstallResult {
 	if err := CloneModule(ctx, srcWT, dstWT, mod); err != nil {
 		if !mod.CloneOnly {
 			installErr := runInstall(ctx, dstWT, mod)
@@ -214,7 +247,7 @@ func cloneAndPost(ctx context.Context, dstWT, srcWT string, mod Module) InstallR
 		}
 	}
 
-	return InstallResult{Module: mod, Source: srcWT, Cloned: true}
+	return InstallResult{Module: mod, Source: srcWT, Cloned: true, Reflink: reflink}
 }
 
 func runInstall(ctx context.Context, worktreePath string, mod Module) error {
