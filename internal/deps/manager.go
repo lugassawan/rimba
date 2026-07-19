@@ -206,8 +206,23 @@ func (m *Manager) installModuleInner(ctx context.Context, worktreePath string, m
 // dependency tree (see cowEligible's doc comment). CloneOnly modules (no
 // install fallback to fall back to) and modules with no InstallCmd at all
 // always attempt the clone, matching pre-existing behavior.
+//
+// Recursive install-capable modules (pnpm/yarn/npm node_modules) are a
+// special case: cowEligible only measures whether ONE file reflinks, but a
+// Recursive clone walks and clones every nested node_modules dir in a
+// monorepo — an unbounded cost that scales with workspace count. Confirmed
+// empirically: a genuine reflink clone of a 100k+-entry node_modules still
+// took 100+s (syscall-per-entry overhead, not a byte-copy in disguise),
+// while the real install stayed at 2-5s regardless (the package manager's
+// own store materializes it). So Recursive install-capable modules always
+// install — the probe is never even consulted for them.
 func tryCloneFromExisting(ctx context.Context, worktreePath string, mh ModuleWithHash, existingPaths []string) (InstallResult, bool) {
 	mod := mh.Module
+
+	if mod.Recursive && mod.InstallCmd != "" && !mod.CloneOnly {
+		return InstallResult{}, false
+	}
+
 	for _, wtPath := range existingPaths {
 		otherHash, err := HashLockfile(wtPath, mod.Lockfile)
 		if err != nil || otherHash != mh.Hash {

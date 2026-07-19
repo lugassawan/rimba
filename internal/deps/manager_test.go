@@ -69,6 +69,10 @@ func mockWorktreeList(paths ...string) string {
 	return b.String()
 }
 
+// TestManagerInstallClone covers a non-recursive install-capable module —
+// the one shape where cowEligible still gates a real clone attempt (see
+// TestManagerInstallRecursiveAlwaysInstalls for why Recursive modules never
+// reach this path at all).
 func TestManagerInstallClone(t *testing.T) {
 	withCowEligible(t, true)
 
@@ -118,6 +122,56 @@ func TestManagerInstallClone(t *testing.T) {
 	}
 
 	assertFileContent(t, filepath.Join(newWT, DirNodeModules, "package.json"), "{}")
+}
+
+// TestManagerInstallRecursiveAlwaysInstalls verifies the fix for a real
+// production monorepo where cowEligible reported a genuine reflink clone
+// (not a byte-copy) yet still took 100+s: a Recursive module (pnpm/yarn/npm
+// node_modules) walks and clones every nested node_modules dir in a
+// monorepo, so its true cost scales with workspace count regardless of true
+// CoW support. Even with cowEligible forced true (so a byte-copy-vs-reflink
+// bug wouldn't be masked), a Recursive install-capable module must still
+// install rather than clone — the sibling's content must never appear.
+func TestManagerInstallRecursiveAlwaysInstalls(t *testing.T) {
+	withCowEligible(t, true)
+
+	existingWT := t.TempDir()
+	newWT := t.TempDir()
+
+	writeFile(t, existingWT, LockfilePnpm, "lockfile-v6-content")
+	writeFile(t, newWT, LockfilePnpm, "lockfile-v6-content")
+
+	if err := os.MkdirAll(filepath.Join(existingWT, DirNodeModules), 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(existingWT, DirNodeModules), "package.json", "{}")
+
+	runner := &mockRunner{worktreeOutput: mockWorktreeList(existingWT, newWT)}
+	mgr := &Manager{Runner: runner}
+	modules := []Module{
+		{
+			Dir:        DirNodeModules,
+			Lockfile:   LockfilePnpm,
+			InstallCmd: "echo ok",
+			Recursive:  true,
+		},
+	}
+
+	results := mgr.Install(context.Background(), newWT, modules, nil, nil)
+	if len(results) != 1 {
+		t.Fatalf(fmtExpectedResults, len(results))
+	}
+
+	r := results[0]
+	if r.Cloned {
+		t.Error("expected Cloned=false: Recursive install-capable modules always install")
+	}
+	if r.Error != nil {
+		t.Errorf(fmtExpectedNoError, r.Error)
+	}
+	if _, err := os.Stat(filepath.Join(newWT, DirNodeModules, "package.json")); !os.IsNotExist(err) {
+		t.Error("expected the sibling's node_modules to never be cloned")
+	}
 }
 
 // TestManagerInstallIneligibleCloneFallsThroughToInstall verifies Stage 1's
