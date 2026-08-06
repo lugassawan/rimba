@@ -179,6 +179,9 @@ func runPostRenameSetup(ctx context.Context, hctx *HandlerContext, cfg *config.C
 	if cfg.Deps != nil {
 		configModules = cfg.Deps.Modules
 	}
+	// Error is ignored: cfg.Validate() (run in HandlerContext setup) already
+	// guarantees post_rename is well-formed before any tool runs.
+	stages, _ := cfg.PostRenameStages()
 	_, err := operations.PostRenameSetup(ctx, hctx.Runner, operations.PostRenameParams{
 		WtPath:        result.NewPath,
 		Service:       svc,
@@ -186,7 +189,7 @@ func runPostRenameSetup(ctx context.Context, hctx *HandlerContext, cfg *config.C
 		AutoDetect:    cfg.IsAutoDetectDeps(),
 		ConfigModules: configModules,
 		SkipHooks:     req.GetBool("skip_hooks", false),
-		PostRename:    cfg.PostRename,
+		PostRename:    stages,
 		Concurrency:   cfg.DepsConcurrency(),
 	}, nil)
 	return err

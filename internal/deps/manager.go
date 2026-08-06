@@ -1,7 +1,6 @@
 package deps
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -285,7 +284,7 @@ func runInstall(ctx context.Context, worktreePath string, mod Module) error {
 	cmd.Dir = dir
 	configureProcessGroup(cmd)
 
-	var buf bytes.Buffer
+	var buf tailBuffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
 

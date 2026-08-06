@@ -40,13 +40,21 @@ type Config struct {
 	DefaultSource  string   `toml:"-"`
 	CommandTimeout string   `toml:"command_timeout,omitempty"`
 	CopyFiles      []string `toml:"copy_files"`
-	PostCreate     []string `toml:"post_create,omitempty"`
-	PostRename     []string `toml:"post_rename,omitempty"`
+	// PostCreate and PostRename hold either a flat list of hook commands or a
+	// nested list of stages (each inner list run concurrently, stages run in
+	// order) — see NormalizeHookStages/PostCreateStages/PostRenameStages.
+	// Never read these fields directly; always go through PostCreateStages/
+	// PostRenameStages, and only after Validate() has run (every caller in
+	// this codebase reaches these fields downstream of a Validate() call —
+	// see cmd/root.go's PersistentPreRunE and internal/mcp's requireConfig).
+	PostCreate any `toml:"post_create,omitempty"`
+	PostRename any `toml:"post_rename,omitempty"`
 
 	Deps          *DepsConfig          `toml:"deps,omitempty"`
 	Open          map[string]string    `toml:"open,omitempty"`
 	Resolver      *ResolverConfig      `toml:"resolver,omitempty"`
 	Observability *ObservabilityConfig `toml:"observability,omitempty"`
+	Hooks         *HooksConfig         `toml:"hooks,omitempty"`
 }
 
 // DefaultObservabilityRetentionDays is used when [observability] retention_days is unset.
@@ -135,6 +143,22 @@ func (c *Config) DepsConcurrency() int {
 	return c.Deps.Concurrency
 }
 
+// HooksConfig holds optional post-create hook execution settings.
+type HooksConfig struct {
+	Parallel *bool `toml:"parallel,omitempty"`
+}
+
+// IsHooksParallel reports whether post-create hooks run concurrently instead
+// of serially. Defaults to false: parallel hooks can break execution-order
+// dependencies between commands (e.g. hook 1 generates a file hook 2 reads),
+// so a repo must explicitly declare its hooks are independent.
+func (c *Config) IsHooksParallel() bool {
+	if c.Hooks == nil || c.Hooks.Parallel == nil {
+		return false
+	}
+	return *c.Hooks.Parallel
+}
+
 // DefaultWorktreeDir returns the conventional worktree directory path for a repo.
 func DefaultWorktreeDir(repoName string) string {
 	return "../" + repoName + "-worktrees"
@@ -167,6 +191,18 @@ func (c *Config) Validate() error {
 	errs = appendIf(errs, validateDeps(c.Deps)...)
 	errs = appendIf(errs, validateOpen(c.Open)...)
 	errs = appendIf(errs, validateResolver(c.Resolver)...)
+	if _, err := c.PostCreateStages(); err != nil {
+		errs = append(errs, errhint.WithFix(
+			fmt.Errorf("config: %w", err),
+			"post_create must be an array of strings, or an array of arrays of strings for staged execution, in .rimba/settings.toml",
+		))
+	}
+	if _, err := c.PostRenameStages(); err != nil {
+		errs = append(errs, errhint.WithFix(
+			fmt.Errorf("config: %w", err),
+			"post_rename must be an array of strings, or an array of arrays of strings for staged execution, in .rimba/settings.toml",
+		))
+	}
 	return errors.Join(errs...)
 }
 
@@ -234,6 +270,9 @@ func Merge(team, local *Config) *Config {
 	}
 	if local.Deps != nil {
 		merged.Deps = local.Deps
+	}
+	if local.Hooks != nil {
+		merged.Hooks = local.Hooks
 	}
 	if local.Open != nil {
 		merged.Open = local.Open

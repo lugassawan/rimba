@@ -25,8 +25,8 @@ type PostCreateOptions struct {
 	AutoDetect    bool
 	ConfigModules []config.ModuleConfig
 	SkipHooks     bool
-	PostCreate    []string // hook commands
-	Concurrency   int      // max parallel module installs; 0 = Manager default
+	PostCreate    [][]string // hook stages — see config.PostCreateStages
+	Concurrency   int        // max parallel module installs; 0 = Manager default
 }
 
 // AddParams holds the inputs for creating a new worktree.

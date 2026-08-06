@@ -115,6 +115,10 @@ var renameCmd = &cobra.Command{
 			configModules = cfg.Deps.Modules
 		}
 		s.Start("Running post-rename setup...")
+		// Error is ignored: cfg.Validate() (run in root.go's
+		// PersistentPreRunE) already guarantees post_rename is well-formed
+		// before any command runs.
+		postRenameStages, _ := cfg.PostRenameStages()
 		postResult, err := operations.PostRenameSetup(cmd.Context(), r, operations.PostRenameParams{
 			WtPath:        result.NewPath,
 			Service:       svc,
@@ -122,7 +126,7 @@ var renameCmd = &cobra.Command{
 			AutoDetect:    cfg.IsAutoDetectDeps(),
 			ConfigModules: configModules,
 			SkipHooks:     skipHooks,
-			PostRename:    cfg.PostRename,
+			PostRename:    postRenameStages,
 			Concurrency:   cfg.DepsConcurrency(),
 		}, func(msg string) { s.Update(msg) })
 		if err != nil {

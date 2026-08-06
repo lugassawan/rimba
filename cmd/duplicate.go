@@ -125,6 +125,11 @@ var duplicateCmd = &cobra.Command{
 			Add(flagDryRun, hintDryRun).
 			Show()
 
+		// Error is ignored: cfg.Validate() (run in root.go's
+		// PersistentPreRunE) already guarantees post_create is well-formed
+		// before any command runs.
+		postCreateStages, _ := cfg.PostCreateStages()
+
 		if dryRun {
 			out := cmd.OutOrStdout()
 			fmt.Fprintf(out, "[dry-run] would create worktree: %s (branch %s from %s)\n", wtPath, newBranch, wt.Branch)
@@ -134,7 +139,7 @@ var duplicateCmd = &cobra.Command{
 			if !skipDeps {
 				fmt.Fprintf(out, "[dry-run] would install deps\n")
 			}
-			if !skipHooks && len(cfg.PostCreate) > 0 {
+			if !skipHooks && len(postCreateStages) > 0 {
 				fmt.Fprintf(out, "[dry-run] would run post-create hooks\n")
 			}
 			return nil
@@ -169,7 +174,7 @@ var duplicateCmd = &cobra.Command{
 			AutoDetect:    cfg.IsAutoDetectDeps(),
 			ConfigModules: configModules,
 			SkipHooks:     skipHooks,
-			PostCreate:    cfg.PostCreate,
+			PostCreate:    postCreateStages,
 			SourcePath:    wt.Path,
 			Concurrency:   cfg.DepsConcurrency(),
 		}, func(msg string) { s.Update(msg) })

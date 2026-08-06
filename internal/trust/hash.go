@@ -12,10 +12,21 @@ import (
 
 // Commands returns all shell-executing strings from cfg in display order:
 // post_create, then post_rename, then non-empty deps.modules[].install.
+//
+// PostCreateStages/PostRenameStages errors are ignored here: cfg.Validate()
+// (run before any command reaches this code) already guarantees both fields
+// are well-formed, and stage boundaries don't matter for hashing — every
+// command's string value contributes regardless of which stage it's in.
 func Commands(cfg *config.Config) []string {
 	var cmds []string
-	cmds = append(cmds, cfg.PostCreate...)
-	cmds = append(cmds, cfg.PostRename...)
+	postCreate, _ := cfg.PostCreateStages()
+	for _, stage := range postCreate {
+		cmds = append(cmds, stage...)
+	}
+	postRename, _ := cfg.PostRenameStages()
+	for _, stage := range postRename {
+		cmds = append(cmds, stage...)
+	}
 	if cfg.Deps != nil {
 		for _, m := range cfg.Deps.Modules {
 			if strings.TrimSpace(m.Install) != "" {

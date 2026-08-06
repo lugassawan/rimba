@@ -73,6 +73,10 @@ func handleRestore(hctx *HandlerContext) server.ToolHandlerFunc {
 			configModules = cfg.Deps.Modules
 		}
 
+		// Error is ignored: cfg.Validate() (run in HandlerContext setup)
+		// already guarantees post_create is well-formed before any tool runs.
+		postCreateStages, _ := cfg.PostCreateStages()
+
 		pcResult, err := operations.PostCreateSetup(ctx, hctx.Runner, operations.PostCreateParams{
 			RepoRoot:      hctx.RepoRoot,
 			WtPath:        wtPath,
@@ -83,7 +87,7 @@ func handleRestore(hctx *HandlerContext) server.ToolHandlerFunc {
 			AutoDetect:    cfg.IsAutoDetectDeps(),
 			ConfigModules: configModules,
 			SkipHooks:     req.GetBool("skip_hooks", false),
-			PostCreate:    cfg.PostCreate,
+			PostCreate:    postCreateStages,
 			Concurrency:   cfg.DepsConcurrency(),
 		}, nil)
 		if err != nil {
