@@ -302,6 +302,12 @@ func TestAllSpecsIncludeMcpToolsSection(t *testing.T) {
 
 	for _, ls := range specs {
 		content := ls.spec.Content()
+		if ls.spec.MCPFree {
+			if strings.Contains(content, "mcp__rimba__") {
+				t.Errorf("%s spec %s is MCPFree but content mentions mcp__rimba__", ls.label, ls.spec.RelPath)
+			}
+			continue
+		}
 		for _, tool := range mcpToolEntries {
 			if !strings.Contains(content, tool.mcp) {
 				t.Errorf("%s spec %s should mention %s", ls.label, ls.spec.RelPath, tool.mcp)
