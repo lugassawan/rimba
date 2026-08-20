@@ -21,7 +21,7 @@ func TestCandidateCopyFiles(t *testing.T) {
 		t.Errorf("files = %v, want %v", files, wantFiles)
 	}
 
-	wantDirs := []string{".vscode", ".idea", ".cursor", ".claude"}
+	wantDirs := []string{".vscode", ".idea", ".cursor", ".claude", ".pi"}
 	if !reflect.DeepEqual(dirs, wantDirs) {
 		t.Errorf("dirs = %v, want %v", dirs, wantDirs)
 	}
