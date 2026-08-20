@@ -307,27 +307,31 @@ func TestMcpToolEntriesIncludesAllRegisteredTools(t *testing.T) {
 }
 
 func TestProjectGeneratorsMentionCurrentCommands(t *testing.T) {
-	cases := []struct {
-		name    string
-		content func() string
-	}{
-		{"agentsBlock", agentsBlock},
-		{"copilotBlock", copilotBlock},
-		{"cursorContent", cursorContent},
-		{"geminiBlock", geminiBlock},
-		{"windsurfContent", windsurfContent},
-		{"rooContent", rooContent},
-		{"claudeSkillContent", claudeSkillContent},
+	coreCommands := []string{"add", "list", "status", "sync", "merge", "remove", "clean"}
+	fullCommands := []string{"doctor", "rename", "restore", "duplicate", "trust"}
+
+	for _, s := range GlobalSpecs() {
+		t.Run("global/"+s.RelPath, func(t *testing.T) {
+			content := s.Content()
+			for _, cmd := range coreCommands {
+				if !strings.Contains(content, cmd) {
+					t.Errorf("global spec %s should mention %q command", s.RelPath, cmd)
+				}
+			}
+		})
 	}
 
-	commands := []string{"doctor", "rename", "restore", "duplicate", "trust"}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			content := c.content()
-			for _, cmd := range commands {
+	for _, s := range ProjectSpecs() {
+		t.Run("project/"+s.RelPath, func(t *testing.T) {
+			content := s.Content()
+			for _, cmd := range coreCommands {
 				if !strings.Contains(content, cmd) {
-					t.Errorf("%s should mention %q command", c.name, cmd)
+					t.Errorf("project spec %s should mention %q command", s.RelPath, cmd)
+				}
+			}
+			for _, cmd := range fullCommands {
+				if !strings.Contains(content, cmd) {
+					t.Errorf("project spec %s should mention %q command", s.RelPath, cmd)
 				}
 			}
 		})
@@ -340,24 +344,30 @@ func TestProjectJSONCommandListsAreCurrent(t *testing.T) {
 		"add", "merge", "remove", "rename", "sync", "clean", "log",
 	}
 
-	cases := []struct {
-		name    string
-		content func() string
-	}{
-		{"agentsBlock", agentsBlock},
-		{"cursorContent", cursorContent},
-		{"claudeSkillContent", claudeSkillContent},
+	all := make([]labeledSpec, 0, len(ProjectSpecs())+len(GlobalSpecs()))
+	for _, s := range ProjectSpecs() {
+		all = append(all, labeledSpec{"project", s})
+	}
+	for _, s := range GlobalSpecs() {
+		all = append(all, labeledSpec{"global", s})
 	}
 
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			content := c.content()
-			for _, cmd := range wantCommands {
-				if !strings.Contains(content, cmd) {
-					t.Errorf("%s --json list should mention %q", c.name, cmd)
-				}
+	tested := 0
+	for _, ls := range all {
+		content := ls.spec.Content()
+		if !strings.Contains(content, "JSON Output") {
+			continue
+		}
+		tested++
+		for _, cmd := range wantCommands {
+			if !strings.Contains(content, cmd) {
+				t.Errorf("%s spec %s documents JSON Output but is missing %q", ls.label, ls.spec.RelPath, cmd)
 			}
-		})
+		}
+	}
+
+	if tested == 0 {
+		t.Fatal("no spec documents a JSON Output section — test is vacuous, registry or content likely broken")
 	}
 }
 
