@@ -167,6 +167,8 @@ agent = 'claude'
 
 Running `rimba init --agents` or `rimba init -g` additionally creates or patches MCP server config files in client tools (`.mcp.json`, `.cursor/mcp.json`, `~/.claude.json`, and others). See [docs/configuration.md#mcp-server-registration](docs/configuration.md#mcp-server-registration) for the full list of patched files and entry format.
 
+Pi is also supported for agent instruction files and skill installation, but — by design — gets no MCP server registration, since Pi's own philosophy is "No MCP. Build CLI tools with READMEs."
+
 ## Trust model
 
 **`.rimba/settings.toml` is committed and team-shared.** The following fields execute shell commands verbatim via `sh -c`:
