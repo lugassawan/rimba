@@ -10,8 +10,8 @@ func TestStatusNotInstalled(t *testing.T) {
 	dir := t.TempDir()
 
 	statuses := StatusProject(dir)
-	if len(statuses) != 7 {
-		t.Fatalf("Status returned %d items, want 7", len(statuses))
+	if len(statuses) != 8 {
+		t.Fatalf("Status returned %d items, want 8", len(statuses))
 	}
 
 	for _, s := range statuses {

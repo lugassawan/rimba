@@ -2,12 +2,6 @@ package agentfile
 
 import "testing"
 
-func TestSpecsReturnsSeven(t *testing.T) {
-	if got := len(ProjectSpecs()); got != 7 {
-		t.Fatalf("Specs() returned %d items, want 7", got)
-	}
-}
-
 func TestSpecsContentNotEmpty(t *testing.T) {
 	for _, spec := range ProjectSpecs() {
 		content := spec.Content()
@@ -17,15 +11,15 @@ func TestSpecsContentNotEmpty(t *testing.T) {
 	}
 }
 
-func TestGlobalSpecsCountIsSeven(t *testing.T) {
-	if got := len(GlobalSpecs()); got != 7 {
-		t.Fatalf("GlobalSpecs() returned %d items, want 7", got)
+func TestGlobalSpecsCount(t *testing.T) {
+	if got := len(GlobalSpecs()); got != 9 {
+		t.Fatalf("GlobalSpecs() returned %d items, want 9", got)
 	}
 }
 
-func TestProjectSpecsCountIsSeven(t *testing.T) {
-	if got := len(ProjectSpecs()); got != 7 {
-		t.Fatalf("ProjectSpecs() returned %d items, want 7", got)
+func TestProjectSpecsCount(t *testing.T) {
+	if got := len(ProjectSpecs()); got != 8 {
+		t.Fatalf("ProjectSpecs() returned %d items, want 8", got)
 	}
 }
 

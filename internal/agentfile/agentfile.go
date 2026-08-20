@@ -37,6 +37,9 @@ type Spec struct {
 	RelPath string        // e.g. "AGENTS.md", ".cursor/rules/rimba.mdc"
 	Kind    FileKind      // block-based or whole-file
 	Content func() string // returns the content to write
+	// MCPFree marks a spec whose agent ships no MCP support by design; its content
+	// documents the rimba CLI surface only and must contain no mcp__rimba__ references.
+	MCPFree bool
 }
 
 // Result reports what happened to a single file during Install or Uninstall.

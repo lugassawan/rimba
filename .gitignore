@@ -50,6 +50,10 @@ local.properties
 .claude/scheduled_tasks.lock
 .claude/worktrees/
 
+# Superpowers SDD scratch (plans + per-plan workspaces)
+.superpowers/
+docs/superpowers/
+
 # macOS
 .DS_Store
 

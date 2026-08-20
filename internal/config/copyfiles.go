@@ -12,7 +12,7 @@ func CandidateCopyFiles() (files, dirs []string) {
 		".env.test", ".env.test.local",
 		".envrc", ".tool-versions", ".python-version", ".dev.vars", ".npmrc",
 	}
-	dirs = []string{".vscode", ".idea", ".cursor", ".claude"}
+	dirs = []string{".vscode", ".idea", ".cursor", ".claude", ".pi"}
 	return files, dirs
 }
 

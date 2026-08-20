@@ -50,6 +50,23 @@ when no MCP connection is available.
 	return strings.TrimRight(b.String(), "\n")
 }
 
+// cliCommandsSection returns a markdown block documenting the core rimba CLI commands, derived
+// from mcpToolEntries so it stays current as commands are added. Agents with no MCP integration
+// (e.g. Pi) use this instead of mcpToolsSection. heading sets the nesting level ("##" or "###")
+// so callers can match their surrounding structure. Emits no mcp__rimba__ strings.
+func cliCommandsSection(heading string) string {
+	var b strings.Builder
+	b.WriteString(heading + ` Core Commands
+
+| Command |
+|---------|
+`)
+	for _, e := range mcpToolEntries {
+		b.WriteString("| `" + e.cli + "` |\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
 // agentsBlock returns the rimba block for AGENTS.md (shared file, block-based).
 func agentsBlock() string {
 	return `<!-- BEGIN RIMBA -->
@@ -596,5 +613,138 @@ Commands supporting ` + "`" + `--json` + "`" + `: ` + "`" + `list` + "`" + `, ` 
 - Always check ` + "`" + `rimba status` + "`" + ` before bulk operations
 
 ` + mcpToolsSection("##") + `
+`
+}
+
+// globalPiSkillContent returns the user-level content for ~/.pi/agent/skills/rimba/SKILL.md.
+func globalPiSkillContent() string {
+	return `---
+name: rimba
+description: Use when the user wants to create, list, sync, merge, remove, or clean up git worktrees, or before starting new feature/bugfix work that should be isolated in its own branch and directory — covers parallel development across multiple tasks without branch-switching
+---
+
+# rimba — Git Worktree Manager
+
+## Prerequisite
+
+Run ` + "`" + `rimba version` + "`" + ` to check if rimba is installed.
+If not found, **ask the user** if they want to install it. Never install automatically.
+
+` + "```" + `sh
+curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/install.sh | bash
+` + "```" + `
+
+Check for ` + "`" + `.rimba/settings.toml` + "`" + ` in the current repo to confirm rimba is configured for this project.
+
+## Decision Logic
+
+| User wants to... | Run |
+|-------------------|-----|
+| Start a new task | ` + "`" + `rimba add <task>` + "`" + ` |
+| Start a task in a monorepo service | ` + "`" + `rimba add service/task` + "`" + ` |
+| See all worktrees | ` + "`" + `rimba list` + "`" + ` |
+| Check worktree health | ` + "`" + `rimba status` + "`" + ` |
+| Navigate to a worktree | ` + "`" + `cd $(rimba open <task>)` + "`" + ` |
+| Update from source branch | ` + "`" + `rimba sync <task>` + "`" + ` |
+| Finish a feature | ` + "`" + `rimba merge <task>` + "`" + ` |
+| Remove a worktree | ` + "`" + `rimba remove <task>` + "`" + ` |
+| Clean up merged work | ` + "`" + `rimba clean --merged` + "`" + ` |
+
+rimba ships no MCP integration for Pi (Pi's own philosophy is CLI-first); use the commands above
+directly rather than looking for an MCP tool.
+
+` + cliCommandsSection("##") + `
+`
+}
+
+// globalPiBlock returns the user-level rimba block for ~/.pi/agent/AGENTS.md.
+func globalPiBlock() string {
+	return `<!-- BEGIN RIMBA -->
+<!-- Managed by rimba — do not edit this block manually -->
+
+# rimba — Git Worktree Manager
+
+rimba manages parallel git worktrees so you can work on multiple tasks simultaneously.
+Check for ` + "`" + `.rimba/settings.toml` + "`" + ` in the current repo to confirm it is configured.
+
+Run ` + "`" + `rimba version` + "`" + ` to check if rimba is installed.
+If not found, **ask the user** before installing. Never install automatically.
+
+rimba has no MCP integration for Pi — use the CLI commands below directly.
+
+## Command Reference
+
+| Concern | Commands |
+|---------|----------|
+| Create & navigate | ` + "`" + `rimba add <task>` + "`" + `, ` + "`" + `rimba add pr:<num>` + "`" + ` (from a GitHub PR), ` + "`" + `rimba open <task>` + "`" + ` |
+| Inspect | ` + "`" + `rimba list` + "`" + ` (` + "`" + `--full` + "`" + ` adds PR/CI columns), ` + "`" + `rimba status` + "`" + ` (` + "`" + `--detail` + "`" + ` adds disk/velocity) |
+| Sync & merge | ` + "`" + `rimba sync [task]` + "`" + `, ` + "`" + `rimba merge <task>` + "`" + ` |
+| Clean up | ` + "`" + `rimba clean --merged` + "`" + `, ` + "`" + `rimba archive <task>` + "`" + `, ` + "`" + `rimba remove <task>` + "`" + ` |
+
+` + cliCommandsSection("##") + `
+
+<!-- END RIMBA -->`
+}
+
+// piSkillContent returns the full content for .pi/skills/rimba/SKILL.md (whole-file, rimba-owned).
+func piSkillContent() string {
+	return `---
+name: rimba
+description: Use when the user wants to create, list, sync, merge, remove, or clean up git worktrees, or before starting new feature/bugfix work that should be isolated in its own branch and directory — covers parallel development across multiple tasks without branch-switching
+---
+
+# rimba — Git Worktree Manager
+
+## Prerequisite
+
+Run ` + "`" + `rimba version` + "`" + ` to check if rimba is installed.
+If not found, **ask the user** if they want to install it. Never install automatically.
+
+` + "```" + `sh
+curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/install.sh | bash
+` + "```" + `
+
+## Decision Logic
+
+| User wants to... | Run |
+|-------------------|-----|
+| Start a new task | ` + "`" + `rimba add <task>` + "`" + ` |
+| Start a task in a monorepo service | ` + "`" + `rimba add service/task` + "`" + ` (auto-detects service from repo dirs) |
+| Rename a task | ` + "`" + `rimba rename <task> [new-task]` + "`" + ` |
+| Duplicate a worktree | ` + "`" + `rimba duplicate <task>` + "`" + ` |
+| See all worktrees | ` + "`" + `rimba list` + "`" + ` or ` + "`" + `rimba list --json` + "`" + ` |
+| Filter by service (monorepo) | ` + "`" + `rimba list --service <svc>` + "`" + ` |
+| Check worktree health | ` + "`" + `rimba status` + "`" + ` |
+| Diagnose stale worktree locks | ` + "`" + `rimba doctor` + "`" + ` |
+| Navigate to a worktree | ` + "`" + `cd $(rimba open <task>)` + "`" + ` |
+| Update from source branch | ` + "`" + `rimba sync <task>` + "`" + ` or ` + "`" + `rimba sync --all` + "`" + ` |
+| Finish a feature | ` + "`" + `rimba merge <task>` + "`" + ` (auto-removes worktree) |
+| Remove a worktree | ` + "`" + `rimba remove <task>` + "`" + ` |
+| Clean up merged work | ` + "`" + `rimba clean --merged` + "`" + ` |
+| Pause a task | ` + "`" + `rimba archive <task>` + "`" + ` (keeps branch) |
+| Resume a paused task | ` + "`" + `rimba restore <task>` + "`" + ` |
+| Run across worktrees | ` + "`" + `rimba exec "<cmd>"` + "`" + ` |
+| Check for conflicts | ` + "`" + `rimba conflict-check` + "`" + ` |
+| Check dependencies | ` + "`" + `rimba deps status` + "`" + ` |
+| Approve committed shell commands | ` + "`" + `rimba trust` + "`" + ` |
+
+rimba ships no MCP integration for Pi (Pi's own philosophy is CLI-first: "No MCP. Build CLI tools
+with READMEs"); use the commands above directly.
+
+## JSON Output
+
+Commands supporting ` + "`" + `--json` + "`" + `: ` + "`" + `list` + "`" + `, ` + "`" + `status` + "`" + `, ` + "`" + `exec` + "`" + `, ` + "`" + `conflict-check` + "`" + `, ` + "`" + `deps status` + "`" + `, ` + "`" + `add` + "`" + `, ` + "`" + `merge` + "`" + `, ` + "`" + `remove` + "`" + `, ` + "`" + `rename` + "`" + `, ` + "`" + `sync` + "`" + `, ` + "`" + `clean` + "`" + `, ` + "`" + `log` + "`" + `.
+
+**Envelope:** ` + "`" + `{"version": "<semver>", "command": "<name>", "data": <payload>}` + "`" + `
+**Error:** ` + "`" + `{"version": "<semver>", "command": "<name>", "error": "<msg>", "code": "<CODE>"}` + "`" + `
+
+## Best Practices
+
+- Prefer ` + "`" + `rimba archive` + "`" + ` over ` + "`" + `rimba remove` + "`" + ` to preserve branches
+- Use ` + "`" + `--force` + "`" + ` only when you understand the implications
+- Never modify ` + "`" + `.rimba/settings.toml` + "`" + ` without asking the user
+- Always check ` + "`" + `rimba status` + "`" + ` before bulk operations
+
+` + cliCommandsSection("##") + `
 `
 }

@@ -96,7 +96,7 @@ rimba init
 | Field | Description | Default |
 |-------|-------------|---------|
 | `worktree_dir` | Directory (relative to repo root) where worktrees are created | `../<repo-name>-worktrees` |
-| `copy_files` | Files or directories to copy from repo root into new worktrees | auto-detected on `rimba init` from gitignored local files; falls back to `.env`, `.env.local`, `.envrc`, `.tool-versions` |
+| `copy_files` | Files or directories to copy from repo root into new worktrees | auto-detected on `rimba init` from gitignored local files, including candidate dirs `.vscode`, `.idea`, `.cursor`, `.claude`, `.pi`; falls back to `.env`, `.env.local`, `.envrc`, `.tool-versions` |
 | `post_create` | Shell commands to run in new worktrees after creation | (none) |
 | `post_rename` | Shell commands to run after `rimba rename` | (none) |
 | `command_timeout` | Deadline for internal git/gh subprocess calls, as a Go duration (e.g. `90s`, `2m`) — does not bound `post_create`/`post_rename` hooks or `deps.modules[].install`, which are unbounded | `120s` |
@@ -142,6 +142,10 @@ When `auto_detect` is enabled (default), rimba recognizes these lockfiles automa
 ## MCP server registration
 
 When `rimba init --agents` or `rimba init -g` is run, rimba registers itself as an MCP server (server name: `rimba`, command: `rimba mcp`) in client config files alongside the agent instruction files. The registration is idempotent — running the command again updates the entry without duplicating it. `--agents --local` updates agent files only and does **not** register MCP.
+
+Pi is the one supported agent with **no** MCP server registration — by design, since Pi's own philosophy is "No MCP. Build CLI tools with READMEs." No entry is added to any of the files below for Pi.
+
+Note that the shared repo-root `AGENTS.md` — written for every AGENTS.md-reading agent, including Codex, which does have MCP — still documents the `mcp__rimba__*` tool table, so a Pi user in a rimba-initialized repo will see it regardless; Pi's own content (`.pi/skills/rimba/SKILL.md`, `~/.pi/agent/...`) documents the CLI surface only and contains no MCP references.
 
 ### User-level (`rimba init -g`)
 

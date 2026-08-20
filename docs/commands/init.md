@@ -8,13 +8,15 @@ nav_order: 1
 
 Initialize rimba in the current repository. Detects the repo root, creates the `.rimba/` config directory with `settings.toml` (team-shared) and `settings.local.toml` (personal overrides), and sets up the worktree directory.
 
-Agent files (`AGENTS.md`, `.github/copilot-instructions.md`, `.cursor/rules/rimba.mdc`, `.claude/skills/rimba/SKILL.md`) can be installed at three tiers:
+Agent files — project-tier paths shown here (`AGENTS.md`, `GEMINI.md`, `.github/copilot-instructions.md`, `.cursor/rules/rimba.mdc`, `.claude/skills/rimba/SKILL.md`, `.windsurf/rules/rimba.md`, `.clinerules/rimba.md`, `.pi/skills/rimba/SKILL.md`) — can be installed at three tiers. The global tier (`-g`) writes equivalent per-agent paths under `~/`; see [Configuration]({{ '/configuration' | relative_url }}#mcp-server-registration) for the full list:
 
 - `--agents` — project-team level (committed to git)
 - `--agents --local` — project-personal level (gitignored)
 - `-g` / `--global` — user level (`~/`) — works outside a git repository
 
 When agent files are installed, rimba also registers itself as an MCP server (`rimba mcp`) in client config files: `.mcp.json`, `.cursor/mcp.json`, `~/.claude.json`, `~/.codex/config.toml`, `~/.gemini/settings.json`, `~/.codeium/windsurf/mcp_config.json`, `~/.roo/mcp.json`. Use `--uninstall` with the same flags to remove.
+
+Pi is the one supported agent with **no** MCP server registration — by design, since Pi's own philosophy is "No MCP. Build CLI tools with READMEs." Pi also prompts before trusting a project folder containing project-local resources; its non-interactive modes (`-p`, `--mode json`, `--mode rpc`) never prompt and fall back to `defaultProjectTrust`, which defaults to `"ask"` — meaning project-local resources (including `.pi/skills/rimba/SKILL.md`) are silently ignored in those modes unless you set `defaultProjectTrust: "always"` or pass `--approve`. The global tier (`~/.pi/agent/`) needs no trust decision and is unaffected.
 
 If `.rimba/` already exists, config creation is skipped but agent files are still installed or updated. If a legacy `.rimba.toml` exists, it is migrated into the new directory layout.
 

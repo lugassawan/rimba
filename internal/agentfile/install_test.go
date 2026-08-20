@@ -22,8 +22,8 @@ func TestInstallCreatesAllFiles(t *testing.T) {
 		t.Fatalf(fatalInstall, err)
 	}
 
-	if len(results) != 7 {
-		t.Fatalf("Install returned %d results, want 7", len(results))
+	if len(results) != 8 {
+		t.Fatalf("Install returned %d results, want 8", len(results))
 	}
 
 	for _, r := range results {
@@ -202,8 +202,8 @@ func TestUninstallRemovesBlock(t *testing.T) {
 		t.Fatalf(fatalUninstall, err)
 	}
 
-	if len(results) != 7 {
-		t.Fatalf("Uninstall returned %d results, want 7", len(results))
+	if len(results) != 8 {
+		t.Fatalf("Uninstall returned %d results, want 8", len(results))
 	}
 
 	// AGENTS.md should still exist with user content
@@ -284,8 +284,8 @@ func TestInstallGlobalCreatesAllFiles(t *testing.T) {
 		t.Fatalf("InstallGlobal: %v", err)
 	}
 
-	if len(results) != 7 {
-		t.Fatalf("InstallGlobal returned %d results, want 7", len(results))
+	if len(results) != 9 {
+		t.Fatalf("InstallGlobal returned %d results, want 9", len(results))
 	}
 	for _, r := range results {
 		if r.Action != actionCreated {
@@ -371,8 +371,8 @@ func TestUninstallGlobalRemovesAllFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UninstallGlobal: %v", err)
 	}
-	if len(results) != 7 {
-		t.Fatalf("UninstallGlobal returned %d results, want 7", len(results))
+	if len(results) != 9 {
+		t.Fatalf("UninstallGlobal returned %d results, want 9", len(results))
 	}
 	for _, r := range results {
 		if r.Action != actionRemoved {
@@ -388,8 +388,8 @@ func TestInstallProjectCreatesAllFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InstallProject: %v", err)
 	}
-	if len(results) != 7 {
-		t.Fatalf("InstallProject returned %d results, want 7", len(results))
+	if len(results) != 8 {
+		t.Fatalf("InstallProject returned %d results, want 8", len(results))
 	}
 	for _, r := range results {
 		if r.Action != actionCreated {

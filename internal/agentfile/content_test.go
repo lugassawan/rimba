@@ -1,6 +1,7 @@
 package agentfile
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -165,6 +166,51 @@ func TestGlobalRooContentNotEmpty(t *testing.T) {
 	}
 }
 
+func TestGlobalPiSkillContentHasFrontmatter(t *testing.T) {
+	content := globalPiSkillContent()
+	if !strings.HasPrefix(content, "---\n") {
+		t.Error("global pi skill content should start with YAML frontmatter")
+	}
+	if !strings.Contains(content, "name: rimba") {
+		t.Error("global pi skill content should have name field")
+	}
+	if !strings.Contains(content, "description:") {
+		t.Error("global pi skill content should have description field")
+	}
+	if strings.Contains(content, "mcp__rimba__") {
+		t.Error("global pi skill content should not mention mcp__rimba__ tools")
+	}
+}
+
+func TestGlobalPiBlockHasMarkers(t *testing.T) {
+	content := globalPiBlock()
+	if !strings.HasPrefix(content, BeginMarker) {
+		t.Error("global pi block should start with BEGIN marker")
+	}
+	if !strings.HasSuffix(content, EndMarker) {
+		t.Error("global pi block should end with END marker")
+	}
+	if strings.Contains(content, "mcp__rimba__") {
+		t.Error("global pi block should not mention mcp__rimba__ tools")
+	}
+}
+
+func TestPiSkillContentHasFrontmatter(t *testing.T) {
+	content := piSkillContent()
+	if !strings.HasPrefix(content, "---\n") {
+		t.Error("pi skill content should start with YAML frontmatter")
+	}
+	if !strings.Contains(content, "name: rimba") {
+		t.Error("pi skill content should have name field")
+	}
+	if !strings.Contains(content, "description:") {
+		t.Error("pi skill content should have description field")
+	}
+	if strings.Contains(content, "mcp__rimba__") {
+		t.Error("pi skill content should not mention mcp__rimba__ tools")
+	}
+}
+
 func TestMcpToolsSection(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -195,6 +241,34 @@ func TestMcpToolsSection(t *testing.T) {
 				if !strings.Contains(section, tool.cli) {
 					t.Errorf("mcp tools section should mention CLI equivalent %s", tool.cli)
 				}
+			}
+		})
+	}
+}
+
+func TestCliCommandsSection(t *testing.T) {
+	cases := []struct {
+		name    string
+		heading string
+	}{
+		{"h2", "##"},
+		{"h3", "###"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			section := cliCommandsSection(c.heading)
+
+			if !strings.HasPrefix(section, c.heading+" Core Commands") {
+				t.Errorf("cli commands section should start with %q heading", c.heading+" Core Commands")
+			}
+			for _, tool := range mcpToolEntries {
+				if !strings.Contains(section, tool.cli) {
+					t.Errorf("cli commands section should mention CLI command %s", tool.cli)
+				}
+			}
+			if strings.Contains(section, "mcp__rimba__") {
+				t.Error("cli commands section should not mention mcp__rimba__ tools")
 			}
 		})
 	}
@@ -234,27 +308,34 @@ func TestMcpToolEntriesIncludesAllRegisteredTools(t *testing.T) {
 }
 
 func TestProjectGeneratorsMentionCurrentCommands(t *testing.T) {
-	cases := []struct {
-		name    string
-		content func() string
-	}{
-		{"agentsBlock", agentsBlock},
-		{"copilotBlock", copilotBlock},
-		{"cursorContent", cursorContent},
-		{"geminiBlock", geminiBlock},
-		{"windsurfContent", windsurfContent},
-		{"rooContent", rooContent},
-		{"claudeSkillContent", claudeSkillContent},
+	coreCommands := []string{"add", "list", "status", "sync", "merge", "remove", "clean"}
+	fullCommands := []string{"doctor", "rename", "restore", "duplicate", "trust"}
+
+	// Every global spec's content ends with an appended mcpToolsSection/cliCommandsSection call,
+	// whose table already renders every coreCommands word — so this loop is a structural
+	// trip-wire (catches a spec that stops calling that helper), not prose-authoring enforcement.
+	for _, s := range GlobalSpecs() {
+		t.Run("global/"+s.RelPath, func(t *testing.T) {
+			content := s.Content()
+			for _, cmd := range coreCommands {
+				if !strings.Contains(content, cmd) {
+					t.Errorf("global spec %s should mention %q command", s.RelPath, cmd)
+				}
+			}
+		})
 	}
 
-	commands := []string{"doctor", "rename", "restore", "duplicate", "trust"}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			content := c.content()
-			for _, cmd := range commands {
+	for _, s := range ProjectSpecs() {
+		t.Run("project/"+s.RelPath, func(t *testing.T) {
+			content := s.Content()
+			for _, cmd := range coreCommands {
 				if !strings.Contains(content, cmd) {
-					t.Errorf("%s should mention %q command", c.name, cmd)
+					t.Errorf("project spec %s should mention %q command", s.RelPath, cmd)
+				}
+			}
+			for _, cmd := range fullCommands {
+				if !strings.Contains(content, cmd) {
+					t.Errorf("project spec %s should mention %q command", s.RelPath, cmd)
 				}
 			}
 		})
@@ -266,25 +347,45 @@ func TestProjectJSONCommandListsAreCurrent(t *testing.T) {
 		"list", "status", "exec", "conflict-check", "deps status",
 		"add", "merge", "remove", "rename", "sync", "clean", "log",
 	}
-
-	cases := []struct {
-		name    string
-		content func() string
-	}{
-		{"agentsBlock", agentsBlock},
-		{"cursorContent", cursorContent},
-		{"claudeSkillContent", claudeSkillContent},
+	// Specs known to document a JSON Output section today. If one of these silently drops the
+	// section, this test must fail with the specific missing path — the dynamic vacuity guard
+	// alone would let a partial regression through undetected.
+	mustDocumentJSON := []string{
+		"AGENTS.md",
+		filepath.Join(".cursor", "rules", "rimba.mdc"),
+		filepath.Join(".claude", "skills", "rimba", "SKILL.md"),
+		filepath.Join(".pi", "skills", "rimba", "SKILL.md"),
 	}
 
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			content := c.content()
-			for _, cmd := range wantCommands {
-				if !strings.Contains(content, cmd) {
-					t.Errorf("%s --json list should mention %q", c.name, cmd)
-				}
+	all := make([]labeledSpec, 0, len(ProjectSpecs())+len(GlobalSpecs()))
+	for _, s := range ProjectSpecs() {
+		all = append(all, labeledSpec{"project", s})
+	}
+	for _, s := range GlobalSpecs() {
+		all = append(all, labeledSpec{"global", s})
+	}
+
+	tested := make(map[string]bool)
+	for _, ls := range all {
+		content := ls.spec.Content()
+		if !strings.Contains(content, "JSON Output") {
+			continue
+		}
+		tested[ls.spec.RelPath] = true
+		for _, cmd := range wantCommands {
+			if !strings.Contains(content, cmd) {
+				t.Errorf("%s spec %s documents JSON Output but is missing %q", ls.label, ls.spec.RelPath, cmd)
 			}
-		})
+		}
+	}
+
+	if len(tested) == 0 {
+		t.Fatal("no spec documents a JSON Output section — test is vacuous, registry or content likely broken")
+	}
+	for _, want := range mustDocumentJSON {
+		if !tested[want] {
+			t.Errorf("expected spec %s to document a JSON Output section, but it no longer does", want)
+		}
 	}
 }
 
@@ -302,6 +403,12 @@ func TestAllSpecsIncludeMcpToolsSection(t *testing.T) {
 
 	for _, ls := range specs {
 		content := ls.spec.Content()
+		if ls.spec.MCPFree {
+			if strings.Contains(content, "mcp__rimba__") {
+				t.Errorf("%s spec %s is MCPFree but content mentions mcp__rimba__", ls.label, ls.spec.RelPath)
+			}
+			continue
+		}
 		for _, tool := range mcpToolEntries {
 			if !strings.Contains(content, tool.mcp) {
 				t.Errorf("%s spec %s should mention %s", ls.label, ls.spec.RelPath, tool.mcp)
