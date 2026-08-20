@@ -45,7 +45,7 @@ Works even in a repo without .rimba/ initialized: it simply finds zero files and
 reports "no data".`,
 	Example: `  rimba report
   rimba report --json`,
-	Annotations: map[string]string{"skipConfig": "true"},
+	Annotations: map[string]string{annotationSkipConfig: annotationValueTrue},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SetContext(withBestEffortConfig(cmd))
 		ctx := cmd.Context()

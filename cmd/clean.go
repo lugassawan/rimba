@@ -36,7 +36,7 @@ var cleanCmd = &cobra.Command{
   rimba clean --dry-run
   rimba clean --merged
   rimba clean --stale --stale-days 7`,
-	Annotations: map[string]string{"skipConfig": "true"},
+	Annotations: map[string]string{annotationSkipConfig: annotationValueTrue},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SetContext(withBestEffortConfig(cmd))
 		r := newRunner(cmd.Context())

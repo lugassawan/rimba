@@ -18,7 +18,7 @@ var completionCmd = &cobra.Command{
 	Short:       "Generate shell completion scripts",
 	ValidArgs:   []string{"bash", "zsh", "fish", "powershell"},
 	Args:        cobra.ExactArgs(1),
-	Annotations: map[string]string{"skipConfig": "true"},
+	Annotations: map[string]string{annotationSkipConfig: annotationValueTrue},
 	Long:        "Generate shell completion scripts for rimba.",
 	Example: `  rimba completion bash          # load: source <(rimba completion bash)
   rimba completion zsh           # load: source <(rimba completion zsh)

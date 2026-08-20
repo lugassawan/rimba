@@ -15,7 +15,7 @@ var hookCmd = &cobra.Command{
 	Use:         "hook",
 	Short:       "Manage Git hooks for worktree workflow",
 	Long:        "Install or remove Git hooks: a post-merge hook for automatic cleanup and a pre-commit hook that prevents direct commits to main/master.",
-	Annotations: map[string]string{"skipConfig": "true"},
+	Annotations: map[string]string{annotationSkipConfig: annotationValueTrue},
 }
 
 var hookInstallCmd = &cobra.Command{
@@ -114,7 +114,7 @@ var hookUninstallCmd = &cobra.Command{
 }
 
 var hookStatusCmd = &cobra.Command{
-	Use:     "status",
+	Use:     cmdNameStatus,
 	Short:   "Show hook status",
 	Example: "  rimba hook status",
 	RunE: func(cmd *cobra.Command, args []string) error {

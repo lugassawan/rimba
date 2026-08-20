@@ -113,8 +113,7 @@ func ShellRunner() RunFunc {
 
 		err := cmd.Run()
 		if err != nil {
-			var exitErr *exec.ExitError
-			if errors.As(err, &exitErr) {
+			if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 				return stdout.Bytes(), stderr.Bytes(), exitErr.ExitCode(), nil
 			}
 			// Process could not start (e.g. binary not found).

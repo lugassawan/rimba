@@ -23,7 +23,7 @@ var doctorCmd = &cobra.Command{
 	Example: `  rimba doctor
   rimba doctor --fix
   rimba doctor --fix --force`,
-	Annotations: map[string]string{"skipConfig": "true"},
+	Annotations: map[string]string{annotationSkipConfig: annotationValueTrue},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		r := newRunner(cmd.Context())
 		commonDir, err := git.CommonDir(cmd.Context(), r)

@@ -74,7 +74,7 @@ func Install(hooksDir, hookName, block string) error {
 		newContent = content + "\n" + block + "\n"
 	}
 
-	if err := os.WriteFile(hookPath, []byte(newContent), fileMode); err != nil {
+	if err := os.WriteFile(hookPath, []byte(newContent), fileMode); err != nil { //nolint:gosec // hookPath is hooksDir joined with the PostMergeHook/PreCommitHook constant, not user input
 		return fmt.Errorf("write hook file: %w", err)
 	}
 
@@ -111,7 +111,7 @@ func Uninstall(hooksDir, hookName string) error {
 		return nil
 	}
 
-	if err := os.WriteFile(hookPath, []byte(cleaned), fileMode); err != nil {
+	if err := os.WriteFile(hookPath, []byte(cleaned), fileMode); err != nil { //nolint:gosec // hookPath is hooksDir joined with the PostMergeHook/PreCommitHook constant, not user input
 		return fmt.Errorf("write hook file: %w", err)
 	}
 	return nil

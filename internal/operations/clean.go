@@ -109,8 +109,8 @@ func FindStaleCandidates(ctx context.Context, r git.Runner, mainBranch string, s
 
 		if ct.Before(threshold) {
 			result.Candidates = append(result.Candidates, StaleCandidate{
-				CleanCandidate: CleanCandidate{Path: e.Path, Branch: e.Branch, Prunable: e.Prunable},
-				LastCommit:     ct,
+				Path: e.Path, Branch: e.Branch, Prunable: e.Prunable,
+				LastCommit: ct,
 			})
 		}
 	}

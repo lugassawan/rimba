@@ -11,8 +11,7 @@ import (
 
 func main() {
 	if err := cmd.Execute(); err != nil {
-		var silent *output.SilentError
-		if errors.As(err, &silent) {
+		if silent, ok := errors.AsType[*output.SilentError](err); ok {
 			os.Exit(silent.ExitCode)
 		}
 

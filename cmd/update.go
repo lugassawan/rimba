@@ -21,7 +21,7 @@ new version to ~/.local/bin instead and prints the path.
 After a successful update, rimba prints a one-line tip if agent files are installed at
 user level (run rimba init -g to refresh) or in this repo (run rimba init --agents to
 refresh). Set RIMBA_QUIET=1 to suppress the tip.`,
-	Annotations: map[string]string{"skipConfig": "true"},
+	Annotations: map[string]string{annotationSkipConfig: annotationValueTrue},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		force, _ := cmd.Flags().GetBool("force")
 

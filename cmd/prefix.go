@@ -15,6 +15,10 @@ type prefixFlag struct {
 	Alias bool
 }
 
+// prefixAliasFix is the built-in "fix" alias for the --bugfix prefix flag,
+// distinct from doctor's unrelated --fix repair flag (flagFix).
+const prefixAliasFix = "fix"
+
 // prefixFlags lists the non-default prefix types available as boolean flags.
 // "feature" is the default and does not need a flag.
 var prefixFlags = []prefixFlag{
@@ -23,7 +27,7 @@ var prefixFlags = []prefixFlag{
 	{"docs", resolver.PrefixDocs, "changes related to documentation", false},
 	{"test", resolver.PrefixTest, "experiments or new tests that might not be merged", false},
 	{"chore", resolver.PrefixChore, "non-code tasks like dependency updates", false},
-	{"fix", resolver.PrefixBugfix, "alias for --bugfix", true},
+	{prefixAliasFix, resolver.PrefixBugfix, "alias for --bugfix", true},
 }
 
 // addPrefixFlags registers all prefix boolean flags on cmd and marks them mutually exclusive.

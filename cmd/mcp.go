@@ -19,7 +19,7 @@ var mcpCmd = &cobra.Command{
 
 Any MCP-compatible client can connect to this server to discover and invoke
 rimba commands with structured parameters and typed responses.`,
-	Annotations: map[string]string{"skipConfig": "true"},
+	Annotations: map[string]string{annotationSkipConfig: annotationValueTrue},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		r := newRunner(cmd.Context())
 

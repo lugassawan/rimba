@@ -72,8 +72,7 @@ Shortcuts are configured in .rimba/settings.toml:
 		sub.Stderr = os.Stderr
 
 		if err := sub.Run(); err != nil {
-			var exitErr *exec.ExitError
-			if errors.As(err, &exitErr) {
+			if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 				return &output.SilentError{ExitCode: exitErr.ExitCode()}
 			}
 			return fmt.Errorf("failed to run %q: %w", cmdArgs[0], err)
