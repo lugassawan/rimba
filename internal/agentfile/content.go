@@ -50,6 +50,23 @@ when no MCP connection is available.
 	return strings.TrimRight(b.String(), "\n")
 }
 
+// cliCommandsSection returns a markdown block documenting the core rimba CLI commands, derived
+// from mcpToolEntries so it stays current as commands are added. Agents with no MCP integration
+// (e.g. Pi) use this instead of mcpToolsSection. heading sets the nesting level ("##" or "###")
+// so callers can match their surrounding structure. Emits no mcp__rimba__ strings.
+func cliCommandsSection(heading string) string {
+	var b strings.Builder
+	b.WriteString(heading + ` Core Commands
+
+| Command |
+|---------|
+`)
+	for _, e := range mcpToolEntries {
+		b.WriteString("| `" + e.cli + "` |\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
 // agentsBlock returns the rimba block for AGENTS.md (shared file, block-based).
 func agentsBlock() string {
 	return `<!-- BEGIN RIMBA -->

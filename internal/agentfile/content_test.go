@@ -200,6 +200,34 @@ func TestMcpToolsSection(t *testing.T) {
 	}
 }
 
+func TestCliCommandsSection(t *testing.T) {
+	cases := []struct {
+		name    string
+		heading string
+	}{
+		{"h2", "##"},
+		{"h3", "###"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			section := cliCommandsSection(c.heading)
+
+			if !strings.HasPrefix(section, c.heading+" Core Commands") {
+				t.Errorf("cli commands section should start with %q heading", c.heading+" Core Commands")
+			}
+			for _, tool := range mcpToolEntries {
+				if !strings.Contains(section, tool.cli) {
+					t.Errorf("cli commands section should mention CLI command %s", tool.cli)
+				}
+			}
+			if strings.Contains(section, "mcp__rimba__") {
+				t.Error("cli commands section should not mention mcp__rimba__ tools")
+			}
+		})
+	}
+}
+
 func TestMcpToolEntriesIncludesAllRegisteredTools(t *testing.T) {
 	want := []string{
 		"mcp__rimba__add",
