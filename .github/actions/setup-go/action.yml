@@ -11,7 +11,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        read_tool() { sed -n "s/^$1 *= *\"\(.*\)\"/\1/p" mise.toml; }
+        read_tool() { sed -n "s/^$1 *= *\"\([^\"]*\)\".*/\1/p" mise.toml; }
         GO=$(read_tool go)
         GCL=$(read_tool golangci-lint)
         [ -n "$GO" ]  || { echo "::error::no go version found in mise.toml"; exit 1; }
