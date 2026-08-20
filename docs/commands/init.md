@@ -8,7 +8,7 @@ nav_order: 1
 
 Initialize rimba in the current repository. Detects the repo root, creates the `.rimba/` config directory with `settings.toml` (team-shared) and `settings.local.toml` (personal overrides), and sets up the worktree directory.
 
-Agent files (`AGENTS.md`, `GEMINI.md`, `.github/copilot-instructions.md`, `.cursor/rules/rimba.mdc`, `.claude/skills/rimba/SKILL.md`, `.windsurf/rules/rimba.md`, `.clinerules/rimba.md`, `.pi/skills/rimba/SKILL.md`) can be installed at three tiers:
+Agent files — project-tier paths shown here (`AGENTS.md`, `GEMINI.md`, `.github/copilot-instructions.md`, `.cursor/rules/rimba.mdc`, `.claude/skills/rimba/SKILL.md`, `.windsurf/rules/rimba.md`, `.clinerules/rimba.md`, `.pi/skills/rimba/SKILL.md`) — can be installed at three tiers. The global tier (`-g`) writes equivalent per-agent paths under `~/`; see [Configuration]({{ '/configuration' | relative_url }}#mcp-server-registration) for the full list:
 
 - `--agents` — project-team level (committed to git)
 - `--agents --local` — project-personal level (gitignored)

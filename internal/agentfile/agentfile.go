@@ -39,8 +39,6 @@ type Spec struct {
 	Content func() string // returns the content to write
 	// MCPFree marks a spec whose agent ships no MCP support by design; its content
 	// documents the rimba CLI surface only and must contain no mcp__rimba__ references.
-	// Zero value (false) means the spec documents MCP via mcpToolsSection, as every
-	// pre-Pi spec does.
 	MCPFree bool
 }
 

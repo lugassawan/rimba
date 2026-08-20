@@ -145,6 +145,8 @@ When `rimba init --agents` or `rimba init -g` is run, rimba registers itself as 
 
 Pi is the one supported agent with **no** MCP server registration — by design, since Pi's own philosophy is "No MCP. Build CLI tools with READMEs." No entry is added to any of the files below for Pi.
 
+Note that the shared repo-root `AGENTS.md` — written for every AGENTS.md-reading agent, including Codex, which does have MCP — still documents the `mcp__rimba__*` tool table, so a Pi user in a rimba-initialized repo will see it regardless; Pi's own content (`.pi/skills/rimba/SKILL.md`, `~/.pi/agent/...`) documents the CLI surface only and contains no MCP references.
+
 ### User-level (`rimba init -g`)
 
 Patches the following files in your home directory:
