@@ -1,4 +1,4 @@
-version: v2.10.1
+version: v2.13.1
 
 plugins:
   - module: github.com/lugassawan/tidygo
