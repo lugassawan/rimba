@@ -264,6 +264,7 @@ func TestInitWithAgentsFlag(t *testing.T) {
 	assertFileExists(t, filepath.Join(repo, "GEMINI.md"))
 	assertFileExists(t, filepath.Join(repo, ".windsurf", "rules", "rimba.md"))
 	assertFileExists(t, filepath.Join(repo, ".clinerules", "rimba.md"))
+	assertFileExists(t, filepath.Join(repo, ".pi", "skills", "rimba", "SKILL.md"))
 }
 
 func TestInitAgentsLocalAddsGitignore(t *testing.T) {
@@ -274,10 +275,11 @@ func TestInitAgentsLocalAddsGitignore(t *testing.T) {
 	repo := setupRepo(t)
 	rimbaSuccess(t, repo, "init", "--agents", "--local")
 
-	// All 7 project spec rel paths should be in .gitignore
+	// All 8 project spec rel paths should be in .gitignore
 	assertGitignoreContains(t, repo, "AGENTS.md")
 	assertGitignoreContains(t, repo, "GEMINI.md")
 	assertGitignoreContains(t, repo, filepath.Join(".windsurf", "rules", "rimba.md"))
+	assertGitignoreContains(t, repo, filepath.Join(".pi", "skills", "rimba", "SKILL.md"))
 }
 
 func TestInitAgentsUninstall(t *testing.T) {
@@ -313,6 +315,8 @@ func TestInitGlobalOutsideRepo(t *testing.T) {
 	assertFileExists(t, filepath.Join(home, ".gemini", "GEMINI.md"))
 	assertFileExists(t, filepath.Join(home, ".codeium", "windsurf", "memories", "global_rules.md"))
 	assertFileExists(t, filepath.Join(home, ".roo", "rules", "rimba.md"))
+	assertFileExists(t, filepath.Join(home, ".pi", "agent", "skills", "rimba", "SKILL.md"))
+	assertFileExists(t, filepath.Join(home, ".pi", "agent", "AGENTS.md"))
 }
 
 func TestInitGlobalUninstall(t *testing.T) {
@@ -329,6 +333,7 @@ func TestInitGlobalUninstall(t *testing.T) {
 
 	assertContains(t, r.Stdout, "Removed rimba (user)")
 	assertFileNotExists(t, filepath.Join(home, ".claude", "skills", "rimba", "SKILL.md"))
+	assertFileNotExists(t, filepath.Join(home, ".pi", "agent", "skills", "rimba", "SKILL.md"))
 }
 
 func TestInitOldAgentFilesFlagFails(t *testing.T) {
@@ -350,6 +355,7 @@ func TestInitSkipsAgentFilesWithoutFlag(t *testing.T) {
 
 	assertNotContains(t, r.Stdout, "rimba agent files")
 	assertFileNotExists(t, filepath.Join(repo, "AGENTS.md"))
+	assertFileNotExists(t, filepath.Join(repo, ".pi", "skills", "rimba", "SKILL.md"))
 }
 
 func TestInitPersonalFreshInit(t *testing.T) {
