@@ -1,0 +1,24 @@
+name: Setup Go from mise
+description: Install the Go toolchain declared in mise.toml, and expose other tool versions from it
+outputs:
+  golangci-lint:
+    description: golangci-lint version series declared in mise.toml
+    value: ${{ steps.version.outputs.golangci_lint }}
+runs:
+  using: composite
+  steps:
+    - id: version
+      shell: bash
+      run: |
+        set -euo pipefail
+        read_tool() { sed -n "s/^$1 *= *\"\(.*\)\"/\1/p" mise.toml; }
+        GO=$(read_tool go)
+        GCL=$(read_tool golangci-lint)
+        [ -n "$GO" ]  || { echo "::error::no go version found in mise.toml"; exit 1; }
+        [ -n "$GCL" ] || { echo "::error::no golangci-lint version found in mise.toml"; exit 1; }
+        echo "go=$GO"            >> "$GITHUB_OUTPUT"
+        echo "golangci_lint=$GCL" >> "$GITHUB_OUTPUT"
+    - uses: actions/setup-go@v7
+      with:
+        go-version: ${{ steps.version.outputs.go }}
+        cache: true
