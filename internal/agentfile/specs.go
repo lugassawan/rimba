@@ -12,6 +12,8 @@ func GlobalSpecs() []Spec {
 		{RelPath: filepath.Join(".gemini", "GEMINI.md"), Kind: KindBlock, Content: globalGeminiBlock},
 		{RelPath: filepath.Join(".codeium", "windsurf", "memories", "global_rules.md"), Kind: KindBlock, Content: globalWindsurfBlock},
 		{RelPath: filepath.Join(".roo", "rules", "rimba.md"), Kind: KindWhole, Content: globalRooContent},
+		{RelPath: filepath.Join(".pi", "agent", "skills", "rimba", "SKILL.md"), Kind: KindWhole, Content: globalPiSkillContent, MCPFree: true},
+		{RelPath: filepath.Join(".pi", "agent", "AGENTS.md"), Kind: KindBlock, Content: globalPiBlock, MCPFree: true},
 	}
 }
 
@@ -25,5 +27,6 @@ func ProjectSpecs() []Spec {
 		{RelPath: "GEMINI.md", Kind: KindBlock, Content: geminiBlock},
 		{RelPath: filepath.Join(".windsurf", "rules", "rimba.md"), Kind: KindWhole, Content: windsurfContent},
 		{RelPath: filepath.Join(".clinerules", "rimba.md"), Kind: KindWhole, Content: rooContent},
+		{RelPath: filepath.Join(".pi", "skills", "rimba", "SKILL.md"), Kind: KindWhole, Content: piSkillContent, MCPFree: true},
 	}
 }
