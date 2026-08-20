@@ -34,15 +34,13 @@ func TestAddWorktreeSuccess(t *testing.T) {
 	}
 
 	result, err := AddWorktree(context.Background(), r, AddParams{
-		Task:   "login",
-		Prefix: "feature/",
-		Source: branchMain,
-		PostCreateOptions: PostCreateOptions{
-			RepoRoot:    tmpDir,
-			WorktreeDir: wtDir,
-			SkipDeps:    true,
-			SkipHooks:   true,
-		},
+		Task:        "login",
+		Prefix:      "feature/",
+		Source:      branchMain,
+		RepoRoot:    tmpDir,
+		WorktreeDir: wtDir,
+		SkipDeps:    true,
+		SkipHooks:   true,
 	}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -86,15 +84,13 @@ func TestAddWorktreeRecordsCreateSpan(t *testing.T) {
 	ctx := observability.WithRecorder(context.Background(), rec)
 
 	_, err := AddWorktree(ctx, r, AddParams{
-		Task:   "login",
-		Prefix: "feature/",
-		Source: branchMain,
-		PostCreateOptions: PostCreateOptions{
-			RepoRoot:    tmpDir,
-			WorktreeDir: wtDir,
-			SkipDeps:    true,
-			SkipHooks:   true,
-		},
+		Task:        "login",
+		Prefix:      "feature/",
+		Source:      branchMain,
+		RepoRoot:    tmpDir,
+		WorktreeDir: wtDir,
+		SkipDeps:    true,
+		SkipHooks:   true,
 	}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -128,14 +124,12 @@ func TestAddWorktreeBranchExists(t *testing.T) {
 	}
 
 	_, err := AddWorktree(context.Background(), r, AddParams{
-		Task:   "login",
-		Prefix: "feature/",
-		Source: branchMain,
-		PostCreateOptions: PostCreateOptions{
-			WorktreeDir: "/tmp/wt",
-			SkipDeps:    true,
-			SkipHooks:   true,
-		},
+		Task:        "login",
+		Prefix:      "feature/",
+		Source:      branchMain,
+		WorktreeDir: "/tmp/wt",
+		SkipDeps:    true,
+		SkipHooks:   true,
 	}, nil)
 	if err == nil {
 		t.Fatal("expected error for existing branch")
@@ -162,15 +156,13 @@ func TestAddWorktreePathExists(t *testing.T) {
 	}
 
 	_, err := AddWorktree(context.Background(), r, AddParams{
-		Task:   "login",
-		Prefix: "feature/",
-		Source: branchMain,
-		PostCreateOptions: PostCreateOptions{
-			RepoRoot:    tmpDir,
-			WorktreeDir: wtDir,
-			SkipDeps:    true,
-			SkipHooks:   true,
-		},
+		Task:        "login",
+		Prefix:      "feature/",
+		Source:      branchMain,
+		RepoRoot:    tmpDir,
+		WorktreeDir: wtDir,
+		SkipDeps:    true,
+		SkipHooks:   true,
 	}, nil)
 	if err == nil {
 		t.Fatal("expected error for existing path")
@@ -195,14 +187,12 @@ func TestAddWorktreeCreateFails(t *testing.T) {
 	}
 
 	_, err := AddWorktree(context.Background(), r, AddParams{
-		Task:   "login",
-		Prefix: "feature/",
-		Source: branchMain,
-		PostCreateOptions: PostCreateOptions{
-			WorktreeDir: "/tmp/nonexistent-wt",
-			SkipDeps:    true,
-			SkipHooks:   true,
-		},
+		Task:        "login",
+		Prefix:      "feature/",
+		Source:      branchMain,
+		WorktreeDir: "/tmp/nonexistent-wt",
+		SkipDeps:    true,
+		SkipHooks:   true,
 	}, nil)
 	if err == nil {
 		t.Fatal("expected error")
@@ -234,15 +224,13 @@ func TestAddWorktreeProgressCallbacks(t *testing.T) {
 	onProgress := progress.Func(func(msg string) { messages = append(messages, msg) })
 
 	_, err := AddWorktree(context.Background(), r, AddParams{
-		Task:   "login",
-		Prefix: "feature/",
-		Source: branchMain,
-		PostCreateOptions: PostCreateOptions{
-			RepoRoot:    tmpDir,
-			WorktreeDir: wtDir,
-			SkipDeps:    true,
-			SkipHooks:   true,
-		},
+		Task:        "login",
+		Prefix:      "feature/",
+		Source:      branchMain,
+		RepoRoot:    tmpDir,
+		WorktreeDir: wtDir,
+		SkipDeps:    true,
+		SkipHooks:   true,
 	}, onProgress)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -275,16 +263,14 @@ func TestAddWorktreeWithDeps(t *testing.T) {
 	}
 
 	result, err := AddWorktree(context.Background(), r, AddParams{
-		Task:   "login",
-		Prefix: "feature/",
-		Source: branchMain,
-		PostCreateOptions: PostCreateOptions{
-			RepoRoot:    tmpDir,
-			WorktreeDir: wtDir,
-			SkipDeps:    false,
-			AutoDetect:  false,
-			SkipHooks:   true,
-		},
+		Task:        "login",
+		Prefix:      "feature/",
+		Source:      branchMain,
+		RepoRoot:    tmpDir,
+		WorktreeDir: wtDir,
+		SkipDeps:    false,
+		AutoDetect:  false,
+		SkipHooks:   true,
 	}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -321,15 +307,13 @@ func TestAddWorktreeRejectsUnsafeInput(t *testing.T) {
 			}
 
 			_, err := AddWorktree(context.Background(), r, AddParams{
-				Task:    tc.task,
-				Service: tc.service,
-				Prefix:  "feature/",
-				Source:  branchMain,
-				PostCreateOptions: PostCreateOptions{
-					WorktreeDir: "/tmp/wt",
-					SkipDeps:    true,
-					SkipHooks:   true,
-				},
+				Task:        tc.task,
+				Service:     tc.service,
+				Prefix:      "feature/",
+				Source:      branchMain,
+				WorktreeDir: "/tmp/wt",
+				SkipDeps:    true,
+				SkipHooks:   true,
 			}, nil)
 			if err == nil {
 				t.Fatal("expected error for unsafe input")
@@ -354,14 +338,12 @@ func TestAddWorktreeRejectsEmptyTask(t *testing.T) {
 	}
 
 	_, err := AddWorktree(context.Background(), r, AddParams{
-		Task:   "",
-		Prefix: "feature/",
-		Source: branchMain,
-		PostCreateOptions: PostCreateOptions{
-			WorktreeDir: "/tmp/wt",
-			SkipDeps:    true,
-			SkipHooks:   true,
-		},
+		Task:        "",
+		Prefix:      "feature/",
+		Source:      branchMain,
+		WorktreeDir: "/tmp/wt",
+		SkipDeps:    true,
+		SkipHooks:   true,
 	}, nil)
 	if err == nil {
 		t.Fatal("expected error for empty task")
@@ -399,15 +381,13 @@ func TestAddWorktreeAllowsSafeInput(t *testing.T) {
 			}
 
 			_, err := AddWorktree(context.Background(), r, AddParams{
-				Task:   tc.task,
-				Prefix: "feature/",
-				Source: branchMain,
-				PostCreateOptions: PostCreateOptions{
-					RepoRoot:    tmpDir,
-					WorktreeDir: wtDir,
-					SkipDeps:    true,
-					SkipHooks:   true,
-				},
+				Task:        tc.task,
+				Prefix:      "feature/",
+				Source:      branchMain,
+				RepoRoot:    tmpDir,
+				WorktreeDir: wtDir,
+				SkipDeps:    true,
+				SkipHooks:   true,
 			}, nil)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
@@ -435,16 +415,14 @@ func TestAddWorktreeWithHooks(t *testing.T) {
 	}
 
 	result, err := AddWorktree(context.Background(), r, AddParams{
-		Task:   "login",
-		Prefix: "feature/",
-		Source: branchMain,
-		PostCreateOptions: PostCreateOptions{
-			RepoRoot:    tmpDir,
-			WorktreeDir: wtDir,
-			SkipDeps:    true,
-			SkipHooks:   false,
-			PostCreate:  []string{"echo hello"},
-		},
+		Task:        "login",
+		Prefix:      "feature/",
+		Source:      branchMain,
+		RepoRoot:    tmpDir,
+		WorktreeDir: wtDir,
+		SkipDeps:    true,
+		SkipHooks:   false,
+		PostCreate:  []string{"echo hello"},
 	}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

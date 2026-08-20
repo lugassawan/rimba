@@ -78,13 +78,11 @@ func TestAddPRWorktreeSameRepo(t *testing.T) {
 	gitR := makePRGitRunner(tmpDir, false)
 
 	result, err := AddPRWorktree(context.Background(), gitR, ghR, AddPRParams{
-		PRNumber: 42,
-		PostCreateOptions: PostCreateOptions{
-			RepoRoot:    tmpDir,
-			WorktreeDir: wtDir,
-			SkipDeps:    true,
-			SkipHooks:   true,
-		},
+		PRNumber:    42,
+		RepoRoot:    tmpDir,
+		WorktreeDir: wtDir,
+		SkipDeps:    true,
+		SkipHooks:   true,
 	}, nil)
 	if err != nil {
 		t.Fatalf("AddPRWorktree: %v", err)
@@ -106,13 +104,11 @@ func TestAddPRWorktreeCrossFork(t *testing.T) {
 	gitR := makePRGitRunner(tmpDir, true)
 
 	result, err := AddPRWorktree(context.Background(), gitR, ghR, AddPRParams{
-		PRNumber: 99,
-		PostCreateOptions: PostCreateOptions{
-			RepoRoot:    tmpDir,
-			WorktreeDir: wtDir,
-			SkipDeps:    true,
-			SkipHooks:   true,
-		},
+		PRNumber:    99,
+		RepoRoot:    tmpDir,
+		WorktreeDir: wtDir,
+		SkipDeps:    true,
+		SkipHooks:   true,
 	}, nil)
 	if err != nil {
 		t.Fatalf("AddPRWorktree: %v", err)
@@ -136,12 +132,10 @@ func TestAddPRWorktreeTaskOverride(t *testing.T) {
 	result, err := AddPRWorktree(context.Background(), gitR, ghR, AddPRParams{
 		PRNumber:     42,
 		TaskOverride: "my-review",
-		PostCreateOptions: PostCreateOptions{
-			RepoRoot:    tmpDir,
-			WorktreeDir: wtDir,
-			SkipDeps:    true,
-			SkipHooks:   true,
-		},
+		RepoRoot:     tmpDir,
+		WorktreeDir:  wtDir,
+		SkipDeps:     true,
+		SkipHooks:    true,
 	}, nil)
 	if err != nil {
 		t.Fatalf("AddPRWorktree: %v", err)
@@ -219,13 +213,11 @@ func TestAddPRWorktreeSameRepoFetchFails(t *testing.T) {
 	}
 
 	_, err := AddPRWorktree(context.Background(), gitR, ghR, AddPRParams{
-		PRNumber: 42,
-		PostCreateOptions: PostCreateOptions{
-			RepoRoot:    tmpDir,
-			WorktreeDir: wtDir,
-			SkipDeps:    true,
-			SkipHooks:   true,
-		},
+		PRNumber:    42,
+		RepoRoot:    tmpDir,
+		WorktreeDir: wtDir,
+		SkipDeps:    true,
+		SkipHooks:   true,
 	}, nil)
 	if err == nil {
 		t.Fatal("expected error from fetch failure")
@@ -260,13 +252,11 @@ func TestAddPRWorktreeCrossForkAddRemoteFails(t *testing.T) {
 	}
 
 	_, err := AddPRWorktree(context.Background(), gitR, ghR, AddPRParams{
-		PRNumber: 99,
-		PostCreateOptions: PostCreateOptions{
-			RepoRoot:    tmpDir,
-			WorktreeDir: wtDir,
-			SkipDeps:    true,
-			SkipHooks:   true,
-		},
+		PRNumber:    99,
+		RepoRoot:    tmpDir,
+		WorktreeDir: wtDir,
+		SkipDeps:    true,
+		SkipHooks:   true,
 	}, nil)
 	if err == nil {
 		t.Fatal("expected error from AddRemote failure")
@@ -304,13 +294,11 @@ func TestAddPRWorktreeCrossForkFetchFails(t *testing.T) {
 	}
 
 	_, err := AddPRWorktree(context.Background(), gitR, ghR, AddPRParams{
-		PRNumber: 99,
-		PostCreateOptions: PostCreateOptions{
-			RepoRoot:    tmpDir,
-			WorktreeDir: wtDir,
-			SkipDeps:    true,
-			SkipHooks:   true,
-		},
+		PRNumber:    99,
+		RepoRoot:    tmpDir,
+		WorktreeDir: wtDir,
+		SkipDeps:    true,
+		SkipHooks:   true,
 	}, nil)
 	if err == nil {
 		t.Fatal("expected error from fork fetch failure")
@@ -337,13 +325,11 @@ func TestAddPRWorktreeResolveSourceFailure(t *testing.T) {
 	}
 
 	_, err := AddPRWorktree(context.Background(), gitR, ghR, AddPRParams{
-		PRNumber: 42,
-		PostCreateOptions: PostCreateOptions{
-			RepoRoot:    tmpDir,
-			WorktreeDir: wtDir,
-			SkipDeps:    true,
-			SkipHooks:   true,
-		},
+		PRNumber:    42,
+		RepoRoot:    tmpDir,
+		WorktreeDir: wtDir,
+		SkipDeps:    true,
+		SkipHooks:   true,
 	}, nil)
 	if err == nil {
 		t.Fatal("expected error from resolveSource failure")
@@ -362,13 +348,11 @@ func TestAddPRWorktreeProgressCallbacks(t *testing.T) {
 	onProgress := progress.Func(func(msg string) { messages = append(messages, msg) })
 
 	_, err := AddPRWorktree(context.Background(), gitR, ghR, AddPRParams{
-		PRNumber: 42,
-		PostCreateOptions: PostCreateOptions{
-			RepoRoot:    tmpDir,
-			WorktreeDir: wtDir,
-			SkipDeps:    true,
-			SkipHooks:   true,
-		},
+		PRNumber:    42,
+		RepoRoot:    tmpDir,
+		WorktreeDir: wtDir,
+		SkipDeps:    true,
+		SkipHooks:   true,
 	}, onProgress)
 	if err != nil {
 		t.Fatalf("AddPRWorktree: %v", err)

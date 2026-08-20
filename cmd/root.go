@@ -36,6 +36,13 @@ const (
 	hintSkipDeps        = "Skip dependency installation (faster, but requires manual install)"
 	hintSkipHooks       = "Skip post-create hooks (faster, but automation won't run)"
 	hintSkipHooksRename = "Skip post-rename hooks (faster, but automation won't run)"
+
+	// annotationSkipConfig marks commands that must run without a resolved
+	// rimba config (e.g. status/clean/log outside a configured repo).
+	annotationSkipConfig = "skipConfig"
+	annotationValueTrue  = "true"
+
+	cmdNameStatus = "status"
 )
 
 // commandName stores the resolved command name for JSON error reporting.
@@ -74,7 +81,7 @@ Persistent flags (available on every command):
 
 		// Skip config if any command in the chain is annotated
 		for c := cmd; c != nil; c = c.Parent() {
-			if c.Annotations != nil && c.Annotations["skipConfig"] == "true" {
+			if c.Annotations != nil && c.Annotations[annotationSkipConfig] == annotationValueTrue {
 				return nil
 			}
 		}
@@ -179,8 +186,7 @@ func Execute() error {
 	if rec := lastRecorder; rec != nil {
 		defer rec.Close() // registered first so it runs LAST (after Finalize below)
 		exitCode := 0
-		var silent *output.SilentError
-		if errors.As(err, &silent) {
+		if silent, ok := errors.AsType[*output.SilentError](err); ok {
 			exitCode = silent.ExitCode
 		} else if err != nil {
 			exitCode = 1

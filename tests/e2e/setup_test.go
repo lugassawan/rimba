@@ -52,8 +52,7 @@ func runSetup(t *testing.T, repo string, args ...string) result {
 		Stderr: stderr.String(),
 	}
 	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			r.ExitCode = exitErr.ExitCode()
 		} else {
 			t.Fatalf("failed to run setup.sh: %v", err)

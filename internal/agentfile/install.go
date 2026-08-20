@@ -146,7 +146,7 @@ func installBlock(path string, spec Spec) (Result, error) {
 		return Result{RelPath: spec.RelPath, Corrupt: true}, nil
 	}
 
-	if err := os.WriteFile(path, []byte(merged), mode); err != nil {
+	if err := os.WriteFile(path, []byte(merged), mode); err != nil { //nolint:gosec // path is baseDir joined with a fixed internal Spec.RelPath, not user input
 		return Result{RelPath: spec.RelPath}, fmt.Errorf("write file: %w", err)
 	}
 	return Result{RelPath: spec.RelPath, Action: action}, nil
@@ -237,7 +237,7 @@ func uninstallBlock(path string, spec Spec) (Result, error) {
 		return Result{RelPath: spec.RelPath, Action: actionRemoved}, nil
 	}
 
-	if err := os.WriteFile(path, []byte(cleaned), info.Mode()); err != nil {
+	if err := os.WriteFile(path, []byte(cleaned), info.Mode()); err != nil { //nolint:gosec // path is baseDir joined with a fixed internal Spec.RelPath, not user input
 		return Result{RelPath: spec.RelPath}, fmt.Errorf("write file: %w", err)
 	}
 	return Result{RelPath: spec.RelPath, Action: actionRemoved}, nil

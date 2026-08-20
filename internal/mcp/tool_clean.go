@@ -12,13 +12,19 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+const (
+	cleanModePrune  = "prune"
+	cleanModeMerged = "merged"
+	cleanModeStale  = "stale"
+)
+
 func registerCleanTool(s *server.MCPServer, hctx *HandlerContext) {
 	tool := mcp.NewTool("clean",
 		mcp.WithDescription("Clean up stale worktree references, merged branches, or stale worktrees"),
 		mcp.WithString("mode",
 			mcp.Description("Clean mode: prune (stale refs), merged (merged branches), or stale (inactive worktrees)"),
 			mcp.Required(),
-			mcp.Enum("prune", "merged", "stale"),
+			mcp.Enum(cleanModePrune, cleanModeMerged, cleanModeStale),
 		),
 		mcp.WithBoolean("dry_run",
 			mcp.Description("Preview what would be cleaned without making changes"),
@@ -48,11 +54,11 @@ func handleClean(hctx *HandlerContext) server.ToolHandlerFunc {
 		r := hctx.Runner
 
 		switch mode {
-		case "prune":
+		case cleanModePrune:
 			return mcpCleanPrune(ctx, r, dryRun)
-		case "merged":
+		case cleanModeMerged:
 			return mcpCleanMerged(ctx, r, hctx, dryRun, force)
-		case "stale":
+		case cleanModeStale:
 			return mcpCleanStale(ctx, r, hctx, dryRun, staleDays, force)
 		default:
 			return errorResult(errhint.WithFix(
@@ -83,7 +89,7 @@ func mcpCleanPrune(ctx context.Context, r git.Runner, dryRun bool) (*mcp.CallToo
 	}
 
 	return marshalResult(cleanResult{
-		Mode:         "prune",
+		Mode:         cleanModePrune,
 		DryRun:       dryRun,
 		Removed:      make([]cleanedItem, 0),
 		Output:       output,
@@ -121,7 +127,7 @@ func mcpCleanMerged(ctx context.Context, r git.Runner, hctx *HandlerContext, dry
 			items[i] = cleanedItem{Branch: c.Branch, Path: c.Path}
 		}
 		return marshalResult(cleanResult{
-			Mode:     "merged",
+			Mode:     cleanModeMerged,
 			DryRun:   dryRun,
 			Removed:  items,
 			Warnings: mergedResult.Warnings,
@@ -140,7 +146,7 @@ func mcpCleanMerged(ctx context.Context, r git.Runner, hctx *HandlerContext, dry
 		}
 	}
 	return marshalResult(cleanResult{
-		Mode:     "merged",
+		Mode:     cleanModeMerged,
 		DryRun:   false,
 		Removed:  items,
 		Warnings: warnings,
@@ -168,7 +174,7 @@ func mcpCleanStale(ctx context.Context, r git.Runner, hctx *HandlerContext, dryR
 			items[i] = cleanedItem{Branch: c.Branch, Path: c.Path}
 		}
 		return marshalResult(cleanResult{
-			Mode:     "stale",
+			Mode:     cleanModeStale,
 			DryRun:   dryRun,
 			Removed:  items,
 			Warnings: staleResult.Warnings,
@@ -186,7 +192,7 @@ func mcpCleanStale(ctx context.Context, r git.Runner, hctx *HandlerContext, dryR
 		items[i] = cleanedItem{Branch: item.Branch, Path: item.Path}
 	}
 	return marshalResult(cleanResult{
-		Mode:     "stale",
+		Mode:     cleanModeStale,
 		DryRun:   false,
 		Removed:  items,
 		Warnings: staleResult.Warnings,

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 )
 
+const gitBin = "git"
+
 type testRepoT interface {
 	Helper()
 	Fatalf(format string, args ...any)
@@ -30,9 +32,9 @@ func NewTestRepo(t testRepoT) string {
 	}
 
 	cmds := [][]string{
-		{"git", "init", "-b", "main"},
-		{"git", "config", "user.email", "test@test.com"},
-		{"git", "config", "user.name", "Test"},
+		{gitBin, "init", "-b", "main"},
+		{gitBin, "config", "user.email", "test@test.com"},
+		{gitBin, "config", "user.name", "Test"},
 	}
 
 	for _, args := range cmds {
@@ -52,8 +54,8 @@ func NewTestRepo(t testRepoT) string {
 	}
 
 	cmds = [][]string{
-		{"git", "add", "."},
-		{"git", "commit", "-m", "initial commit"},
+		{gitBin, "add", "."},
+		{gitBin, "commit", "-m", "initial commit"},
 	}
 
 	for _, args := range cmds {
@@ -81,7 +83,7 @@ func CreateFile(t testFatalT, dir, name, content string) {
 // GitCmd runs a git command in the given directory.
 func GitCmd(t testFatalT, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", args...)
+	cmd := exec.Command(gitBin, args...)
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	if err != nil {

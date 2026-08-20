@@ -85,6 +85,8 @@ linters:
       - path: _test\.go
         linters: [gocognit]
       - path: _test\.go
+        linters: [goconst]
+      - path: _test\.go
         linters: [tidygo]
         text: "nolateexport:"
       - path: internal/agentfile/content\.go

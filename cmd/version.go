@@ -17,7 +17,7 @@ var versionCmd = &cobra.Command{
 	Use:         "version",
 	Short:       "Print the version information",
 	Example:     "  rimba version",
-	Annotations: map[string]string{"skipConfig": "true"},
+	Annotations: map[string]string{annotationSkipConfig: annotationValueTrue},
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Fprint(cmd.OutOrStdout(), versionString())
 	},
