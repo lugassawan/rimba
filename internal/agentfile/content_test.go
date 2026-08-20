@@ -1,6 +1,7 @@
 package agentfile
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -310,6 +311,9 @@ func TestProjectGeneratorsMentionCurrentCommands(t *testing.T) {
 	coreCommands := []string{"add", "list", "status", "sync", "merge", "remove", "clean"}
 	fullCommands := []string{"doctor", "rename", "restore", "duplicate", "trust"}
 
+	// Every global spec's content ends with an appended mcpToolsSection/cliCommandsSection call,
+	// whose table already renders every coreCommands word — so this loop is a structural
+	// trip-wire (catches a spec that stops calling that helper), not prose-authoring enforcement.
 	for _, s := range GlobalSpecs() {
 		t.Run("global/"+s.RelPath, func(t *testing.T) {
 			content := s.Content()
@@ -343,6 +347,15 @@ func TestProjectJSONCommandListsAreCurrent(t *testing.T) {
 		"list", "status", "exec", "conflict-check", "deps status",
 		"add", "merge", "remove", "rename", "sync", "clean", "log",
 	}
+	// Specs known to document a JSON Output section today. If one of these silently drops the
+	// section, this test must fail with the specific missing path — the dynamic vacuity guard
+	// alone would let a partial regression through undetected.
+	mustDocumentJSON := []string{
+		"AGENTS.md",
+		filepath.Join(".cursor", "rules", "rimba.mdc"),
+		filepath.Join(".claude", "skills", "rimba", "SKILL.md"),
+		filepath.Join(".pi", "skills", "rimba", "SKILL.md"),
+	}
 
 	all := make([]labeledSpec, 0, len(ProjectSpecs())+len(GlobalSpecs()))
 	for _, s := range ProjectSpecs() {
@@ -352,13 +365,13 @@ func TestProjectJSONCommandListsAreCurrent(t *testing.T) {
 		all = append(all, labeledSpec{"global", s})
 	}
 
-	tested := 0
+	tested := make(map[string]bool)
 	for _, ls := range all {
 		content := ls.spec.Content()
 		if !strings.Contains(content, "JSON Output") {
 			continue
 		}
-		tested++
+		tested[ls.spec.RelPath] = true
 		for _, cmd := range wantCommands {
 			if !strings.Contains(content, cmd) {
 				t.Errorf("%s spec %s documents JSON Output but is missing %q", ls.label, ls.spec.RelPath, cmd)
@@ -366,8 +379,13 @@ func TestProjectJSONCommandListsAreCurrent(t *testing.T) {
 		}
 	}
 
-	if tested == 0 {
+	if len(tested) == 0 {
 		t.Fatal("no spec documents a JSON Output section — test is vacuous, registry or content likely broken")
+	}
+	for _, want := range mustDocumentJSON {
+		if !tested[want] {
+			t.Errorf("expected spec %s to document a JSON Output section, but it no longer does", want)
+		}
 	}
 }
 
