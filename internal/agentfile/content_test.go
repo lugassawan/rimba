@@ -165,6 +165,51 @@ func TestGlobalRooContentNotEmpty(t *testing.T) {
 	}
 }
 
+func TestGlobalPiSkillContentHasFrontmatter(t *testing.T) {
+	content := globalPiSkillContent()
+	if !strings.HasPrefix(content, "---\n") {
+		t.Error("global pi skill content should start with YAML frontmatter")
+	}
+	if !strings.Contains(content, "name: rimba") {
+		t.Error("global pi skill content should have name field")
+	}
+	if !strings.Contains(content, "description:") {
+		t.Error("global pi skill content should have description field")
+	}
+	if strings.Contains(content, "mcp__rimba__") {
+		t.Error("global pi skill content should not mention mcp__rimba__ tools")
+	}
+}
+
+func TestGlobalPiBlockHasMarkers(t *testing.T) {
+	content := globalPiBlock()
+	if !strings.HasPrefix(content, BeginMarker) {
+		t.Error("global pi block should start with BEGIN marker")
+	}
+	if !strings.HasSuffix(content, EndMarker) {
+		t.Error("global pi block should end with END marker")
+	}
+	if strings.Contains(content, "mcp__rimba__") {
+		t.Error("global pi block should not mention mcp__rimba__ tools")
+	}
+}
+
+func TestPiSkillContentHasFrontmatter(t *testing.T) {
+	content := piSkillContent()
+	if !strings.HasPrefix(content, "---\n") {
+		t.Error("pi skill content should start with YAML frontmatter")
+	}
+	if !strings.Contains(content, "name: rimba") {
+		t.Error("pi skill content should have name field")
+	}
+	if !strings.Contains(content, "description:") {
+		t.Error("pi skill content should have description field")
+	}
+	if strings.Contains(content, "mcp__rimba__") {
+		t.Error("pi skill content should not mention mcp__rimba__ tools")
+	}
+}
+
 func TestMcpToolsSection(t *testing.T) {
 	cases := []struct {
 		name    string
