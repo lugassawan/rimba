@@ -338,8 +338,7 @@ func gitCommitResult(t *testing.T, dir, msg string) result {
 	}
 
 	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			r.ExitCode = exitErr.ExitCode()
 		} else {
 			t.Fatalf("failed to run git commit: %v", err)

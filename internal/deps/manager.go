@@ -294,8 +294,7 @@ func runInstall(ctx context.Context, worktreePath string, mod Module) error {
 	exitCode := 0
 	if err != nil {
 		exitCode = -1
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			exitCode = exitErr.ExitCode()
 		}
 	}

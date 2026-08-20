@@ -182,7 +182,7 @@ func resolveAddPrefix(cmd *cobra.Command, arg string, ps *resolver.PrefixSet) (p
 	sel := resolvePrefixSelection(cmd)
 	if sel.Explicit {
 		if sel.Alias {
-			return sel.Prefix, true, "fix"
+			return sel.Prefix, true, prefixAliasFix
 		}
 		return sel.Prefix, false, ""
 	}

@@ -17,7 +17,7 @@ import (
 )
 
 var statusCmd = &cobra.Command{
-	Use:   "status",
+	Use:   cmdNameStatus,
 	Short: "Show worktree dashboard with summary stats and age info",
 	Long: `Displays a summary of all worktrees including total count, dirty, stale, and behind counts,
 plus per-worktree age information.
@@ -28,7 +28,7 @@ in the last 7 days. With --detail, rows are sorted largest-first.`,
 	Example: `  rimba status
   rimba status --detail          # add SIZE/7D columns and disk summary
   rimba status --stale-days 7    # consider worktrees stale after 7 days`,
-	Annotations: map[string]string{"skipConfig": "true"},
+	Annotations: map[string]string{annotationSkipConfig: annotationValueTrue},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SetContext(withBestEffortConfig(cmd))
 		r := newRunner(cmd.Context())

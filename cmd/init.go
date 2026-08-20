@@ -61,7 +61,7 @@ rimba, command: rimba mcp) in client config files (.mcp.json, .cursor/mcp.json,
 ~/.claude.json, ~/.codex/config.toml, ~/.gemini/settings.json,
 ~/.codeium/windsurf/mcp_config.json, ~/.roo/mcp.json). --agents --local does not
 register MCP — it only updates agent files. Registration is idempotent.`,
-	Annotations: map[string]string{"skipConfig": "true"},
+	Annotations: map[string]string{annotationSkipConfig: annotationValueTrue},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		m := initModeFromFlags(cmd)
 		if err := m.validate(); err != nil {

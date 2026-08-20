@@ -40,7 +40,7 @@ var logCmd = &cobra.Command{
 	Long:  "Displays the most recent commit from each worktree, sorted from newest to oldest.",
 	Example: `  rimba log
   rimba log --since 7d --limit 10`,
-	Annotations: map[string]string{"skipConfig": "true"},
+	Annotations: map[string]string{annotationSkipConfig: annotationValueTrue},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SetContext(withBestEffortConfig(cmd))
 		ctx := cmd.Context()

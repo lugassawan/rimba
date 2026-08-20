@@ -39,7 +39,7 @@ var depsCmd = &cobra.Command{
 }
 
 var depsStatusCmd = &cobra.Command{
-	Use:     "status",
+	Use:     cmdNameStatus,
 	Short:   "Show detected modules and lockfile hashes for all worktrees",
 	Example: "  rimba deps status",
 	RunE: func(cmd *cobra.Command, args []string) error {

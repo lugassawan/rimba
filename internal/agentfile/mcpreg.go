@@ -11,7 +11,10 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-const mcpServerName = "rimba"
+const (
+	mcpServerName = "rimba"
+	mcpServersKey = "mcpServers"
+)
 
 type mcpFormat int
 
@@ -41,12 +44,12 @@ type MCPSpec struct {
 // GlobalMCPSpecs returns the MCP config files patched at user level (~/).
 func GlobalMCPSpecs() []MCPSpec {
 	return []MCPSpec{
-		{RelPath: ".claude.json", Format: mcpJSON, ContainerKey: "mcpServers"},
-		{RelPath: filepath.Join(".cursor", "mcp.json"), Format: mcpJSON, ContainerKey: "mcpServers"},
-		{RelPath: filepath.Join(".codeium", "windsurf", "mcp_config.json"), Format: mcpJSON, ContainerKey: "mcpServers"},
+		{RelPath: ".claude.json", Format: mcpJSON, ContainerKey: mcpServersKey},
+		{RelPath: filepath.Join(".cursor", "mcp.json"), Format: mcpJSON, ContainerKey: mcpServersKey},
+		{RelPath: filepath.Join(".codeium", "windsurf", "mcp_config.json"), Format: mcpJSON, ContainerKey: mcpServersKey},
 		{RelPath: filepath.Join(".codex", "config.toml"), Format: mcpTOML, ContainerKey: "mcp_servers"},
-		{RelPath: filepath.Join(".gemini", "settings.json"), Format: mcpJSON, ContainerKey: "mcpServers"},
-		{RelPath: filepath.Join(".roo", "mcp.json"), Format: mcpJSON, ContainerKey: "mcpServers"},
+		{RelPath: filepath.Join(".gemini", "settings.json"), Format: mcpJSON, ContainerKey: mcpServersKey},
+		{RelPath: filepath.Join(".roo", "mcp.json"), Format: mcpJSON, ContainerKey: mcpServersKey},
 	}
 }
 
@@ -54,8 +57,8 @@ func GlobalMCPSpecs() []MCPSpec {
 // .cursor/mcp.json is repo-root-relative (workspace MCP), distinct from ~/.cursor/mcp.json.
 func ProjectMCPSpecs() []MCPSpec {
 	return []MCPSpec{
-		{RelPath: ".mcp.json", Format: mcpJSON, ContainerKey: "mcpServers"},
-		{RelPath: filepath.Join(".cursor", "mcp.json"), Format: mcpJSON, ContainerKey: "mcpServers"},
+		{RelPath: ".mcp.json", Format: mcpJSON, ContainerKey: mcpServersKey},
+		{RelPath: filepath.Join(".cursor", "mcp.json"), Format: mcpJSON, ContainerKey: mcpServersKey},
 	}
 }
 
@@ -95,7 +98,7 @@ func UnregisterMCPProject(repoRoot string) ([]Result, error) {
 // They are only ever removed (never written) to self-heal existing installations.
 func legacyClaudeSpecs() []MCPSpec {
 	return []MCPSpec{
-		{RelPath: filepath.Join(".claude", "settings.json"), Format: mcpJSON, ContainerKey: "mcpServers"},
+		{RelPath: filepath.Join(".claude", "settings.json"), Format: mcpJSON, ContainerKey: mcpServersKey},
 	}
 }
 
