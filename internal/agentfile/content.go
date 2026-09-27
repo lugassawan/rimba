@@ -91,7 +91,7 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 
 | Concern | Commands |
 |---------|----------|
-| Create & navigate | ` + "`" + `rimba add <task>` + "`" + ` (or ` + "`" + `rimba add service/task` + "`" + ` for monorepos), ` + "`" + `rimba add pr:<num>` + "`" + ` (from a GitHub PR), ` + "`" + `rimba open <task>` + "`" + `, ` + "`" + `rimba rename <task> [new-task]` + "`" + `, ` + "`" + `rimba duplicate <task>` + "`" + ` |
+| Create & navigate | ` + "`" + `rimba add <task>` + "`" + ` (or ` + "`" + `rimba add service/task` + "`" + ` for monorepos), ` + "`" + `rimba add pr:<num>` + "`" + ` (from a GitHub PR), ` + "`" + `rimba add branch:<branch>` + "`" + ` (promote the current branch into its own worktree), ` + "`" + `rimba open <task>` + "`" + `, ` + "`" + `rimba rename <task> [new-task]` + "`" + `, ` + "`" + `rimba duplicate <task>` + "`" + ` |
 | Inspect | ` + "`" + `rimba list` + "`" + ` (` + "`" + `--full` + "`" + ` adds PR/CI columns), ` + "`" + `rimba status` + "`" + ` (` + "`" + `--detail` + "`" + ` adds disk/velocity), ` + "`" + `rimba log` + "`" + `, ` + "`" + `rimba doctor` + "`" + `, ` + "`" + `rimba report` + "`" + ` |
 | Sync & merge | ` + "`" + `rimba sync [task]` + "`" + `, ` + "`" + `rimba merge <task>` + "`" + ` |
 | Clean up | ` + "`" + `rimba clean --merged` + "`" + `, ` + "`" + `rimba archive <task>` + "`" + `, ` + "`" + `rimba restore <task>` + "`" + `, ` + "`" + `rimba remove <task>` + "`" + ` |
@@ -105,6 +105,11 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 ` + "```" + `sh
 rimba add my-feature        # creates worktree + branch
 rimba open my-feature       # prints worktree path (use: cd $(rimba open my-feature))
+` + "```" + `
+
+**Promote the branch you're already on:**
+` + "```" + `sh
+rimba add branch:feature/my-feature   # promote current branch to its own worktree
 ` + "```" + `
 
 **Check health and clean up stale worktrees:**
@@ -271,7 +276,7 @@ If not found, **ask the user** before installing. Never install automatically.
 
 | Concern | Commands |
 |---------|----------|
-| Create & navigate | ` + "`" + `rimba add <task>` + "`" + `, ` + "`" + `rimba add pr:<num>` + "`" + ` (from a GitHub PR), ` + "`" + `rimba open <task>` + "`" + `, ` + "`" + `rimba rename <task> [new-task]` + "`" + `, ` + "`" + `rimba duplicate <task>` + "`" + ` |
+| Create & navigate | ` + "`" + `rimba add <task>` + "`" + `, ` + "`" + `rimba add pr:<num>` + "`" + ` (from a GitHub PR), ` + "`" + `rimba add branch:<branch>` + "`" + ` (promote the current branch into its own worktree), ` + "`" + `rimba open <task>` + "`" + `, ` + "`" + `rimba rename <task> [new-task]` + "`" + `, ` + "`" + `rimba duplicate <task>` + "`" + ` |
 | Inspect | ` + "`" + `rimba list` + "`" + ` (` + "`" + `--full` + "`" + ` adds PR/CI columns), ` + "`" + `rimba status` + "`" + ` (` + "`" + `--detail` + "`" + ` adds disk/velocity), ` + "`" + `rimba doctor` + "`" + `, ` + "`" + `rimba report` + "`" + ` |
 | Sync & merge | ` + "`" + `rimba sync [task]` + "`" + `, ` + "`" + `rimba merge <task>` + "`" + ` |
 | Clean up | ` + "`" + `rimba clean --merged` + "`" + `, ` + "`" + `rimba archive <task>` + "`" + `, ` + "`" + `rimba restore <task>` + "`" + `, ` + "`" + `rimba remove <task>` + "`" + ` |
