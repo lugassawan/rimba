@@ -178,7 +178,7 @@ The two tiers are **not** mirror images — the paths differ for most agents:
 | Codex (and other AGENTS.md readers) | `AGENTS.md` (repo root) | `~/.codex/AGENTS.md` |
 | Gemini CLI | `GEMINI.md` (repo root) | `~/.gemini/GEMINI.md` |
 | Windsurf | `.windsurf/rules/rimba.md` | `~/.codeium/windsurf/memories/global_rules.md` |
-| Roo Code / Cline | `.clinerules/rimba.md` | `~/.roo/rules/rimba.md` |
+| Roo Code / Cline | `.clinerules/rimba.md` | `~/.roo/rules/rimba.md` (Roo Code only — no global-tier file for Cline) |
 | Pi | `.pi/skills/rimba/SKILL.md` | `~/.pi/agent/skills/rimba/SKILL.md` **plus** `~/.pi/agent/AGENTS.md` |
 
 ## MCP server registration
