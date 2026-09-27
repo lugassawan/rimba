@@ -141,12 +141,12 @@ When `auto_detect` is enabled (default), rimba recognizes these lockfiles automa
 
 ## Agent instruction files
 
-`rimba init --agents` (project tier, committed), `rimba init --agents --local` (project tier, gitignored), and `rimba init -g` (global tier, under `~/`) install one instruction file per supported agent. Files are refreshed by re-running the same command; `--uninstall` removes them.
+`rimba init --agents` (project tier, committed), `rimba init --agents --local` (project tier, gitignored), and `rimba init -g` (global tier, under `~/`) install instruction files for each supported agent (Pi gets two at the global tier — a skill file and an `AGENTS.md` managed block). Files are refreshed by re-running the same command; `--uninstall` removes them.
 
 Two install modes exist (source of truth: `internal/agentfile/specs.go`):
 
 - **Whole file** — rimba creates and owns the entire file. `--uninstall` deletes it.
-- **Managed block** — rimba injects a `<!-- BEGIN RIMBA -->` … `<!-- END RIMBA -->` marker-delimited block into a file you may share with other content. `--uninstall` excises only the block and leaves the rest of the file untouched.
+- **Managed block** — rimba injects a `<!-- BEGIN RIMBA -->` … `<!-- END RIMBA -->` marker-delimited block into a file you may share with other content. `--uninstall` excises only the block and leaves the rest of the file untouched (if the block is all that remains, the file itself is removed).
 
 ### User-level (`rimba init -g`)
 
@@ -168,7 +168,7 @@ Use `rimba init -g --uninstall` to remove all of the above.
 
 ### Project vs global paths
 
-The two tiers are **not** mirror images — five agents differ:
+The two tiers are **not** mirror images — the paths differ for most agents:
 
 | Agent | Project tier (`--agents`) | Global tier (`-g`) |
 |-------|---------------------------|--------------------|
