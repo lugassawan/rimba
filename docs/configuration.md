@@ -139,6 +139,48 @@ When `auto_detect` is enabled (default), rimba recognizes these lockfiles automa
 | `RIMBA_QUIET` | Suppress informational hints and tips — the pre-execution option hints and the post-update agent-file tip (set to any value, e.g. `RIMBA_QUIET=1`). Does not suppress errors or command output. |
 | `NO_COLOR` | Disable colored output globally (per [no-color.org](https://no-color.org)) |
 
+## Agent instruction files
+
+`rimba init --agents` (project tier, committed), `rimba init --agents --local` (project tier, gitignored), and `rimba init -g` (global tier, under `~/`) install one instruction file per supported agent. Files are refreshed by re-running the same command; `--uninstall` removes them.
+
+Two install modes exist (source of truth: `internal/agentfile/specs.go`):
+
+- **Whole file** — rimba creates and owns the entire file. `--uninstall` deletes it.
+- **Managed block** — rimba injects a `<!-- BEGIN RIMBA -->` … `<!-- END RIMBA -->` marker-delimited block into a file you may share with other content. `--uninstall` excises only the block and leaves the rest of the file untouched.
+
+### User-level (`rimba init -g`)
+
+Writes the following files in your home directory:
+
+| Agent | File | Install mode |
+|-------|------|--------------|
+| Claude Code | `~/.claude/skills/rimba/SKILL.md` | Whole file |
+| Cursor | `~/.cursor/rules/rimba.mdc` | Whole file |
+| GitHub Copilot | `~/.github/copilot-instructions.md` | Managed block |
+| Codex | `~/.codex/AGENTS.md` | Managed block |
+| Gemini CLI | `~/.gemini/GEMINI.md` | Managed block |
+| Windsurf | `~/.codeium/windsurf/memories/global_rules.md` | Managed block |
+| Roo Code | `~/.roo/rules/rimba.md` | Whole file |
+| Pi | `~/.pi/agent/skills/rimba/SKILL.md` | Whole file |
+| Pi | `~/.pi/agent/AGENTS.md` | Managed block |
+
+Use `rimba init -g --uninstall` to remove all of the above.
+
+### Project vs global paths
+
+The two tiers are **not** mirror images — five agents differ:
+
+| Agent | Project tier (`--agents`) | Global tier (`-g`) |
+|-------|---------------------------|--------------------|
+| Claude Code | `.claude/skills/rimba/SKILL.md` | `~/.claude/skills/rimba/SKILL.md` (same path under `~/`) |
+| Cursor | `.cursor/rules/rimba.mdc` | `~/.cursor/rules/rimba.mdc` (same path under `~/`) |
+| GitHub Copilot | `.github/copilot-instructions.md` | `~/.github/copilot-instructions.md` (same path under `~/`) |
+| Codex (and other AGENTS.md readers) | `AGENTS.md` (repo root) | `~/.codex/AGENTS.md` |
+| Gemini CLI | `GEMINI.md` (repo root) | `~/.gemini/GEMINI.md` |
+| Windsurf | `.windsurf/rules/rimba.md` | `~/.codeium/windsurf/memories/global_rules.md` |
+| Roo Code / Cline | `.clinerules/rimba.md` | `~/.roo/rules/rimba.md` |
+| Pi | `.pi/skills/rimba/SKILL.md` | `~/.pi/agent/skills/rimba/SKILL.md` **plus** `~/.pi/agent/AGENTS.md` |
+
 ## MCP server registration
 
 When `rimba init --agents` or `rimba init -g` is run, rimba registers itself as an MCP server (server name: `rimba`, command: `rimba mcp`) in client config files alongside the agent instruction files. The registration is idempotent — running the command again updates the entry without duplicating it. `--agents --local` updates agent files only and does **not** register MCP.
