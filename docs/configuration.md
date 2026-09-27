@@ -129,7 +129,10 @@ When `auto_detect` is enabled (default), rimba recognizes these lockfiles automa
 > Dependencies are shared using copy-on-write clones (`cp -c` on macOS, `cp --reflink=auto` on Linux) for near-instant copies on supported filesystems (APFS, Btrfs). Falls back to regular copy on other systems.
 
 {: .note }
-> **Gradle design note:** rimba clones project-local build state (`.gradle/` and `build/`) from a sibling worktree when lockfile content hashes match. A stale clone is a harmless warm cache — Gradle re-validates via content hashes on next invocation. Global caches (`~/.gradle/caches`) and Maven's `~/.m2` are **not** cloned; rimba's CoW model is scoped to project-local directories only. Maven support (project-local `target/`) is deferred.
+> **Gradle design note:** rimba clones project-local build state (`.gradle/` and `build/`) from a sibling worktree when lockfile content hashes match. A stale clone is a harmless warm cache — Gradle re-validates via content hashes on next invocation. Global caches (`~/.gradle/caches`) and Maven's `~/.m2` are **not** cloned; rimba's CoW model is scoped to project-local directories only.
+
+{: .note }
+> **Maven design note:** project-local `target/` is deliberately **not** warm-cloned. Maven decides what to recompile from file modification times, and a cross-worktree clone defeats that validation either way: on macOS the CoW clone preserves the donor's timestamps, so every source file in the new worktree looks newer and Maven recompiles the module anyway (the clone buys nothing); on Linux and in the regular-copy fallback the clone resets timestamps to copy time, so the cloned output looks newer than the new worktree's sources and Maven can skip compiling changed code — building and testing against the donor's stale classes. Only content-hash-validated build state is safe to warm-clone. If you use Maven's [build cache extension](https://maven.apache.org/extensions/maven-build-cache-extension/) with a project-local cache directory, that directory is a candidate for a future opt-in preset.
 
 ## Environment Variables
 
