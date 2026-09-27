@@ -19,6 +19,7 @@ test-short:
 
 clean:
 	rm -rf bin/ custom-gcl
+	rm -f -- *.out
 
 fmt:
 	go fmt ./...
