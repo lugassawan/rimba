@@ -120,7 +120,7 @@ rimba remove my-feature
 | Command | Description |
 |---------|-------------|
 | `rimba init` | Initialize rimba in the current repo; with `--agents` also installs team agent files, `--agents --local` for personal agent files, `-g`/`--global` for user-level installation, all registering the MCP server |
-| `rimba add <task>` | Create a new worktree with auto-prefixed branch (`service/task` for monorepos), or `pr:<num>` to create one from a GitHub PR |
+| `rimba add <task>` | Create a new worktree with auto-prefixed branch (`service/task` for monorepos), `pr:<num>` to create one from a GitHub PR, or `branch:<branch>` to promote the current branch into its own worktree |
 | `rimba remove <task>` | Remove a worktree and delete its branch |
 | `rimba rename <old> <new>` | Rename a worktree's task, branch, and directory |
 | `rimba duplicate <task>` | Create a copy of an existing worktree |

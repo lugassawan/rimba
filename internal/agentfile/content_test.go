@@ -342,6 +342,28 @@ func TestProjectGeneratorsMentionCurrentCommands(t *testing.T) {
 	}
 }
 
+func TestProjectAgentTablesDocumentAllAddModes(t *testing.T) {
+	// Issue #430: the add row must surface all three rimba add forms. Scoped to the
+	// AGENTS.md and GEMINI.md specs — the surfaces the issue names.
+	mustDocument := []string{"AGENTS.md", "GEMINI.md"}
+	byRelPath := make(map[string]Spec)
+	for _, s := range ProjectSpecs() {
+		byRelPath[s.RelPath] = s
+	}
+	for _, rel := range mustDocument {
+		s, ok := byRelPath[rel]
+		if !ok {
+			t.Fatalf("expected project spec %s in registry", rel)
+		}
+		content := s.Content()
+		for _, mode := range []string{"rimba add <task>", "pr:<num>", "branch:<branch>"} {
+			if !strings.Contains(content, mode) {
+				t.Errorf("project spec %s should document add mode %q", rel, mode)
+			}
+		}
+	}
+}
+
 func TestProjectJSONCommandListsAreCurrent(t *testing.T) {
 	wantCommands := []string{
 		"list", "status", "exec", "conflict-check", "deps status",
