@@ -181,6 +181,7 @@ func Execute() (err error) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	defer func() { lastRecorder = nil }() // runs last, even when finalizeRecorder re-panics
 	// lastRecorder is set inside ExecuteContext (see its doc comment), so it is
 	// read when the defer runs. recover() must be called directly in the literal.
 	defer func() { finalizeRecorder(lastRecorder, recover(), err) }()

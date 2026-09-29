@@ -131,6 +131,9 @@ func TestExecuteRecordsCommandAndRootSpanSharingRunID(t *testing.T) {
 	if err := Execute(); err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
+	if lastRecorder != nil {
+		t.Error("lastRecorder should be cleared once Execute returns")
+	}
 
 	logFile, metricFile := splitDayFiles(t, findCacheJSONLFiles(t, home))
 
