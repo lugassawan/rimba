@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/lugassawan/rimba/internal/agentfile"
+	"github.com/lugassawan/rimba/internal/envvar"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/spf13/cobra"
 )
@@ -14,7 +15,7 @@ import (
 // printAgentRefreshTips prints a per-tier refresh tip and/or corrupt-block tip.
 // Silent when RIMBA_QUIET is set, nothing applies, or a path is empty.
 func printAgentRefreshTips(cmd *cobra.Command, home string, repoRoot string) {
-	if _, ok := os.LookupEnv("RIMBA_QUIET"); ok {
+	if _, ok := os.LookupEnv(envvar.Quiet); ok {
 		return
 	}
 	w := cmd.ErrOrStderr()

@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/lugassawan/rimba/internal/debug"
+	"github.com/lugassawan/rimba/internal/envvar"
 )
 
 // Recorder binds one logical command invocation. A nil *Recorder no-ops on
@@ -52,7 +52,7 @@ func NewRecorder(sink Sink, command, task, service, rimbaVersion string) *Record
 		rimbaVersion: rimbaVersion,
 		start:        time.Now(),
 	}
-	if _, ok := os.LookupEnv(debug.EnvVar); ok {
+	if _, ok := os.LookupEnv(envvar.Debug); ok {
 		r.debugTiming = true
 	}
 	r.rootSpanID = r.newSpanID()

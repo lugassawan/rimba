@@ -10,6 +10,7 @@ import (
 	toml "github.com/pelletier/go-toml/v2"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/envvar"
 	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/fileutil"
 )
@@ -114,7 +115,7 @@ func GateNonInteractive(repoRoot string, cfg *config.Config) error {
 // It is the canonical definition of truthy for this environment variable;
 // cmd/trust_gate.go delegates to it to avoid duplicate semantics.
 func TrustYesFromEnv() bool {
-	v, ok := os.LookupEnv("RIMBA_TRUST_YES")
+	v, ok := os.LookupEnv(envvar.TrustYes)
 	return ok && v != "" && v != "0"
 }
 

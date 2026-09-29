@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/lugassawan/rimba/internal/config"
-	rimbadebug "github.com/lugassawan/rimba/internal/debug"
+	"github.com/lugassawan/rimba/internal/envvar"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/observability"
 	"github.com/lugassawan/rimba/internal/output"
@@ -73,7 +73,7 @@ Persistent flags (available on every command):
 		lastRecorder = nil
 
 		if debug, _ := cmd.Flags().GetBool(flagDebug); debug {
-			_ = os.Setenv(rimbadebug.EnvVar, "1")
+			_ = os.Setenv(envvar.Debug, "1")
 		}
 
 		// Skip config for Cobra internals (completion, __complete)
