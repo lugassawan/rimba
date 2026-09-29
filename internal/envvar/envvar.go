@@ -1,5 +1,5 @@
-// Package envvar names the environment variables rimba reads, so each name is
-// spelled once. It imports nothing, so any package can use it without a cycle.
+// Package envvar names the environment variables rimba reads, so production code
+// spells each name once. It imports nothing, so any package can use it without a cycle.
 package envvar
 
 const (

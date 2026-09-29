@@ -28,7 +28,7 @@ type Sink interface {
 }
 
 // fileSink is the default Sink: per-day JSONL log and metrics files, rotated lazily
-// after midnight. Files deleted mid-day go unnoticed until the next rotation.
+// after midnight. A day-file deleted mid-day keeps receiving writes to the unlinked inode, so those records are lost.
 type fileSink struct {
 	mu            sync.Mutex
 	dir, prefix   string
@@ -49,9 +49,8 @@ func RepoPrefix(repoRoot string) string {
 	return fmt.Sprintf("rimba-%s-%s", base, hash)
 }
 
-// NewFileSink opens (creating if necessary) today's log and metrics JSONL
-// files for repoRoot under the OS cache directory, and best-effort prunes
-// day-files older than retentionDays (<= 0 disables). It rotates itself across midnight.
+// NewFileSink opens today's log and metrics JSONL files for repoRoot in the OS cache dir,
+// rotating across midnight and pruning day-files older than retentionDays (<= 0 disables).
 func NewFileSink(repoRoot string, retentionDays int) (Sink, error) {
 	cacheDir, err := os.UserCacheDir()
 	if err != nil {
