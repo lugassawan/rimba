@@ -189,7 +189,7 @@ func Execute() (err error) {
 }
 
 // finalizeRecorder finalizes and closes rec, then re-raises a recovered panic.
-// No rec == nil guard: it would swallow the panic when observability is off.
+// rec may be nil: Finalize and Close are nil-safe, so the panic is always re-raised.
 func finalizeRecorder(rec *observability.Recorder, p any, err error) {
 	outcome, exitCode := observability.OutcomeSuccess, exitCodeFor(err)
 	switch {

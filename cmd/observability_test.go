@@ -16,11 +16,8 @@ import (
 
 var errProbeBoom = errors.New("probe boom")
 
-// addObservabilityProbeCmd registers a throwaway subcommand (deliberately not
-// skipConfig-annotated, unlike version/status) so PersistentPreRunE runs its
-// full path — including the observability build — when Execute() invokes it.
-// Returns a cleanup func that removes it and resets rootCmd's execution state
-// (mirroring TestExecute's cleanup). A nil runE makes the probe a no-op.
+// addObservabilityProbeCmd registers a non-skipConfig probe subcommand so Execute()
+// runs the full PersistentPreRunE path; a nil runE makes it a no-op.
 func addObservabilityProbeCmd(t *testing.T, runE func(*cobra.Command, []string) error) {
 	t.Helper()
 	if runE == nil {
