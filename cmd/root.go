@@ -43,6 +43,8 @@ const (
 	annotationValueTrue  = "true"
 
 	cmdNameStatus = "status"
+
+	exitCodePanic = 2 // Go runtime panic exit code
 )
 
 // commandName stores the resolved command name for JSON error reporting.
@@ -172,31 +174,43 @@ func CommandName() string {
 	return commandName
 }
 
-func Execute() error {
+func Execute() (err error) {
 	updater.SweepOldBinary()
 	rootCmd.Version = versionString()
 	rootCmd.SetVersionTemplate("{{.Version}}")
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	err := rootCmd.ExecuteContext(ctx)
+	// lastRecorder is set inside ExecuteContext (see its doc comment), so it is
+	// read when the defer runs. recover() must be called directly in the literal.
+	defer func() { finalizeRecorder(lastRecorder, recover(), err) }()
 
-	// rootCmd.Context() doesn't reflect PersistentPreRunE's context (see
-	// lastRecorder's doc comment), so the Recorder is read from lastRecorder.
-	if rec := lastRecorder; rec != nil {
-		defer rec.Close() // registered first so it runs LAST (after Finalize below)
-		exitCode := 0
-		if silent, ok := errors.AsType[*output.SilentError](err); ok {
-			exitCode = silent.ExitCode
-		} else if err != nil {
-			exitCode = 1
-		}
-		outcome := observability.OutcomeSuccess
-		if err != nil {
-			outcome = observability.OutcomeError
-		}
-		rec.Finalize(outcome, exitCode, err)
+	return rootCmd.ExecuteContext(ctx)
+}
+
+// finalizeRecorder finalizes and closes rec, then re-raises a recovered panic.
+// No rec == nil guard: it would swallow the panic when observability is off.
+func finalizeRecorder(rec *observability.Recorder, p any, err error) {
+	outcome, exitCode := observability.OutcomeSuccess, exitCodeFor(err)
+	switch {
+	case p != nil:
+		outcome, exitCode, err = observability.OutcomeError, exitCodePanic, observability.PanicError(p)
+	case err != nil:
+		outcome = observability.OutcomeError
 	}
+	rec.Finalize(outcome, exitCode, err)
+	_ = rec.Close()
+	if p != nil {
+		panic(p)
+	}
+}
 
-	return err
+func exitCodeFor(err error) int {
+	if silent, ok := errors.AsType[*output.SilentError](err); ok {
+		return silent.ExitCode
+	}
+	if err != nil {
+		return 1
+	}
+	return 0
 }

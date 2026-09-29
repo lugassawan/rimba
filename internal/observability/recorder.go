@@ -180,15 +180,17 @@ func (r *Recorder) Finalize(outcome string, exitCode int, err error) {
 	r.writeSpan(r.rootSpanID, "", "command", d, "")
 }
 
-// Close releases the underlying sink's file handles. Nil-safe. Callers defer
-// this immediately after Maybe(...) returns; Finalize must run before Close
-// (see cmd/root.go's Execute and internal/mcp/observability.go's withRecorder).
+// Close releases the underlying sink's file handles. Nil-safe. Call it after
+// Finalize (see finalizeRecorder in cmd/root.go and finishCall in internal/mcp).
 func (r *Recorder) Close() error {
 	if r == nil {
 		return nil
 	}
 	return r.sink.Close()
 }
+
+// PanicError formats a recovered panic value for a CommandRecord's Error field.
+func PanicError(p any) error { return fmt.Errorf("panic: %v", p) }
 
 // newRunID returns a run identifier unique enough for local correlation:
 // timestamp+pid+counter, no UUID dependency.
