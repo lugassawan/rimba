@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/lugassawan/rimba/internal/termcolor"
@@ -37,6 +38,7 @@ func checkUpdateHint(ctx context.Context, version string, timeout time.Duration)
 	u := newUpdater(version)
 	go func() {
 		defer cancel()
+		defer func() { closeOnHintPanic(out, recover()) }()
 		result, err := u.Check(tctx)
 		if err != nil || result.UpToDate {
 			close(out)
@@ -46,6 +48,18 @@ func checkUpdateHint(ctx context.Context, version string, timeout time.Duration)
 	}()
 
 	return out
+}
+
+// closeOnHintPanic turns a panic in the best-effort update check into "no hint"
+// (a failing check must not crash the CLI); the cause shows under RIMBA_DEBUG.
+func closeOnHintPanic(out chan<- *updater.CheckResult, p any) {
+	if p == nil {
+		return
+	}
+	if os.Getenv("RIMBA_DEBUG") != "" {
+		fmt.Fprintf(os.Stderr, "\n[debug] update check panicked: %v\n", p)
+	}
+	close(out)
 }
 
 // collectHint reads the result from the hint channel. Returns nil if the
