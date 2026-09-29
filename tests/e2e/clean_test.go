@@ -255,7 +255,7 @@ func commitInWorktree(t *testing.T, wtPath, file string) {
 	testutil.GitCmd(t, wtPath, "commit", "-m", "work "+file)
 }
 
-// TestCleanMergedFastForward pins #445: a fast-forward-merged worktree is removed.
+// TestCleanMergedFastForward pins that a fast-forward-merged worktree is removed.
 func TestCleanMergedFastForward(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)

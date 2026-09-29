@@ -175,7 +175,7 @@ func classifyMergedEntry(ctx context.Context, r git.Runner, mergeRef string, e g
 }
 
 // classifyMainlineHit handles a `--merged` hit. A tip on main's first-parent chain is
-// either fresh (#335) or fast-forward-merged; only the branch reflog tells them apart.
+// either fresh or fast-forward-merged; only the branch reflog tells them apart.
 func classifyMainlineHit(ctx context.Context, r git.Runner, e git.WorktreeEntry, mainline mainlineLookup) (*CleanCandidate, string) {
 	if mainline.err != nil {
 		return nil, fmt.Sprintf("skipped %s: mainline check failed: %v", e.Branch, mainline.err)

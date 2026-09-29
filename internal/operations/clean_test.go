@@ -197,7 +197,7 @@ func TestFindMergedCandidatesMergeCommitRemoved(t *testing.T) {
 	}
 }
 
-// TestFindMergedCandidatesOnChainReflog covers #445: an on-chain tip is a
+// TestFindMergedCandidatesOnChainReflog covers fast-forward detection: an on-chain tip is a
 // fast-forward merge only when the branch reflog shows local commit work.
 func TestFindMergedCandidatesOnChainReflog(t *testing.T) {
 	tests := []struct {
