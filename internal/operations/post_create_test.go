@@ -198,6 +198,7 @@ func TestPostCreateSetupCopyFilesErrorIncludesRecoveryHint(t *testing.T) {
 		RepoRoot:  tmpDir,
 		WtPath:    wtPath,
 		Task:      "test-task",
+		NewBranch: true,
 		CopyFiles: []string{".env"},
 		SkipDeps:  true,
 		SkipHooks: true,
@@ -234,10 +235,11 @@ func TestPostCreateSetupListWorktreesError(t *testing.T) {
 	}
 
 	_, err := PostCreateSetup(context.Background(), r, PostCreateParams{
-		RepoRoot: tmpDir,
-		WtPath:   wtPath,
-		Task:     "test-task",
-		SkipDeps: false, // Enable deps so ListWorktrees is called
+		RepoRoot:  tmpDir,
+		WtPath:    wtPath,
+		Task:      "test-task",
+		NewBranch: true,
+		SkipDeps:  false, // Enable deps so ListWorktrees is called
 	}, nil)
 	if err == nil {
 		t.Fatal("expected error when ListWorktrees fails")
@@ -247,6 +249,87 @@ func TestPostCreateSetupListWorktreesError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "To fix: rimba remove test-task") {
 		t.Errorf("error = %q, want recovery hint 'To fix: rimba remove test-task'", err.Error())
+	}
+}
+
+func TestPostCreateSetupPreservedBranchHintsArchive(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("chmod 000 is ineffective for root; skipping")
+	}
+
+	tests := []struct {
+		name   string
+		copy   []string
+		unread bool
+	}{
+		{name: "copy failure", copy: []string{".env"}, unread: true},
+		{name: "list worktrees failure"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			wtPath := filepath.Join(tmpDir, "worktree")
+			if err := os.MkdirAll(wtPath, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if tt.unread {
+				envPath := filepath.Join(tmpDir, ".env")
+				if err := os.WriteFile(envPath, []byte("SECRET=1"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Chmod(envPath, 0o000); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(envPath, 0o600) })
+			}
+
+			r := &mockRunner{
+				run: func(args ...string) (string, error) {
+					if len(args) > 0 && args[0] == gitCmdWorktree {
+						return "", errors.New("permission denied")
+					}
+					return "", nil
+				},
+				runInDir: noopRunInDir,
+			}
+
+			_, err := PostCreateSetup(context.Background(), r, PostCreateParams{
+				RepoRoot:  tmpDir,
+				WtPath:    wtPath,
+				Task:      "test-task",
+				CopyFiles: tt.copy,
+				SkipHooks: true,
+			}, nil)
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if !strings.Contains(err.Error(), "To fix: rimba archive test-task") {
+				t.Errorf("error = %q, want archive hint", err.Error())
+			}
+			if strings.Contains(err.Error(), "rimba remove") {
+				t.Errorf("error = %q, must not suggest destructive remove", err.Error())
+			}
+		})
+	}
+}
+
+func TestRecoveryHint(t *testing.T) {
+	tests := []struct {
+		name string
+		p    PostCreateParams
+		want string
+	}{
+		{"new branch", PostCreateParams{Task: "t", NewBranch: true}, "rimba remove t"},
+		{"new branch with service", PostCreateParams{Task: "t", Service: "svc", NewBranch: true}, "rimba remove svc/t"},
+		{"preserved branch", PostCreateParams{Task: "t"}, "rimba archive t"},
+		{"preserved branch with service", PostCreateParams{Task: "t", Service: "svc"}, "rimba archive svc/t"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := recoveryHint(tt.p); got != tt.want {
+				t.Errorf("recoveryHint() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 

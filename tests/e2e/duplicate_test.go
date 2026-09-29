@@ -9,6 +9,34 @@ import (
 	"github.com/lugassawan/rimba/testutil"
 )
 
+// The duplicate branch is new, so a partial failure should suggest remove.
+func TestDuplicatePartialFailCopyHint(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+	if os.Getuid() == 0 {
+		t.Skip("chmod 000 is ineffective for root")
+	}
+
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", taskDupA)
+
+	envPath := filepath.Join(repo, ".env")
+	if err := os.WriteFile(envPath, []byte("SECRET=fail"), 0o000); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(envPath, 0o644) })
+
+	cfg := loadConfig(t, repo)
+	cfg.CopyFiles = []string{".env"}
+	saveConfig(t, repo, cfg)
+
+	r := rimbaFail(t, repo, "duplicate", taskDupA, "--as", "dup-hint")
+	assertContains(t, r.Stderr, "failed to copy files")
+	assertContains(t, r.Stderr, "rimba remove dup-hint")
+	assertNotContains(t, r.Stderr, "rimba archive")
+}
+
 func TestDuplicateAutoSuffix(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)

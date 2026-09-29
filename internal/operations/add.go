@@ -98,6 +98,7 @@ func AddWorktree(ctx context.Context, r git.Runner, params AddParams, onProgress
 		WtPath:        wtPath,
 		Task:          params.Task,
 		Service:       params.Service,
+		NewBranch:     true,
 		CopyFiles:     params.CopyFiles,
 		SkipDeps:      params.SkipDeps,
 		AutoDetect:    params.AutoDetect,

@@ -20,6 +20,7 @@ type PostCreateParams struct {
 	WtPath        string
 	Task          string // for error messages
 	Service       string // monorepo service name; scopes dep detection to this subdir
+	NewBranch     bool   // true when this op created the branch; selects remove vs archive hint
 	CopyFiles     []string
 	SkipDeps      bool
 	AutoDetect    bool
@@ -53,7 +54,7 @@ func PostCreateSetup(ctx context.Context, r git.Runner, params PostCreateParams,
 	if err != nil {
 		return result, errhint.WithFix(
 			fmt.Errorf("failed to copy files: %w\nTo retry, manually copy files to: %s", err, params.WtPath),
-			"rimba remove "+params.Task,
+			recoveryHint(params),
 		)
 	}
 	result.Copied = copied
@@ -69,7 +70,7 @@ func PostCreateSetup(ctx context.Context, r git.Runner, params PostCreateParams,
 			stop()
 			return result, errhint.WithFix(
 				fmt.Errorf("failed to list worktrees for dependency setup: %w", err),
-				"rimba remove "+params.Task,
+				recoveryHint(params),
 			)
 		}
 
@@ -98,4 +99,17 @@ func PostCreateSetup(ctx context.Context, r git.Runner, params PostCreateParams,
 	}
 
 	return result, nil
+}
+
+// recoveryHint picks the command to suggest after a partial failure. Remove
+// deletes the branch, so it is only safe when this operation created it.
+func recoveryHint(p PostCreateParams) string {
+	ref := p.Task
+	if p.Service != "" {
+		ref = p.Service + "/" + p.Task
+	}
+	if p.NewBranch {
+		return "rimba remove " + ref
+	}
+	return "rimba archive " + ref
 }
