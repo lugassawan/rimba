@@ -185,8 +185,8 @@ func (r *Recorder) Finalize(outcome string, exitCode int, err error) {
 	r.writeSpan(r.rootSpanID, "", "command", d, "")
 }
 
-// Close releases the underlying sink's file handles. Nil-safe. Call it after
-// Finalize (see finalizeRecorder in cmd/root.go and finishCall in internal/mcp).
+// Close closes the sink; nil-safe. Call it only when the Recorder owns the sink
+// (cmd/root.go) — the MCP server's shared sink is closed by cmd/mcp.go.
 func (r *Recorder) Close() error {
 	if r == nil {
 		return nil

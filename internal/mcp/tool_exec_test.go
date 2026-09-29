@@ -25,6 +25,7 @@ const cmdEchoTest = "echo test"
 type fakeSink struct {
 	logs    []any
 	metrics []any
+	closes  int
 }
 
 func (f *fakeSink) WriteLog(record any) error {
@@ -38,6 +39,7 @@ func (f *fakeSink) WriteMetric(record any) error {
 }
 
 func (f *fakeSink) Close() error {
+	f.closes++
 	return nil
 }
 

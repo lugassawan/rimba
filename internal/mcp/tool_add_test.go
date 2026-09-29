@@ -989,8 +989,8 @@ func TestResolveMCPPrefixTypeExplicitTypeWins(t *testing.T) {
 // withRecorder wrapping (registration-time, see observability.go) doesn't
 // change handleAdd's response shape or error text — only observes it.
 func TestAddToolWithRecorderWrappingPreservesResponse(t *testing.T) {
-	withRedirectedCacheDir(t)
 	hctx := testContext(&mockRunner{})
+	hctx.Sink = &fakeSink{}
 	handler := withRecorder(hctx, "add", handleAdd(hctx))
 
 	result := callTool(t, handler, nil)

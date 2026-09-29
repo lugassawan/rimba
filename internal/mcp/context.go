@@ -4,6 +4,7 @@ import (
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/gh"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/observability"
 	"github.com/lugassawan/rimba/internal/resolver"
 )
 
@@ -15,6 +16,7 @@ type HandlerContext struct {
 	Config   *config.Config // may be nil if not in a rimba-initialized repo
 	RepoRoot string
 	Version  string
+	Sink     observability.Sink // nil disables observability; owned and closed by cmd/mcp.go
 }
 
 // PrefixSet returns the configured prefixes merged with built-ins (or just

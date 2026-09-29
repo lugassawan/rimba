@@ -1,12 +1,8 @@
 package mcp
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
-	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -28,7 +24,7 @@ func recordingHandler(sawRecorder *bool, result *mcp.CallToolResult) server.Tool
 	}
 }
 
-func TestWithRecorderNilConfigSkipsWrapping(t *testing.T) {
+func TestWithRecorderNilSinkSkipsWrapping(t *testing.T) {
 	hctx := &HandlerContext{Config: nil, RepoRoot: "/repo", Version: "test"}
 	var sawRecorder bool
 	handler := withRecorder(hctx, "add", recordingHandler(&sawRecorder, mcp.NewToolResultText("ok")))
@@ -38,20 +34,15 @@ func TestWithRecorderNilConfigSkipsWrapping(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if sawRecorder {
-		t.Error("expected no Recorder attached when Config is nil")
+		t.Error("expected no Recorder attached when Sink is nil")
 	}
 	if result == nil {
 		t.Fatal("expected non-nil result")
 	}
 }
 
-func TestWithRecorderDisabledConfigSkipsWrapping(t *testing.T) {
-	disabled := false
-	hctx := &HandlerContext{
-		Config:   &config.Config{Observability: &config.ObservabilityConfig{Enabled: &disabled}},
-		RepoRoot: "/repo",
-		Version:  "test",
-	}
+func TestWithRecorderEnabledConfigNilSinkSkipsWrapping(t *testing.T) {
+	hctx := &HandlerContext{Config: &config.Config{}, RepoRoot: "/repo", Version: "test"}
 	var sawRecorder bool
 	handler := withRecorder(hctx, "add", recordingHandler(&sawRecorder, mcp.NewToolResultText("ok")))
 
@@ -59,33 +50,13 @@ func TestWithRecorderDisabledConfigSkipsWrapping(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if sawRecorder {
-		t.Error("expected no Recorder attached when observability is disabled")
+		t.Error("expected no Recorder attached when Sink is nil, even with observability enabled")
 	}
 }
 
-// withRedirectedCacheDir points os.UserCacheDir() at a fresh temp dir for the
-// duration of the test, so enabled-observability tests never touch the real
-// user cache dir (mirrors sink_test.go's HOME-override pattern).
-func withRedirectedCacheDir(t *testing.T) string {
-	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	// Linux resolves UserCacheDir via XDG_CACHE_HOME when set; clear it so
-	// HOME/.cache takes effect consistently across platforms.
-	t.Setenv("XDG_CACHE_HOME", "")
-	os.Unsetenv("XDG_CACHE_HOME")
-	return home
-}
-
-func TestWithRecorderEnabledAttachesRecorderAndWritesFile(t *testing.T) {
-	home := withRedirectedCacheDir(t)
-	repoRoot := t.TempDir()
-
-	hctx := &HandlerContext{
-		Config:   &config.Config{},
-		RepoRoot: repoRoot,
-		Version:  "test",
-	}
+func TestWithRecorderAttachesRecorderAndWritesCommandRecord(t *testing.T) {
+	sink := &fakeSink{}
+	hctx := &HandlerContext{Sink: sink, RepoRoot: "/repo", Version: "test"}
 	var sawRecorder bool
 	handler := withRecorder(hctx, "add", recordingHandler(&sawRecorder, mcp.NewToolResultText("ok")))
 
@@ -93,83 +64,81 @@ func TestWithRecorderEnabledAttachesRecorderAndWritesFile(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !sawRecorder {
-		t.Fatal("expected a Recorder attached to ctx when observability is enabled")
+		t.Fatal("expected a Recorder attached to ctx when a Sink is set")
+	}
+	rec, ok := findCommandRecord(sink, func(r observability.CommandRecord) bool { return r.Command == "add" })
+	if !ok {
+		t.Fatalf("no CommandRecord for command %q in %v", "add", sink.logs)
+	}
+	if rec.Outcome != observability.OutcomeSuccess {
+		t.Errorf("outcome = %q, want %q", rec.Outcome, observability.OutcomeSuccess)
+	}
+}
+
+// TestWithRecorderSharedSinkSurvivesAcrossCalls guards the shared-sink
+// contract: the per-call Recorder must never close the sink, or every call
+// after the first would silently lose its records.
+func TestWithRecorderSharedSinkSurvivesAcrossCalls(t *testing.T) {
+	sink := &fakeSink{}
+	hctx := &HandlerContext{Sink: sink, RepoRoot: "/repo", Version: "test"}
+	var sawRecorder bool
+	handler := withRecorder(hctx, "add", recordingHandler(&sawRecorder, mcp.NewToolResultText("ok")))
+
+	for range 2 {
+		if _, err := handler(context.Background(), mcp.CallToolRequest{}); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 	}
 
-	logFiles := findCacheLogFiles(t, home)
-	if len(logFiles) == 0 {
-		t.Fatal("expected at least one .log.jsonl file to be written under the cache dir")
+	commands := 0
+	for _, l := range sink.logs {
+		if r, ok := asCommandRecord(l); ok && r.Command == "add" {
+			commands++
+		}
 	}
-
-	data, err := os.ReadFile(logFiles[0])
-	if err != nil {
-		t.Fatalf("reading log file: %v", err)
+	if commands != 2 {
+		t.Errorf("command records = %d, want 2", commands)
 	}
-	if !containsCommandRecord(t, data, "add") {
-		t.Errorf("log file %s did not contain a CommandRecord for command %q:\n%s", logFiles[0], "add", data)
+	if sink.closes != 0 {
+		t.Errorf("sink closed %d times by withRecorder, want 0", sink.closes)
 	}
 }
 
 func TestWithRecorderErrorResultMarksOutcomeError(t *testing.T) {
-	home := withRedirectedCacheDir(t)
-	repoRoot := t.TempDir()
-
-	hctx := &HandlerContext{
-		Config:   &config.Config{},
-		RepoRoot: repoRoot,
-		Version:  "test",
-	}
+	sink := &fakeSink{}
+	hctx := &HandlerContext{Sink: sink, RepoRoot: "/repo", Version: "test"}
 	var sawRecorder bool
 	handler := withRecorder(hctx, "remove", recordingHandler(&sawRecorder, errorResult(errors.New("boom"))))
 
 	if _, err := handler(context.Background(), mcp.CallToolRequest{}); err != nil {
 		t.Fatalf("unexpected protocol error: %v", err)
 	}
-
-	logFiles := findCacheLogFiles(t, home)
-	if len(logFiles) == 0 {
-		t.Fatal("expected at least one .log.jsonl file to be written under the cache dir")
-	}
-	data, err := os.ReadFile(logFiles[0])
-	if err != nil {
-		t.Fatalf("reading log file: %v", err)
-	}
-	if !containsOutcome(t, data, observability.OutcomeError) {
-		t.Errorf("log file did not contain an error outcome CommandRecord:\n%s", data)
+	if _, ok := findCommandRecord(sink, func(r observability.CommandRecord) bool {
+		return r.Outcome == observability.OutcomeError
+	}); !ok {
+		t.Errorf("no error-outcome CommandRecord in %v", sink.logs)
 	}
 }
 
-// findCacheLogFiles walks home looking for any *.log.jsonl file, wherever
-// os.UserCacheDir() placed the "rimba" subdir on this platform (e.g.
-// Library/Caches/rimba on macOS, .cache/rimba on Linux).
-func findCacheLogFiles(t *testing.T, home string) []string {
-	t.Helper()
-	var matches []string
-	err := filepath.WalkDir(home, func(path string, d os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if d.IsDir() {
-			return nil
-		}
-		if strings.HasSuffix(path, ".log.jsonl") && filepath.Base(filepath.Dir(path)) == "rimba" {
-			matches = append(matches, path)
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("walking %s: %v", home, err)
+// asCommandRecord unwraps a sink log entry, which Recorder may write by value or pointer.
+func asCommandRecord(v any) (observability.CommandRecord, bool) {
+	switch r := v.(type) {
+	case observability.CommandRecord:
+		return r, true
+	case *observability.CommandRecord:
+		return *r, true
 	}
-	return matches
+	return observability.CommandRecord{}, false
 }
 
-// containsCommandRecord reports whether data (JSONL) contains a "command" kind
-// record for the given command name.
-func containsCommandRecord(t *testing.T, data []byte, command string) bool {
-	t.Helper()
-	return scanJSONLKind(t, data, "command", func(m map[string]any) bool {
-		return m["command"] == command
-	})
+// findCommandRecord returns the first CommandRecord in sink's log stream satisfying match.
+func findCommandRecord(sink *fakeSink, match func(observability.CommandRecord) bool) (observability.CommandRecord, bool) {
+	for _, l := range sink.logs {
+		if r, ok := asCommandRecord(l); ok && match(r) {
+			return r, true
+		}
+	}
+	return observability.CommandRecord{}, false
 }
 
 // callRecoveringPanic invokes h and returns the value it panicked with.
@@ -181,8 +150,8 @@ func callRecoveringPanic(t *testing.T, h server.ToolHandlerFunc) (recovered any)
 }
 
 func TestWithRecorderPanicRecordsErrorAndRepanics(t *testing.T) {
-	home := withRedirectedCacheDir(t)
-	hctx := &HandlerContext{Config: &config.Config{}, RepoRoot: t.TempDir(), Version: "test"}
+	sink := &fakeSink{}
+	hctx := &HandlerContext{Sink: sink, RepoRoot: "/repo", Version: "test"}
 	handler := withRecorder(hctx, "add", func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		panic(errBoom)
 	})
@@ -191,35 +160,19 @@ func TestWithRecorderPanicRecordsErrorAndRepanics(t *testing.T) {
 		t.Fatalf("panic value = %v, want errBoom", got)
 	}
 
-	logFiles := findCacheLogFiles(t, home)
-	if len(logFiles) == 0 {
-		t.Fatal("expected a .log.jsonl file")
+	if _, ok := findCommandRecord(sink, func(r observability.CommandRecord) bool {
+		return r.Outcome == observability.OutcomeError && strings.Contains(r.Error, "panic:")
+	}); !ok {
+		t.Errorf("no error CommandRecord with a panic message in %v", sink.logs)
 	}
-	data, err := os.ReadFile(logFiles[0])
-	if err != nil {
-		t.Fatalf("reading log file: %v", err)
-	}
-	panicked := scanJSONLKind(t, data, "command", func(m map[string]any) bool {
-		msg, _ := m["error"].(string)
-		return m["outcome"] == observability.OutcomeError && strings.Contains(msg, "panic:")
-	})
-	if !panicked {
-		t.Errorf("no error CommandRecord with a panic message:\n%s", data)
-	}
-
-	metricsPath := strings.TrimSuffix(logFiles[0], ".log.jsonl") + ".metrics.jsonl"
-	metrics, err := os.ReadFile(metricsPath)
-	if err != nil {
-		t.Fatalf("reading metrics file: %v", err)
-	}
-	if !scanJSONLKind(t, metrics, "span", func(m map[string]any) bool { return m["name"] == "command" }) {
-		t.Errorf("no root command span in metrics:\n%s", metrics)
+	if len(sink.metrics) == 0 {
+		t.Error("expected a root command span in the metrics stream")
 	}
 }
 
 func TestWithRecorderGoexitRecordsErrorNotSuccess(t *testing.T) {
-	home := withRedirectedCacheDir(t)
-	hctx := &HandlerContext{Config: &config.Config{}, RepoRoot: t.TempDir(), Version: "test"}
+	sink := &fakeSink{}
+	hctx := &HandlerContext{Sink: sink, RepoRoot: "/repo", Version: "test"}
 	handler := withRecorder(hctx, "add", func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		runtime.Goexit()
 		return nil, errBoom // unreachable
@@ -232,46 +185,14 @@ func TestWithRecorderGoexitRecordsErrorNotSuccess(t *testing.T) {
 	}()
 	<-done
 
-	logFiles := findCacheLogFiles(t, home)
-	if len(logFiles) == 0 {
-		t.Fatal("expected a .log.jsonl file")
+	if _, ok := findCommandRecord(sink, func(r observability.CommandRecord) bool {
+		return r.Outcome == observability.OutcomeSuccess
+	}); ok {
+		t.Errorf("Goexit was recorded as success: %v", sink.logs)
 	}
-	data, err := os.ReadFile(logFiles[0])
-	if err != nil {
-		t.Fatalf("reading log file: %v", err)
+	if _, ok := findCommandRecord(sink, func(r observability.CommandRecord) bool {
+		return r.Outcome == observability.OutcomeError
+	}); !ok {
+		t.Errorf("expected an error CommandRecord for Goexit: %v", sink.logs)
 	}
-	if containsOutcome(t, data, observability.OutcomeSuccess) {
-		t.Errorf("Goexit was recorded as success:\n%s", data)
-	}
-	if !containsOutcome(t, data, observability.OutcomeError) {
-		t.Errorf("expected an error CommandRecord for Goexit:\n%s", data)
-	}
-}
-
-// containsOutcome reports whether data (JSONL) contains a "command" kind
-// record with the given outcome.
-func containsOutcome(t *testing.T, data []byte, outcome string) bool {
-	t.Helper()
-	return scanJSONLKind(t, data, "command", func(m map[string]any) bool {
-		return m["outcome"] == outcome
-	})
-}
-
-// scanJSONLKind scans newline-delimited JSON records, returning true if any
-// record has the given "kind" and satisfies match.
-func scanJSONLKind(t *testing.T, data []byte, kind string, match func(map[string]any) bool) bool {
-	t.Helper()
-	for line := range bytes.SplitSeq(data, []byte("\n")) {
-		if len(line) == 0 {
-			continue
-		}
-		var m map[string]any
-		if err := json.Unmarshal(line, &m); err != nil {
-			t.Fatalf("unmarshal jsonl line: %v", err)
-		}
-		if m["kind"] == kind && match(m) {
-			return true
-		}
-	}
-	return false
 }

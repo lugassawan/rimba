@@ -38,7 +38,7 @@ func TestNewFileSinkSmoke(t *testing.T) {
 func TestFileSinkWriteReadRoundTrip(t *testing.T) {
 	cacheDir := t.TempDir()
 	repoRoot := "/repo/myproject"
-	sink, err := newFileSinkAt(cacheDir, repoRoot, 14)
+	sink, err := newFileSinkAt(cacheDir, repoRoot, 14, time.Now)
 	if err != nil {
 		t.Fatalf("newFileSinkAt: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestFileSinkWriteReadRoundTrip(t *testing.T) {
 func TestFileSinkFilePermissions(t *testing.T) {
 	cacheDir := t.TempDir()
 	repoRoot := "/repo/permcheck"
-	sink, err := newFileSinkAt(cacheDir, repoRoot, 14)
+	sink, err := newFileSinkAt(cacheDir, repoRoot, 14, time.Now)
 	if err != nil {
 		t.Fatalf("newFileSinkAt: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestFileSinkFilePermissions(t *testing.T) {
 func TestFileSinkConcurrentWrites(t *testing.T) {
 	cacheDir := t.TempDir()
 	repoRoot := "/repo/concurrent"
-	sink, err := newFileSinkAt(cacheDir, repoRoot, 14)
+	sink, err := newFileSinkAt(cacheDir, repoRoot, 14, time.Now)
 	if err != nil {
 		t.Fatalf("newFileSinkAt: %v", err)
 	}
@@ -177,7 +177,7 @@ func TestFileSinkConcurrentWrites(t *testing.T) {
 func TestFileSinkNaming(t *testing.T) {
 	cacheDir := t.TempDir()
 	repoRoot := "/some/path/to/myrepo"
-	sink, err := newFileSinkAt(cacheDir, repoRoot, 14)
+	sink, err := newFileSinkAt(cacheDir, repoRoot, 14, time.Now)
 	if err != nil {
 		t.Fatalf("newFileSinkAt: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestPruneOldDayFiles(t *testing.T) {
 		touch(name)
 	}
 
-	sink, err := newFileSinkAt(cacheDir, repoRoot, 14)
+	sink, err := newFileSinkAt(cacheDir, repoRoot, 14, time.Now)
 	if err != nil {
 		t.Fatalf("newFileSinkAt: %v", err)
 	}
@@ -270,7 +270,7 @@ func TestNewFileSinkAtMkdirAllFails(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	if _, err := newFileSinkAt(cacheDir, "/repo/mkdirfail", 14); err == nil {
+	if _, err := newFileSinkAt(cacheDir, "/repo/mkdirfail", 14, time.Now); err == nil {
 		t.Fatal("expected error when the rimba cache path collides with a file")
 	}
 }
@@ -291,7 +291,7 @@ func TestNewFileSinkAtLogFileOpenFails(t *testing.T) {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 
-	if _, err := newFileSinkAt(cacheDir, repoRoot, 14); err == nil {
+	if _, err := newFileSinkAt(cacheDir, repoRoot, 14, time.Now); err == nil {
 		t.Fatal("expected error opening the log file where a directory exists")
 	}
 }
@@ -313,14 +313,14 @@ func TestNewFileSinkAtMetricFileOpenFails(t *testing.T) {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 
-	if _, err := newFileSinkAt(cacheDir, repoRoot, 14); err == nil {
+	if _, err := newFileSinkAt(cacheDir, repoRoot, 14, time.Now); err == nil {
 		t.Fatal("expected error opening the metrics file where a directory exists")
 	}
 }
 
 func TestAppendJSONLineMarshalError(t *testing.T) {
 	cacheDir := t.TempDir()
-	sink, err := newFileSinkAt(cacheDir, "/repo/marshalerr", 14)
+	sink, err := newFileSinkAt(cacheDir, "/repo/marshalerr", 14, time.Now)
 	if err != nil {
 		t.Fatalf("newFileSinkAt: %v", err)
 	}
@@ -333,7 +333,7 @@ func TestAppendJSONLineMarshalError(t *testing.T) {
 
 func TestAppendJSONLineWriteError(t *testing.T) {
 	cacheDir := t.TempDir()
-	sinkIface, err := newFileSinkAt(cacheDir, "/repo/writeerr", 14)
+	sinkIface, err := newFileSinkAt(cacheDir, "/repo/writeerr", 14, time.Now)
 	if err != nil {
 		t.Fatalf("newFileSinkAt: %v", err)
 	}
@@ -386,7 +386,7 @@ func TestPruneOldDayFilesPrunesGlobMetacharacterPrefix(t *testing.T) {
 		}
 	}
 
-	pruneOldDayFiles(dir, prefix, 14, today)
+	pruneOldDayFiles(dir, prefix, 14, time.Now())
 
 	if _, err := os.Stat(filepath.Join(dir, oldLog)); err == nil {
 		t.Error("old day-file with a glob-metacharacter prefix was not pruned")
@@ -426,7 +426,7 @@ func TestPruneOldDayFilesRetentionDisabled(t *testing.T) {
 				t.Fatalf("WriteFile: %v", err)
 			}
 
-			sink, err := newFileSinkAt(cacheDir, repoRoot, retention)
+			sink, err := newFileSinkAt(cacheDir, repoRoot, retention, time.Now)
 			if err != nil {
 				t.Fatalf("newFileSinkAt: %v", err)
 			}
