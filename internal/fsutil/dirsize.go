@@ -5,11 +5,16 @@ import (
 	"context"
 	"io/fs"
 	"path/filepath"
+	"runtime/debug"
+
+	"github.com/lugassawan/rimba/internal/parallel"
 )
 
 type dirSizeResult struct {
-	size int64
-	err  error
+	size     int64
+	err      error
+	panicVal any    // non-nil when the walker panicked
+	stack    []byte // walker stack captured at the panic
 }
 
 // DirSize returns the total size of regular files under path.
@@ -17,13 +22,23 @@ type dirSizeResult struct {
 //
 // Returns (0, ctx.Err()) immediately on cancellation. The WalkDir goroutine
 // continues until the OS returns — it cannot be interrupted mid-syscall.
+// A walker panic is re-raised on the caller's goroutine (dropped if ctx won).
 func DirSize(ctx context.Context, path string) (int64, error) {
+	return dirSizeWith(ctx, path, walkDirSize)
+}
+
+func dirSizeWith(ctx context.Context, path string, walk func(string) (int64, error)) (int64, error) {
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
 	ch := make(chan dirSizeResult, 1)
 	go func() {
-		size, err := walkDirSize(path)
+		defer func() {
+			if p := recover(); p != nil {
+				ch <- dirSizeResult{panicVal: p, stack: debug.Stack()}
+			}
+		}()
+		size, err := walk(path)
 		ch <- dirSizeResult{size: size, err: err}
 	}()
 
@@ -31,6 +46,10 @@ func DirSize(ctx context.Context, path string) (int64, error) {
 	case <-ctx.Done():
 		return 0, ctx.Err()
 	case r := <-ch:
+		if r.panicVal != nil {
+			parallel.ReportPanic("panic in DirSize walker", r.panicVal, r.stack)
+			panic(r.panicVal)
+		}
 		return r.size, r.err
 	}
 }

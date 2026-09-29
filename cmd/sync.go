@@ -12,6 +12,7 @@ import (
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/output"
+	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
@@ -266,14 +267,12 @@ func syncAll(ctx context.Context, sc *syncContext, worktrees []resolver.Worktree
 	eligible := operations.FilterEligible(worktrees, prefixes, sc.cfg.DefaultSource, allTasks, includeInherited)
 
 	sc.res = &syncResult{}
-	var wg sync.WaitGroup
+	var g parallel.Group
 	sem := make(chan struct{}, 4) // bounded: git worktrees share object store
 
 	var completed int
 	for _, wt := range eligible {
-		wg.Add(1)
-		go func(wt resolver.WorktreeInfo) {
-			defer wg.Done()
+		g.Go(func() {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
@@ -283,11 +282,11 @@ func syncAll(ctx context.Context, sc *syncContext, worktrees []resolver.Worktree
 			completed++
 			sc.s.Update(fmt.Sprintf("[%d/%d] Syncing worktrees...", completed, len(eligible)))
 			sc.mu.Unlock()
-		}(wt)
+		})
 	}
-	wg.Wait()
-
+	g.Wait()
 	sc.s.Stop()
+
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}

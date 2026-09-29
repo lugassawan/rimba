@@ -6,25 +6,27 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/output"
 	"github.com/spf13/cobra"
 )
 
-// addObservabilityProbeCmd registers a throwaway subcommand (deliberately not
-// skipConfig-annotated, unlike version/status) so PersistentPreRunE runs its
-// full path — including the observability build — when Execute() invokes it.
-// Returns a cleanup func that removes it and resets rootCmd's execution state
-// (mirroring TestExecute's cleanup).
-func addObservabilityProbeCmd(t *testing.T) {
+var errProbeBoom = errors.New("probe boom")
+
+// addObservabilityProbeCmd registers a non-skipConfig probe subcommand so Execute()
+// runs the full PersistentPreRunE path; a nil runE makes it a no-op.
+func addObservabilityProbeCmd(t *testing.T, runE func(*cobra.Command, []string) error) {
 	t.Helper()
+	if runE == nil {
+		runE = func(*cobra.Command, []string) error { return nil }
+	}
 	probe := &cobra.Command{
-		Use: "observability-probe",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return nil
-		},
+		Use:  "observability-probe",
+		RunE: runE,
 	}
 	rootCmd.AddCommand(probe)
 	rootCmd.SetArgs([]string{"observability-probe"})
@@ -125,10 +127,13 @@ func TestExecuteRecordsCommandAndRootSpanSharingRunID(t *testing.T) {
 	restore := overrideNewRunner(r)
 	defer restore()
 
-	addObservabilityProbeCmd(t)
+	addObservabilityProbeCmd(t, nil)
 
 	if err := Execute(); err != nil {
 		t.Fatalf("Execute: %v", err)
+	}
+	if lastRecorder != nil {
+		t.Error("lastRecorder should be cleared once Execute returns")
 	}
 
 	logFile, metricFile := splitDayFiles(t, findCacheJSONLFiles(t, home))
@@ -211,7 +216,7 @@ func TestExecuteNoObservabilityEnvProducesNoFile(t *testing.T) {
 	restore := overrideNewRunner(r)
 	defer restore()
 
-	addObservabilityProbeCmd(t)
+	addObservabilityProbeCmd(t, nil)
 
 	if err := Execute(); err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -246,7 +251,7 @@ func TestExecuteConfigDisabledObservabilityProducesNoFile(t *testing.T) {
 	restore := overrideNewRunner(r)
 	defer restore()
 
-	addObservabilityProbeCmd(t)
+	addObservabilityProbeCmd(t, nil)
 
 	if err := Execute(); err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -254,5 +259,172 @@ func TestExecuteConfigDisabledObservabilityProducesNoFile(t *testing.T) {
 
 	if files := findCacheJSONLFiles(t, home); len(files) != 0 {
 		t.Errorf("expected no observability files with [observability] enabled=false, found: %v", files)
+	}
+}
+
+// executeRecoveringPanic runs Execute() and returns the value it panicked
+// with (nil if it returned normally).
+func executeRecoveringPanic(t *testing.T) (recovered any) {
+	t.Helper()
+	defer func() { recovered = recover() }()
+	_ = Execute()
+	return nil
+}
+
+func TestExecutePanicRecordsErrorAndRepanics(t *testing.T) {
+	home := redirectCacheDir(t)
+
+	dir := t.TempDir()
+	if err := config.Save(filepath.Join(dir, config.FileName), &config.Config{WorktreeDir: "../worktrees"}); err != nil {
+		t.Fatalf("Save config: %v", err)
+	}
+	r := repoRootRunner(dir, func(args ...string) (string, error) {
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", errors.New("unexpected")
+	})
+	restore := overrideNewRunner(r)
+	defer restore()
+
+	addObservabilityProbeCmd(t, func(*cobra.Command, []string) error { panic(errProbeBoom) })
+
+	if got := executeRecoveringPanic(t); got != errProbeBoom { //nolint:errorlint // asserting identity of the re-panicked value
+		t.Fatalf("Execute panic value = %v, want errProbeBoom", got)
+	}
+
+	logFile, metricFile := splitDayFiles(t, findCacheJSONLFiles(t, home))
+	cmdRecord := findRecord(jsonlRecords(t, logFile), "command", "", "")
+	if cmdRecord == nil {
+		t.Fatalf("expected a CommandRecord in %s", logFile)
+	}
+	if cmdRecord["outcome"] != "error" {
+		t.Errorf("outcome = %v, want error", cmdRecord["outcome"])
+	}
+	if code, _ := cmdRecord["exit_code"].(float64); code != 2 {
+		t.Errorf("exit_code = %v, want 2", cmdRecord["exit_code"])
+	}
+	if msg, _ := cmdRecord["error"].(string); !strings.Contains(msg, "panic:") {
+		t.Errorf("error = %q, want it to contain %q", msg, "panic:")
+	}
+	rootSpan := findRecord(jsonlRecords(t, metricFile), "span", "name", "command")
+	if rootSpan == nil {
+		t.Fatalf("expected a root SpanRecord in %s", metricFile)
+	}
+	if rootSpan["run_id"] != cmdRecord["run_id"] {
+		t.Errorf("run_id mismatch: span %v vs command %v", rootSpan["run_id"], cmdRecord["run_id"])
+	}
+}
+
+func TestExecuteGoexitRecordsErrorNotSuccess(t *testing.T) {
+	home := redirectCacheDir(t)
+	dir := t.TempDir()
+	if err := config.Save(filepath.Join(dir, config.FileName), &config.Config{WorktreeDir: "../worktrees"}); err != nil {
+		t.Fatalf("Save config: %v", err)
+	}
+	restore := overrideNewRunner(repoRootRunner(dir, func(args ...string) (string, error) {
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", errors.New("unexpected")
+	}))
+	defer restore()
+
+	addObservabilityProbeCmd(t, func(*cobra.Command, []string) error {
+		runtime.Goexit()
+		return nil
+	})
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = Execute()
+	}()
+	<-done
+
+	logFile, _ := splitDayFiles(t, findCacheJSONLFiles(t, home))
+	rec := findRecord(jsonlRecords(t, logFile), "command", "", "")
+	if rec == nil {
+		t.Fatalf("expected a CommandRecord in %s", logFile)
+	}
+	if rec["outcome"] != "error" {
+		t.Errorf("outcome = %v, want error (Goexit is not success)", rec["outcome"])
+	}
+}
+
+func TestFinalizeRecorderNilRecorderStillRepanics(t *testing.T) {
+	defer func() {
+		if got := recover(); got != "x" {
+			t.Errorf("recovered %v, want x", got)
+		}
+	}()
+	finalizeRecorder(nil, "x", true, nil)
+	t.Fatal("expected finalizeRecorder to re-panic")
+}
+
+func TestFinalizeRecorderNilRecorderErrorNoPanic(t *testing.T) {
+	finalizeRecorder(nil, nil, true, errors.New("boom"))
+}
+
+func TestExecuteErrorRecordsOutcomeAndExitCode(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		wantCode float64
+	}{
+		{"plain error", errors.New("probe failure"), 1},
+		{"silent error", &output.SilentError{ExitCode: 7}, 7},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := redirectCacheDir(t)
+			dir := t.TempDir()
+			if err := config.Save(filepath.Join(dir, config.FileName), &config.Config{WorktreeDir: "../worktrees"}); err != nil {
+				t.Fatalf("Save config: %v", err)
+			}
+			restore := overrideNewRunner(repoRootRunner(dir, func(args ...string) (string, error) {
+				if args[0] == cmdSymbolicRef {
+					return refsRemotesOriginMain, nil
+				}
+				return "", errors.New("unexpected")
+			}))
+			defer restore()
+
+			addObservabilityProbeCmd(t, func(*cobra.Command, []string) error { return tt.err })
+			if err := Execute(); err == nil {
+				t.Fatal("expected Execute to return the probe error")
+			}
+
+			logFile, _ := splitDayFiles(t, findCacheJSONLFiles(t, home))
+			rec := findRecord(jsonlRecords(t, logFile), "command", "", "")
+			if rec == nil {
+				t.Fatalf("expected a CommandRecord in %s", logFile)
+			}
+			if rec["outcome"] != "error" {
+				t.Errorf("outcome = %v, want error", rec["outcome"])
+			}
+			if code, _ := rec["exit_code"].(float64); code != tt.wantCode {
+				t.Errorf("exit_code = %v, want %v", rec["exit_code"], tt.wantCode)
+			}
+		})
+	}
+}
+
+func TestExitCodeFor(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{"nil", nil, 0},
+		{"plain", errors.New("boom"), 1},
+		{"silent", &output.SilentError{ExitCode: 7}, 7},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := exitCodeFor(tt.err); got != tt.want {
+				t.Errorf("exitCodeFor = %d, want %d", got, tt.want)
+			}
+		})
 	}
 }

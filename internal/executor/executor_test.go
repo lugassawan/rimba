@@ -15,6 +15,25 @@ func mockRunner(stdout, stderr string, exitCode int, err error) RunFunc {
 	}
 }
 
+// runRecoveringPanic runs Run with a panicking Runner and returns the panic value.
+func runRecoveringPanic() (recovered any) {
+	defer func() { recovered = recover() }()
+	Run(context.Background(), Config{
+		Targets: []Target{{Path: "/tmp", Branch: "feature/x", Task: "x"}},
+		Command: "true",
+		Runner: func(context.Context, string, string) ([]byte, []byte, int, error) {
+			panic("runner boom")
+		},
+	})
+	return nil
+}
+
+func TestRunRepanicsWorkerPanicOnCaller(t *testing.T) {
+	if got := runRecoveringPanic(); got != "runner boom" {
+		t.Errorf("recovered %v, want %q", got, "runner boom")
+	}
+}
+
 func TestRunSuccess(t *testing.T) {
 	results := Run(context.Background(), Config{
 		Targets: []Target{{Path: "/tmp", Branch: "feature/x", Task: "x"}},

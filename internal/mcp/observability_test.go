@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -15,6 +16,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
+
+var errBoom = errors.New("handler boom")
 
 // recordingHandler returns a server.ToolHandlerFunc that records whether a
 // Recorder was attached to ctx, then returns result.
@@ -167,6 +170,82 @@ func containsCommandRecord(t *testing.T, data []byte, command string) bool {
 	return scanJSONLKind(t, data, "command", func(m map[string]any) bool {
 		return m["command"] == command
 	})
+}
+
+// callRecoveringPanic invokes h and returns the value it panicked with.
+func callRecoveringPanic(t *testing.T, h server.ToolHandlerFunc) (recovered any) {
+	t.Helper()
+	defer func() { recovered = recover() }()
+	_, _ = h(context.Background(), mcp.CallToolRequest{})
+	return nil
+}
+
+func TestWithRecorderPanicRecordsErrorAndRepanics(t *testing.T) {
+	home := withRedirectedCacheDir(t)
+	hctx := &HandlerContext{Config: &config.Config{}, RepoRoot: t.TempDir(), Version: "test"}
+	handler := withRecorder(hctx, "add", func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		panic(errBoom)
+	})
+
+	if got := callRecoveringPanic(t, handler); got != errBoom { //nolint:errorlint // asserting identity of the re-panicked value
+		t.Fatalf("panic value = %v, want errBoom", got)
+	}
+
+	logFiles := findCacheLogFiles(t, home)
+	if len(logFiles) == 0 {
+		t.Fatal("expected a .log.jsonl file")
+	}
+	data, err := os.ReadFile(logFiles[0])
+	if err != nil {
+		t.Fatalf("reading log file: %v", err)
+	}
+	panicked := scanJSONLKind(t, data, "command", func(m map[string]any) bool {
+		msg, _ := m["error"].(string)
+		return m["outcome"] == observability.OutcomeError && strings.Contains(msg, "panic:")
+	})
+	if !panicked {
+		t.Errorf("no error CommandRecord with a panic message:\n%s", data)
+	}
+
+	metricsPath := strings.TrimSuffix(logFiles[0], ".log.jsonl") + ".metrics.jsonl"
+	metrics, err := os.ReadFile(metricsPath)
+	if err != nil {
+		t.Fatalf("reading metrics file: %v", err)
+	}
+	if !scanJSONLKind(t, metrics, "span", func(m map[string]any) bool { return m["name"] == "command" }) {
+		t.Errorf("no root command span in metrics:\n%s", metrics)
+	}
+}
+
+func TestWithRecorderGoexitRecordsErrorNotSuccess(t *testing.T) {
+	home := withRedirectedCacheDir(t)
+	hctx := &HandlerContext{Config: &config.Config{}, RepoRoot: t.TempDir(), Version: "test"}
+	handler := withRecorder(hctx, "add", func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		runtime.Goexit()
+		return nil, errBoom // unreachable
+	})
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = handler(context.Background(), mcp.CallToolRequest{})
+	}()
+	<-done
+
+	logFiles := findCacheLogFiles(t, home)
+	if len(logFiles) == 0 {
+		t.Fatal("expected a .log.jsonl file")
+	}
+	data, err := os.ReadFile(logFiles[0])
+	if err != nil {
+		t.Fatalf("reading log file: %v", err)
+	}
+	if containsOutcome(t, data, observability.OutcomeSuccess) {
+		t.Errorf("Goexit was recorded as success:\n%s", data)
+	}
+	if !containsOutcome(t, data, observability.OutcomeError) {
+		t.Errorf("expected an error CommandRecord for Goexit:\n%s", data)
+	}
 }
 
 // containsOutcome reports whether data (JSONL) contains a "command" kind

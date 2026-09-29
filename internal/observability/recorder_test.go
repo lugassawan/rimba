@@ -40,6 +40,25 @@ func (f *fakeSink) Close() error {
 	return nil
 }
 
+func TestPanicError(t *testing.T) {
+	tests := []struct {
+		name string
+		in   any
+		want string
+	}{
+		{"string", "oops", "panic: oops"},
+		{"error", errors.New("bad"), "panic: bad"},
+		{"int", 42, "panic: 42"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := PanicError(tt.in).Error(); got != tt.want {
+				t.Errorf("PanicError = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestRecorderNilSafety(t *testing.T) {
 	var r *Recorder
 

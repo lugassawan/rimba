@@ -35,6 +35,30 @@ func overrideNewUpdater(t *testing.T, srv *httptest.Server) {
 	t.Cleanup(func() { newUpdater = orig })
 }
 
+// panicTransport is an http.RoundTripper whose RoundTrip panics, so u.Check panics.
+type panicTransport struct{}
+
+func (panicTransport) RoundTrip(*http.Request) (*http.Response, error) { panic("transport boom") }
+
+func TestCheckUpdateHintPanicIsSwallowedAsNoHint(t *testing.T) {
+	orig := newUpdater
+	newUpdater = func(version string) *updater.Updater {
+		return &updater.Updater{
+			CurrentVersion: version,
+			GOOS:           "linux",
+			GOARCH:         "amd64",
+			Client:         &http.Client{Transport: panicTransport{}},
+			APIEndpoint:    "http://example.invalid",
+		}
+	}
+	t.Cleanup(func() { newUpdater = orig })
+
+	ch := checkUpdateHint(context.Background(), testVersionHint, 2*time.Second)
+	if got := collectHint(ch); got != nil {
+		t.Errorf("collectHint = %v, want nil after a panicking update check", got)
+	}
+}
+
 func TestCheckUpdateHintNewVersionAvailable(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(hdrContentType, mimeJSON)

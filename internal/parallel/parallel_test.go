@@ -2,12 +2,71 @@ package parallel_test
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/lugassawan/rimba/internal/parallel"
 )
+
+var errWorkerBoom = errors.New("worker boom")
+
+// collectRecoveringPanic runs Collect and returns the value it panicked with.
+func collectRecoveringPanic(fn func(context.Context, int) int) (recovered any) {
+	defer func() { recovered = recover() }()
+	parallel.Collect(context.Background(), 8, 4, fn)
+	return nil
+}
+
+func TestCollectRepanicsWorkerPanicOnCaller(t *testing.T) {
+	var completed atomic.Int32
+	got := collectRecoveringPanic(func(_ context.Context, i int) int {
+		if i == 3 {
+			panic(errWorkerBoom)
+		}
+		completed.Add(1)
+		return i
+	})
+
+	if got != errWorkerBoom { //nolint:errorlint // asserting identity of the re-panicked value
+		t.Fatalf("recovered %v, want errWorkerBoom", got)
+	}
+	if n := completed.Load(); n != 7 {
+		t.Errorf("completed = %d, want 7 (a panic must not abandon sibling items)", n)
+	}
+}
+
+// runGroupWorkers runs n Group workers that each panic with their index and
+// returns the value Wait re-raises (nil if it does not).
+func runGroupWorkers(n int) (recovered any) {
+	defer func() { recovered = recover() }()
+	var g parallel.Group
+	for i := range n {
+		g.Go(func() { panic(i) })
+	}
+	g.Wait()
+	return nil
+}
+
+func TestGroupRepanicsFirstWorkerPanic(t *testing.T) {
+	got, ok := runGroupWorkers(4).(int)
+	if !ok || got < 0 || got > 3 {
+		t.Fatalf("recovered %v, want one of the worker panic values 0..3", got)
+	}
+}
+
+func TestGroupWaitRunsAllWorkersWithoutPanic(t *testing.T) {
+	var g parallel.Group
+	var ran atomic.Int32
+	for range 5 {
+		g.Go(func() { ran.Add(1) })
+	}
+	g.Wait() // must not panic
+	if n := ran.Load(); n != 5 {
+		t.Errorf("ran = %d, want 5", n)
+	}
+}
 
 func TestCollectPreservesOrder(t *testing.T) {
 	results := parallel.Collect(context.Background(), 10, 4, func(_ context.Context, i int) int {

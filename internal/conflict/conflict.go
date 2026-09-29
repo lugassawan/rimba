@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/resolver"
 )
 
@@ -93,14 +94,12 @@ func DetectOverlaps(diffs map[string][]string) *CheckResult {
 func CollectDiffs(ctx context.Context, r git.Runner, mainBranch string, branches []resolver.WorktreeInfo) (map[string][]string, error) {
 	diffs := make(map[string][]string)
 	var mu sync.Mutex
-	var wg sync.WaitGroup
+	var g parallel.Group
 	var firstErr error
 	sem := make(chan struct{}, 8)
 
 	for _, wt := range branches {
-		wg.Add(1)
-		go func(wt resolver.WorktreeInfo) {
-			defer wg.Done()
+		g.Go(func() {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
@@ -115,9 +114,9 @@ func CollectDiffs(ctx context.Context, r git.Runner, mainBranch string, branches
 				return
 			}
 			diffs[wt.Branch] = files
-		}(wt)
+		})
 	}
-	wg.Wait()
+	g.Wait()
 
 	if firstErr != nil {
 		return nil, firstErr
@@ -137,15 +136,13 @@ func DryMergeAll(ctx context.Context, r git.Runner, branches []resolver.Worktree
 	}
 
 	results := make([]DryMergeResult, len(pairs))
-	var wg sync.WaitGroup
+	var g parallel.Group
 	var mu sync.Mutex
 	var firstErr error
 	sem := make(chan struct{}, 4)
 
 	for idx, p := range pairs {
-		wg.Add(1)
-		go func(idx int, p pair) {
-			defer wg.Done()
+		g.Go(func() {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
@@ -165,9 +162,9 @@ func DryMergeAll(ctx context.Context, r git.Runner, branches []resolver.Worktree
 				HasConflicts:  mt.HasConflicts,
 				ConflictFiles: mt.ConflictFiles,
 			}
-		}(idx, p)
+		})
 	}
-	wg.Wait()
+	g.Wait()
 
 	if firstErr != nil {
 		return nil, firstErr

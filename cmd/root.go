@@ -43,6 +43,8 @@ const (
 	annotationValueTrue  = "true"
 
 	cmdNameStatus = "status"
+
+	exitCodePanic = 2 // Go runtime panic exit code
 )
 
 // commandName stores the resolved command name for JSON error reporting.
@@ -172,31 +174,49 @@ func CommandName() string {
 	return commandName
 }
 
-func Execute() error {
+func Execute() (err error) {
 	updater.SweepOldBinary()
 	rootCmd.Version = versionString()
 	rootCmd.SetVersionTemplate("{{.Version}}")
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	err := rootCmd.ExecuteContext(ctx)
+	defer func() { lastRecorder = nil }() // runs last, even when finalizeRecorder re-panics
+	// lastRecorder is set inside ExecuteContext (see its doc comment), so it is
+	// read when the defer runs. recover() must be called directly in the literal.
+	done := false // stays false on panic or runtime.Goexit
+	defer func() { finalizeRecorder(lastRecorder, recover(), done, err) }()
 
-	// rootCmd.Context() doesn't reflect PersistentPreRunE's context (see
-	// lastRecorder's doc comment), so the Recorder is read from lastRecorder.
-	if rec := lastRecorder; rec != nil {
-		defer rec.Close() // registered first so it runs LAST (after Finalize below)
-		exitCode := 0
-		if silent, ok := errors.AsType[*output.SilentError](err); ok {
-			exitCode = silent.ExitCode
-		} else if err != nil {
-			exitCode = 1
-		}
-		outcome := observability.OutcomeSuccess
-		if err != nil {
-			outcome = observability.OutcomeError
-		}
-		rec.Finalize(outcome, exitCode, err)
-	}
-
+	err = rootCmd.ExecuteContext(ctx)
+	done = true
 	return err
+}
+
+// finalizeRecorder finalizes and closes rec, then re-raises a recovered panic.
+// rec may be nil: Finalize and Close are nil-safe, so the panic is always re-raised.
+func finalizeRecorder(rec *observability.Recorder, p any, done bool, err error) {
+	outcome, exitCode := observability.OutcomeSuccess, exitCodeFor(err)
+	switch {
+	case p != nil:
+		outcome, exitCode, err = observability.OutcomeError, exitCodePanic, observability.PanicError(p)
+	case !done:
+		outcome, exitCode, err = observability.OutcomeError, 1, observability.ErrIncomplete
+	case err != nil:
+		outcome = observability.OutcomeError
+	}
+	rec.Finalize(outcome, exitCode, err)
+	_ = rec.Close()
+	if p != nil {
+		panic(p)
+	}
+}
+
+func exitCodeFor(err error) int {
+	if silent, ok := errors.AsType[*output.SilentError](err); ok {
+		return silent.ExitCode
+	}
+	if err != nil {
+		return 1
+	}
+	return 0
 }

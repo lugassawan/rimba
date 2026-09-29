@@ -175,6 +175,21 @@ func TestSeverityLabel(t *testing.T) {
 	}
 }
 
+// collectDiffsRecoveringPanic runs CollectDiffs against a panicking runner and
+// returns the panic value.
+func collectDiffsRecoveringPanic() (recovered any) {
+	defer func() { recovered = recover() }()
+	r := &mockRunner{run: func(...string) (string, error) { panic("git boom") }}
+	_, _ = CollectDiffs(context.Background(), r, "main", []resolver.WorktreeInfo{{Branch: "feature/a"}})
+	return nil
+}
+
+func TestCollectDiffsRepanicsWorkerPanicOnCaller(t *testing.T) {
+	if got := collectDiffsRecoveringPanic(); got != "git boom" {
+		t.Errorf("recovered %v, want %q", got, "git boom")
+	}
+}
+
 func TestCollectDiffsSuccess(t *testing.T) {
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {

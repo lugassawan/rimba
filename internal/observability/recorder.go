@@ -1,6 +1,7 @@
 package observability
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -31,6 +32,10 @@ type Recorder struct {
 // runIDCounter disambiguates run IDs generated within the same nanosecond by
 // the same process.
 var runIDCounter atomic.Uint64
+
+// ErrIncomplete is recorded when a command's goroutine exits without returning
+// or panicking (runtime.Goexit, e.g. t.FailNow in tests).
+var ErrIncomplete = errors.New("exited without returning")
 
 // NewRecorder builds a Recorder bound to sink for one command invocation.
 // Prefer Maybe over calling this directly — it's the single call composition
@@ -180,15 +185,17 @@ func (r *Recorder) Finalize(outcome string, exitCode int, err error) {
 	r.writeSpan(r.rootSpanID, "", "command", d, "")
 }
 
-// Close releases the underlying sink's file handles. Nil-safe. Callers defer
-// this immediately after Maybe(...) returns; Finalize must run before Close
-// (see cmd/root.go's Execute and internal/mcp/observability.go's withRecorder).
+// Close releases the underlying sink's file handles. Nil-safe. Call it after
+// Finalize (see finalizeRecorder in cmd/root.go and finishCall in internal/mcp).
 func (r *Recorder) Close() error {
 	if r == nil {
 		return nil
 	}
 	return r.sink.Close()
 }
+
+// PanicError formats a recovered panic value for a CommandRecord's Error field.
+func PanicError(p any) error { return fmt.Errorf("panic: %v", p) }
 
 // newRunID returns a run identifier unique enough for local correlation:
 // timestamp+pid+counter, no UUID dependency.
