@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/envvar"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/observability"
 	"github.com/lugassawan/rimba/internal/output"
@@ -73,7 +73,7 @@ Persistent flags (available on every command):
 		lastRecorder = nil
 
 		if debug, _ := cmd.Flags().GetBool(flagDebug); debug {
-			_ = os.Setenv("RIMBA_DEBUG", "1")
+			_ = os.Setenv(envvar.Debug, "1")
 		}
 
 		// Skip config for Cobra internals (completion, __complete)
@@ -111,19 +111,7 @@ Persistent flags (available on every command):
 			return err
 		}
 
-		// Only open the sink when observability is enabled, so disabling it
-		// leaves zero filesystem footprint (not just an empty untouched file).
-		var rec *observability.Recorder
-		if cfg.IsObservabilityEnabled() {
-			sink, sinkErr := observability.NewFileSink(repoRoot, cfg.ObservabilityRetentionDays())
-			if sinkErr == nil {
-				rec = observability.Maybe(true, sink, commandName, "", "", version)
-			} else if os.Getenv("RIMBA_DEBUG") != "" {
-				// Swallowed deliberately (e.g. a read-only cache dir must never
-				// block a command); surfaced only under RIMBA_DEBUG.
-				fmt.Fprintf(os.Stderr, "\n[debug] observability disabled: %v\n", sinkErr)
-			}
-		}
+		rec := observability.Maybe(true, openObservabilitySink(cfg, repoRoot), commandName, "", "", version)
 		lastRecorder = rec
 
 		ctx := observability.WithRecorder(cmd.Context(), rec)

@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"runtime"
 	"sync"
+
+	"github.com/lugassawan/rimba/internal/envvar"
 )
 
 // cowProbeCache memoizes probeCowCapable per destination directory for the
@@ -18,19 +20,13 @@ var cowProbeCache sync.Map // dstDir string -> bool
 // of each racing to populate the cache.
 var cowProbeOnce sync.Map // dstDir string -> *sync.Once
 
-// cowEligibleOverrideEnv lets e2e tests pin cowEligible's decision ("1" or
-// "0"), since CI temp filesystems don't reliably support (or lack)
-// reflink/clonefile and the compiled e2e binary can't use the Go-injection
-// seam unit tests use. Internal test seam only, not a user-facing config knob.
-const cowEligibleOverrideEnv = "RIMBA_COW_ELIGIBLE_OVERRIDE"
-
 // cowEligible reports whether cloning src onto dstDir is a true
 // reflink/clonefile (near-instant) rather than cowCopyCmd's permissive
 // "-c"/"--reflink=auto" silently falling back to a full byte-copy — the exact
 // silent fallback that turned "cloned" node_modules spans into 14-123s
 // pessimizations. A package var so tests can force the outcome deterministically.
 var cowEligible = func(ctx context.Context, src, dstDir string) bool {
-	if v, ok := os.LookupEnv(cowEligibleOverrideEnv); ok {
+	if v, ok := os.LookupEnv(envvar.CowEligibleOverride); ok {
 		return v == "1"
 	}
 

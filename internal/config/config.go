@@ -11,6 +11,7 @@ import (
 
 	toml "github.com/pelletier/go-toml/v2"
 
+	"github.com/lugassawan/rimba/internal/envvar"
 	"github.com/lugassawan/rimba/internal/errhint"
 )
 
@@ -64,7 +65,7 @@ type ObservabilityConfig struct {
 // invocation. RIMBA_NO_OBSERVABILITY (any value, checked via os.LookupEnv) forces it
 // off regardless of config. Config [observability] enabled defaults to true when unset.
 func (c *Config) IsObservabilityEnabled() bool {
-	if _, off := os.LookupEnv("RIMBA_NO_OBSERVABILITY"); off {
+	if _, off := os.LookupEnv(envvar.NoObservability); off {
 		return false
 	}
 	if c.Observability == nil || c.Observability.Enabled == nil {

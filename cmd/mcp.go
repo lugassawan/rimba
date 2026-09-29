@@ -39,12 +39,20 @@ rimba commands with structured parameters and typed responses.`,
 			cfg.FillDefaults(repoName, defaultBranch)
 		}
 
+		// One sink shared by every tool call; ServeStdio drains in-flight
+		// workers before returning, so Close never races a call.
+		sink := openObservabilitySink(cfg, repoRoot)
+		if sink != nil {
+			defer func() { _ = sink.Close() }()
+		}
+
 		hctx := &mcppkg.HandlerContext{
 			Runner:   r,
 			GH:       newGHRunner(cmd.Context()),
 			Config:   cfg,
 			RepoRoot: repoRoot,
 			Version:  version,
+			Sink:     sink,
 		}
 
 		s := mcppkg.NewServer(hctx)

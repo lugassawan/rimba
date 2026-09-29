@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/lugassawan/rimba/internal/envvar"
 )
 
 // StartTimer logs the start of a labelled operation and returns a function
@@ -42,6 +44,6 @@ func logf(format string, args ...any) {
 }
 
 func enabled() bool {
-	_, ok := os.LookupEnv("RIMBA_DEBUG")
+	_, ok := os.LookupEnv(envvar.Debug)
 	return ok
 }

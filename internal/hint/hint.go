@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/lugassawan/rimba/internal/envvar"
 	"github.com/lugassawan/rimba/internal/termcolor"
 	"github.com/spf13/cobra"
 )
@@ -35,7 +36,7 @@ func (h *Hints) Add(flag, description string) *Hints {
 // Show prints the hint block to stderr, filtering out flags already in use.
 // It returns immediately if RIMBA_QUIET is set or no options remain after filtering.
 func (h *Hints) Show() {
-	if _, ok := os.LookupEnv("RIMBA_QUIET"); ok {
+	if _, ok := os.LookupEnv(envvar.Quiet); ok {
 		return
 	}
 

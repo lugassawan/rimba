@@ -398,7 +398,7 @@ func TestLogSubprocessDebugTimingWritesToStderr(t *testing.T) {
 
 func TestRecorderConcurrentLogSubprocessWithRealFileSink(t *testing.T) {
 	cacheDir := t.TempDir()
-	sink, err := newFileSinkAt(cacheDir, "/repo/recorder-concurrency", 14)
+	sink, err := newFileSinkAt(cacheDir, "/repo/recorder-concurrency", 14, time.Now)
 	if err != nil {
 		t.Fatalf("newFileSinkAt: %v", err)
 	}

@@ -9,6 +9,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"github.com/lugassawan/rimba/internal/envvar"
 )
 
 func TestSameDeviceSamePath(t *testing.T) {
@@ -163,7 +165,7 @@ func TestCowEligibleOverrideEnv(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv(cowEligibleOverrideEnv, tt.val)
+			t.Setenv(envvar.CowEligibleOverride, tt.val)
 			// Nonexistent src would normally make sameDevice fail (ineligible)
 			// regardless — proves the override short-circuits before that check.
 			dir := t.TempDir()
