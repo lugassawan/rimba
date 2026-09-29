@@ -89,6 +89,27 @@ func TestDuplicateAutoSuffixIncrement(t *testing.T) {
 	assertFileExists(t, resolver.WorktreePath(wtDir, resolver.BranchName(defaultPrefix, taskDupB+"-2")))
 }
 
+func TestDuplicateAutoSuffixSkipsStrayDir(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupInitializedRepo(t)
+	rimbaSuccess(t, repo, "add", taskDupB)
+
+	// Stray directory occupies the -1 path although no such branch exists.
+	cfg := loadConfig(t, repo)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	stray := resolver.WorktreePath(wtDir, resolver.BranchName(defaultPrefix, taskDupB+"-1"))
+	if err := os.MkdirAll(stray, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	r := rimbaSuccess(t, repo, "duplicate", taskDupB)
+	assertContains(t, r.Stdout, taskDupB+"-2")
+	assertFileExists(t, resolver.WorktreePath(wtDir, resolver.BranchName(defaultPrefix, taskDupB+"-2")))
+}
+
 func TestDuplicateWithAs(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
