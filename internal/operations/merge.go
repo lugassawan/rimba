@@ -8,6 +8,7 @@ import (
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/progress"
 	"github.com/lugassawan/rimba/internal/resolver"
 )
@@ -222,10 +223,12 @@ type dirtyCheckArgs struct {
 func checkDirty(ctx context.Context, r git.Runner, args dirtyCheckArgs) error {
 	var srcCheck, tgtCheck dirtyResult
 	var wg sync.WaitGroup
+	var panics parallel.Panics
 	wg.Add(2)
 
 	go func() {
 		defer wg.Done()
+		defer panics.Recover()
 		if args.sourcePrunable {
 			return
 		}
@@ -233,9 +236,11 @@ func checkDirty(ctx context.Context, r git.Runner, args dirtyCheckArgs) error {
 	}()
 	go func() {
 		defer wg.Done()
+		defer panics.Recover()
 		tgtCheck.dirty, tgtCheck.err = git.IsDirty(ctx, r, args.targetDir)
 	}()
 	wg.Wait()
+	panics.Repanic()
 
 	if srcCheck.err != nil {
 		return srcCheck.err

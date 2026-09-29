@@ -78,16 +78,19 @@ func StatusDashboard(ctx context.Context, gitR git.Runner, req StatusDashboardRe
 	var mainSize int64
 	var mainErr error
 	var mainWG sync.WaitGroup
+	var panics parallel.Panics
 	if req.Detail && mainEntry != nil {
 		mainWG.Add(1)
 		go func(path string) {
 			defer mainWG.Done()
+			defer panics.Recover()
 			mainSize, mainErr = fsutil.DirSize(ctx, path)
 		}(mainEntry.Path)
 	}
 
 	entries := collectStatusEntries(ctx, gitR, candidates, req.Detail)
 	mainWG.Wait()
+	panics.Repanic()
 
 	var footprint *DiskFootprint
 	if req.Detail {

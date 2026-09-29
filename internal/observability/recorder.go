@@ -1,6 +1,7 @@
 package observability
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -31,6 +32,10 @@ type Recorder struct {
 // runIDCounter disambiguates run IDs generated within the same nanosecond by
 // the same process.
 var runIDCounter atomic.Uint64
+
+// ErrIncomplete is recorded when a command's goroutine exits without returning
+// or panicking (runtime.Goexit, e.g. t.FailNow in tests).
+var ErrIncomplete = errors.New("exited without returning")
 
 // NewRecorder builds a Recorder bound to sink for one command invocation.
 // Prefer Maybe over calling this directly — it's the single call composition

@@ -24,13 +24,13 @@ func Collect[T any](ctx context.Context, n, concurrency int, fn func(ctx context
 	results := make([]T, n)
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, concurrency)
-	var firstPanic panicSlot
+	var panics Panics
 
 	for i := range n {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			defer func() { firstPanic.record(recover()) }()
+			defer panics.Recover()
 			select {
 			case sem <- struct{}{}:
 			case <-ctx.Done():
@@ -42,26 +42,32 @@ func Collect[T any](ctx context.Context, n, concurrency int, fn func(ctx context
 		}(i)
 	}
 	wg.Wait()
-	firstPanic.repanic()
+	panics.Repanic()
 	return results
 }
 
-// panicSlot holds the first panic value recovered from any worker.
-type panicSlot struct {
+// Panics carries the first panic from a set of worker goroutines back to the
+// goroutine that waits on them, where a caller's recover (e.g. cmd.Execute's
+// observability finalizer) can see it. The worker's stack trace is lost.
+//
+// Per worker: `defer wg.Done()` first, then `defer panics.Recover()`. After
+// wg.Wait(): `panics.Repanic()`.
+type Panics struct {
 	once sync.Once
 	val  any
 	set  bool
 }
 
-func (s *panicSlot) record(p any) {
-	if p == nil {
-		return
+// Recover must be deferred directly (`defer p.Recover()`) for recover() to work.
+func (p *Panics) Recover() {
+	if v := recover(); v != nil {
+		p.once.Do(func() { p.val, p.set = v, true })
 	}
-	s.once.Do(func() { s.val, s.set = p, true })
 }
 
-func (s *panicSlot) repanic() {
-	if s.set {
-		panic(s.val)
+// Repanic re-raises the first recovered panic, if any. Call it after wg.Wait().
+func (p *Panics) Repanic() {
+	if p.set {
+		panic(p.val)
 	}
 }

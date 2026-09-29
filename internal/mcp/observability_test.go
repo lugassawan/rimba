@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -213,6 +214,37 @@ func TestWithRecorderPanicRecordsErrorAndRepanics(t *testing.T) {
 	}
 	if !scanJSONLKind(t, metrics, "span", func(m map[string]any) bool { return m["name"] == "command" }) {
 		t.Errorf("no root command span in metrics:\n%s", metrics)
+	}
+}
+
+func TestWithRecorderGoexitRecordsErrorNotSuccess(t *testing.T) {
+	home := withRedirectedCacheDir(t)
+	hctx := &HandlerContext{Config: &config.Config{}, RepoRoot: t.TempDir(), Version: "test"}
+	handler := withRecorder(hctx, "add", func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		runtime.Goexit()
+		return nil, errBoom // unreachable
+	})
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = handler(context.Background(), mcp.CallToolRequest{})
+	}()
+	<-done
+
+	logFiles := findCacheLogFiles(t, home)
+	if len(logFiles) == 0 {
+		t.Fatal("expected a .log.jsonl file")
+	}
+	data, err := os.ReadFile(logFiles[0])
+	if err != nil {
+		t.Fatalf("reading log file: %v", err)
+	}
+	if containsOutcome(t, data, observability.OutcomeSuccess) {
+		t.Errorf("Goexit was recorded as success:\n%s", data)
+	}
+	if !containsOutcome(t, data, observability.OutcomeError) {
+		t.Errorf("expected an error CommandRecord for Goexit:\n%s", data)
 	}
 }
 

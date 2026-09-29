@@ -3,6 +3,7 @@ package parallel_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -35,6 +36,35 @@ func TestCollectRepanicsWorkerPanicOnCaller(t *testing.T) {
 	if n := completed.Load(); n != 7 {
 		t.Errorf("completed = %d, want 7 (a panic must not abandon sibling items)", n)
 	}
+}
+
+// runGuardedWorkers runs n goroutines that each panic with their index, guarded
+// by p, and returns the value p re-raises (nil if it does not).
+func runGuardedWorkers(p *parallel.Panics, n int) (recovered any) {
+	defer func() { recovered = recover() }()
+	var wg sync.WaitGroup
+	for i := range n {
+		wg.Go(func() {
+			defer p.Recover()
+			panic(i)
+		})
+	}
+	wg.Wait()
+	p.Repanic()
+	return nil
+}
+
+func TestPanicsRepanicsFirstWorkerPanic(t *testing.T) {
+	var p parallel.Panics
+	got, ok := runGuardedWorkers(&p, 4).(int)
+	if !ok || got < 0 || got > 3 {
+		t.Fatalf("recovered %v, want one of the worker panic values 0..3", got)
+	}
+}
+
+func TestPanicsRepanicNoopWithoutPanic(t *testing.T) {
+	var p parallel.Panics
+	p.Repanic() // must not panic
 }
 
 func TestCollectPreservesOrder(t *testing.T) {

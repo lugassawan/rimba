@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -315,18 +316,54 @@ func TestExecutePanicRecordsErrorAndRepanics(t *testing.T) {
 	}
 }
 
+func TestExecuteGoexitRecordsErrorNotSuccess(t *testing.T) {
+	home := redirectCacheDir(t)
+	dir := t.TempDir()
+	if err := config.Save(filepath.Join(dir, config.FileName), &config.Config{WorktreeDir: "../worktrees"}); err != nil {
+		t.Fatalf("Save config: %v", err)
+	}
+	restore := overrideNewRunner(repoRootRunner(dir, func(args ...string) (string, error) {
+		if args[0] == cmdSymbolicRef {
+			return refsRemotesOriginMain, nil
+		}
+		return "", errors.New("unexpected")
+	}))
+	defer restore()
+
+	addObservabilityProbeCmd(t, func(*cobra.Command, []string) error {
+		runtime.Goexit()
+		return nil
+	})
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = Execute()
+	}()
+	<-done
+
+	logFile, _ := splitDayFiles(t, findCacheJSONLFiles(t, home))
+	rec := findRecord(jsonlRecords(t, logFile), "command", "", "")
+	if rec == nil {
+		t.Fatalf("expected a CommandRecord in %s", logFile)
+	}
+	if rec["outcome"] != "error" {
+		t.Errorf("outcome = %v, want error (Goexit is not success)", rec["outcome"])
+	}
+}
+
 func TestFinalizeRecorderNilRecorderStillRepanics(t *testing.T) {
 	defer func() {
 		if got := recover(); got != "x" {
 			t.Errorf("recovered %v, want x", got)
 		}
 	}()
-	finalizeRecorder(nil, "x", nil)
+	finalizeRecorder(nil, "x", true, nil)
 	t.Fatal("expected finalizeRecorder to re-panic")
 }
 
 func TestFinalizeRecorderNilRecorderErrorNoPanic(t *testing.T) {
-	finalizeRecorder(nil, nil, errors.New("boom"))
+	finalizeRecorder(nil, nil, true, errors.New("boom"))
 }
 
 func TestExecuteErrorRecordsOutcomeAndExitCode(t *testing.T) {

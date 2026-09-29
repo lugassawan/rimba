@@ -184,18 +184,23 @@ func Execute() (err error) {
 	defer func() { lastRecorder = nil }() // runs last, even when finalizeRecorder re-panics
 	// lastRecorder is set inside ExecuteContext (see its doc comment), so it is
 	// read when the defer runs. recover() must be called directly in the literal.
-	defer func() { finalizeRecorder(lastRecorder, recover(), err) }()
+	done := false // stays false on panic or runtime.Goexit
+	defer func() { finalizeRecorder(lastRecorder, recover(), done, err) }()
 
-	return rootCmd.ExecuteContext(ctx)
+	err = rootCmd.ExecuteContext(ctx)
+	done = true
+	return err
 }
 
 // finalizeRecorder finalizes and closes rec, then re-raises a recovered panic.
 // rec may be nil: Finalize and Close are nil-safe, so the panic is always re-raised.
-func finalizeRecorder(rec *observability.Recorder, p any, err error) {
+func finalizeRecorder(rec *observability.Recorder, p any, done bool, err error) {
 	outcome, exitCode := observability.OutcomeSuccess, exitCodeFor(err)
 	switch {
 	case p != nil:
 		outcome, exitCode, err = observability.OutcomeError, exitCodePanic, observability.PanicError(p)
+	case !done:
+		outcome, exitCode, err = observability.OutcomeError, 1, observability.ErrIncomplete
 	case err != nil:
 		outcome = observability.OutcomeError
 	}

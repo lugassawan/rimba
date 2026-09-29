@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/lugassawan/rimba/internal/git"
+	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/resolver"
 )
 
@@ -95,12 +96,14 @@ func CollectDiffs(ctx context.Context, r git.Runner, mainBranch string, branches
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	var firstErr error
+	var panics parallel.Panics
 	sem := make(chan struct{}, 8)
 
 	for _, wt := range branches {
 		wg.Add(1)
 		go func(wt resolver.WorktreeInfo) {
 			defer wg.Done()
+			defer panics.Recover()
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
@@ -118,6 +121,7 @@ func CollectDiffs(ctx context.Context, r git.Runner, mainBranch string, branches
 		}(wt)
 	}
 	wg.Wait()
+	panics.Repanic()
 
 	if firstErr != nil {
 		return nil, firstErr
@@ -140,12 +144,14 @@ func DryMergeAll(ctx context.Context, r git.Runner, branches []resolver.Worktree
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	var firstErr error
+	var panics parallel.Panics
 	sem := make(chan struct{}, 4)
 
 	for idx, p := range pairs {
 		wg.Add(1)
 		go func(idx int, p pair) {
 			defer wg.Done()
+			defer panics.Recover()
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
@@ -168,6 +174,7 @@ func DryMergeAll(ctx context.Context, r git.Runner, branches []resolver.Worktree
 		}(idx, p)
 	}
 	wg.Wait()
+	panics.Repanic()
 
 	if firstErr != nil {
 		return nil, firstErr

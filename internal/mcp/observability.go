@@ -21,21 +21,26 @@ func withRecorder(hctx *HandlerContext, toolName string, handler server.ToolHand
 			return handler(ctx, req) // never block a tool call on observability failing to open
 		}
 		rec := observability.NewRecorder(sink, toolName, "", "", hctx.Version)
+		done := false // stays false on panic or runtime.Goexit
 		// recover() must be called directly inside the deferred literal to take effect.
-		defer func() { finishCall(rec, recover(), result, callErr) }()
+		defer func() { finishCall(rec, recover(), done, result, callErr) }()
 
-		return handler(observability.WithRecorder(ctx, rec), req)
+		result, callErr = handler(observability.WithRecorder(ctx, rec), req)
+		done = true
+		return result, callErr
 	}
 }
 
-// finishCall finalizes and closes rec for a completed (or panicked) call, then
-// re-raises a recovered panic so the decorator stays observation-only.
-func finishCall(rec *observability.Recorder, p any, result *mcp.CallToolResult, callErr error) {
+// finishCall finalizes and closes rec for a completed, panicked or Goexit-ed
+// call, then re-raises a recovered panic so the decorator stays observation-only.
+func finishCall(rec *observability.Recorder, p any, done bool, result *mcp.CallToolResult, callErr error) {
 	outcome := observability.OutcomeSuccess
 	recErr := callErr
 	switch {
 	case p != nil:
 		outcome, recErr = observability.OutcomeError, observability.PanicError(p)
+	case !done:
+		outcome, recErr = observability.OutcomeError, observability.ErrIncomplete
 	case callErr != nil || (result != nil && result.IsError):
 		outcome = observability.OutcomeError
 	}

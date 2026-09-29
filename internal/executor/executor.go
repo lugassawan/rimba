@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"sync"
 	"time"
+
+	"github.com/lugassawan/rimba/internal/parallel"
 )
 
 // terminationGracePeriod bounds SIGTERM-to-SIGKILL escalation for a cancelled
@@ -62,11 +64,13 @@ func Run(ctx context.Context, cfg Config) []Result {
 	defer cancel()
 
 	var wg sync.WaitGroup
+	var panics parallel.Panics
 
 	for i, t := range cfg.Targets {
 		wg.Add(1)
 		go func(idx int, target Target) {
 			defer wg.Done()
+			defer panics.Recover()
 
 			// Check for cancellation before acquiring semaphore.
 			select {
@@ -95,6 +99,7 @@ func Run(ctx context.Context, cfg Config) []Result {
 	}
 
 	wg.Wait()
+	panics.Repanic()
 	return results
 }
 

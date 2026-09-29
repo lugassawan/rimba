@@ -12,6 +12,7 @@ import (
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
 	"github.com/lugassawan/rimba/internal/output"
+	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
@@ -267,6 +268,7 @@ func syncAll(ctx context.Context, sc *syncContext, worktrees []resolver.Worktree
 
 	sc.res = &syncResult{}
 	var wg sync.WaitGroup
+	var panics parallel.Panics
 	sem := make(chan struct{}, 4) // bounded: git worktrees share object store
 
 	var completed int
@@ -274,6 +276,7 @@ func syncAll(ctx context.Context, sc *syncContext, worktrees []resolver.Worktree
 		wg.Add(1)
 		go func(wt resolver.WorktreeInfo) {
 			defer wg.Done()
+			defer panics.Recover()
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
@@ -286,8 +289,9 @@ func syncAll(ctx context.Context, sc *syncContext, worktrees []resolver.Worktree
 		}(wt)
 	}
 	wg.Wait()
-
 	sc.s.Stop()
+	panics.Repanic()
+
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
