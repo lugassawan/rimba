@@ -49,6 +49,7 @@ local.properties
 # Claude Code runtime files
 .claude/scheduled_tasks.lock
 .claude/worktrees/
+.claude/cache/
 
 # Superpowers SDD scratch (plans + per-plan workspaces)
 .superpowers/
