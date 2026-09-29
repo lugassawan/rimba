@@ -1,7 +1,10 @@
 package cmd
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -71,6 +74,8 @@ var duplicateCmd = &cobra.Command{
 			matchedPrefix, _ = resolver.PrefixString(resolver.DefaultPrefixType)
 		}
 
+		wtDir := filepath.Join(repoRoot, cfg.WorktreeDir)
+
 		// Determine new task name
 		asFlag, _ := cmd.Flags().GetString(flagAs)
 		var newTask string
@@ -88,22 +93,13 @@ var duplicateCmd = &cobra.Command{
 				svc = res.Service
 			}
 		} else {
-			// Auto-suffix: try task-1, task-2, etc.
-			for i := 1; i <= maxDuplicateSuffix; i++ {
-				candidate := fmt.Sprintf("%s-%d", task, i)
-				candidateBranch := resolver.FullBranchName(svc, matchedPrefix, candidate)
-				if !git.BranchExists(ctx, r, candidateBranch) {
-					newTask = candidate
-					break
-				}
-			}
-			if newTask == "" {
-				return fmt.Errorf("could not find available suffix for %q (tried 1-%d); use --as to specify a name", task, maxDuplicateSuffix)
+			newTask, err = nextDuplicateTask(ctx, r, task, svc, matchedPrefix, wtDir)
+			if err != nil {
+				return err
 			}
 		}
 
 		newBranch := resolver.FullBranchName(svc, matchedPrefix, newTask)
-		wtDir := filepath.Join(repoRoot, cfg.WorktreeDir)
 		wtPath := resolver.WorktreePath(wtDir, newBranch)
 
 		// Validate
@@ -206,4 +202,26 @@ func init() {
 	duplicateCmd.Flags().Bool(flagSkipHooks, false, "skip post-create hooks")
 	duplicateCmd.Flags().Bool(flagDryRun, false, "preview what would be duplicated without making changes")
 	rootCmd.AddCommand(duplicateCmd)
+}
+
+// nextDuplicateTask returns the first "<task>-N" whose branch is unused and
+// whose worktree path is unoccupied on disk.
+func nextDuplicateTask(ctx context.Context, r git.Runner, task, svc, prefix, wtDir string) (string, error) {
+	for i := 1; i <= maxDuplicateSuffix; i++ {
+		candidate := fmt.Sprintf("%s-%d", task, i)
+		candidateBranch := resolver.FullBranchName(svc, prefix, candidate)
+		if git.BranchExists(ctx, r, candidateBranch) {
+			continue
+		}
+		path := resolver.WorktreePath(wtDir, candidateBranch)
+		_, err := os.Lstat(path) // Lstat: a dangling symlink still occupies the path
+		if err == nil {
+			continue
+		}
+		if !errors.Is(err, fs.ErrNotExist) {
+			return "", fmt.Errorf("check worktree path %s: %w", path, err)
+		}
+		return candidate, nil
+	}
+	return "", fmt.Errorf("could not find available suffix for %q (tried 1-%d); use --as to specify a name", task, maxDuplicateSuffix)
 }
