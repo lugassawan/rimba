@@ -161,13 +161,7 @@ type mainlineLookup struct {
 // the first-parent guard when isMergedHit, else squash-merge detection.
 func classifyMergedEntry(ctx context.Context, r git.Runner, mergeRef string, e git.WorktreeEntry, isMergedHit bool, mainline mainlineLookup, mainlinePIDsByBase map[string]map[string]bool) (*CleanCandidate, string) {
 	if isMergedHit {
-		if mainline.err != nil {
-			return nil, fmt.Sprintf("skipped %s: mainline check failed: %v", e.Branch, mainline.err)
-		}
-		if git.IsSHAOnChain(e.HEAD, mainline.shas) {
-			return nil, ""
-		}
-		return &CleanCandidate{Path: e.Path, Branch: e.Branch, Prunable: e.Prunable}, ""
+		return classifyMainlineHit(ctx, r, e, mainline)
 	}
 
 	squashed, err := squashMergedCached(ctx, r, mergeRef, e.Branch, mainlinePIDsByBase)
@@ -178,6 +172,36 @@ func classifyMergedEntry(ctx context.Context, r git.Runner, mergeRef string, e g
 		return nil, ""
 	}
 	return &CleanCandidate{Path: e.Path, Branch: e.Branch, Prunable: e.Prunable}, ""
+}
+
+// classifyMainlineHit handles a `--merged` hit. A tip on main's first-parent chain is
+// either fresh or fast-forward-merged; only the branch reflog tells them apart.
+func classifyMainlineHit(ctx context.Context, r git.Runner, e git.WorktreeEntry, mainline mainlineLookup) (*CleanCandidate, string) {
+	if mainline.err != nil {
+		return nil, fmt.Sprintf("skipped %s: mainline check failed: %v", e.Branch, mainline.err)
+	}
+	candidate := &CleanCandidate{Path: e.Path, Branch: e.Branch, Prunable: e.Prunable}
+	if !git.IsSHAOnChain(e.HEAD, mainline.shas) {
+		return candidate, ""
+	}
+	subjects, err := git.BranchReflogSubjects(ctx, r, e.Branch)
+	if err != nil {
+		return nil, fmt.Sprintf("skipped %s: reflog check failed: %v", e.Branch, err)
+	}
+	if !hasLocalCommitEntry(subjects) {
+		return nil, ""
+	}
+	if e.Prunable {
+		return candidate, ""
+	}
+	dirty, err := git.IsDirty(ctx, r, e.Path)
+	if err != nil {
+		return nil, fmt.Sprintf("skipped %s: dirty check failed: %v", e.Branch, err)
+	}
+	if dirty {
+		return nil, fmt.Sprintf("skipped %s: fast-forward merged but has uncommitted changes", e.Branch)
+	}
+	return candidate, ""
 }
 
 // squashMergedCached is git.IsSquashMerged, but reuses the mainline patch-ID set
@@ -209,4 +233,20 @@ func deleteRemoteForItem(ctx context.Context, r git.Runner, branch string, item 
 		return
 	}
 	item.RemoteDeleted = true
+}
+
+// hasLocalCommitEntry scans reflog subjects newest-first: a commit-like entry means local work,
+// a tip-rewinding one means not merged. Merge/pull/revert entries are deliberately not work.
+func hasLocalCommitEntry(subjects []string) bool {
+	for _, s := range subjects {
+		switch {
+		case strings.HasPrefix(s, "commit:"), strings.HasPrefix(s, "commit ("),
+			strings.HasPrefix(s, "cherry-pick:"), strings.HasPrefix(s, "am:"):
+			return true
+		case s == "", strings.HasPrefix(s, "reset:"), strings.HasPrefix(s, "branch: Reset to"),
+			strings.HasPrefix(s, "fetch"), strings.HasPrefix(s, "update by push"):
+			return false
+		}
+	}
+	return false
 }

@@ -239,6 +239,119 @@ func TestCleanMergedProtectsFreshWorktree(t *testing.T) {
 	}
 }
 
+// addCleanWorktree creates a worktree for task and returns its branch and path.
+func addCleanWorktree(t *testing.T, repo, task string) (branch, wtPath string) {
+	t.Helper()
+	rimbaSuccess(t, repo, "add", task)
+	cfg := loadConfig(t, repo)
+	branch = resolver.BranchName(defaultPrefix, task)
+	return branch, resolver.WorktreePath(filepath.Join(repo, cfg.WorktreeDir), branch)
+}
+
+func commitInWorktree(t *testing.T, wtPath, file string) {
+	t.Helper()
+	testutil.CreateFile(t, wtPath, file, "content")
+	testutil.GitCmd(t, wtPath, "add", ".")
+	testutil.GitCmd(t, wtPath, "commit", "-m", "work "+file)
+}
+
+// TestCleanMergedFastForward pins that a fast-forward-merged worktree is removed.
+func TestCleanMergedFastForward(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupCleanInitializedRepo(t)
+	_, wtPath := addCleanWorktree(t, repo, "ff-task")
+	commitInWorktree(t, wtPath, "ff.txt")
+	rimbaSuccess(t, repo, "merge", "ff-task", "--keep")
+	assertFileExists(t, wtPath)
+
+	r := rimbaSuccess(t, repo, "clean", flagMergedE2E, flagForceE2E)
+	assertContains(t, r.Stdout, "ff-task")
+	assertFileNotExists(t, wtPath)
+}
+
+// TestCleanMergedFastForwardKeepsDirtyWorktree: a reflog-detected fast-forward
+// merge is not removed while the worktree holds uncommitted changes, even with --force.
+func TestCleanMergedFastForwardKeepsDirtyWorktree(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupCleanInitializedRepo(t)
+	_, wtPath := addCleanWorktree(t, repo, "dirty-ff-task")
+	commitInWorktree(t, wtPath, "ff.txt")
+	rimbaSuccess(t, repo, "merge", "dirty-ff-task", "--keep")
+	testutil.CreateFile(t, wtPath, "wip.txt", "unsaved")
+
+	r := rimbaSuccess(t, repo, "clean", flagMergedE2E, flagForceE2E)
+	assertContains(t, r.Stdout+r.Stderr, "uncommitted changes")
+	assertFileExists(t, wtPath)
+}
+
+// TestCleanMergedProtectsFreshSyncedWorktree: a fresh worktree synced to an
+// advanced main has no local commits and must be kept.
+func TestCleanMergedProtectsFreshSyncedWorktree(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupCleanInitializedRepo(t)
+	_, wtPath := addCleanWorktree(t, repo, "synced-task")
+	testutil.CreateFile(t, repo, "main-advance.txt", "x")
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "advance main")
+	rimbaSuccess(t, repo, "sync", "synced-task")
+
+	r := rimbaSuccess(t, repo, "clean", flagMergedE2E, flagForceE2E)
+	assertContains(t, r.Stdout, "No merged worktrees found")
+	assertFileExists(t, wtPath)
+}
+
+// TestCleanMergedRebasedThenFastForward: commit, rebase onto an advanced main,
+// then fast-forward merge — removed.
+func TestCleanMergedRebasedThenFastForward(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupCleanInitializedRepo(t)
+	branch, wtPath := addCleanWorktree(t, repo, "rebased-task")
+	commitInWorktree(t, wtPath, "rb.txt")
+	testutil.CreateFile(t, repo, "main-advance.txt", "x")
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "advance main")
+	testutil.GitCmd(t, wtPath, "rebase", "main")
+	testutil.GitCmd(t, repo, "merge", "--ff-only", branch)
+
+	r := rimbaSuccess(t, repo, "clean", flagMergedE2E, flagForceE2E)
+	assertContains(t, r.Stdout, "rebased-task")
+	assertFileNotExists(t, wtPath)
+}
+
+// TestCleanMergedResetThenSynced: work discarded via reset --hard, then synced
+// to main — no unmerged-then-merged work, so it must be kept.
+func TestCleanMergedResetThenSynced(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupCleanInitializedRepo(t)
+	_, wtPath := addCleanWorktree(t, repo, "reset-task")
+	base := strings.TrimSpace(testutil.GitCmd(t, wtPath, "rev-parse", "HEAD"))
+	commitInWorktree(t, wtPath, "gone.txt")
+	testutil.GitCmd(t, wtPath, "reset", "--hard", base)
+	testutil.CreateFile(t, repo, "main-advance.txt", "x")
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "advance main")
+	rimbaSuccess(t, repo, "sync", "reset-task")
+
+	r := rimbaSuccess(t, repo, "clean", flagMergedE2E, flagForceE2E)
+	assertContains(t, r.Stdout, "No merged worktrees found")
+	assertFileExists(t, wtPath)
+}
+
 func TestCleanMergedKeepsUnmerged(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)

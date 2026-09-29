@@ -197,6 +197,150 @@ func TestFindMergedCandidatesMergeCommitRemoved(t *testing.T) {
 	}
 }
 
+// TestFindMergedCandidatesOnChainReflog covers fast-forward detection: an on-chain tip is a
+// fast-forward merge only when the branch reflog shows local commit work.
+func TestFindMergedCandidatesOnChainReflog(t *testing.T) {
+	tests := []struct {
+		name         string
+		reflog       string
+		reflogErr    error
+		status       string
+		statusErr    error
+		wantCands    int
+		wantWarnings int
+	}{
+		{name: "commit in reflog is removed", reflog: "@commit: work\n@branch: Created from main\n", wantCands: 1},
+		{name: "created only is protected", reflog: "@branch: Created from main\n"},
+		{name: "empty reflog is skipped silently", reflog: ""},
+		{name: "reflog error warns", reflogErr: errors.New("boom"), wantWarnings: 1},
+		{name: "dirty worktree is skipped with warning", reflog: "@commit: work\n", status: " M file.txt\n", wantWarnings: 1},
+		{name: "dirty check error warns", reflog: "@commit: work\n", statusErr: errors.New("boom"), wantWarnings: 1},
+		{name: "unlabelled update is a barrier", reflog: "@\n@commit: work\n"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wt := porcelainEntries(
+				struct{ path, branch string }{"/repo", "main"},
+				struct{ path, branch string }{"/wt/ff", "feature/ff"},
+			)
+			r := &mockRunner{
+				run: func(args ...string) (string, error) {
+					switch args[0] {
+					case gitCmdBranch:
+						return "  feature/ff\n", nil
+					case gitCmdWorktree:
+						return wt, nil
+					case gitCmdRevList:
+						return "abc123\nolder", nil
+					case gitCmdLog:
+						return tt.reflog, tt.reflogErr
+					}
+					return "", nil
+				},
+				runInDir: func(_ string, _ ...string) (string, error) { return tt.status, tt.statusErr },
+			}
+
+			result, err := FindMergedCandidates(context.Background(), r, "origin/main", "main")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(result.Candidates) != tt.wantCands {
+				t.Errorf("candidates = %d, want %d", len(result.Candidates), tt.wantCands)
+			}
+			if len(result.Warnings) != tt.wantWarnings {
+				t.Errorf("warnings = %v, want %d", result.Warnings, tt.wantWarnings)
+			}
+		})
+	}
+}
+
+// TestFindMergedCandidatesOnChainReflogPrunable: an orphaned worktree dir is
+// never probed for dirtiness, so it stays a candidate flagged Prunable.
+func TestFindMergedCandidatesOnChainReflogPrunable(t *testing.T) {
+	wt := strings.Join([]string{
+		"worktree /repo",
+		"HEAD abc123",
+		"branch refs/heads/main",
+		"",
+		"worktree /wt/gone",
+		"HEAD abc123",
+		"branch refs/heads/feature/gone",
+		"prunable gitdir file points to non-existent location",
+		"",
+	}, "\n")
+
+	runInDirCalls := 0
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			switch args[0] {
+			case gitCmdBranch:
+				return "  feature/gone\n", nil
+			case gitCmdWorktree:
+				return wt, nil
+			case gitCmdRevList:
+				return "abc123\nolder", nil
+			case gitCmdLog:
+				return "@commit: work\n", nil
+			}
+			return "", nil
+		},
+		runInDir: func(_ string, _ ...string) (string, error) {
+			runInDirCalls++
+			return "", nil
+		},
+	}
+
+	result, err := FindMergedCandidates(context.Background(), r, "origin/main", "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Candidates) != 1 || !result.Candidates[0].Prunable {
+		t.Fatalf("expected 1 prunable candidate, got %+v", result.Candidates)
+	}
+	if len(result.Warnings) != 0 {
+		t.Errorf("unexpected warnings: %v", result.Warnings)
+	}
+	if runInDirCalls != 0 {
+		t.Errorf("runInDir called %d times, want 0", runInDirCalls)
+	}
+}
+
+func TestHasLocalCommitEntry(t *testing.T) {
+	tests := []struct {
+		name     string
+		subjects []string
+		want     bool
+	}{
+		{"created only", []string{"branch: Created from main"}, false},
+		{"ff sync", []string{"merge main: Fast-forward", "branch: Created from main"}, false},
+		{"rebase finish only", []string{"rebase (finish): refs/heads/x onto abc", "branch: Created from main"}, false},
+		{"commit", []string{"commit: work", "branch: Created from main"}, true},
+		{"amend", []string{"commit (amend): work", "branch: Created from main"}, true},
+		{"initial", []string{"commit (initial): work"}, true},
+		{"conflict-resolved merge commit", []string{"commit (merge): merge x", "branch: Created from main"}, true},
+		{"cherry-pick", []string{"cherry-pick: work", "branch: Created from main"}, true},
+		{"am", []string{"am: work", "branch: Created from main"}, true},
+		{"renamed then commit", []string{"commit: work", "Branch: renamed refs/heads/a to refs/heads/b"}, true},
+		{"commit then reset", []string{"reset: moving to abc", "commit: work", "branch: Created from main"}, false},
+		{"branch reset to", []string{"branch: Reset to main", "commit: work"}, false},
+		{"reset then commit", []string{"commit: again", "reset: moving to abc", "commit: work"}, true},
+		{"commit then rebase finish", []string{"rebase (finish): x", "commit: work", "branch: Created from main"}, true},
+		{"forced fetch", []string{"fetch . +main:B: forced-update", "commit: work"}, false},
+		{"update by push", []string{"update by push", "commit: work"}, false},
+		{"unlabelled update", []string{"", "commit: work"}, false},
+		{"empty", nil, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := hasLocalCommitEntry(tt.subjects); got != tt.want {
+				t.Errorf("hasLocalCommitEntry(%v) = %v, want %v", tt.subjects, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestFindMergedCandidatesSquashMerge(t *testing.T) {
 	defer func(orig func(context.Context, string) (map[string]bool, error)) {
 		git.ComputePatchIDs = orig
