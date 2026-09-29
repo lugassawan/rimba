@@ -3,7 +3,6 @@ package parallel_test
 import (
 	"context"
 	"errors"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -38,33 +37,35 @@ func TestCollectRepanicsWorkerPanicOnCaller(t *testing.T) {
 	}
 }
 
-// runGuardedWorkers runs n goroutines that each panic with their index, guarded
-// by p, and returns the value p re-raises (nil if it does not).
-func runGuardedWorkers(p *parallel.Panics, n int) (recovered any) {
+// runGroupWorkers runs n Group workers that each panic with their index and
+// returns the value Wait re-raises (nil if it does not).
+func runGroupWorkers(n int) (recovered any) {
 	defer func() { recovered = recover() }()
-	var wg sync.WaitGroup
+	var g parallel.Group
 	for i := range n {
-		wg.Go(func() {
-			defer p.Recover()
-			panic(i)
-		})
+		g.Go(func() { panic(i) })
 	}
-	wg.Wait()
-	p.Repanic()
+	g.Wait()
 	return nil
 }
 
-func TestPanicsRepanicsFirstWorkerPanic(t *testing.T) {
-	var p parallel.Panics
-	got, ok := runGuardedWorkers(&p, 4).(int)
+func TestGroupRepanicsFirstWorkerPanic(t *testing.T) {
+	got, ok := runGroupWorkers(4).(int)
 	if !ok || got < 0 || got > 3 {
 		t.Fatalf("recovered %v, want one of the worker panic values 0..3", got)
 	}
 }
 
-func TestPanicsRepanicNoopWithoutPanic(t *testing.T) {
-	var p parallel.Panics
-	p.Repanic() // must not panic
+func TestGroupWaitRunsAllWorkersWithoutPanic(t *testing.T) {
+	var g parallel.Group
+	var ran atomic.Int32
+	for range 5 {
+		g.Go(func() { ran.Add(1) })
+	}
+	g.Wait() // must not panic
+	if n := ran.Load(); n != 5 {
+		t.Errorf("ran = %d, want 5", n)
+	}
 }
 
 func TestCollectPreservesOrder(t *testing.T) {

@@ -5,12 +5,16 @@ import (
 	"context"
 	"io/fs"
 	"path/filepath"
+	"runtime/debug"
+
+	"github.com/lugassawan/rimba/internal/parallel"
 )
 
 type dirSizeResult struct {
 	size     int64
 	err      error
-	panicVal any // non-nil when the walker panicked
+	panicVal any    // non-nil when the walker panicked
+	stack    []byte // walker stack captured at the panic
 }
 
 // DirSize returns the total size of regular files under path.
@@ -31,7 +35,7 @@ func dirSizeWith(ctx context.Context, path string, walk func(string) (int64, err
 	go func() {
 		defer func() {
 			if p := recover(); p != nil {
-				ch <- dirSizeResult{panicVal: p}
+				ch <- dirSizeResult{panicVal: p, stack: debug.Stack()}
 			}
 		}()
 		size, err := walk(path)
@@ -43,6 +47,7 @@ func dirSizeWith(ctx context.Context, path string, walk func(string) (int64, err
 		return 0, ctx.Err()
 	case r := <-ch:
 		if r.panicVal != nil {
+			parallel.ReportPanic(r.panicVal, r.stack)
 			panic(r.panicVal)
 		}
 		return r.size, r.err

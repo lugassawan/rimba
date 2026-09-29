@@ -3,7 +3,6 @@ package operations
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/errhint"
@@ -222,25 +221,18 @@ type dirtyCheckArgs struct {
 // checkDirty checks both source and target for uncommitted changes concurrently.
 func checkDirty(ctx context.Context, r git.Runner, args dirtyCheckArgs) error {
 	var srcCheck, tgtCheck dirtyResult
-	var wg sync.WaitGroup
-	var panics parallel.Panics
-	wg.Add(2)
+	var g parallel.Group
 
-	go func() {
-		defer wg.Done()
-		defer panics.Recover()
+	g.Go(func() {
 		if args.sourcePrunable {
 			return
 		}
 		srcCheck.dirty, srcCheck.err = git.IsDirty(ctx, r, args.sourcePath)
-	}()
-	go func() {
-		defer wg.Done()
-		defer panics.Recover()
+	})
+	g.Go(func() {
 		tgtCheck.dirty, tgtCheck.err = git.IsDirty(ctx, r, args.targetDir)
-	}()
-	wg.Wait()
-	panics.Repanic()
+	})
+	g.Wait()
 
 	if srcCheck.err != nil {
 		return srcCheck.err

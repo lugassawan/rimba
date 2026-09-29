@@ -63,14 +63,11 @@ func Run(ctx context.Context, cfg Config) []Result {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	var wg sync.WaitGroup
-	var panics parallel.Panics
+	var g parallel.Group
 
 	for i, t := range cfg.Targets {
-		wg.Add(1)
-		go func(idx int, target Target) {
-			defer wg.Done()
-			defer panics.Recover()
+		g.Go(func() {
+			idx, target := i, t
 
 			// Check for cancellation before acquiring semaphore.
 			select {
@@ -95,11 +92,10 @@ func Run(ctx context.Context, cfg Config) []Result {
 			if cfg.FailFast && (exitCode != 0 || err != nil) {
 				cancel()
 			}
-		}(i, t)
+		})
 	}
 
-	wg.Wait()
-	panics.Repanic()
+	g.Wait()
 	return results
 }
 

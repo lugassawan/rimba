@@ -267,16 +267,13 @@ func syncAll(ctx context.Context, sc *syncContext, worktrees []resolver.Worktree
 	eligible := operations.FilterEligible(worktrees, prefixes, sc.cfg.DefaultSource, allTasks, includeInherited)
 
 	sc.res = &syncResult{}
-	var wg sync.WaitGroup
-	var panics parallel.Panics
+	var g parallel.Group
 	sem := make(chan struct{}, 4) // bounded: git worktrees share object store
+	defer sc.s.Stop()             // idempotent; also clears the spinner if a worker panic propagates
 
 	var completed int
 	for _, wt := range eligible {
-		wg.Add(1)
-		go func(wt resolver.WorktreeInfo) {
-			defer wg.Done()
-			defer panics.Recover()
+		g.Go(func() {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
@@ -286,11 +283,10 @@ func syncAll(ctx context.Context, sc *syncContext, worktrees []resolver.Worktree
 			completed++
 			sc.s.Update(fmt.Sprintf("[%d/%d] Syncing worktrees...", completed, len(eligible)))
 			sc.mu.Unlock()
-		}(wt)
+		})
 	}
-	wg.Wait()
+	g.Wait()
 	sc.s.Stop()
-	panics.Repanic()
 
 	if ctx.Err() != nil {
 		return ctx.Err()

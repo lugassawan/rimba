@@ -2,6 +2,10 @@ package parallel
 
 import (
 	"context"
+	"fmt"
+	"io"
+	"os"
+	"runtime/debug"
 	"sync"
 )
 
@@ -11,8 +15,8 @@ import (
 // ctx is passed to each fn invocation so callers can enforce per-item deadlines.
 // On cancellation, goroutines waiting for a semaphore slot exit early; their
 // result entries hold the zero value of T.
-// A panic in fn is recovered on its worker and re-raised on the caller's
-// goroutine once all workers finish (first panic wins; the worker stack is lost).
+// A worker panic is re-raised on the caller's goroutine once all workers
+// finish (see Group).
 func Collect[T any](ctx context.Context, n, concurrency int, fn func(ctx context.Context, i int) T) []T {
 	if n == 0 {
 		return nil
@@ -22,15 +26,11 @@ func Collect[T any](ctx context.Context, n, concurrency int, fn func(ctx context
 	}
 
 	results := make([]T, n)
-	var wg sync.WaitGroup
+	var g Group
 	sem := make(chan struct{}, concurrency)
-	var panics Panics
 
 	for i := range n {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
-			defer panics.Recover()
+		g.Go(func() {
 			select {
 			case sem <- struct{}{}:
 			case <-ctx.Done():
@@ -38,36 +38,58 @@ func Collect[T any](ctx context.Context, n, concurrency int, fn func(ctx context
 			}
 			defer func() { <-sem }()
 
-			results[idx] = fn(ctx, idx)
-		}(i)
+			results[i] = fn(ctx, i)
+		})
 	}
-	wg.Wait()
-	panics.Repanic()
+	g.Wait()
 	return results
 }
 
-// Panics carries the first panic from a set of worker goroutines back to the
-// goroutine that waits on them, where a caller's recover (e.g. cmd.Execute's
-// observability finalizer) can see it. The worker's stack trace is lost.
-//
-// Per worker: `defer wg.Done()` first, then `defer panics.Recover()`. After
-// wg.Wait(): `panics.Repanic()`.
-type Panics struct {
-	once sync.Once
-	val  any
-	set  bool
+// Group is a sync.WaitGroup whose workers' panics reach the goroutine that
+// calls Wait, where a caller's recover (e.g. cmd.Execute's observability
+// finalizer) can see them. First panic wins; its worker stack goes to stderr.
+type Group struct {
+	wg sync.WaitGroup
+	p  panicSlot
 }
 
-// Recover must be deferred directly (`defer p.Recover()`) for recover() to work.
-func (p *Panics) Recover() {
+// Go runs fn on a new goroutine, recovering any panic for Wait to re-raise.
+func (g *Group) Go(fn func()) {
+	g.wg.Go(func() {
+		defer g.p.recoverWorker()
+		fn()
+	})
+}
+
+// Wait blocks until every Go worker returns, then re-raises the first worker panic.
+func (g *Group) Wait() {
+	g.wg.Wait()
+	if g.p.set {
+		ReportPanic(g.p.val, g.p.stack)
+		panic(g.p.val)
+	}
+}
+
+// ReportPanic writes a recovered panic and the stack it was captured with to
+// stderr, for panics that are about to be re-raised or swallowed elsewhere.
+func ReportPanic(p any, stack []byte) { writePanic(os.Stderr, p, stack) }
+
+// panicSlot holds the first panic recovered from any worker.
+type panicSlot struct {
+	once  sync.Once
+	val   any
+	stack []byte
+	set   bool
+}
+
+// recoverWorker must be deferred directly for recover() to take effect.
+func (s *panicSlot) recoverWorker() {
 	if v := recover(); v != nil {
-		p.once.Do(func() { p.val, p.set = v, true })
+		stack := debug.Stack() // still inside the deferred call: includes the panicking frames
+		s.once.Do(func() { s.val, s.stack, s.set = v, stack, true })
 	}
 }
 
-// Repanic re-raises the first recovered panic, if any. Call it after wg.Wait().
-func (p *Panics) Repanic() {
-	if p.set {
-		panic(p.val)
-	}
+func writePanic(w io.Writer, p any, stack []byte) {
+	_, _ = fmt.Fprintf(w, "panic in worker goroutine: %v\n%s\n", p, stack)
 }

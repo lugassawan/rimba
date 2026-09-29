@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime/debug"
 	"time"
 
+	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/termcolor"
 	"github.com/lugassawan/rimba/internal/updater"
 	"github.com/spf13/cobra"
@@ -57,7 +59,7 @@ func closeOnHintPanic(out chan<- *updater.CheckResult, p any) {
 		return
 	}
 	if os.Getenv("RIMBA_DEBUG") != "" {
-		fmt.Fprintf(os.Stderr, "\n[debug] update check panicked: %v\n", p)
+		parallel.ReportPanic(p, debug.Stack())
 	}
 	close(out)
 }
