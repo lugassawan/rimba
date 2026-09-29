@@ -262,7 +262,7 @@ func TestHasLocalCommitEntry(t *testing.T) {
 		{"commit", []string{"commit: work", "branch: Created from main"}, true},
 		{"amend", []string{"commit (amend): work", "branch: Created from main"}, true},
 		{"initial", []string{"commit (initial): work"}, true},
-		{"merge commit", []string{"commit (merge): merge x", "branch: Created from main"}, true},
+		{"conflict-resolved merge commit", []string{"commit (merge): merge x", "branch: Created from main"}, true},
 		{"cherry-pick", []string{"cherry-pick: work", "branch: Created from main"}, true},
 		{"am", []string{"am: work", "branch: Created from main"}, true},
 		{"renamed then commit", []string{"commit: work", "Branch: renamed refs/heads/a to refs/heads/b"}, true},
