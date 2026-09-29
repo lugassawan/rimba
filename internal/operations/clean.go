@@ -235,9 +235,8 @@ func deleteRemoteForItem(ctx context.Context, r git.Runner, branch string, item 
 	item.RemoteDeleted = true
 }
 
-// hasLocalCommitEntry scans reflog subjects newest-first: a commit-like entry means
-// work was done on the branch; a move that can rewind the tip (reset, fetch, push,
-// or an unlabelled update) means it may have gone back, so not merged.
+// hasLocalCommitEntry scans reflog subjects newest-first: a commit-like entry means local work,
+// a tip-rewinding one means not merged. Merge/pull/revert entries are deliberately not work.
 func hasLocalCommitEntry(subjects []string) bool {
 	for _, s := range subjects {
 		switch {

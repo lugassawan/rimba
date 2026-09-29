@@ -255,6 +255,57 @@ func TestFindMergedCandidatesOnChainReflog(t *testing.T) {
 	}
 }
 
+// TestFindMergedCandidatesOnChainReflogPrunable: an orphaned worktree dir is
+// never probed for dirtiness, so it stays a candidate flagged Prunable.
+func TestFindMergedCandidatesOnChainReflogPrunable(t *testing.T) {
+	wt := strings.Join([]string{
+		"worktree /repo",
+		"HEAD abc123",
+		"branch refs/heads/main",
+		"",
+		"worktree /wt/gone",
+		"HEAD abc123",
+		"branch refs/heads/feature/gone",
+		"prunable gitdir file points to non-existent location",
+		"",
+	}, "\n")
+
+	runInDirCalls := 0
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			switch args[0] {
+			case gitCmdBranch:
+				return "  feature/gone\n", nil
+			case gitCmdWorktree:
+				return wt, nil
+			case gitCmdRevList:
+				return "abc123\nolder", nil
+			case gitCmdLog:
+				return "@commit: work\n", nil
+			}
+			return "", nil
+		},
+		runInDir: func(_ string, _ ...string) (string, error) {
+			runInDirCalls++
+			return "", nil
+		},
+	}
+
+	result, err := FindMergedCandidates(context.Background(), r, "origin/main", "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Candidates) != 1 || !result.Candidates[0].Prunable {
+		t.Fatalf("expected 1 prunable candidate, got %+v", result.Candidates)
+	}
+	if len(result.Warnings) != 0 {
+		t.Errorf("unexpected warnings: %v", result.Warnings)
+	}
+	if runInDirCalls != 0 {
+		t.Errorf("runInDir called %d times, want 0", runInDirCalls)
+	}
+}
+
 func TestHasLocalCommitEntry(t *testing.T) {
 	tests := []struct {
 		name     string
