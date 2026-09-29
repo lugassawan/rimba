@@ -65,14 +65,14 @@ func (g *Group) Go(fn func()) {
 func (g *Group) Wait() {
 	g.wg.Wait()
 	if g.p.set {
-		ReportPanic(g.p.val, g.p.stack)
+		ReportPanic("panic in worker goroutine", g.p.val, g.p.stack)
 		panic(g.p.val)
 	}
 }
 
 // ReportPanic writes a recovered panic and the stack it was captured with to
-// stderr, for panics that are about to be re-raised or swallowed elsewhere.
-func ReportPanic(p any, stack []byte) { writePanic(os.Stderr, p, stack) }
+// stderr under label, for panics that are re-raised or swallowed elsewhere.
+func ReportPanic(label string, p any, stack []byte) { writePanic(os.Stderr, label, p, stack) }
 
 // panicSlot holds the first panic recovered from any worker.
 type panicSlot struct {
@@ -90,6 +90,6 @@ func (s *panicSlot) recoverWorker() {
 	}
 }
 
-func writePanic(w io.Writer, p any, stack []byte) {
-	_, _ = fmt.Fprintf(w, "panic in worker goroutine: %v\n%s\n", p, stack)
+func writePanic(w io.Writer, label string, p any, stack []byte) {
+	_, _ = fmt.Fprintf(w, "%s: %v\n%s\n", label, p, stack)
 }

@@ -21,9 +21,11 @@ func TestGroupCapturesWorkerStack(t *testing.T) {
 
 func TestWritePanicIncludesValueAndStack(t *testing.T) {
 	var b bytes.Buffer
-	writePanic(&b, "boom", []byte("STACK"))
+	writePanic(&b, "my label", "boom", []byte("STACK"))
 	out := b.String()
-	if !strings.Contains(out, "boom") || !strings.Contains(out, "STACK") {
-		t.Errorf("writePanic output missing value or stack: %q", out)
+	for _, want := range []string{"my label", "boom", "STACK"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("writePanic output missing %q: %q", want, out)
+		}
 	}
 }

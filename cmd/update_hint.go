@@ -59,7 +59,7 @@ func closeOnHintPanic(out chan<- *updater.CheckResult, p any) {
 		return
 	}
 	if os.Getenv("RIMBA_DEBUG") != "" {
-		parallel.ReportPanic(p, debug.Stack())
+		parallel.ReportPanic("[debug] update check panicked (ignored)", p, debug.Stack())
 	}
 	close(out)
 }

@@ -47,7 +47,7 @@ func dirSizeWith(ctx context.Context, path string, walk func(string) (int64, err
 		return 0, ctx.Err()
 	case r := <-ch:
 		if r.panicVal != nil {
-			parallel.ReportPanic(r.panicVal, r.stack)
+			parallel.ReportPanic("panic in DirSize walker", r.panicVal, r.stack)
 			panic(r.panicVal)
 		}
 		return r.size, r.err

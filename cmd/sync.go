@@ -269,7 +269,6 @@ func syncAll(ctx context.Context, sc *syncContext, worktrees []resolver.Worktree
 	sc.res = &syncResult{}
 	var g parallel.Group
 	sem := make(chan struct{}, 4) // bounded: git worktrees share object store
-	defer sc.s.Stop()             // idempotent; also clears the spinner if a worker panic propagates
 
 	var completed int
 	for _, wt := range eligible {
