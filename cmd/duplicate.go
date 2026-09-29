@@ -164,6 +164,7 @@ var duplicateCmd = &cobra.Command{
 			WtPath:        wtPath,
 			Task:          newTask,
 			Service:       svc,
+			NewBranch:     true,
 			CopyFiles:     cfg.CopyFiles,
 			SkipDeps:      skipDeps,
 			AutoDetect:    cfg.IsAutoDetectDeps(),
