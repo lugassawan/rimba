@@ -204,13 +204,18 @@ func TestFindMergedCandidatesOnChainReflog(t *testing.T) {
 		name         string
 		reflog       string
 		reflogErr    error
+		status       string
+		statusErr    error
 		wantCands    int
 		wantWarnings int
 	}{
-		{name: "commit in reflog is removed", reflog: "commit: work\nbranch: Created from main\n", wantCands: 1},
-		{name: "created only is protected", reflog: "branch: Created from main\n"},
+		{name: "commit in reflog is removed", reflog: "@commit: work\n@branch: Created from main\n", wantCands: 1},
+		{name: "created only is protected", reflog: "@branch: Created from main\n"},
 		{name: "empty reflog is skipped silently", reflog: ""},
 		{name: "reflog error warns", reflogErr: errors.New("boom"), wantWarnings: 1},
+		{name: "dirty worktree is skipped with warning", reflog: "@commit: work\n", status: " M file.txt\n", wantWarnings: 1},
+		{name: "dirty check error warns", reflog: "@commit: work\n", statusErr: errors.New("boom"), wantWarnings: 1},
+		{name: "unlabelled update is a barrier", reflog: "@\n@commit: work\n"},
 	}
 
 	for _, tt := range tests {
@@ -233,7 +238,7 @@ func TestFindMergedCandidatesOnChainReflog(t *testing.T) {
 					}
 					return "", nil
 				},
-				runInDir: noopRunInDir,
+				runInDir: func(_ string, _ ...string) (string, error) { return tt.status, tt.statusErr },
 			}
 
 			result, err := FindMergedCandidates(context.Background(), r, "origin/main", "main")
@@ -270,6 +275,9 @@ func TestHasLocalCommitEntry(t *testing.T) {
 		{"branch reset to", []string{"branch: Reset to main", "commit: work"}, false},
 		{"reset then commit", []string{"commit: again", "reset: moving to abc", "commit: work"}, true},
 		{"commit then rebase finish", []string{"rebase (finish): x", "commit: work", "branch: Created from main"}, true},
+		{"forced fetch", []string{"fetch . +main:B: forced-update", "commit: work"}, false},
+		{"update by push", []string{"update by push", "commit: work"}, false},
+		{"unlabelled update", []string{"", "commit: work"}, false},
 		{"empty", nil, false},
 	}
 

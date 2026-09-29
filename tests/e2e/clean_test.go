@@ -272,6 +272,24 @@ func TestCleanMergedFastForward(t *testing.T) {
 	assertFileNotExists(t, wtPath)
 }
 
+// TestCleanMergedFastForwardKeepsDirtyWorktree: a reflog-detected fast-forward
+// merge is not removed while the worktree holds uncommitted changes, even with --force.
+func TestCleanMergedFastForwardKeepsDirtyWorktree(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2E)
+	}
+
+	repo := setupCleanInitializedRepo(t)
+	_, wtPath := addCleanWorktree(t, repo, "dirty-ff-task")
+	commitInWorktree(t, wtPath, "ff.txt")
+	rimbaSuccess(t, repo, "merge", "dirty-ff-task", "--keep")
+	testutil.CreateFile(t, wtPath, "wip.txt", "unsaved")
+
+	r := rimbaSuccess(t, repo, "clean", flagMergedE2E, flagForceE2E)
+	assertContains(t, r.Stdout+r.Stderr, "uncommitted changes")
+	assertFileExists(t, wtPath)
+}
+
 // TestCleanMergedProtectsFreshSyncedWorktree: a fresh worktree synced to an
 // advanced main has no local commits and must be kept.
 func TestCleanMergedProtectsFreshSyncedWorktree(t *testing.T) {

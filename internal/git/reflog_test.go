@@ -2,6 +2,8 @@ package git_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -60,6 +62,31 @@ func TestBranchReflogSubjectsLeadingDash(t *testing.T) {
 	}
 }
 
+func TestBranchReflogSubjectsEmptySubject(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipIntegration)
+	}
+
+	repo := testutil.NewTestRepo(t)
+	r := &git.ExecRunner{Dir: repo}
+
+	head := strings.TrimSpace(testutil.GitCmd(t, repo, "rev-parse", "HEAD"))
+	testutil.GitCmd(t, repo, "update-ref", "-m", "commit: first", "refs/heads/e", head)
+	testutil.CreateFile(t, repo, "n.txt", "n")
+	testutil.GitCmd(t, repo, "add", ".")
+	testutil.GitCmd(t, repo, "commit", "-m", "next")
+	next := strings.TrimSpace(testutil.GitCmd(t, repo, "rev-parse", "HEAD"))
+	testutil.GitCmd(t, repo, "update-ref", "refs/heads/e", next)
+
+	got, err := git.BranchReflogSubjects(context.Background(), r, "e")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"", "commit: first"}; !slices.Equal(got, want) {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
 func TestBranchReflogSubjectsNoReflog(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipIntegration)
@@ -70,6 +97,9 @@ func TestBranchReflogSubjectsNoReflog(t *testing.T) {
 
 	head := strings.TrimSpace(testutil.GitCmd(t, repo, "rev-parse", "HEAD"))
 	testutil.GitCmd(t, repo, "update-ref", "refs/heads/bare", head)
+	if err := os.Remove(filepath.Join(repo, ".git", "logs", "refs", "heads", "bare")); err != nil {
+		t.Fatal(err)
+	}
 
 	got, err := git.BranchReflogSubjects(context.Background(), r, "bare")
 	if err != nil {

@@ -191,6 +191,16 @@ func classifyMainlineHit(ctx context.Context, r git.Runner, e git.WorktreeEntry,
 	if !hasLocalCommitEntry(subjects) {
 		return nil, ""
 	}
+	if e.Prunable {
+		return candidate, ""
+	}
+	dirty, err := git.IsDirty(ctx, r, e.Path)
+	if err != nil {
+		return nil, fmt.Sprintf("skipped %s: dirty check failed: %v", e.Branch, err)
+	}
+	if dirty {
+		return nil, fmt.Sprintf("skipped %s: fast-forward merged but has uncommitted changes", e.Branch)
+	}
 	return candidate, ""
 }
 
@@ -226,14 +236,16 @@ func deleteRemoteForItem(ctx context.Context, r git.Runner, branch string, item 
 }
 
 // hasLocalCommitEntry scans reflog subjects newest-first: a commit-like entry means
-// work was done on the branch; a reset means the branch was moved back, so not merged.
+// work was done on the branch; a move that can rewind the tip (reset, fetch, push,
+// or an unlabelled update) means it may have gone back, so not merged.
 func hasLocalCommitEntry(subjects []string) bool {
 	for _, s := range subjects {
 		switch {
 		case strings.HasPrefix(s, "commit:"), strings.HasPrefix(s, "commit ("),
 			strings.HasPrefix(s, "cherry-pick:"), strings.HasPrefix(s, "am:"):
 			return true
-		case strings.HasPrefix(s, "reset:"), strings.HasPrefix(s, "branch: Reset to"):
+		case s == "", strings.HasPrefix(s, "reset:"), strings.HasPrefix(s, "branch: Reset to"),
+			strings.HasPrefix(s, "fetch"), strings.HasPrefix(s, "update by push"):
 			return false
 		}
 	}
