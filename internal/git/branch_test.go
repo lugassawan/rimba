@@ -528,8 +528,8 @@ func TestFirstParentChainSHAsFastForward(t *testing.T) {
 	testutil.GitCmd(t, repo, "checkout", "main")
 	testutil.GitCmd(t, repo, "merge", "feature/ff")
 
-	// Accepted false-negative: a fast-forward merge leaves the branch tip on
-	// mainline, so clean --merged will not remove it.
+	// A fast-forward merge leaves the tip on mainline; clean --merged tells it
+	// from a fresh branch via the branch reflog.
 	mainline, err := git.FirstParentChainSHAs(context.Background(), r, "main")
 	if err != nil {
 		t.Fatalf("FirstParentChainSHAs: %v", err)

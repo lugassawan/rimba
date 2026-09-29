@@ -197,6 +197,91 @@ func TestFindMergedCandidatesMergeCommitRemoved(t *testing.T) {
 	}
 }
 
+// TestFindMergedCandidatesOnChainReflog covers #445: an on-chain tip is a
+// fast-forward merge only when the branch reflog shows local commit work.
+func TestFindMergedCandidatesOnChainReflog(t *testing.T) {
+	tests := []struct {
+		name         string
+		reflog       string
+		reflogErr    error
+		wantCands    int
+		wantWarnings int
+	}{
+		{name: "commit in reflog is removed", reflog: "commit: work\nbranch: Created from main\n", wantCands: 1},
+		{name: "created only is protected", reflog: "branch: Created from main\n"},
+		{name: "empty reflog is skipped silently", reflog: ""},
+		{name: "reflog error warns", reflogErr: errors.New("boom"), wantWarnings: 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wt := porcelainEntries(
+				struct{ path, branch string }{"/repo", "main"},
+				struct{ path, branch string }{"/wt/ff", "feature/ff"},
+			)
+			r := &mockRunner{
+				run: func(args ...string) (string, error) {
+					switch args[0] {
+					case gitCmdBranch:
+						return "  feature/ff\n", nil
+					case gitCmdWorktree:
+						return wt, nil
+					case gitCmdRevList:
+						return "abc123\nolder", nil
+					case gitCmdLog:
+						return tt.reflog, tt.reflogErr
+					}
+					return "", nil
+				},
+				runInDir: noopRunInDir,
+			}
+
+			result, err := FindMergedCandidates(context.Background(), r, "origin/main", "main")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(result.Candidates) != tt.wantCands {
+				t.Errorf("candidates = %d, want %d", len(result.Candidates), tt.wantCands)
+			}
+			if len(result.Warnings) != tt.wantWarnings {
+				t.Errorf("warnings = %v, want %d", result.Warnings, tt.wantWarnings)
+			}
+		})
+	}
+}
+
+func TestHasLocalCommitEntry(t *testing.T) {
+	tests := []struct {
+		name     string
+		subjects []string
+		want     bool
+	}{
+		{"created only", []string{"branch: Created from main"}, false},
+		{"ff sync", []string{"merge main: Fast-forward", "branch: Created from main"}, false},
+		{"rebase finish only", []string{"rebase (finish): refs/heads/x onto abc", "branch: Created from main"}, false},
+		{"commit", []string{"commit: work", "branch: Created from main"}, true},
+		{"amend", []string{"commit (amend): work", "branch: Created from main"}, true},
+		{"initial", []string{"commit (initial): work"}, true},
+		{"merge commit", []string{"commit (merge): merge x", "branch: Created from main"}, true},
+		{"cherry-pick", []string{"cherry-pick: work", "branch: Created from main"}, true},
+		{"am", []string{"am: work", "branch: Created from main"}, true},
+		{"renamed then commit", []string{"commit: work", "Branch: renamed refs/heads/a to refs/heads/b"}, true},
+		{"commit then reset", []string{"reset: moving to abc", "commit: work", "branch: Created from main"}, false},
+		{"branch reset to", []string{"branch: Reset to main", "commit: work"}, false},
+		{"reset then commit", []string{"commit: again", "reset: moving to abc", "commit: work"}, true},
+		{"commit then rebase finish", []string{"rebase (finish): x", "commit: work", "branch: Created from main"}, true},
+		{"empty", nil, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := hasLocalCommitEntry(tt.subjects); got != tt.want {
+				t.Errorf("hasLocalCommitEntry(%v) = %v, want %v", tt.subjects, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestFindMergedCandidatesSquashMerge(t *testing.T) {
 	defer func(orig func(context.Context, string) (map[string]bool, error)) {
 		git.ComputePatchIDs = orig

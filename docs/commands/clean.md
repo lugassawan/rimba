@@ -50,6 +50,8 @@ rimba hook install
 ```
 
 {: .warning }
+> `--merged` also detects fast-forward merges by reading the branch reflog for local commits, so a worktree with no commits of its own is kept. Where reflogs are unavailable (bare repos, `git gc` expiry), fast-forward-merged worktrees are not detected.
+
 > `--merged` and `--stale` are mutually exclusive. `--merged` works with or without `rimba init`. Without a config file, it falls back to auto-detecting the default branch. By default, `rimba clean` prunes stale remote-tracking refs across all configured remotes (not just `origin`).
 
 ## Flags
