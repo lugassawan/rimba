@@ -15,7 +15,7 @@ func withRecorder(hctx *HandlerContext, toolName string, handler server.ToolHand
 		if hctx.Sink == nil {
 			return handler(ctx, req)
 		}
-		rec := observability.NewRecorder(hctx.Sink, toolName, "", "", hctx.Version)
+		rec := observability.NewRecorder(observability.ShareSink(hctx.Sink), toolName, "", "", hctx.Version)
 		done := false // stays false on panic or runtime.Goexit
 		// recover() must be called directly inside the deferred literal to take effect.
 		defer func() { finishCall(rec, recover(), done, result, callErr) }()

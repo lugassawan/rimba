@@ -9,9 +9,8 @@ import (
 	"testing"
 )
 
-// mcpObservabilityEnv returns the environment for an MCP session that records
-// observability into home. RIMBA_NO_OBSERVABILITY disables on mere presence,
-// so it is dropped rather than overridden.
+// mcpObservabilityEnv returns an env recording into home; RIMBA_NO_OBSERVABILITY
+// disables on mere presence, so it is dropped rather than overridden.
 func mcpObservabilityEnv(home string) []string {
 	var env []string
 	for _, kv := range os.Environ() {

@@ -7,6 +7,7 @@ import (
 	"runtime/debug"
 	"time"
 
+	rimbadebug "github.com/lugassawan/rimba/internal/debug"
 	"github.com/lugassawan/rimba/internal/parallel"
 	"github.com/lugassawan/rimba/internal/termcolor"
 	"github.com/lugassawan/rimba/internal/updater"
@@ -58,7 +59,7 @@ func closeOnHintPanic(out chan<- *updater.CheckResult, p any) {
 	if p == nil {
 		return
 	}
-	if os.Getenv("RIMBA_DEBUG") != "" {
+	if os.Getenv(rimbadebug.EnvVar) != "" {
 		parallel.ReportPanic("[debug] update check panicked (ignored)", p, debug.Stack())
 	}
 	close(out)

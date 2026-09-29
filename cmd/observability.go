@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/debug"
 	"github.com/lugassawan/rimba/internal/observability"
 )
 
@@ -16,7 +17,7 @@ func openObservabilitySink(cfg *config.Config, repoRoot string) observability.Si
 	}
 	sink, err := observability.NewFileSink(repoRoot, cfg.ObservabilityRetentionDays())
 	if err != nil {
-		if os.Getenv("RIMBA_DEBUG") != "" {
+		if os.Getenv(debug.EnvVar) != "" {
 			fmt.Fprintf(os.Stderr, "\n[debug] observability disabled: %v\n", err)
 		}
 		return nil

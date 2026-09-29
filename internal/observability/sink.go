@@ -27,8 +27,8 @@ type Sink interface {
 	Close() error
 }
 
-// fileSink is the default Sink: per-day append-only JSONL log and metrics files,
-// rotated lazily on the first write after midnight so a long-lived owner can share it.
+// fileSink is the default Sink: per-day JSONL log and metrics files, rotated lazily
+// after midnight. Files deleted mid-day go unnoticed until the next rotation.
 type fileSink struct {
 	mu            sync.Mutex
 	dir, prefix   string
@@ -80,6 +80,12 @@ func ListDayFiles(dir, prefix, suffix string) []string {
 	return matches
 }
 
+// ShareSink wraps s so Close is a no-op, for a sink whose owner closes it once
+// while many short-lived Recorders write through it.
+func ShareSink(s Sink) Sink {
+	return sharedSink{Sink: s}
+}
+
 // WriteLog appends record to the log stream as one JSON line.
 func (f *fileSink) WriteLog(record any) error {
 	return f.appendLine(record, func() *os.File { return f.logFile })
@@ -103,6 +109,11 @@ func (f *fileSink) Close() error {
 	return err
 }
 
+// sharedSink embeds a Sink but does not forward Close.
+type sharedSink struct{ Sink }
+
+func (sharedSink) Close() error { return nil }
+
 // newFileSinkAt is NewFileSink with the cache-dir root and clock passed
 // explicitly, so tests can use a temp dir and a fake clock.
 func newFileSinkAt(cacheDir, repoRoot string, retentionDays int, now func() time.Time) (Sink, error) {
@@ -124,11 +135,8 @@ func newFileSinkAt(cacheDir, repoRoot string, retentionDays int, now func() time
 	}, nil
 }
 
-// pruneOldDayFiles best-effort deletes this repo's own day-files (matched by
-// prefix) older than retentionDays relative to now. retentionDays <= 0
-// disables pruning entirely — a config typo must never wipe everything.
-// Today's own file is never deleted, regardless of retentionDays, via an
-// unconditional guard independent of the age arithmetic below.
+// pruneOldDayFiles best-effort deletes this repo's day-files older than
+// retentionDays. <= 0 disables pruning (a typo must never wipe everything); today's file is kept.
 func pruneOldDayFiles(dir, prefix string, retentionDays int, now time.Time) {
 	if retentionDays <= 0 {
 		return
@@ -137,10 +145,8 @@ func pruneOldDayFiles(dir, prefix string, retentionDays int, now time.Time) {
 	pruneSuffix(dir, prefix, ".metrics.jsonl", retentionDays, now)
 }
 
-// pruneSuffix deletes files under dir whose name literally starts with
-// prefix+"-" and ends with suffix, and whose embedded YYYY-MM-DD date is
-// older than retentionDays days before now. Unparseable dates and today's
-// own date are always skipped.
+// pruneSuffix deletes prefix+"-"…suffix files in dir dated more than
+// retentionDays before now; unparseable dates and today's date are skipped.
 func pruneSuffix(dir, prefix, suffix string, retentionDays int, now time.Time) {
 	want := prefix + "-"
 	today := now.Format(dayLayout)

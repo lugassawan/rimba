@@ -75,14 +75,14 @@ func TestWithRecorderAttachesRecorderAndWritesCommandRecord(t *testing.T) {
 	}
 }
 
-// TestWithRecorderSharedSinkSurvivesAcrossCalls guards the shared-sink
-// contract: the per-call Recorder must never close the sink, or every call
-// after the first would silently lose its records.
+// A handler closing its Recorder must not close the shared sink for later calls.
 func TestWithRecorderSharedSinkSurvivesAcrossCalls(t *testing.T) {
 	sink := &fakeSink{}
 	hctx := &HandlerContext{Sink: sink, RepoRoot: "/repo", Version: "test"}
-	var sawRecorder bool
-	handler := withRecorder(hctx, "add", recordingHandler(&sawRecorder, mcp.NewToolResultText("ok")))
+	handler := withRecorder(hctx, "add", func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		_ = observability.FromContext(ctx).Close()
+		return mcp.NewToolResultText("ok"), nil
+	})
 
 	for range 2 {
 		if _, err := handler(context.Background(), mcp.CallToolRequest{}); err != nil {
@@ -100,7 +100,7 @@ func TestWithRecorderSharedSinkSurvivesAcrossCalls(t *testing.T) {
 		t.Errorf("command records = %d, want 2", commands)
 	}
 	if sink.closes != 0 {
-		t.Errorf("sink closed %d times by withRecorder, want 0", sink.closes)
+		t.Errorf("shared sink closed %d times, want 0", sink.closes)
 	}
 }
 

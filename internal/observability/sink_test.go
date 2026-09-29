@@ -318,7 +318,7 @@ func TestNewFileSinkAtMetricFileOpenFails(t *testing.T) {
 	}
 }
 
-func TestAppendJSONLineMarshalError(t *testing.T) {
+func TestFileSinkMarshalError(t *testing.T) {
 	cacheDir := t.TempDir()
 	sink, err := newFileSinkAt(cacheDir, "/repo/marshalerr", 14, time.Now)
 	if err != nil {
@@ -331,7 +331,7 @@ func TestAppendJSONLineMarshalError(t *testing.T) {
 	}
 }
 
-func TestAppendJSONLineWriteError(t *testing.T) {
+func TestFileSinkWriteError(t *testing.T) {
 	cacheDir := t.TempDir()
 	sinkIface, err := newFileSinkAt(cacheDir, "/repo/writeerr", 14, time.Now)
 	if err != nil {

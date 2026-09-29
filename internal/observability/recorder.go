@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/lugassawan/rimba/internal/debug"
 )
 
 // Recorder binds one logical command invocation. A nil *Recorder no-ops on
@@ -50,7 +52,7 @@ func NewRecorder(sink Sink, command, task, service, rimbaVersion string) *Record
 		rimbaVersion: rimbaVersion,
 		start:        time.Now(),
 	}
-	if _, ok := os.LookupEnv("RIMBA_DEBUG"); ok {
+	if _, ok := os.LookupEnv(debug.EnvVar); ok {
 		r.debugTiming = true
 	}
 	r.rootSpanID = r.newSpanID()
@@ -185,8 +187,8 @@ func (r *Recorder) Finalize(outcome string, exitCode int, err error) {
 	r.writeSpan(r.rootSpanID, "", "command", d, "")
 }
 
-// Close closes the sink; nil-safe. Call it only when the Recorder owns the sink
-// (cmd/root.go) — the MCP server's shared sink is closed by cmd/mcp.go.
+// Close closes the sink; nil-safe. It is a no-op for a ShareSink-wrapped sink,
+// whose owner (cmd/mcp.go) closes it.
 func (r *Recorder) Close() error {
 	if r == nil {
 		return nil

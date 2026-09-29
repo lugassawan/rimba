@@ -8,6 +8,9 @@ import (
 	"time"
 )
 
+// EnvVar is the environment variable that enables debug output when set.
+const EnvVar = "RIMBA_DEBUG"
+
 // StartTimer logs the start of a labelled operation and returns a function
 // that logs elapsed time when called. No-op when RIMBA_DEBUG is unset.
 func StartTimer(label string) func() {
@@ -42,6 +45,6 @@ func logf(format string, args ...any) {
 }
 
 func enabled() bool {
-	_, ok := os.LookupEnv("RIMBA_DEBUG")
+	_, ok := os.LookupEnv(EnvVar)
 	return ok
 }

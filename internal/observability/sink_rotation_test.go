@@ -85,9 +85,8 @@ func TestFileSinkRotatesAcrossMidnight(t *testing.T) {
 	}
 }
 
-// TestFileSinkRotationFailureKeepsOldFilesThenRetries blocks one of the next
-// day's paths with a directory so that open fails, once per stream: blocking
-// the metrics path exercises the log-opened-then-metrics-failed branch.
+// Blocking each stream's next-day path in turn covers both the log-open and the
+// log-opened-then-metrics-failed rotation failures.
 func TestFileSinkRotationFailureKeepsOldFilesThenRetries(t *testing.T) {
 	for _, blockedSuffix := range []string{".log.jsonl", ".metrics.jsonl"} {
 		t.Run(blockedSuffix, func(t *testing.T) {
@@ -167,7 +166,7 @@ func TestFileSinkRotationPrunesExpiredDayFiles(t *testing.T) {
 	}
 	defer func() { _ = sink.Close() }()
 
-	// Aged past retention only once the clock moves to day 2 or later.
+	// Created after open, so only the rotation-time prune can remove it.
 	stale := rotationDayFile(cacheDir, "2026-02-25", ".log.jsonl")
 	if err := os.WriteFile(stale, []byte("{}\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile stale: %v", err)
