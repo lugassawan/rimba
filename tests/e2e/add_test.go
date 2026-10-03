@@ -167,9 +167,12 @@ func TestAddFailsDuplicate(t *testing.T) {
 	assertContains(t, r.Stderr, "already exists")
 }
 
-func TestAddPartialFailCopyHint(t *testing.T) {
+func TestAddPartialFailCopyRollsBack(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
+	}
+	if os.Getuid() == 0 {
+		t.Skip("chmod 000 is ineffective for root")
 	}
 
 	repo := setupRepo(t)
@@ -180,7 +183,7 @@ func TestAddPartialFailCopyHint(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 	// Restore permissions on cleanup so t.TempDir() can remove the file
-	t.Cleanup(func() { _ = os.Chmod(envPath, 0644) })
+	t.Cleanup(func() { _ = os.Chmod(envPath, 0o644) })
 
 	rimbaSuccess(t, repo, "init")
 
@@ -189,10 +192,27 @@ func TestAddPartialFailCopyHint(t *testing.T) {
 	cfg.CopyFiles = []string{".env"}
 	saveConfig(t, repo, cfg)
 
-	r := rimbaFail(t, repo, "add", "copy-fail-task")
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	task := "copy-fail-task"
+	branch := resolver.BranchName(defaultPrefix, task)
+	wtPath := resolver.WorktreePath(wtDir, branch)
+
+	r := rimbaFail(t, repo, "add", task)
 	assertContains(t, r.Stderr, "failed to copy files")
-	assertContains(t, r.Stderr, "To retry, manually copy files to:")
-	assertContains(t, r.Stderr, "rimba remove copy-fail-task")
+	assertContains(t, r.Stderr, "Rollback completed")
+	assertNotContains(t, r.Stderr, "To fix:")
+	assertNotContains(t, r.Stderr, "To retry, manually copy")
+	assertFileNotExists(t, wtPath)
+	if got := strings.TrimSpace(testutil.GitCmd(t, repo, "branch", "--list", branch)); got != "" {
+		t.Fatalf("branch still exists after rollback: %q", got)
+	}
+
+	// With the blocker gone, the same task name must be retryable.
+	if err := os.Chmod(envPath, 0o644); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	rimbaSuccess(t, repo, "add", task, flagSkipDepsE2E, flagSkipHooksE2E)
+	assertFileExists(t, wtPath)
 }
 
 func TestAddFailsNoArgs(t *testing.T) {

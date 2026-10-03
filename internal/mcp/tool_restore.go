@@ -87,7 +87,13 @@ func handleRestore(hctx *HandlerContext) server.ToolHandlerFunc {
 			Concurrency:   cfg.DepsConcurrency(),
 		}, nil)
 		if err != nil {
-			return errorResult(err), nil
+			rollbackErr := operations.RollbackFailedCreate(hctx.Runner, operations.RollbackParams{
+				WtPath:     wtPath,
+				Branch:     branch,
+				Task:       task,
+				KeepBranch: true, // the branch pre-existed this create
+			}, err)
+			return errorResult(rollbackErr), nil
 		}
 
 		return marshalResult(restoreResult{

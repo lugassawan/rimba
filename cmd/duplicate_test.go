@@ -65,8 +65,12 @@ func TestDuplicateAutoSuffix(t *testing.T) {
 		"",
 	}, "\n")
 
+	rollbackCalled := false
 	r := &mockRunner{
 		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == "worktree" && args[1] == cmdRemove {
+				rollbackCalled = true
+			}
 			if len(args) >= 2 && args[1] == cmdGitCommonDir {
 				return filepath.Join(repoDir, ".git"), nil
 			}
@@ -101,6 +105,9 @@ func TestDuplicateAutoSuffix(t *testing.T) {
 	}
 	if !strings.Contains(out, "login-1") {
 		t.Errorf("output = %q, want auto-suffix 'login-1'", out)
+	}
+	if rollbackCalled {
+		t.Fatal("successful duplicate must not roll back")
 	}
 }
 

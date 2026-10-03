@@ -88,11 +88,15 @@ var errGitFailed = errors.New("git failed")
 
 // mockRunner implements git.Runner with configurable closures for testing.
 type mockRunner struct {
-	run      func(args ...string) (string, error)
-	runInDir func(dir string, args ...string) (string, error)
+	run        func(args ...string) (string, error)
+	runContext func(context.Context, ...string) (string, error)
+	runInDir   func(dir string, args ...string) (string, error)
 }
 
-func (m *mockRunner) Run(_ context.Context, args ...string) (string, error) {
+func (m *mockRunner) Run(ctx context.Context, args ...string) (string, error) {
+	if m.runContext != nil {
+		return m.runContext(ctx, args...)
+	}
 	return m.run(args...)
 }
 

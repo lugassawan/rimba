@@ -108,7 +108,12 @@ func AddWorktree(ctx context.Context, r git.Runner, params AddParams, onProgress
 		Concurrency:   params.Concurrency,
 	}, onProgress)
 	if err != nil {
-		return result, err
+		return result, RollbackFailedCreate(r, RollbackParams{
+			WtPath:     wtPath,
+			Branch:     branch,
+			Task:       params.Task,
+			OnProgress: onProgress,
+		}, err)
 	}
 	result.Copied = pcResult.Copied
 	result.Skipped = pcResult.Skipped

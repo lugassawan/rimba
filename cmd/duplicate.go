@@ -171,7 +171,12 @@ var duplicateCmd = &cobra.Command{
 			Concurrency:   cfg.DepsConcurrency(),
 		}, func(msg string) { s.Update(msg) })
 		if err != nil {
-			return err
+			return operations.RollbackFailedCreate(r, operations.RollbackParams{
+				WtPath:     wtPath,
+				Branch:     newBranch,
+				Task:       newTask,
+				OnProgress: func(msg string) { s.Update(msg) },
+			}, err)
 		}
 
 		s.Stop()
