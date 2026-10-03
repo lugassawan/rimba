@@ -3,8 +3,10 @@ package e2e_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/testutil"
 )
 
@@ -25,9 +27,8 @@ func TestRestoreBasic(t *testing.T) {
 	assertContains(t, r.Stdout, "restore-basic")
 }
 
-// A failed restore must point at `rimba archive` (branch-preserving), never
-// `rimba remove`, which would delete the archived branch.
-func TestRestorePartialFailHintPreservesBranch(t *testing.T) {
+// A failed restore rolls back the worktree while preserving the archived branch.
+func TestRestorePartialFailRollsBackKeepsBranch(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
 	}
@@ -49,21 +50,27 @@ func TestRestorePartialFailHintPreservesBranch(t *testing.T) {
 	cfg := loadConfig(t, repo)
 	cfg.CopyFiles = []string{".env"}
 	saveConfig(t, repo, cfg)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	branch := resolver.BranchName(defaultPrefix, task)
+	wtPath := resolver.WorktreePath(wtDir, branch)
 
 	r := rimbaFail(t, repo, "restore", task)
 	assertContains(t, r.Stderr, "failed to copy files")
-	assertContains(t, r.Stderr, "rimba archive "+task)
+	assertContains(t, r.Stderr, "Rollback completed")
+	assertContains(t, r.Stderr, "preserved")
 	assertNotContains(t, r.Stderr, "rimba remove")
+	assertNotContains(t, r.Stderr, "To fix:")
+	assertFileNotExists(t, wtPath)
+	if got := strings.TrimSpace(testutil.GitCmd(t, repo, "branch", "--list", branch)); got == "" {
+		t.Fatal("archived branch must survive restore rollback")
+	}
 
-	// Follow the hint: the branch must survive and restore must then succeed.
-	rimbaSuccess(t, repo, "archive", task)
-	branches := testutil.GitCmd(t, repo, "branch", "--list", "*"+task)
-	assertContains(t, branches, task)
-
+	// With the blocker gone, restoring the same task must succeed.
 	if err := os.Chmod(envPath, 0o644); err != nil {
 		t.Fatalf("chmod: %v", err)
 	}
 	rimbaSuccess(t, repo, "restore", task, flagSkipDepsE2E, flagSkipHooksE2E)
+	assertFileExists(t, wtPath)
 }
 
 func TestRestoreNoBranch(t *testing.T) {

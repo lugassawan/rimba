@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -12,8 +11,6 @@ import (
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/resolver"
 )
-
-const duplicateRollbackBranch = "feature/login-copy"
 
 func TestDuplicateDefaultBranchError(t *testing.T) {
 	repoDir := t.TempDir()
@@ -111,147 +108,6 @@ func TestDuplicateAutoSuffix(t *testing.T) {
 	}
 	if rollbackCalled {
 		t.Fatal("successful duplicate must not roll back")
-	}
-}
-
-func TestRollbackFailedDuplicateCleanupSucceeds(t *testing.T) {
-	setupErr := errors.New("setup failed")
-	cleanupContextLive := false
-	r := &mockRunner{
-		runContext: func(ctx context.Context, args ...string) (string, error) {
-			if len(args) >= 2 && args[0] == "worktree" && args[1] == cmdRemove {
-				cleanupContextLive = ctx.Err() == nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
-
-	err := rollbackFailedDuplicate(r, filepath.Join(t.TempDir(), "worktree"), duplicateRollbackBranch, "login-copy", setupErr, nil)
-	assertErrorsAre(t, err, setupErr)
-	if !cleanupContextLive {
-		t.Error("cleanup context was cancelled, want live context")
-	}
-	assertErrorContains(t, err, "Rollback completed", duplicateRollbackBranch)
-}
-
-func TestRollbackFailedDuplicateWorktreeRemovalFails(t *testing.T) {
-	setupErr := errors.New("setup failed")
-	removeErr := errors.New("worktree removal failed")
-	wtPath := filepath.Join(t.TempDir(), "worktree")
-	if err := os.MkdirAll(wtPath, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(wtPath, ".git"), []byte("gitdir: /tmp/worktrees/login-copy"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[0] == "worktree" && args[1] == cmdRemove {
-				return "", removeErr
-			}
-			if len(args) >= 1 && args[0] == cmdBranch {
-				t.Fatal("branch deletion must not run after worktree removal fails")
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
-
-	err := rollbackFailedDuplicate(r, wtPath, duplicateRollbackBranch, "login-copy", setupErr, nil)
-	assertErrorsAre(t, err, setupErr, removeErr)
-	assertErrorContains(t, err, "Rollback failed", wtPath, "branch preserved")
-}
-
-func TestRollbackFailedDuplicateBranchDeletionFails(t *testing.T) {
-	setupErr := errors.New("setup failed")
-	branchErr := errors.New("branch delete failed")
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 1 && args[0] == cmdBranch {
-				return "", branchErr
-			}
-			if len(args) >= 1 && args[0] == cmdRevParse {
-				return "", nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
-
-	err := rollbackFailedDuplicate(r, filepath.Join(t.TempDir(), "worktree"), duplicateRollbackBranch, "login-copy", setupErr, nil)
-	assertErrorsAre(t, err, setupErr, branchErr)
-	assertErrorContains(t, err, "worktree removed", duplicateRollbackBranch, "failed to delete branch")
-}
-
-func TestRollbackFailedDuplicateLeavesDirectoryAndBranch(t *testing.T) {
-	setupErr := errors.New("setup failed")
-	branchErr := errors.New("branch delete failed")
-	wtPath := filepath.Join(t.TempDir(), "$(unexpected)")
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[0] == "worktree" && args[1] == cmdRemove {
-				return "", errors.New("remove failed")
-			}
-			if len(args) >= 1 && args[0] == cmdBranch {
-				return "", branchErr
-			}
-			if len(args) >= 1 && args[0] == cmdRevParse {
-				return "", nil
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
-
-	err := rollbackFailedDuplicate(r, wtPath, duplicateRollbackBranch, "login-copy", setupErr, nil)
-	assertErrorsAre(t, err, setupErr, branchErr)
-	assertErrorContains(t, err, "directory remains", wtPath, duplicateRollbackBranch)
-	if strings.Contains(err.Error(), "rm -rf --") {
-		t.Errorf("error = %q, must not render a shell command", err)
-	}
-}
-
-func TestRollbackFailedDuplicateFailedPruneLeavesDirectory(t *testing.T) {
-	setupErr := errors.New("setup failed")
-	pruneErr := errors.New("prune failed")
-	wtPath := filepath.Join(t.TempDir(), "worktree")
-	r := &mockRunner{
-		run: func(args ...string) (string, error) {
-			if len(args) >= 2 && args[0] == "worktree" && args[1] == cmdRemove {
-				return "", errors.New("remove failed")
-			}
-			if len(args) >= 2 && args[0] == "worktree" && args[1] == "prune" {
-				return "", pruneErr
-			}
-			if len(args) >= 1 && args[0] == cmdBranch {
-				t.Fatal("branch deletion must not run after failed prune")
-			}
-			return "", nil
-		},
-		runInDir: noopRunInDir,
-	}
-
-	err := rollbackFailedDuplicate(r, wtPath, duplicateRollbackBranch, "login-copy", setupErr, nil)
-	assertErrorsAre(t, err, setupErr, pruneErr)
-	assertErrorContains(t, err, "Rollback failed", "Directory remains", wtPath, "branch preserved")
-}
-
-func assertErrorsAre(t *testing.T, err error, wants ...error) {
-	t.Helper()
-	for _, want := range wants {
-		if !errors.Is(err, want) {
-			t.Errorf("errors.Is(err, %v) = false, err = %v", want, err)
-		}
-	}
-}
-
-func assertErrorContains(t *testing.T, err error, wants ...string) {
-	t.Helper()
-	for _, want := range wants {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("error = %q, want substring %q", err, want)
-		}
 	}
 }
 

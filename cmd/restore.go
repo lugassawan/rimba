@@ -91,7 +91,13 @@ to see available archived branches.`,
 			Concurrency:   cfg.DepsConcurrency(),
 		}, func(msg string) { s.Update(msg) })
 		if err != nil {
-			return err
+			return operations.RollbackFailedCreate(r, operations.RollbackParams{
+				WtPath:     wtPath,
+				Branch:     branch,
+				Task:       task,
+				KeepBranch: true, // the branch pre-existed this create
+				OnProgress: func(msg string) { s.Update(msg) },
+			}, err)
 		}
 
 		s.Stop()

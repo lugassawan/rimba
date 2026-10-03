@@ -12,7 +12,6 @@ import (
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
-	"github.com/lugassawan/rimba/internal/progress"
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
@@ -172,7 +171,12 @@ var duplicateCmd = &cobra.Command{
 			Concurrency:   cfg.DepsConcurrency(),
 		}, func(msg string) { s.Update(msg) })
 		if err != nil {
-			return rollbackFailedDuplicate(r, wtPath, newBranch, newTask, err, func(msg string) { s.Update(msg) })
+			return operations.RollbackFailedCreate(r, operations.RollbackParams{
+				WtPath:     wtPath,
+				Branch:     newBranch,
+				Task:       newTask,
+				OnProgress: func(msg string) { s.Update(msg) },
+			}, err)
 		}
 
 		s.Stop()
@@ -196,34 +200,6 @@ var duplicateCmd = &cobra.Command{
 
 		return nil
 	},
-}
-
-func rollbackFailedDuplicate(r git.Runner, wtPath, branch, task string, setupErr error, onProgress progress.Func) error {
-	result, err := operations.RemoveWorktree(
-		context.Background(),
-		r,
-		resolver.WorktreeInfo{Path: wtPath, Branch: branch},
-		task,
-		false,
-		true,
-		onProgress,
-	)
-	if err != nil {
-		if result.LeftOnDisk {
-			return fmt.Errorf("%w\nRollback failed for worktree %s; branch preserved: %s\nDirectory remains; remove it manually: %s\nCleanup error: %w", setupErr, wtPath, branch, wtPath, err)
-		}
-		return fmt.Errorf("%w\nRollback failed for worktree %s; branch preserved: %s\nCleanup error: %w", setupErr, wtPath, branch, err)
-	}
-	if result.LeftOnDisk && result.BranchError != nil {
-		return fmt.Errorf("%w\nRollback incomplete: branch %s remains and directory remains: %s\nRemove the directory manually: %s\nBranch cleanup error: %w", setupErr, branch, wtPath, wtPath, result.BranchError)
-	}
-	if result.BranchError != nil {
-		return fmt.Errorf("%w\nRollback incomplete: worktree removed but branch %s remains: %w", setupErr, branch, result.BranchError)
-	}
-	if result.LeftOnDisk {
-		return fmt.Errorf("%w\nRollback incomplete: branch %s was removed, but directory remains: %s\nRemove the directory manually: %s", setupErr, branch, wtPath, wtPath)
-	}
-	return fmt.Errorf("%w\nRollback completed: removed worktree %s and branch %s; retry the duplicate command", setupErr, wtPath, branch)
 }
 
 func init() {

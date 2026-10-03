@@ -284,11 +284,17 @@ func TestRestoreToolPostCreateSetupFails(t *testing.T) {
 	if !strings.Contains(errText, "worktree list failed") {
 		t.Errorf("expected post-create setup error, got: %s", errText)
 	}
-	if !strings.Contains(errText, "To fix: rimba archive restored-task") {
-		t.Errorf("expected archive hint, got: %s", errText)
+	if !strings.Contains(errText, "Rollback completed") {
+		t.Errorf("expected rollback completion, got: %s", errText)
+	}
+	if !strings.Contains(errText, "preserved") {
+		t.Errorf("expected branch-preserved note, got: %s", errText)
 	}
 	if strings.Contains(errText, "rimba remove") {
 		t.Errorf("hint must not suggest destructive remove, got: %s", errText)
+	}
+	if strings.Contains(errText, "To fix:") {
+		t.Errorf("stale recovery hint must be stripped after rollback, got: %s", errText)
 	}
 }
 

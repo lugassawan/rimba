@@ -37,6 +37,9 @@ func TestDuplicatePartialFailCopyRollsBack(t *testing.T) {
 	r := rimbaFail(t, repo, "duplicate", taskDupA, "--as", "dup-hint")
 	assertContains(t, r.Stderr, "failed to copy files")
 	assertContains(t, r.Stderr, "Rollback completed")
+	assertNotContains(t, r.Stderr, "rimba remove")
+	assertNotContains(t, r.Stderr, "To retry, manually copy")
+	assertNotContains(t, r.Stderr, "To fix:")
 	assertFileNotExists(t, dupPath)
 	if got := strings.TrimSpace(testutil.GitCmd(t, repo, "branch", "--list", dupBranch)); got != "" {
 		t.Fatalf("branch still exists after rollback: %q", got)
