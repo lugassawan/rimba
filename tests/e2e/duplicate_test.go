@@ -3,14 +3,14 @@ package e2e_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/testutil"
 )
 
-// The duplicate branch is new, so a partial failure should suggest remove.
-func TestDuplicatePartialFailCopyHint(t *testing.T) {
+func TestDuplicatePartialFailCopyRollsBack(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2E)
 	}
@@ -30,11 +30,23 @@ func TestDuplicatePartialFailCopyHint(t *testing.T) {
 	cfg := loadConfig(t, repo)
 	cfg.CopyFiles = []string{".env"}
 	saveConfig(t, repo, cfg)
+	wtDir := filepath.Join(repo, cfg.WorktreeDir)
+	dupBranch := resolver.BranchName(defaultPrefix, "dup-hint")
+	dupPath := resolver.WorktreePath(wtDir, dupBranch)
 
 	r := rimbaFail(t, repo, "duplicate", taskDupA, "--as", "dup-hint")
 	assertContains(t, r.Stderr, "failed to copy files")
-	assertContains(t, r.Stderr, "rimba remove dup-hint")
-	assertNotContains(t, r.Stderr, "rimba archive")
+	assertContains(t, r.Stderr, "Rollback completed")
+	assertFileNotExists(t, dupPath)
+	if got := strings.TrimSpace(testutil.GitCmd(t, repo, "branch", "--list", dupBranch)); got != "" {
+		t.Fatalf("branch still exists after rollback: %q", got)
+	}
+
+	if err := os.Chmod(envPath, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rimbaSuccess(t, repo, "duplicate", taskDupA, "--as", "dup-hint")
+	assertFileExists(t, dupPath)
 }
 
 func TestDuplicateAutoSuffix(t *testing.T) {
