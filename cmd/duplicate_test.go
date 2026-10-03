@@ -177,6 +177,31 @@ func TestRollbackFailedDuplicateBranchDeletionFails(t *testing.T) {
 	assertErrorContains(t, err, "worktree removed", duplicateRollbackBranch, "failed to delete branch")
 }
 
+func TestRollbackFailedDuplicateLeavesDirectoryAndBranch(t *testing.T) {
+	setupErr := errors.New("setup failed")
+	branchErr := errors.New("branch delete failed")
+	wtPath := filepath.Join(t.TempDir(), "worktree")
+	r := &mockRunner{
+		run: func(args ...string) (string, error) {
+			if len(args) >= 2 && args[0] == "worktree" && args[1] == cmdRemove {
+				return "", errors.New("remove failed")
+			}
+			if len(args) >= 1 && args[0] == cmdBranch {
+				return "", branchErr
+			}
+			if len(args) >= 1 && args[0] == cmdRevParse {
+				return "", nil
+			}
+			return "", nil
+		},
+		runInDir: noopRunInDir,
+	}
+
+	err := rollbackFailedDuplicate(r, wtPath, duplicateRollbackBranch, "login-copy", setupErr, nil)
+	assertErrorsAre(t, err, setupErr, branchErr)
+	assertErrorContains(t, err, "directory remains", wtPath, duplicateRollbackBranch)
+}
+
 func assertErrorsAre(t *testing.T, err error, wants ...error) {
 	t.Helper()
 	for _, want := range wants {
