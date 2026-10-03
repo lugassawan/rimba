@@ -199,7 +199,7 @@ func TestRollbackFailedDuplicateLeavesDirectoryAndBranch(t *testing.T) {
 
 	err := rollbackFailedDuplicate(r, wtPath, duplicateRollbackBranch, "login-copy", setupErr, nil)
 	assertErrorsAre(t, err, setupErr, branchErr)
-	assertErrorContains(t, err, "directory remains", wtPath, duplicateRollbackBranch)
+	assertErrorContains(t, err, "directory remains", "rm -rf --", wtPath, duplicateRollbackBranch)
 }
 
 func assertErrorsAre(t *testing.T, err error, wants ...error) {

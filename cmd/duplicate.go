@@ -212,13 +212,13 @@ func rollbackFailedDuplicate(r git.Runner, wtPath, branch, task string, setupErr
 		return fmt.Errorf("%w\nRollback failed for worktree %s; branch preserved: %s\nCleanup error: %w", setupErr, wtPath, branch, err)
 	}
 	if result.LeftOnDisk && result.BranchError != nil {
-		return fmt.Errorf("%w\nRollback incomplete: branch %s remains and directory remains: %s\nBranch cleanup error: %w", setupErr, branch, wtPath, result.BranchError)
+		return fmt.Errorf("%w\nRollback incomplete: branch %s remains and directory remains: %s\nRemove directory manually: rm -rf -- %q\nBranch cleanup error: %w", setupErr, branch, wtPath, wtPath, result.BranchError)
 	}
 	if result.BranchError != nil {
 		return fmt.Errorf("%w\nRollback incomplete: worktree removed but branch %s remains: %w", setupErr, branch, result.BranchError)
 	}
 	if result.LeftOnDisk {
-		return fmt.Errorf("%w\nRollback incomplete: branch %s was removed, but directory remains: %s", setupErr, branch, wtPath)
+		return fmt.Errorf("%w\nRollback incomplete: branch %s was removed, but directory remains: %s\nRemove directory manually: rm -rf -- %q", setupErr, branch, wtPath, wtPath)
 	}
 	return fmt.Errorf("%w\nRollback completed: removed worktree %s and branch %s; retry the duplicate command", setupErr, wtPath, branch)
 }
