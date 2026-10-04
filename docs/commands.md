@@ -20,7 +20,7 @@ These flags are available on every command:
 
 | Flag | Description |
 |------|-------------|
-| `--json` | Output in JSON format (supported by `list`, `status`, `deps status`, `conflict-check`, `exec`, `log`) |
+| `--json` | Output in JSON format (supported by `add`, `clean`, `conflict-check`, `deps status`, `exec`, `list`, `log`, `merge`, `remove`, `rename`, `report`, `status`, `sync`) |
 | `--no-color` | Disable colored output (also respects `NO_COLOR` env var) |
 | `--debug` | Log git commands and timings to stderr (also respects `RIMBA_DEBUG=1`) |
 | `--yes` | Approve committed shell commands without prompting (see `rimba trust`; also respects `RIMBA_TRUST_YES=1`) |
