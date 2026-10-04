@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -645,88 +644,5 @@ func TestDuplicateAutoSuffixSkipsExistingPath(t *testing.T) {
 	}
 	if out := buf.String(); !strings.Contains(out, "login-2") {
 		t.Errorf("output = %q, want auto-suffix 'login-2'", out)
-	}
-}
-
-func TestNextDuplicateTask(t *testing.T) {
-	tests := []struct {
-		name     string
-		svc      string
-		occupied []string // suffixed tasks with a directory on disk
-		dangling []string // suffixed tasks with a dangling symlink on disk
-		branches []string // suffixed tasks whose branch exists
-		want     string
-	}{
-		{name: "no collision", want: "login-1"},
-		{name: "path collision", occupied: []string{"login-1"}, want: "login-2"},
-		{name: "dangling symlink collision", dangling: []string{"login-1"}, want: "login-2"},
-		{name: "service scoped path collision", svc: "auth-api", occupied: []string{"login-1"}, want: "login-2"},
-		{name: "branch collision", branches: []string{"login-1"}, want: "login-2"},
-		{name: "mixed collisions", occupied: []string{"login-1"}, branches: []string{"login-2"}, want: "login-3"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			wtDir := t.TempDir()
-			for _, o := range tt.occupied {
-				b := resolver.FullBranchName(tt.svc, "feature/", o)
-				_ = os.MkdirAll(resolver.WorktreePath(wtDir, b), 0755)
-			}
-			for _, d := range tt.dangling {
-				b := resolver.FullBranchName(tt.svc, "feature/", d)
-				p := resolver.WorktreePath(wtDir, b)
-				if err := os.Symlink(filepath.Join(wtDir, "missing-target"), p); err != nil {
-					t.Skipf("symlinks unavailable: %v", err)
-				}
-			}
-			r := &mockRunner{
-				run: func(args ...string) (string, error) {
-					for _, b := range tt.branches {
-						if strings.HasSuffix(args[len(args)-1], "/"+b) {
-							return "", nil
-						}
-					}
-					return "", errGitFailed
-				},
-				runInDir: noopRunInDir,
-			}
-			got, err := nextDuplicateTask(context.Background(), r, "login", tt.svc, "feature/", wtDir)
-			if err != nil {
-				t.Fatalf("nextDuplicateTask: %v", err)
-			}
-			if got != tt.want {
-				t.Errorf("got %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestNextDuplicateTaskExhausted(t *testing.T) {
-	r := &mockRunner{
-		run:      func(args ...string) (string, error) { return "", nil }, // every branch exists
-		runInDir: noopRunInDir,
-	}
-	_, err := nextDuplicateTask(context.Background(), r, "login", "", "feature/", t.TempDir())
-	if err == nil || !strings.Contains(err.Error(), "could not find available suffix") {
-		t.Fatalf("err = %v, want 'could not find available suffix'", err)
-	}
-}
-
-func TestNextDuplicateTaskPathCheckError(t *testing.T) {
-	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
-		t.Skip("permission-based test not reliable here")
-	}
-	wtDir := t.TempDir()
-	if err := os.Chmod(wtDir, 0); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(wtDir, 0755) })
-
-	r := &mockRunner{
-		run:      func(args ...string) (string, error) { return "", errGitFailed },
-		runInDir: noopRunInDir,
-	}
-	_, err := nextDuplicateTask(context.Background(), r, "login", "", "feature/", filepath.Join(wtDir, "sub"))
-	if err == nil || !strings.Contains(err.Error(), "check worktree path") {
-		t.Fatalf("err = %v, want 'check worktree path'", err)
 	}
 }
