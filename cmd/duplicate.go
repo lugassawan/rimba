@@ -1,18 +1,13 @@
 package cmd
 
 import (
-	"context"
-	"errors"
 	"fmt"
-	"io/fs"
-	"os"
 	"path/filepath"
 
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/git"
 	"github.com/lugassawan/rimba/internal/hint"
 	"github.com/lugassawan/rimba/internal/operations"
-	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/spinner"
 	"github.com/spf13/cobra"
 )
@@ -21,8 +16,6 @@ const (
 	flagAs = "as"
 
 	hintAs = "Use a custom name instead of auto-suffix (-1, -2, etc.)"
-
-	maxDuplicateSuffix = 1000
 )
 
 var duplicateCmd = &cobra.Command{
@@ -40,79 +33,50 @@ var duplicateCmd = &cobra.Command{
 		return completeWorktreeTasks(cmd, toComplete), cobra.ShellCompDirectiveNoFileComp
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		task := args[0]
+		rawTask := args[0]
 		cfg := config.FromContext(cmd.Context())
-
-		r := newRunner(cmd.Context())
 		ctx := cmd.Context()
+		r := newRunner(ctx)
 
 		repoRoot, err := git.MainRepoRoot(ctx, r)
 		if err != nil {
 			return err
 		}
-
-		wt, err := findWorktree(ctx, r, task)
+		wt, err := findWorktree(ctx, r, rawTask)
 		if err != nil {
 			return err
 		}
 
 		ps := cfg.PrefixSet()
-		if err := operations.GuardKnownPrefix(ps, wt.Branch, cfg.DefaultSource, false); err != nil {
-			return err
-		}
-
-		_, task = operations.ResolveTaskInput(task, repoRoot, ps)
-
-		prefixes := ps.Strip()
-
-		if wt.Branch == cfg.DefaultSource {
-			return fmt.Errorf("cannot duplicate the default branch %q; use 'rimba add' instead", cfg.DefaultSource)
-		}
-
-		svc, _, matchedPrefix := resolver.ServiceFromBranch(wt.Branch, prefixes)
-		if matchedPrefix == "" {
-			matchedPrefix, _ = resolver.PrefixString(resolver.DefaultPrefixType)
-		}
-
-		wtDir := filepath.Join(repoRoot, cfg.WorktreeDir)
-
-		// Determine new task name
-		asFlag, _ := cmd.Flags().GetString(flagAs)
-		var newTask string
-		if asFlag != "" {
-			res := operations.ClassifyTaskInput(asFlag, repoRoot, ps)
-			if res.Kind == operations.KindUnknownService {
-				candidate, _ := resolver.SplitServiceInput(asFlag)
-				return fmt.Errorf("service %q not found; create the service directory first or omit the service prefix", candidate)
-			}
-			if err := operations.ValidateBranchInput(res.Task, res.Service); err != nil {
-				return err
-			}
-			newTask = res.Task
-			if res.Service != "" {
-				svc = res.Service
-			}
-		} else {
-			newTask, err = nextDuplicateTask(ctx, r, task, svc, matchedPrefix, wtDir)
-			if err != nil {
-				return err
-			}
-		}
-
-		newBranch := resolver.FullBranchName(svc, matchedPrefix, newTask)
-		wtPath := resolver.WorktreePath(wtDir, newBranch)
-
-		// Validate
-		if git.BranchExists(ctx, r, newBranch) {
-			return fmt.Errorf("branch %q already exists", newBranch)
-		}
-		if _, err := os.Stat(wtPath); err == nil {
-			return fmt.Errorf("worktree path already exists: %s", wtPath)
-		}
-
+		_, sourceTask := operations.ResolveTaskInput(rawTask, repoRoot, ps)
+		as, _ := cmd.Flags().GetString(flagAs)
 		dryRun, _ := cmd.Flags().GetBool(flagDryRun)
 		skipDeps, _ := cmd.Flags().GetBool(flagSkipDeps)
 		skipHooks, _ := cmd.Flags().GetBool(flagSkipHooks)
+		var configModules []config.ModuleConfig
+		if cfg.Deps != nil {
+			configModules = cfg.Deps.Modules
+		}
+		postCreateOptions := operations.PostCreateOptions{
+			RepoRoot:      repoRoot,
+			WorktreeDir:   filepath.Join(repoRoot, cfg.WorktreeDir),
+			CopyFiles:     cfg.CopyFiles,
+			SkipDeps:      skipDeps,
+			AutoDetect:    cfg.IsAutoDetectDeps(),
+			ConfigModules: configModules,
+			SkipHooks:     skipHooks,
+			PostCreate:    cfg.PostCreate,
+			Concurrency:   cfg.DepsConcurrency(),
+		}
+		params := operations.DuplicateParams{
+			Source:            wt,
+			SourceTask:        sourceTask,
+			As:                as,
+			PrefixSet:         ps,
+			DefaultSource:     cfg.DefaultSource,
+			DryRun:            dryRun,
+			PostCreateOptions: postCreateOptions,
+		}
 
 		hint.New(cmd, hintPainter(cmd)).
 			Add(flagSkipDeps, hintSkipDeps).
@@ -122,8 +86,12 @@ var duplicateCmd = &cobra.Command{
 			Show()
 
 		if dryRun {
+			result, err := operations.DuplicateWorktree(ctx, r, params, nil)
+			if err != nil {
+				return err
+			}
 			out := cmd.OutOrStdout()
-			fmt.Fprintf(out, "[dry-run] would create worktree: %s (branch %s from %s)\n", wtPath, newBranch, wt.Branch)
+			fmt.Fprintf(out, "[dry-run] would create worktree: %s (branch %s from %s)\n", result.Path, result.Branch, result.SourceBranch)
 			if len(cfg.CopyFiles) > 0 {
 				fmt.Fprintf(out, "[dry-run] would copy files: %v\n", cfg.CopyFiles)
 			}
@@ -136,68 +104,38 @@ var duplicateCmd = &cobra.Command{
 			return nil
 		}
 
+		preflight := params
+		preflight.DryRun = true
+		if _, err := operations.DuplicateWorktree(ctx, r, preflight, nil); err != nil {
+			return err
+		}
 		if err := ensureTrust(cmd, repoRoot, cfg); err != nil {
 			return err
 		}
-
 		s := spinner.New(spinnerOpts(cmd))
 		defer s.Stop()
-
-		// Create worktree from source branch
 		s.Start("Creating worktree...")
-		if err := git.AddWorktree(ctx, r, wtPath, newBranch, wt.Branch); err != nil {
+		result, err := operations.DuplicateWorktree(ctx, r, params, func(msg string) { s.Update(msg) })
+		if err != nil {
 			return err
 		}
-
-		// Post-create setup: copy files, deps, hooks
-		var configModules []config.ModuleConfig
-		if cfg.Deps != nil {
-			configModules = cfg.Deps.Modules
-		}
-
-		pcResult, err := operations.PostCreateSetup(cmd.Context(), r, operations.PostCreateParams{
-			RepoRoot:      repoRoot,
-			WtPath:        wtPath,
-			Task:          newTask,
-			Service:       svc,
-			NewBranch:     true,
-			CopyFiles:     cfg.CopyFiles,
-			SkipDeps:      skipDeps,
-			AutoDetect:    cfg.IsAutoDetectDeps(),
-			ConfigModules: configModules,
-			SkipHooks:     skipHooks,
-			PostCreate:    cfg.PostCreate,
-			SourcePath:    wt.Path,
-			Concurrency:   cfg.DepsConcurrency(),
-		}, func(msg string) { s.Update(msg) })
-		if err != nil {
-			return operations.RollbackFailedCreate(r, operations.RollbackParams{
-				WtPath:     wtPath,
-				Branch:     newBranch,
-				Task:       newTask,
-				OnProgress: func(msg string) { s.Update(msg) },
-			}, err)
-		}
-
 		s.Stop()
 
 		out := cmd.OutOrStdout()
-		fmt.Fprintf(out, "Duplicated worktree %q as %q\n", task, newTask)
-		fmt.Fprintf(out, "  Branch: %s\n", newBranch)
-		fmt.Fprintf(out, "  Path:   %s\n", wtPath)
-		if len(pcResult.Copied) > 0 {
-			fmt.Fprintf(out, "  Copied: %v\n", pcResult.Copied)
+		fmt.Fprintf(out, "Duplicated worktree %q as %q\n", sourceTask, result.Task)
+		fmt.Fprintf(out, "  Branch: %s\n", result.Branch)
+		fmt.Fprintf(out, "  Path:   %s\n", result.Path)
+		if len(result.Copied) > 0 {
+			fmt.Fprintf(out, "  Copied: %v\n", result.Copied)
 		}
-		if len(pcResult.Skipped) > 0 {
-			fmt.Fprintf(out, "  Skipped (not found): %v\n", pcResult.Skipped)
+		if len(result.Skipped) > 0 {
+			fmt.Fprintf(out, "  Skipped (not found): %v\n", result.Skipped)
 		}
-		if len(pcResult.SkippedSymlinks) > 0 {
-			fmt.Fprintf(out, "  Skipped (symlinks): %v\n", pcResult.SkippedSymlinks)
+		if len(result.SkippedSymlinks) > 0 {
+			fmt.Fprintf(out, "  Skipped (symlinks): %v\n", result.SkippedSymlinks)
 		}
-
-		printInstallResults(out, pcResult.DepsResults)
-		printHookResultsList(out, pcResult.HookResults)
-
+		printInstallResults(out, result.DepsResults)
+		printHookResultsList(out, result.HookResults)
 		return nil
 	},
 }
@@ -208,26 +146,4 @@ func init() {
 	duplicateCmd.Flags().Bool(flagSkipHooks, false, "skip post-create hooks")
 	duplicateCmd.Flags().Bool(flagDryRun, false, "preview what would be duplicated without making changes")
 	rootCmd.AddCommand(duplicateCmd)
-}
-
-// nextDuplicateTask returns the first "<task>-N" whose branch is unused and
-// whose worktree path is unoccupied on disk.
-func nextDuplicateTask(ctx context.Context, r git.Runner, task, svc, prefix, wtDir string) (string, error) {
-	for i := 1; i <= maxDuplicateSuffix; i++ {
-		candidate := fmt.Sprintf("%s-%d", task, i)
-		candidateBranch := resolver.FullBranchName(svc, prefix, candidate)
-		if git.BranchExists(ctx, r, candidateBranch) {
-			continue
-		}
-		path := resolver.WorktreePath(wtDir, candidateBranch)
-		_, err := os.Lstat(path) // Lstat: a dangling symlink still occupies the path
-		if err == nil {
-			continue
-		}
-		if !errors.Is(err, fs.ErrNotExist) {
-			return "", fmt.Errorf("check worktree path %s: %w", path, err)
-		}
-		return candidate, nil
-	}
-	return "", fmt.Errorf("could not find available suffix for %q (tried 1-%d); use --as to specify a name", task, maxDuplicateSuffix)
 }

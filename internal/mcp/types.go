@@ -49,6 +49,19 @@ type addResult struct {
 	Source string `json:"source,omitempty"`
 }
 
+// duplicateResult holds the outcome of a worktree duplication.
+type duplicateResult struct {
+	SourceTask      string   `json:"source_task"`
+	SourceBranch    string   `json:"source_branch"`
+	Task            string   `json:"task"`
+	Branch          string   `json:"branch"`
+	Path            string   `json:"path"`
+	DryRun          bool     `json:"dry_run"`
+	Copied          []string `json:"copied,omitempty"`
+	Skipped         []string `json:"skipped,omitempty"`
+	SkippedSymlinks []string `json:"skipped_symlinks,omitempty"`
+}
+
 // removeResult holds the outcome of a worktree removal.
 type removeResult struct {
 	Task            string `json:"task"`
