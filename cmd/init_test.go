@@ -527,3 +527,9 @@ func TestInitReInitMigratesPerFileEntries(t *testing.T) {
 		t.Errorf(".gitignore should not contain per-file trust.local.toml after re-init, got:\n%s", content)
 	}
 }
+
+func TestInitCmdHelpMentionsPi(t *testing.T) {
+	if !strings.Contains(initCmd.Long, "Pi") || !strings.Contains(initCmd.Long, ".pi/") {
+		t.Errorf("initCmd.Long should mention Pi coding agent and .pi/ generation, got:\n%s", initCmd.Long)
+	}
+}
