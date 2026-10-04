@@ -72,7 +72,7 @@ func planDuplicate(ctx context.Context, r git.Runner, params DuplicateParams) (D
 	if git.BranchExists(ctx, r, result.Branch) {
 		return result, fmt.Errorf("branch %q already exists", result.Branch)
 	}
-	if _, err := os.Stat(result.Path); err == nil {
+	if _, err := os.Lstat(result.Path); err == nil {
 		return result, fmt.Errorf("worktree path already exists: %s", result.Path)
 	}
 	return result, nil

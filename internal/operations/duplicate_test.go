@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -339,5 +340,48 @@ func TestNextDuplicateTaskExhausted(t *testing.T) {
 	_, err := nextDuplicateTask(context.Background(), r, "login", "", "feature/", t.TempDir())
 	if err == nil || !strings.Contains(err.Error(), "could not find available suffix") {
 		t.Fatalf("error = %v, want suffix exhaustion", err)
+	}
+}
+
+func TestNextDuplicateTaskPathCheckError(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("permission-based test not reliable here")
+	}
+	wtDir := t.TempDir()
+	if err := os.Chmod(wtDir, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(wtDir, 0o755) })
+
+	r := &mockRunner{
+		run:      func(args ...string) (string, error) { return "", errGitFailed },
+		runInDir: noopRunInDir,
+	}
+	_, err := nextDuplicateTask(context.Background(), r, "login", "", "feature/", filepath.Join(wtDir, "sub"))
+	if err == nil || !strings.Contains(err.Error(), "check worktree path") {
+		t.Fatalf("err = %v, want 'check worktree path'", err)
+	}
+}
+
+func TestDuplicateWorktreeRejectsDanglingDestinationSymlink(t *testing.T) {
+	repoRoot := t.TempDir()
+	params := duplicateParams(repoRoot)
+	params.As = "copy"
+	params.DryRun = true
+	path := resolver.WorktreePath(params.WorktreeDir, "feature/copy")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(repoRoot, "missing"), path); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &mockRunner{
+		run:      func(args ...string) (string, error) { return "", errGitFailed },
+		runInDir: noopRunInDir,
+	}
+	_, err := DuplicateWorktree(context.Background(), r, params, nil)
+	if err == nil || !strings.Contains(err.Error(), "worktree path already exists") {
+		t.Fatalf("err = %v, want existing worktree path error", err)
 	}
 }
