@@ -28,6 +28,7 @@ func NewServer(hctx *HandlerContext) *server.MCPServer {
 	registerLogTool(s, hctx)
 	registerArchiveTool(s, hctx)
 	registerRestoreTool(s, hctx)
+	registerDuplicateTool(s, hctx)
 
 	return s
 }

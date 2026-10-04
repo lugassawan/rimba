@@ -141,7 +141,7 @@ func TestNewServer(t *testing.T) {
 	tools := s.ListTools()
 	expectedTools := []string{
 		"list", "add", "remove", "status", "exec", "conflict-check", "merge", "sync", "clean",
-		"rename", "merge-plan", "log", "archive", "restore",
+		"rename", "merge-plan", "log", "archive", "restore", "duplicate",
 	}
 	for _, name := range expectedTools {
 		if _, exists := tools[name]; !exists {
