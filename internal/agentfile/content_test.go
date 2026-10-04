@@ -290,6 +290,7 @@ func TestMcpToolEntriesIncludesAllRegisteredTools(t *testing.T) {
 		"mcp__rimba__log",
 		"mcp__rimba__archive",
 		"mcp__rimba__restore",
+		"mcp__rimba__duplicate",
 	}
 
 	got := make(map[string]bool, len(mcpToolEntries))

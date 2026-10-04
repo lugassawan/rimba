@@ -15,6 +15,7 @@ type mcpToolEntry struct {
 // mapping, consumed by mcpToolsSection and asserted against directly in tests.
 var mcpToolEntries = []mcpToolEntry{
 	{"mcp__rimba__add", "rimba add <task>"},
+	{"mcp__rimba__duplicate", "rimba duplicate <task>"},
 	{"mcp__rimba__list", "rimba list"},
 	{"mcp__rimba__status", "rimba status"},
 	{"mcp__rimba__sync", "rimba sync [task]"},
