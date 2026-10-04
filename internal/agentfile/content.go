@@ -142,7 +142,7 @@ MCP tools also accept ` + "`" + `service/task` + "`" + ` format in the ` + "`" +
 
 ## JSON Output
 
-Commands that support ` + "`" + `--json` + "`" + `: list, status, exec, conflict-check, deps status, add, merge, remove, rename, sync, clean, log.
+Commands that support ` + "`" + `--json` + "`" + `: list, status, exec, conflict-check, deps status, add, merge, remove, rename, sync, clean, log, report.
 
 Envelope: ` + "`" + `{"version": "...", "command": "...", "data": ...}` + "`" + `
 Error: ` + "`" + `{"version": "...", "command": "...", "error": "...", "code": "..."}` + "`" + `
@@ -245,7 +245,7 @@ See AGENTS.md at the repo root for full documentation.
 
 ## JSON Output
 
-Use ` + "`" + `--json` + "`" + ` with: list, status, exec, conflict-check, deps status, add, merge, remove, rename, sync, clean, log.
+Use ` + "`" + `--json` + "`" + ` with: list, status, exec, conflict-check, deps status, add, merge, remove, rename, sync, clean, log, report.
 Envelope: ` + "`" + `{"version", "command", "data"}` + "`" + ` or ` + "`" + `{"version", "command", "error", "code"}` + "`" + `.
 
 ## Best Practices
@@ -587,7 +587,7 @@ curl -sSfL https://raw.githubusercontent.com/lugassawan/rimba/main/scripts/insta
 
 ## JSON Output
 
-Commands supporting ` + "`" + `--json` + "`" + `: ` + "`" + `list` + "`" + `, ` + "`" + `status` + "`" + `, ` + "`" + `exec` + "`" + `, ` + "`" + `conflict-check` + "`" + `, ` + "`" + `deps status` + "`" + `, ` + "`" + `add` + "`" + `, ` + "`" + `merge` + "`" + `, ` + "`" + `remove` + "`" + `, ` + "`" + `rename` + "`" + `, ` + "`" + `sync` + "`" + `, ` + "`" + `clean` + "`" + `, ` + "`" + `log` + "`" + `.
+Commands supporting ` + "`" + `--json` + "`" + `: ` + "`" + `list` + "`" + `, ` + "`" + `status` + "`" + `, ` + "`" + `exec` + "`" + `, ` + "`" + `conflict-check` + "`" + `, ` + "`" + `deps status` + "`" + `, ` + "`" + `add` + "`" + `, ` + "`" + `merge` + "`" + `, ` + "`" + `remove` + "`" + `, ` + "`" + `rename` + "`" + `, ` + "`" + `sync` + "`" + `, ` + "`" + `clean` + "`" + `, ` + "`" + `log` + "`" + `, ` + "`" + `report` + "`" + `.
 
 **Envelope:** ` + "`" + `{"version": "<semver>", "command": "<name>", "data": <payload>}` + "`" + `
 **Error:** ` + "`" + `{"version": "<semver>", "command": "<name>", "error": "<msg>", "code": "<CODE>"}` + "`" + `
@@ -739,7 +739,7 @@ with READMEs"); use the commands above directly.
 
 ## JSON Output
 
-Commands supporting ` + "`" + `--json` + "`" + `: ` + "`" + `list` + "`" + `, ` + "`" + `status` + "`" + `, ` + "`" + `exec` + "`" + `, ` + "`" + `conflict-check` + "`" + `, ` + "`" + `deps status` + "`" + `, ` + "`" + `add` + "`" + `, ` + "`" + `merge` + "`" + `, ` + "`" + `remove` + "`" + `, ` + "`" + `rename` + "`" + `, ` + "`" + `sync` + "`" + `, ` + "`" + `clean` + "`" + `, ` + "`" + `log` + "`" + `.
+Commands supporting ` + "`" + `--json` + "`" + `: ` + "`" + `list` + "`" + `, ` + "`" + `status` + "`" + `, ` + "`" + `exec` + "`" + `, ` + "`" + `conflict-check` + "`" + `, ` + "`" + `deps status` + "`" + `, ` + "`" + `add` + "`" + `, ` + "`" + `merge` + "`" + `, ` + "`" + `remove` + "`" + `, ` + "`" + `rename` + "`" + `, ` + "`" + `sync` + "`" + `, ` + "`" + `clean` + "`" + `, ` + "`" + `log` + "`" + `, ` + "`" + `report` + "`" + `.
 
 **Envelope:** ` + "`" + `{"version": "<semver>", "command": "<name>", "data": <payload>}` + "`" + `
 **Error:** ` + "`" + `{"version": "<semver>", "command": "<name>", "error": "<msg>", "code": "<CODE>"}` + "`" + `

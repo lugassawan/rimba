@@ -43,7 +43,7 @@ with READMEs"); use the commands above directly.
 
 ## JSON Output
 
-Commands supporting `--json`: `list`, `status`, `exec`, `conflict-check`, `deps status`, `add`, `merge`, `remove`, `rename`, `sync`, `clean`, `log`.
+Commands supporting `--json`: `list`, `status`, `exec`, `conflict-check`, `deps status`, `add`, `merge`, `remove`, `rename`, `sync`, `clean`, `log`, `report`.
 
 **Envelope:** `{"version": "<semver>", "command": "<name>", "data": <payload>}`
 **Error:** `{"version": "<semver>", "command": "<name>", "error": "<msg>", "code": "<CODE>"}`
@@ -60,6 +60,7 @@ Commands supporting `--json`: `list`, `status`, `exec`, `conflict-check`, `deps 
 | Command |
 |---------|
 | `rimba add <task>` |
+| `rimba duplicate <task>` |
 | `rimba list` |
 | `rimba status` |
 | `rimba sync [task]` |
