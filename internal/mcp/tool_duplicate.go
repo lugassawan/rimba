@@ -7,6 +7,7 @@ import (
 	"github.com/lugassawan/rimba/internal/config"
 	"github.com/lugassawan/rimba/internal/errhint"
 	"github.com/lugassawan/rimba/internal/operations"
+	"github.com/lugassawan/rimba/internal/resolver"
 	"github.com/lugassawan/rimba/internal/trust"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -46,21 +47,7 @@ func handleDuplicate(hctx *HandlerContext) server.ToolHandlerFunc {
 			return errorResult(err), nil
 		}
 
-		dryRun := req.GetBool("dry_run", false)
-		if !dryRun {
-			if err := trust.GateNonInteractive(hctx.RepoRoot, cfg); err != nil {
-				return errorResult(err), nil
-			}
-		}
-		result, err := operations.DuplicateWorktree(ctx, hctx.Runner, operations.DuplicateParams{
-			Source:            source,
-			SourceTask:        task,
-			As:                req.GetString("as", ""),
-			PrefixSet:         ps,
-			DefaultSource:     cfg.DefaultSource,
-			DryRun:            dryRun,
-			PostCreateOptions: buildPostCreateOptions(hctx, cfg, req),
-		}, nil)
+		result, err := performDuplicate(ctx, hctx, cfg, req, source, task, ps)
 		if err != nil {
 			return errorResult(err), nil
 		}
@@ -76,4 +63,28 @@ func handleDuplicate(hctx *HandlerContext) server.ToolHandlerFunc {
 			SkippedSymlinks: result.SkippedSymlinks,
 		})
 	}
+}
+
+func performDuplicate(ctx context.Context, hctx *HandlerContext, cfg *config.Config, req mcp.CallToolRequest, source resolver.WorktreeInfo, task string, ps *resolver.PrefixSet) (operations.DuplicateResult, error) {
+	params := operations.DuplicateParams{
+		Source:            source,
+		SourceTask:        task,
+		As:                req.GetString("as", ""),
+		PrefixSet:         ps,
+		DefaultSource:     cfg.DefaultSource,
+		DryRun:            req.GetBool("dry_run", false),
+		PostCreateOptions: buildPostCreateOptions(hctx, cfg, req),
+	}
+	if params.DryRun {
+		return operations.DuplicateWorktree(ctx, hctx.Runner, params, nil)
+	}
+	preflight := params
+	preflight.DryRun = true
+	if _, err := operations.DuplicateWorktree(ctx, hctx.Runner, preflight, nil); err != nil {
+		return operations.DuplicateResult{}, err
+	}
+	if err := trust.GateNonInteractive(hctx.RepoRoot, cfg); err != nil {
+		return operations.DuplicateResult{}, err
+	}
+	return operations.DuplicateWorktree(ctx, hctx.Runner, params, nil)
 }

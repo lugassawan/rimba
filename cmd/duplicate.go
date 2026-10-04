@@ -104,6 +104,11 @@ var duplicateCmd = &cobra.Command{
 			return nil
 		}
 
+		preflight := params
+		preflight.DryRun = true
+		if _, err := operations.DuplicateWorktree(ctx, r, preflight, nil); err != nil {
+			return err
+		}
 		if err := ensureTrust(cmd, repoRoot, cfg); err != nil {
 			return err
 		}

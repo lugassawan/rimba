@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/lugassawan/rimba/internal/config"
+	"github.com/lugassawan/rimba/internal/trust"
 )
 
 func TestDuplicateToolSchema(t *testing.T) {
@@ -127,6 +128,31 @@ func TestDuplicateToolTrustGate(t *testing.T) {
 	}
 	if created {
 		t.Fatal("untrusted request must not create a worktree")
+	}
+}
+
+func TestDuplicateToolValidatesBeforeTrustGate(t *testing.T) {
+	t.Setenv("RIMBA_TRUST_YES", "1")
+	repoRoot := t.TempDir()
+	if err := os.WriteFile(filepath.Join(repoRoot, ".gitignore"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	created := false
+	r := duplicateToolRunner(repoRoot, "feature/my-task", &created, false)
+	cfg := testConfig()
+	cfg.PostCreate = []string{"make install"}
+	hctx := &HandlerContext{Runner: r, Config: cfg, RepoRoot: repoRoot, Version: "test"}
+
+	result := callTool(t, handleDuplicate(hctx), map[string]any{"task": "my-task", "as": "-copy"})
+	if got := resultError(t, result); !strings.Contains(got, "invalid task name") {
+		t.Errorf("error = %q, want invalid target", got)
+	}
+	trusted, err := trust.IsTrusted(repoRoot, trust.Hash(cfg))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if trusted {
+		t.Fatal("invalid request must not record trust")
 	}
 }
 
