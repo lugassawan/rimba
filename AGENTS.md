@@ -70,7 +70,7 @@ MCP tools also accept `service/task` format in the `task` parameter.
 
 ## JSON Output
 
-Commands that support `--json`: list, status, exec, conflict-check, deps status, add, merge, remove, rename, sync, clean, log.
+Commands that support `--json`: list, status, exec, conflict-check, deps status, add, merge, remove, rename, sync, clean, log, report.
 
 Envelope: `{"version": "...", "command": "...", "data": ...}`
 Error: `{"version": "...", "command": "...", "error": "...", "code": "..."}`
@@ -91,6 +91,7 @@ when no MCP connection is available.
 | MCP tool | CLI equivalent |
 |----------|----------------|
 | `mcp__rimba__add` | `rimba add <task>` |
+| `mcp__rimba__duplicate` | `rimba duplicate <task>` |
 | `mcp__rimba__list` | `rimba list` |
 | `mcp__rimba__status` | `rimba status` |
 | `mcp__rimba__sync` | `rimba sync [task]` |

@@ -369,6 +369,7 @@ func TestProjectJSONCommandListsAreCurrent(t *testing.T) {
 	wantCommands := []string{
 		"list", "status", "exec", "conflict-check", "deps status",
 		"add", "merge", "remove", "rename", "sync", "clean", "log",
+		"report",
 	}
 	// Specs known to document a JSON Output section today. If one of these silently drops the
 	// section, this test must fail with the specific missing path — the dynamic vacuity guard
@@ -391,13 +392,18 @@ func TestProjectJSONCommandListsAreCurrent(t *testing.T) {
 	tested := make(map[string]bool)
 	for _, ls := range all {
 		content := ls.spec.Content()
-		if !strings.Contains(content, "JSON Output") {
+		idx := strings.Index(content, "JSON Output")
+		if idx == -1 {
 			continue
 		}
 		tested[ls.spec.RelPath] = true
+		section := content[idx:]
+		if end := strings.Index(section[len("JSON Output"):], "\n## "); end != -1 {
+			section = section[:len("JSON Output")+end]
+		}
 		for _, cmd := range wantCommands {
-			if !strings.Contains(content, cmd) {
-				t.Errorf("%s spec %s documents JSON Output but is missing %q", ls.label, ls.spec.RelPath, cmd)
+			if !strings.Contains(section, cmd) {
+				t.Errorf("%s spec %s documents JSON Output but is missing %q in JSON Output section", ls.label, ls.spec.RelPath, cmd)
 			}
 		}
 	}
